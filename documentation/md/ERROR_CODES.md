@@ -154,4 +154,35 @@ A11 also moved statuses: owner/admin/member/invitee permission failures went 400
 
 Not coded by A11: the internal seed or data lookups (group owner role, member role, admin role, default group type, group type, group settings, group owner, current-owner membership), which use the category copy, and `Group has no sport set — cannot validate a sport-specific location` (defensive, effectively unreachable). `getGroup` of a missing group, and all other group lookups by id, use `GROUP_NOT_FOUND`.
 
-Still to come: each remaining Phase B ticket (A18, SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.
+#### post (A18, `PostServiceImpl`, `CommentServiceImpl`, `HashtagServiceImpl`, `PostGate`)
+
+A18 moved statuses the same way A11 did: permission failures 400 → 403, "already liked / not liked" and "second active broadcast" 400 → 409. The session comment proxy (`SessionService.createSessionComment` and friends) reaches the same comment and like codes. `ResourceGate` gained a coded `require(...)` overload for the gate's 404/403 pair.
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `POST_NOT_FOUND` | 404 | none | Any post-scoped call for a post that does not exist, is soft-deleted, has an inactive group, or is a `SESSION_POST` reached through `/api/posts/**` (get, update, delete, extend broadcast, like, unlike, comment on it, hashtag extraction, and the session-post prechecks). |
+| `POST_FORBIDDEN` | 403 | none | The post exists but the caller may not see it (private or friends-only `USER_FEED` post, group post for a non-member): get, like, unlike, comment, list comments, like or unlike one of its comments. |
+| `POST_GROUP_MEMBER_REQUIRED` | 403 | none | `GET /api/posts/group/{id}` by a non-member; creating a `GROUP_POST` in a group the caller is not in (moved from 400 by A18). |
+| `POST_BROADCAST_ADMIN_REQUIRED` | 403 | none | Creating or extending a `GROUP_BROADCAST` without being owner or admin (moved from 400 by A18). |
+| `POST_EDIT_FORBIDDEN` | 403 | none | `PUT /api/posts/{id}` by someone who is neither the author nor (for a broadcast) a group moderator (moved from 400 by A18). |
+| `POST_DELETE_FORBIDDEN` | 403 | none | `DELETE /api/posts/{id}` by someone who is neither the author nor a group moderator (moved from 400 by A18). |
+| `POST_TYPE_NOT_CREATABLE` | 400 | `{postType}` | Creating a `GROUP_SYSTEM` or `SESSION_POST` post directly. Diagnostic: the client never offers these. |
+| `POST_TYPE_NOT_EDITABLE` | 400 | `{postType}` | Editing a `GROUP_SYSTEM` or `SESSION_POST` post. Diagnostic. |
+| `POST_TYPE_NOT_DELETABLE` | 400 | `{postType}` | Deleting a `GROUP_SYSTEM` or `SESSION_POST` post. Diagnostic. |
+| `POST_GROUP_NOT_ALLOWED` | 400 | none | Creating a `USER_FEED` post with a `groupId`. |
+| `POST_GROUP_ID_REQUIRED` | 400 | none | Creating a `GROUP_POST` or `GROUP_BROADCAST` without a `groupId`. |
+| `POST_BROADCAST_ALREADY_ACTIVE` | 409 | none | Creating a broadcast while the group already has an active one (moved from 400 by A18). |
+| `POST_BROADCAST_END_TIME_PAST` | 400 | none | Creating or extending a broadcast with an end time that is not in the future. |
+| `POST_NOT_BROADCAST` | 400 | none | `PATCH /api/posts/{id}/broadcast-end-time` on a post that is not a `GROUP_BROADCAST`. |
+| `POST_ALREADY_LIKED` | 409 | none | Liking a post the caller already liked (moved from 400 by A18). Also on the session post like route. |
+| `POST_NOT_LIKED` | 409 | none | Unliking a post the caller has not liked (moved from 400 by A18). Also on the session post like route. |
+| `COMMENT_NOT_FOUND` | 404 | none | Delete, like or unlike of a comment that does not exist, is soft-deleted, or belongs to a different post than the session route names. |
+| `COMMENT_PARENT_NOT_FOUND` | 404 | none | Replying to a parent comment that does not exist. |
+| `COMMENT_SYSTEM_READONLY` | 400 | `{action: reply\|like\|delete}` | Replying to, liking, unliking or deleting a system comment (session joins and leaves). |
+| `COMMENT_DELETE_FORBIDDEN` | 403 | none | Deleting someone else's comment (moved from 400 by A18). |
+| `COMMENT_ALREADY_LIKED` | 409 | none | Liking a comment the caller already liked (moved from 400 by A18). |
+| `COMMENT_NOT_LIKED` | 409 | none | Unliking a comment the caller has not liked (moved from 400 by A18). |
+
+Not coded by A18: none of the post-module sites are left un-coded. Bean-validation failures on post and comment bodies use `VALIDATION_FAILED`. A deactivated caller gets no special answer from any of these endpoints (U12 known gap, no check added).
+
+Still to come: each remaining Phase B ticket (SESSION-45, REF-5, LOC-6, NTF-5) adds its section here.

@@ -22,3 +22,5 @@ Phase C of the error-handling program for **post**, after A18 defines the codes:
 **Tests:** Vitest/RTL per updated component or hook (code → localized text, unknown code → category copy → server prose), a `locale.spec.ts` or flow e2e case for the main flow in `vi`, scoped e2e; update `client/docs/E2E_OVERVIEW.md` if specs change.
 
 **On close:** update this ticket's row in the tracker table in `documentation/md/ERROR_HANDLING_DESIGN.md` (and the module's `BACKLOG_MVP.md`/`PROGRESS.md` as usual).
+
+**Carried over from post A18 (2026-10-06):** the final codes are the `ERROR_CODES.md` § post registry (22 codes) and the per-flow audit table in `modules/social/post-impl/docs/MVP/A18_ERROR_CODE_AUDIT.md`. A18 moved statuses (permission failures 400 -> 403, already/not liked 400 -> 409, second broadcast 400 -> 409), so build the behavior table from the audit table, not the old messages. Also update the MSW like handlers (`client/e2e/mocks/handlers/sessions.ts` ~1033/1053, and feed handlers) to return 409 with the new codes; they still return 400.

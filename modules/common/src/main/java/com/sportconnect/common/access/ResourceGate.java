@@ -47,4 +47,20 @@ public interface ResourceGate<T> {
         }
         return resource;
     }
+
+    /**
+     * Coded variant of {@link #require(Object, UUID, String, String)}: same availability-then-
+     * visibility order, but the thrown exceptions carry registered error codes (see
+     * {@code ERROR_CODES.md}) so the client can localize them.
+     */
+    default T require(T resource, UUID viewerId, String notFoundCode, String notFoundMessage,
+                      String notVisibleCode, String notVisibleMessage) {
+        if (resource == null || !isAvailable(resource)) {
+            throw new NotFoundException(notFoundCode, notFoundMessage, null);
+        }
+        if (!isVisibleTo(resource, viewerId)) {
+            throw new ForbiddenException(notVisibleCode, notVisibleMessage, null);
+        }
+        return resource;
+    }
 }

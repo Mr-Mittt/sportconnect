@@ -45,7 +45,7 @@ public class HashtagServiceImpl implements HashtagService {
         }
 
         Post post = postRepository.findById(postId)
-                .orElseThrow(() -> new NotFoundException("Post not found"));
+                .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found", null));
 
         for (String tag : tags) {
             Hashtag hashtag = hashtagRepository.findByTag(tag)

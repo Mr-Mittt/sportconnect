@@ -466,7 +466,7 @@ public class SessionController {
     @Operation(summary = "Like a session", description = "Likes the session's own SESSION_POST anchor — same gating as getSessionComments (participant, or group member for a group-linked session). The underlying post is invisible via /api/posts/{postId}/like — this is the only way to like a session.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Liked"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Already liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already liked (POST_ALREADY_LIKED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })
@@ -482,7 +482,7 @@ public class SessionController {
     @Operation(summary = "Unlike a session", description = "Same gating as likeSession.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Unliked"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not currently liked (POST_NOT_LIKED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })

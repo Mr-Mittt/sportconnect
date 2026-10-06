@@ -88,3 +88,4 @@ DELETE /api/posts/comments/{commentId}/like
   comment-count key — that key's DB fallback counts system rows, so skipping it would make the
   cached count disagree with the uncached one.
 - **`PostService` has the same bypass shape for the post itself** — `likeSessionPost`/`unlikeSessionPost`, same `requireSessionPost` postType check, same "don't wire a controller to them" rule. No secondary-id cross-check needed there (unlike the comment methods) — there's no second id involved, just `postId`.
+- **Every user-reachable throw is a coded exception (A18), with the status the availability-vs-visibility rule demands:** gate 404 `POST_NOT_FOUND` / 403 `POST_FORBIDDEN` (via the coded `ResourceGate.require` overload), permission failures 403, "already/not liked" and "second active broadcast" 409, input and type-rule failures 400. New throw sites must register a code in `documentation/md/ERROR_CODES.md` § post; `PostErrorCodesIntegrationTest` is the real-pipeline check.

@@ -48,7 +48,7 @@ public class PostController {
     @Operation(summary = "Create a post", description = "USER_FEED, GROUP_POST, or GROUP_BROADCAST depending on postType/groupId — see request schema. GROUP_BROADCAST is owner/admin-only and limited to one active broadcast per group.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Post created"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, invalid postType/groupId combination, not a group member, not owner/admin for a broadcast, or the group already has an active broadcast"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, invalid postType/groupId combination, or broadcast end time not in the future (POST_TYPE_NOT_CREATABLE, POST_GROUP_NOT_ALLOWED, POST_GROUP_ID_REQUIRED, POST_BROADCAST_END_TIME_PAST); 403 POST_GROUP_MEMBER_REQUIRED or POST_BROADCAST_ADMIN_REQUIRED; 409 POST_BROADCAST_ALREADY_ACTIVE"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping
@@ -136,7 +136,7 @@ public class PostController {
     @Operation(summary = "Update a post", description = "Ownership-gated — the caller must own the post (a non-owner gets 400, not 403 — see the actual service check).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Post updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or not the post owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or the post type cannot be edited (POST_TYPE_NOT_EDITABLE); 403 POST_EDIT_FORBIDDEN when not the owner"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Post not found")
     })
@@ -153,7 +153,7 @@ public class PostController {
     @Operation(summary = "Extend or change a broadcast's end time", description = "GROUP_BROADCAST only, owner/admin only.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "End time updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, post isn't a GROUP_BROADCAST, not owner/admin, or end time not in the future"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, post isn't a GROUP_BROADCAST, or end time not in the future (POST_NOT_BROADCAST, POST_BROADCAST_END_TIME_PAST); 403 POST_BROADCAST_ADMIN_REQUIRED when not owner/admin"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Post not found")
     })
@@ -171,7 +171,7 @@ public class PostController {
     @Operation(summary = "Delete a post", description = "Owner, or group owner/admin for GROUP_POST/GROUP_BROADCAST (a disallowed caller gets 400, not 403 — see the actual service check). Soft delete.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Post deleted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "No permission to delete this post"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "The post type cannot be deleted (POST_TYPE_NOT_DELETABLE); 403 POST_DELETE_FORBIDDEN when not allowed"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Post not found")
     })
@@ -187,7 +187,7 @@ public class PostController {
     @Operation(summary = "Like a post")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Liked"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Already liked, or post not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already liked (POST_ALREADY_LIKED); 403 POST_FORBIDDEN, 404 POST_NOT_FOUND"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping("/{postId}/like")
@@ -202,7 +202,7 @@ public class PostController {
     @Operation(summary = "Unlike a post")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Unliked"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not currently liked (POST_NOT_LIKED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @DeleteMapping("/{postId}/like")
@@ -250,7 +250,7 @@ public class PostController {
     @Operation(summary = "Delete a comment", description = "Ownership-gated (400, not 403, for a non-owner — see the actual service check). Soft delete.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Comment deleted"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not the comment owner"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the comment owner (COMMENT_DELETE_FORBIDDEN); 400 COMMENT_SYSTEM_READONLY for a system comment"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Comment not found")
     })
@@ -266,7 +266,7 @@ public class PostController {
     @Operation(summary = "Like a comment")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Liked"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Already liked, or comment not found"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already liked (COMMENT_ALREADY_LIKED); 400 COMMENT_SYSTEM_READONLY for a system comment, 404 COMMENT_NOT_FOUND"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping("/comments/{commentId}/like")
@@ -281,7 +281,7 @@ public class PostController {
     @Operation(summary = "Unlike a comment")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Unliked"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently liked"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not currently liked (COMMENT_NOT_LIKED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @DeleteMapping("/comments/{commentId}/like")

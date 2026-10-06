@@ -3,6 +3,7 @@ package com.sportconnect.social.post.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.NotFoundException;
 import com.sportconnect.group.api.service.GroupService;
@@ -90,35 +91,35 @@ public class PostServiceImpl implements PostService {
         Long groupId = request.getGroupId();
 
         if (postType == PostType.GROUP_SYSTEM) {
-            throw new BadRequestException("GROUP_SYSTEM posts cannot be created directly");
+            throw new BadRequestException("POST_TYPE_NOT_CREATABLE", "GROUP_SYSTEM posts cannot be created directly", Map.of("postType", "GROUP_SYSTEM"));
         }
         if (postType == PostType.SESSION_POST) {
-            throw new BadRequestException("SESSION_POST posts cannot be created directly");
+            throw new BadRequestException("POST_TYPE_NOT_CREATABLE", "SESSION_POST posts cannot be created directly", Map.of("postType", "SESSION_POST"));
         }
         if (postType == PostType.USER_FEED && groupId != null) {
-            throw new BadRequestException("USER_FEED posts cannot be associated with a group");
+            throw new BadRequestException("POST_GROUP_NOT_ALLOWED", "USER_FEED posts cannot be associated with a group", null);
         }
         if ((postType == PostType.GROUP_POST || postType == PostType.GROUP_BROADCAST) && groupId == null) {
-            throw new BadRequestException("Group posts require a groupId");
+            throw new BadRequestException("POST_GROUP_ID_REQUIRED", "Group posts require a groupId", null);
         }
         if (postType == PostType.GROUP_POST && !groupService.isGroupMember(groupId, userId)) {
-            throw new BadRequestException("You must be a group member to post in this group");
+            throw new ForbiddenException("POST_GROUP_MEMBER_REQUIRED", "You must be a group member to post in this group", null);
         }
         if (postType == PostType.GROUP_BROADCAST && !groupService.canManagePosts(groupId, userId)) {
-            throw new BadRequestException("Only group owners and admins can create broadcast posts");
+            throw new ForbiddenException("POST_BROADCAST_ADMIN_REQUIRED", "Only group owners and admins can create broadcast posts", null);
         }
 
         LocalDateTime broadcastEndTime = null;
         if (postType == PostType.GROUP_BROADCAST) {
             if (postRepository.existsActiveGroupBroadcast(groupId)) {
-                throw new BadRequestException("This group already has an active broadcast");
+                throw new ConflictException("POST_BROADCAST_ALREADY_ACTIVE", "This group already has an active broadcast", null);
             }
             LocalDateTime now = LocalDateTime.now();
             broadcastEndTime = request.getBroadcastEndTime() != null
                     ? request.getBroadcastEndTime()
                     : now.plusHours(24);
             if (!broadcastEndTime.isAfter(now)) {
-                throw new BadRequestException("broadcastEndTime must be in the future");
+                throw new BadRequestException("POST_BROADCAST_END_TIME_PAST", "broadcastEndTime must be in the future", null);
             }
         }
 
@@ -194,7 +195,8 @@ public class PostServiceImpl implements PostService {
     @Transactional(readOnly = true)
     public PostResponse getPostById(Long postId, UUID currentUserId) {
         Post post = postGate.require(postRepository.findById(postId).orElse(null), currentUserId,
-                "Post not found", "You don't have access to this post");
+                "POST_NOT_FOUND", "Post not found",
+                "POST_FORBIDDEN", "You don't have access to this post");
         List<Post> single = List.of(post);
         return mapToResponse(post, currentUserId, hashtagService.getTagsForPost(post.getId()),
                 getUsersForPosts(single));
@@ -247,7 +249,7 @@ public class PostServiceImpl implements PostService {
     @Transactional(readOnly = true)
     public Page<PostResponse> getGroupPosts(Long groupId, UUID currentUserId, Pageable pageable) {
         if (currentUserId == null || !groupService.isGroupMember(groupId, currentUserId)) {
-            throw new ForbiddenException("You must be a group member to view posts");
+            throw new ForbiddenException("POST_GROUP_MEMBER_REQUIRED", "You must be a group member to view posts", null);
         }
         Page<Post> postsPage = postRepository.findByGroupIdAndIsActiveTrue(groupId, pageable);
         Map<Long, List<String>> hashtagsByPostId = getHashtagsForPosts(postsPage.getContent());
@@ -260,13 +262,13 @@ public class PostServiceImpl implements PostService {
     @Transactional
     public PostResponse updatePost(Long postId, UUID userId, CreatePostRequest request) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId)
-                .orElseThrow(() -> new NotFoundException("Post not found"));
+                .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found", null));
 
         if (post.getPostType() == PostType.GROUP_SYSTEM) {
-            throw new BadRequestException("GROUP_SYSTEM posts cannot be edited");
+            throw new BadRequestException("POST_TYPE_NOT_EDITABLE", "GROUP_SYSTEM posts cannot be edited", Map.of("postType", "GROUP_SYSTEM"));
         }
         if (post.getPostType() == PostType.SESSION_POST) {
-            throw new BadRequestException("SESSION_POST posts cannot be edited");
+            throw new BadRequestException("POST_TYPE_NOT_EDITABLE", "SESSION_POST posts cannot be edited", Map.of("postType", "SESSION_POST"));
         }
 
         boolean isCreator = post.getUserId().equals(userId);
@@ -275,7 +277,7 @@ public class PostServiceImpl implements PostService {
                 && groupService.canManagePosts(post.getGroupId(), userId);
 
         if (!isCreator && !isBroadcastModerator) {
-            throw new BadRequestException("You can only update your own posts");
+            throw new ForbiddenException("POST_EDIT_FORBIDDEN", "You can only update your own posts", null);
         }
 
         post.setContent(request.getContent());
@@ -298,13 +300,13 @@ public class PostServiceImpl implements PostService {
     @Transactional
     public void deletePost(Long postId, UUID userId) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId)
-                .orElseThrow(() -> new NotFoundException("Post not found"));
+                .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found", null));
 
         if (post.getPostType() == PostType.GROUP_SYSTEM) {
-            throw new BadRequestException("GROUP_SYSTEM posts cannot be deleted");
+            throw new BadRequestException("POST_TYPE_NOT_DELETABLE", "GROUP_SYSTEM posts cannot be deleted", Map.of("postType", "GROUP_SYSTEM"));
         }
         if (post.getPostType() == PostType.SESSION_POST) {
-            throw new BadRequestException("SESSION_POST posts cannot be deleted");
+            throw new BadRequestException("POST_TYPE_NOT_DELETABLE", "SESSION_POST posts cannot be deleted", Map.of("postType", "SESSION_POST"));
         }
 
         boolean isOwner = post.getUserId().equals(userId);
@@ -312,7 +314,7 @@ public class PostServiceImpl implements PostService {
                 groupService.canManagePosts(post.getGroupId(), userId);
 
         if (!isOwner && !isGroupModerator) {
-            throw new BadRequestException("You do not have permission to delete this post");
+            throw new ForbiddenException("POST_DELETE_FORBIDDEN", "You do not have permission to delete this post", null);
         }
 
         hashtagService.decrementHashtagsForPost(postId);
@@ -326,7 +328,8 @@ public class PostServiceImpl implements PostService {
     @Transactional
     public void likePost(Long postId, UUID userId) {
         postGate.require(postRepository.findById(postId).orElse(null), userId,
-                "Post not found", "You don't have access to this post");
+                "POST_NOT_FOUND", "Post not found",
+                "POST_FORBIDDEN", "You don't have access to this post");
         doLikePost(postId, userId);
     }
 
@@ -339,7 +342,7 @@ public class PostServiceImpl implements PostService {
 
     private void doLikePost(Long postId, UUID userId) {
         if (postLikeRepository.existsByPostIdAndUserId(postId, userId)) {
-            throw new BadRequestException("You have already liked this post");
+            throw new ConflictException("POST_ALREADY_LIKED", "You have already liked this post", null);
         }
 
         PostLike like = PostLike.builder()
@@ -356,7 +359,8 @@ public class PostServiceImpl implements PostService {
     @Transactional
     public void unlikePost(Long postId, UUID userId) {
         postGate.require(postRepository.findById(postId).orElse(null), userId,
-                "Post not found", "You don't have access to this post");
+                "POST_NOT_FOUND", "Post not found",
+                "POST_FORBIDDEN", "You don't have access to this post");
         doUnlikePost(postId, userId);
     }
 
@@ -369,7 +373,7 @@ public class PostServiceImpl implements PostService {
 
     private void doUnlikePost(Long postId, UUID userId) {
         if (!postLikeRepository.existsByPostIdAndUserId(postId, userId)) {
-            throw new BadRequestException("You have not liked this post");
+            throw new ConflictException("POST_NOT_LIKED", "You have not liked this post", null);
         }
 
         postLikeRepository.deleteByPostIdAndUserId(postId, userId);
@@ -384,7 +388,7 @@ public class PostServiceImpl implements PostService {
     private void requireSessionPost(Long postId) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId).orElse(null);
         if (post == null || post.getPostType() != PostType.SESSION_POST) {
-            throw new NotFoundException("Post not found");
+            throw new NotFoundException("POST_NOT_FOUND", "Post not found", null);
         }
     }
 
@@ -622,20 +626,20 @@ public class PostServiceImpl implements PostService {
     @Transactional
     public PostResponse updateBroadcastEndTime(Long postId, UUID callerId, LocalDateTime newEndTime) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId)
-                .orElseThrow(() -> new NotFoundException("Post not found"));
+                .orElseThrow(() -> new NotFoundException("POST_NOT_FOUND", "Post not found", null));
 
         if (post.getPostType() != PostType.GROUP_BROADCAST) {
-            throw new BadRequestException("Only GROUP_BROADCAST posts have an end time");
+            throw new BadRequestException("POST_NOT_BROADCAST", "Only GROUP_BROADCAST posts have an end time", null);
         }
 
         boolean isModerator = post.getGroupId() != null &&
                 groupService.canManagePosts(post.getGroupId(), callerId);
         if (!isModerator) {
-            throw new BadRequestException("Only group owners and admins can extend a broadcast");
+            throw new ForbiddenException("POST_BROADCAST_ADMIN_REQUIRED", "Only group owners and admins can extend a broadcast", null);
         }
 
         if (!newEndTime.isAfter(LocalDateTime.now())) {
-            throw new BadRequestException("broadcastEndTime must be in the future");
+            throw new BadRequestException("POST_BROADCAST_END_TIME_PAST", "broadcastEndTime must be in the future", null);
         }
 
         post.setBroadcastEndTime(newEndTime);

@@ -2,6 +2,7 @@ package com.sportconnect.social.post.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.service.GroupService
@@ -187,7 +188,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_GROUP_NOT_ALLOWED'
     }
 
     def "createPost rejects caller-supplied GROUP_SYSTEM postType"() {
@@ -203,7 +205,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_TYPE_NOT_CREATABLE'
     }
 
     // ── createSystemPost (B9) ─────────────────────────────────────────────────
@@ -233,7 +236,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_TYPE_NOT_CREATABLE'
     }
 
     def "createSessionPost creates a SESSION_POST authored by the given user, never groupId-scoped"() {
@@ -262,7 +266,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_GROUP_ID_REQUIRED'
     }
 
     def "createPost GROUP_POST throws BadRequestException when user is not a member"() {
@@ -279,7 +284,8 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * groupService.isGroupMember(groupId, userId) >> false
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_GROUP_MEMBER_REQUIRED'
     }
 
     def "createPost GROUP_POST succeeds when user is a member"() {
@@ -315,7 +321,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_GROUP_ID_REQUIRED'
     }
 
     def "createPost GROUP_BROADCAST throws BadRequestException when user is not owner or admin"() {
@@ -332,7 +339,8 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * groupService.canManagePosts(groupId, userId) >> false
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_BROADCAST_ADMIN_REQUIRED'
     }
 
     def "createPost GROUP_BROADCAST succeeds when user is owner"() {
@@ -386,7 +394,8 @@ class PostServiceImplSpec extends Specification {
         1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.existsActiveGroupBroadcast(groupId) >> true
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'POST_BROADCAST_ALREADY_ACTIVE'
     }
 
     def "createPost GROUP_BROADCAST defaults broadcastEndTime to now plus 24 hours when not provided"() {
@@ -427,7 +436,8 @@ class PostServiceImplSpec extends Specification {
         1 * groupService.canManagePosts(groupId, userId) >> true
         1 * postRepository.existsActiveGroupBroadcast(groupId) >> false
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_BROADCAST_END_TIME_PAST'
     }
 
     def "createPost GROUP_BROADCAST persists an explicit future broadcastEndTime"() {
@@ -464,7 +474,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         // Redis cache miss → DB fallback
         1 * postLikeRepository.countByPostId(postId) >> 5L
         1 * commentRepository.countByPostIdAndIsActiveTrue(postId) >> 3L
@@ -484,7 +494,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         valueOps.get("post:" + postId + ":likes") >> "7"
         valueOps.get("post:" + postId + ":comments") >> "2"
         0 * postLikeRepository.countByPostId(_)
@@ -500,7 +510,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.empty()
-        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
+        1 * postGate.require(null, userId, _, _, _, _) >> { throw new NotFoundException("Post not found") }
         thrown(NotFoundException)
     }
 
@@ -513,7 +523,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        1 * postGate.require(post, userId, _, _, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
         thrown(ForbiddenException)
     }
 
@@ -655,7 +665,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * groupService.isGroupMember(groupId, nonMember) >> false
-        thrown(ForbiddenException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_GROUP_MEMBER_REQUIRED'
     }
 
     def "getGroupPosts throws ForbiddenException for unauthenticated caller"() {
@@ -667,7 +678,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         0 * groupService.isGroupMember(_, _)
-        thrown(ForbiddenException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_GROUP_MEMBER_REQUIRED'
     }
 
     // ── updatePost ────────────────────────────────────────────────────────────
@@ -699,7 +711,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_EDIT_FORBIDDEN'
     }
 
     def "updatePost allows group owner to edit GROUP_BROADCAST content as non-creator"() {
@@ -758,7 +771,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * groupService.canManagePosts(groupId, userId) >> false
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_EDIT_FORBIDDEN'
     }
 
     def "updatePost still restricts GROUP_POST edits to the creator"() {
@@ -777,7 +791,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * groupService._
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_EDIT_FORBIDDEN'
     }
 
     def "updatePost rejects GROUP_SYSTEM posts even for the nominal author"() {
@@ -792,7 +807,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * groupService._
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_TYPE_NOT_EDITABLE'
     }
 
     def "updatePost rejects SESSION_POST posts even for the nominal author"() {
@@ -807,7 +823,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * groupService._
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_TYPE_NOT_EDITABLE'
     }
 
     // ── deletePost ────────────────────────────────────────────────────────────
@@ -834,7 +851,8 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * groupService._
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_DELETE_FORBIDDEN'
     }
 
     def "deletePost allows group owner to delete GROUP_POST"() {
@@ -876,7 +894,8 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * groupService.canManagePosts(groupId, callerId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_DELETE_FORBIDDEN'
     }
 
     def "deletePost rejects GROUP_SYSTEM posts even for the group owner"() {
@@ -890,7 +909,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * groupService._
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_TYPE_NOT_DELETABLE'
     }
 
     def "deletePost rejects SESSION_POST posts even for the nominal author"() {
@@ -904,7 +924,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * groupService._
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_TYPE_NOT_DELETABLE'
     }
 
     // ── getActiveBroadcasts ───────────────────────────────────────────────────
@@ -985,7 +1006,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * groupService.canManagePosts(groupId, userId) >> false
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'POST_BROADCAST_ADMIN_REQUIRED'
     }
 
     def "updateBroadcastEndTime throws BadRequestException when newEndTime is not strictly future"() {
@@ -999,7 +1021,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * groupService.canManagePosts(groupId, userId) >> true
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_BROADCAST_END_TIME_PAST'
     }
 
     def "updateBroadcastEndTime throws BadRequestException when target post is not GROUP_BROADCAST"() {
@@ -1013,7 +1036,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * groupService._
         0 * postRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'POST_NOT_BROADCAST'
     }
 
     def "updateBroadcastEndTime throws NotFoundException when post does not exist"() {
@@ -1022,7 +1046,8 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     // ── likePost / unlikePost ─────────────────────────────────────────────────
@@ -1036,7 +1061,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
         1 * postLikeRepository.save(_ as PostLike) >> new PostLike()
         1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
@@ -1051,9 +1076,10 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'POST_ALREADY_LIKED'
     }
 
     def "likePost throws NotFoundException when post does not exist"() {
@@ -1062,7 +1088,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.empty()
-        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
+        1 * postGate.require(null, userId, _, _, _, _) >> { throw new NotFoundException("Post not found") }
         thrown(NotFoundException)
     }
 
@@ -1075,7 +1101,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        1 * postGate.require(post, userId, _, _, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
         thrown(ForbiddenException)
     }
 
@@ -1088,7 +1114,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
         1 * postLikeRepository.deleteByPostIdAndUserId(postId, userId)
         1 * stringRedisTemplate.execute(_ as RedisScript, ["post:" + postId + ":likes"])
@@ -1103,9 +1129,10 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> post
+        1 * postGate.require(post, userId, _, _, _, _) >> post
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> false
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'POST_NOT_LIKED'
     }
 
     def "unlikePost throws NotFoundException when post does not exist"() {
@@ -1114,7 +1141,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.empty()
-        1 * postGate.require(null, userId, _, _) >> { throw new NotFoundException("Post not found") }
+        1 * postGate.require(null, userId, _, _, _, _) >> { throw new NotFoundException("Post not found") }
         thrown(NotFoundException)
     }
 
@@ -1127,7 +1154,7 @@ class PostServiceImplSpec extends Specification {
 
         then:
         1 * postRepository.findById(postId) >> Optional.of(post)
-        1 * postGate.require(post, userId, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
+        1 * postGate.require(post, userId, _, _, _, _) >> { throw new ForbiddenException("You don't have access to this post") }
         thrown(ForbiddenException)
     }
 
@@ -1158,7 +1185,8 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         1 * postLikeRepository.existsByPostIdAndUserId(postId, userId) >> true
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == 'POST_ALREADY_LIKED'
     }
 
     def "likeSessionPost throws NotFoundException when the post doesn't exist"() {
@@ -1168,7 +1196,8 @@ class PostServiceImplSpec extends Specification {
         then:
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.empty()
         0 * postGate._
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     def "likeSessionPost throws NotFoundException when the post exists but isn't a SESSION_POST"() {
@@ -1182,7 +1211,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * postGate._
         0 * postLikeRepository._
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     def "unlikeSessionPost bypasses PostGate, only checks the post is an active SESSION_POST"() {
@@ -1211,7 +1241,8 @@ class PostServiceImplSpec extends Specification {
         1 * postRepository.findByIdAndIsActiveTrue(postId) >> Optional.of(post)
         0 * postGate._
         0 * postLikeRepository._
-        thrown(NotFoundException)
+        def e = thrown(NotFoundException)
+        e.errorCode == 'POST_NOT_FOUND'
     }
 
     // ── getSessionPostLikeInfo (batch, no-N+1 for SessionServiceImpl.mapToResponses) ─

@@ -61,8 +61,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * localhost and fail with a 500 in CI, which has none.
  *
  * <p>Not covered here: {@code GROUP_POST_NOT_FOUND} is unreachable through the API ({@code
- * PostService.getPostById} throws its own un-coded post-module 404 before the group check can see
- * a null; that un-coded 404 is A18's territory). {@code GROUP_MEMBER_NOT_FOUND} (role change or
+ * PostService.getPostById} throws its own post-module 404, coded {@code POST_NOT_FOUND} by A18,
+ * before the group check can see a null; the pin of a missing post is asserted below as that code).
+ * {@code GROUP_MEMBER_NOT_FOUND} (role change or
  * ownership transfer for a non-member) is covered by the Spock spec only.
  */
 class GroupErrorCodesIntegrationTest extends RedisBaseIT {
@@ -607,6 +608,15 @@ class GroupErrorCodesIntegrationTest extends RedisBaseIT {
         pin(publicGroupId, postId)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("GROUP_ADMIN_REQUIRED"));
+    }
+
+    @Test
+    void pinPost_whenThePostDoesNotExist_is404PostNotFound() throws Exception {
+        authenticateAs(ownerId);
+
+        pin(publicGroupId, 999999L)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("POST_NOT_FOUND"));
     }
 
     @Test
