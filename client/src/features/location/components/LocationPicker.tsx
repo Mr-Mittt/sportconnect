@@ -38,6 +38,8 @@ export interface LocationPickerProps {
   onResolveUrl: () => void;
   isResolving: boolean;
   isResolveError: boolean;
+  /** Specific line for a coded resolve failure; absent, the static `resolveError` copy shows. */
+  resolveErrorText?: string;
   resolvedNoCoordinates: boolean;
   coordinates: { latitude: number; longitude: number } | null;
   mapSeed: number;
@@ -51,6 +53,8 @@ export interface LocationPickerProps {
   onSave: () => void;
   isSaving: boolean;
   isSaveError: boolean;
+  /** Specific line for a coded create failure; absent, the static `saveError` copy shows. */
+  saveErrorText?: string;
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -96,6 +100,7 @@ export function LocationPicker({
   onResolveUrl,
   isResolving,
   isResolveError,
+  resolveErrorText,
   resolvedNoCoordinates,
   coordinates,
   mapSeed,
@@ -108,6 +113,7 @@ export function LocationPicker({
   onSave,
   isSaving,
   isSaveError,
+  saveErrorText,
   i18nOverridePrefix,
 }: LocationPickerProps) {
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
@@ -226,7 +232,7 @@ export function LocationPicker({
             </div>
             {isResolveError && (
               <p role="alert" className="mb-3 text-2sm text-text-danger">
-                {t('locationPicker.resolveError')}
+                {resolveErrorText ?? t('locationPicker.resolveError')}
               </p>
             )}
             {resolvedNoCoordinates && (
@@ -275,7 +281,7 @@ export function LocationPicker({
 
             {isSaveError && (
               <p role="alert" className="mb-3 text-2sm text-text-danger">
-                {t('locationPicker.saveError')}
+                {saveErrorText ?? t('locationPicker.saveError')}
               </p>
             )}
 

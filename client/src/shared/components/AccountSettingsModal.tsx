@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   applyGeoSelection,
@@ -45,6 +45,9 @@ interface AccountSettingsModalProps {
   onSave: (payload: AccountSettingsSavePayload) => void;
   isSaving: boolean;
   errorMessage: string | null;
+  /** CLIENT-ERR-8: the reference code the last save was rejected with (`REGION_UNKNOWN` and friends), shown
+   * in the geo hint line instead of `errorMessage`. */
+  geoErrorCode?: string | null;
   /** CLIENT-I18N-6 convention: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -83,6 +86,7 @@ export function AccountSettingsModal({
   onSave,
   isSaving,
   errorMessage,
+  geoErrorCode = null,
   i18nOverridePrefix,
 }: AccountSettingsModalProps) {
   const t = useOverridableText('accountSettings', i18nOverridePrefix);
@@ -94,6 +98,10 @@ export function AccountSettingsModal({
     countryId: user.countryId,
     regionId: user.regionId,
   });
+  const { applyServerErrorCode } = geoLocale;
+  useEffect(() => {
+    applyServerErrorCode(geoErrorCode);
+  }, [geoErrorCode, applyServerErrorCode]);
 
   const set = <K extends keyof ProfileEditDraft>(key: K, value: ProfileEditDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -204,7 +212,7 @@ export function AccountSettingsModal({
                 />
               </div>
             </div>
-            <GeoLocaleLocationHint geoHint={geoLocale.geoHint} />
+            <GeoLocaleLocationHint geoHint={geoLocale.geoHint} serverGeoCode={geoLocale.serverGeoCode} />
             <GeoLocaleReferenceError isReferenceError={geoLocale.isReferenceError} />
 
             <h4 className="mt-1 text-2sm font-semibold text-text-secondary">{t('section.contact')}</h4>

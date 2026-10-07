@@ -234,13 +234,22 @@ export function GeoLocaleLocationButton({
 
 export interface GeoLocaleLocationHintProps {
   geoHint: GeoHint | null;
+  /** CLIENT-ERR-8: the reference code the server rejected the selection with; wins over `geoHint`. */
+  serverGeoCode?: string | null;
 }
 
 /** The *result* of a "Use my current location" click (denied/unavailable/timeout) — feedback the
  * user needs to actually see, not just the button's hover hint. Renders `null` (nothing, not even
  * an empty element) until there's something to show. */
-export function GeoLocaleLocationHint({ geoHint }: GeoLocaleLocationHintProps) {
+export function GeoLocaleLocationHint({ geoHint, serverGeoCode = null }: GeoLocaleLocationHintProps) {
   const { t } = useTranslation();
+  if (serverGeoCode) {
+    return (
+      <p className="mb-3 text-2xs text-text-danger" aria-live="polite">
+        {t(`errors:codes.${serverGeoCode}`)}
+      </p>
+    );
+  }
   if (!geoHint) {
     return null;
   }

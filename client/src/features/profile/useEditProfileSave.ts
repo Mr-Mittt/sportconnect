@@ -1,6 +1,7 @@
 import i18next from 'i18next';
 import { useState } from 'react';
 import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
+import { isGeoServerCode } from '@/shared/lib/geoErrors';
 import type { AccountSettingsSavePayload } from '@/shared/components/AccountSettingsModal';
 import { useUpdateMyPreferences } from './useUpdateMyPreferences';
 import { useUpdateMyProfile } from './useUpdateMyProfile';
@@ -32,9 +33,11 @@ export function useEditProfileSave() {
   const profile = useUpdateMyProfile();
   const preferences = useUpdateMyPreferences();
   const [combinedError, setCombinedError] = useState<string | null>(null);
+  const [geoErrorCode, setGeoErrorCode] = useState<string | null>(null);
 
   async function save(payload: AccountSettingsSavePayload, options?: { onSuccess?: () => void }) {
     setCombinedError(null);
+    setGeoErrorCode(null);
     const hasProfileChange = Object.keys(payload.profile).length > 0;
     const hasLanguageChange = payload.languageCode !== undefined;
 
@@ -50,6 +53,19 @@ export function useEditProfileSave() {
 
     if (!profileFailed && !preferencesFailed) {
       options?.onSuccess?.();
+      return;
+    }
+
+    // CLIENT-ERR-8: a rejected country / region shows in the geo hint line, not in this message.
+    const profileCode = profileFailed ? getApiError(profileResult.reason).code : undefined;
+    if (isGeoServerCode(profileCode)) {
+      setGeoErrorCode(profileCode);
+      const preferencesOnly = preferencesFailed
+        ? extractErrorMessage(preferencesResult.reason, i18next.t('profilePage:saveResult.preferencesFailed'))
+        : hasLanguageChange
+          ? i18next.t('profilePage:saveResult.preferencesSaved')
+          : null;
+      setCombinedError(preferencesOnly);
       return;
     }
 
@@ -77,6 +93,7 @@ export function useEditProfileSave() {
 
   function reset() {
     setCombinedError(null);
+    setGeoErrorCode(null);
     profile.reset();
     preferences.reset();
   }
@@ -85,6 +102,8 @@ export function useEditProfileSave() {
     save,
     isSaving: profile.isPending || preferences.isPending,
     errorMessage: combinedError,
+    /** CLIENT-ERR-8: the reference code the profile half was rejected with, or `null`. */
+    geoErrorCode,
     reset,
   };
 }

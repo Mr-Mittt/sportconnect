@@ -1,11 +1,14 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocaleStore } from '@/app/localeStore';
+import { getApiError } from '@/shared/lib/apiError';
 import { getBrowserLocales, isGeolocationSupported, requestBrowserPosition } from '@/shared/lib/detectEnvironment';
+import { isGeoServerCode } from '@/shared/lib/geoErrors';
 import { getViewerZoneId } from '@/shared/lib/viewerZone';
 import type { CountryResponse, LanguageResponse, RegionResponse } from '@/shared/types/reference';
-import { useCountries } from './useCountries';
+import { countriesQueryKey, useCountries } from './useCountries';
 import { useLanguages } from './useLanguages';
-import { useRegions } from './useRegions';
+import { regionsQueryKey, useRegions } from './useRegions';
 import { useResolveGeo } from './useResolveGeo';
 
 type TouchedField = 'language' | 'country' | 'region';
@@ -37,6 +40,12 @@ export interface GeoLocaleFieldsData {
   isGeolocationSupported: boolean;
   isRequestingLocation: boolean;
   geoHint: GeoHint | null;
+  /** CLIENT-ERR-8: the reference code the server rejected the selection with (`REGION_UNKNOWN` and
+   * friends), shown in the same hint line as `geoHint`; `null` when there is none. Cleared on any pick. */
+  serverGeoCode: string | null;
+  /** CLIENT-ERR-8: call with the `errorCode` of a failed register / profile save. A geo code clears
+   * the stale selection, refetches the matching list and sets `serverGeoCode`; anything else is ignored. */
+  applyServerErrorCode: (code: string | null) => void;
   onUseMyLocation: () => void;
 
   /** Coordinates from a successful "Use my current location" click — `null` until one succeeds.
@@ -123,7 +132,14 @@ export function useGeoLocaleFieldsData(initial?: GeoLocaleFieldsInitial): GeoLoc
     ),
   );
 
-  const { data: regions, isLoading: isRegionsLoading, isError: isRegionsError } = useRegions(countryId);
+  const {
+    data: regions,
+    isLoading: isRegionsLoading,
+    isError: isRegionsError,
+    error: regionsError,
+  } = useRegions(countryId);
+  const queryClient = useQueryClient();
+  const [serverGeoCode, setServerGeoCode] = useState<string | null>(null);
 
   const { resolve } = useResolveGeo();
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
@@ -190,6 +206,7 @@ export function useGeoLocaleFieldsData(initial?: GeoLocaleFieldsInitial): GeoLoc
     (id: number | null) => {
       touchedRef.current.add('country');
       touchedRef.current.delete('region');
+      setServerGeoCode(null);
       setCountryId(id);
       setRegionId(null);
 
@@ -215,11 +232,52 @@ export function useGeoLocaleFieldsData(initial?: GeoLocaleFieldsInitial): GeoLoc
 
   const onRegionChange = useCallback((id: number | null) => {
     touchedRef.current.add('region');
+    setServerGeoCode(null);
     setRegionId(id);
   }, []);
 
+  // Read through a ref so `applyServerErrorCode` stays stable: callers run it from an effect keyed on
+  // the server's code, and a changing identity would re-apply a stale error over the user's next pick.
+  const countryIdRef = useRef(countryId);
+  useEffect(() => {
+    countryIdRef.current = countryId;
+  });
+
+  const applyServerErrorCode = useCallback(
+    (code: string | null) => {
+      if (!isGeoServerCode(code)) return;
+      setServerGeoCode(code);
+      touchedRef.current.add('region');
+      setRegionId(null);
+      if (code === 'REGION_UNKNOWN') {
+        void queryClient.invalidateQueries({ queryKey: regionsQueryKey(countryIdRef.current ?? -1) });
+      } else if (code !== 'REGION_COUNTRY_REQUIRED') {
+        touchedRef.current.add('country');
+        setCountryId(null);
+        void queryClient.invalidateQueries({ queryKey: countriesQueryKey });
+      }
+    },
+    [queryClient],
+  );
+
+  // The selected country is gone (stale or deactivated since the list loaded): same treatment as a
+  // rejected save, instead of the generic "couldn't load regions" line. State is adjusted while
+  // rendering (not in an effect) so the stale country never paints; the effect below only refetches.
+  const regionsErrorCode = regionsError ? getApiError(regionsError).code : undefined;
+  if (regionsErrorCode === 'COUNTRY_NOT_FOUND' && countryId !== null) {
+    setServerGeoCode('COUNTRY_NOT_FOUND');
+    setCountryId(null);
+    setRegionId(null);
+  }
+  useEffect(() => {
+    if (serverGeoCode === 'COUNTRY_NOT_FOUND') {
+      void queryClient.invalidateQueries({ queryKey: countriesQueryKey });
+    }
+  }, [serverGeoCode, queryClient]);
+
   const onUseMyLocation = useCallback(() => {
     setGeoHint(null);
+    setServerGeoCode(null);
     setIsRequestingLocation(true);
     void requestBrowserPosition()
       .then((position) => {
@@ -260,6 +318,8 @@ export function useGeoLocaleFieldsData(initial?: GeoLocaleFieldsInitial): GeoLoc
     isGeolocationSupported: isGeolocationSupported(),
     isRequestingLocation,
     geoHint,
+    serverGeoCode,
+    applyServerErrorCode,
     onUseMyLocation,
 
     latitude,

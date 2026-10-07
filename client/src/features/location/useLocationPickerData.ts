@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocationSearch } from './hooks/useLocationSearch';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import { useResolveMapsUrl } from './hooks/useResolveMapsUrl';
 import { useCreateLocation } from './hooks/useCreateLocation';
 import type { Location } from './types';
@@ -160,6 +161,8 @@ export function useLocationPickerData(
     onResolveUrl: resolveUrl,
     isResolving: resolveMutation.isPending,
     isResolveError: resolveMutation.isError,
+    /** CLIENT-ERR-8: the coded copy for a failed resolve (`LOCATION_MAPS_URL_*`), `undefined` for anything else. */
+    resolveErrorText: getCodedErrorMessage(resolveMutation.error),
     resolvedNoCoordinates:
       resolveMutation.isSuccess &&
       resolveMutation.data.latitude === null &&
@@ -175,5 +178,7 @@ export function useLocationPickerData(
     onSave: saveNewLocation,
     isSaving: createMutation.isPending,
     isSaveError: createMutation.isError,
+    /** CLIENT-ERR-8: the coded copy for a failed create, `undefined` for anything else. */
+    saveErrorText: getCodedErrorMessage(createMutation.error),
   };
 }

@@ -233,6 +233,7 @@ e2e/
     group-errors.spec.ts      # CLIENT-ERR-5
     post-errors.spec.ts       # CLIENT-ERR-6
     session-errors.spec.ts    # CLIENT-ERR-7
+    misc-errors.spec.ts       # CLIENT-ERR-8
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
@@ -1089,6 +1090,16 @@ The session module's coded errors (SESSION-45) localized from the error code. Ea
 | same dialog in Vietnamese | Locale stored as `vi`, forced 404 `SESSION_NOT_FOUND` on join: the dialog reads "Buổi chơi này không còn tồn tại.", "Đã hiểu" closes it. |
 | open a session that no longer exists | Forced 404 `SESSION_NOT_FOUND` on the detail load: the modal body shows the "No longer available" state (not "Couldn't load this session."), no toast; Close closes the modal. |
 | leave from a card, not a participant | Forced 409 `SESSION_NOT_PARTICIPANT` on a card's Leave (no modal open): the dialog reads "You're no longer part of this session.", no toast. |
+
+### `e2e/flows/misc-errors.spec.ts` (CLIENT-ERR-8, 3 `test()`s)
+
+The reference module's coded errors (REF-5) localized from the error code. The register response is forced with `page.route` (the MSW register handler only fails on a taken email). The location favorite and notification codes are covered by Vitest. See `client/docs/MVP/CLIENT-ERR-8_MISC_ERROR_ADAPTATION.md`.
+
+| Test | What it checks |
+|---|---|
+| `REGION_UNKNOWN` (en) | Register submit with a forced 400: the hint line under the geo fields reads "That region is no longer available. Pick another one.", no `role="alert"` banner appears, and the typed email and name are kept. |
+| `REGION_UNKNOWN` (vi) | Same hint in Vietnamese ("Khu vực này không còn khả dụng. Hãy chọn khu vực khác."), no banner; the locale is set through `locale-storage` before load. |
+| `COUNTRY_UNKNOWN` | Pick a country, submit with a forced 400: the hint reads "That country isn't available. Pick another one." and the Country select is empty again. |
 
 ### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
 

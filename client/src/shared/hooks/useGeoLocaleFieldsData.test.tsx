@@ -271,4 +271,76 @@ describe('useGeoLocaleFieldsData', () => {
     expect(result.current.languageCode).toBe('en'); // the seed — a failed resolve never touched it anyway
     expect(result.current.countryId).toBeNull();
   });
+
+  describe('server-rejected selections (CLIENT-ERR-8)', () => {
+    beforeEach(() => {
+      vi.spyOn(apiClient, 'post').mockResolvedValue(apiResponse(allNull));
+    });
+
+    it('REGION_UNKNOWN clears the region, keeps the country and sets serverGeoCode until the next pick', async () => {
+      const { result } = renderHook(() => useGeoLocaleFieldsData({ countryId: 1, regionId: 101 }), { wrapper });
+      await waitFor(() => expect(result.current.isReferenceLoading).toBe(false));
+
+      act(() => result.current.applyServerErrorCode('REGION_UNKNOWN'));
+
+      expect(result.current.regionId).toBeNull();
+      expect(result.current.countryId).toBe(1);
+      expect(result.current.serverGeoCode).toBe('REGION_UNKNOWN');
+
+      act(() => result.current.onRegionChange(101));
+      expect(result.current.serverGeoCode).toBeNull();
+    });
+
+    it('COUNTRY_UNKNOWN clears the country and the region', async () => {
+      const { result } = renderHook(() => useGeoLocaleFieldsData({ countryId: 1, regionId: 101 }), { wrapper });
+      await waitFor(() => expect(result.current.isReferenceLoading).toBe(false));
+
+      act(() => result.current.applyServerErrorCode('COUNTRY_UNKNOWN'));
+
+      expect(result.current.countryId).toBeNull();
+      expect(result.current.regionId).toBeNull();
+      expect(result.current.serverGeoCode).toBe('COUNTRY_UNKNOWN');
+    });
+
+    it('REGION_COUNTRY_REQUIRED shows the hint and leaves the country alone', async () => {
+      const { result } = renderHook(() => useGeoLocaleFieldsData({ countryId: 1 }), { wrapper });
+      await waitFor(() => expect(result.current.isReferenceLoading).toBe(false));
+
+      act(() => result.current.applyServerErrorCode('REGION_COUNTRY_REQUIRED'));
+
+      expect(result.current.countryId).toBe(1);
+      expect(result.current.serverGeoCode).toBe('REGION_COUNTRY_REQUIRED');
+    });
+
+    it('ignores null and codes that are not geo codes', async () => {
+      const { result } = renderHook(() => useGeoLocaleFieldsData({ countryId: 1, regionId: 101 }), { wrapper });
+      await waitFor(() => expect(result.current.isReferenceLoading).toBe(false));
+
+      act(() => result.current.applyServerErrorCode(null));
+      act(() => result.current.applyServerErrorCode('EMAIL_ALREADY_REGISTERED'));
+
+      expect(result.current.regionId).toBe(101);
+      expect(result.current.serverGeoCode).toBeNull();
+    });
+
+    it('a COUNTRY_NOT_FOUND from the regions list is handled like a rejected country', async () => {
+      vi.spyOn(apiClient, 'get').mockImplementation(async (url: unknown) => {
+        const path = url as string;
+        if (path === '/reference/languages') return apiResponse(languages);
+        if (path === '/reference/countries') return apiResponse(countries);
+        throw {
+          isAxiosError: true,
+          response: {
+            status: 404,
+            data: { success: false, message: 'Country not found', errorCode: 'COUNTRY_NOT_FOUND', data: null, timestamp: '' },
+          },
+        };
+      });
+
+      const { result } = renderHook(() => useGeoLocaleFieldsData({ countryId: 1 }), { wrapper });
+
+      await waitFor(() => expect(result.current.serverGeoCode).toBe('COUNTRY_NOT_FOUND'));
+      expect(result.current.countryId).toBeNull();
+    });
+  });
 });

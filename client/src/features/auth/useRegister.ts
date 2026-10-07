@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
 import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
+import { isGeoServerCode } from '@/shared/lib/geoErrors';
 import { useAuthStore } from '@/app/authStore';
 import type { ApiResponse } from '@/shared/types/api';
 import type { AuthResult, RegisterPayload, User } from './types';
@@ -36,8 +37,11 @@ export function useRegister(options?: { onSuccess?: (user: User) => void }): {
     },
   });
 
-  const errorMessage = mutation.error ? getErrorMessage(mutation.error) : null;
   const apiError = mutation.error ? getApiError(mutation.error) : null;
+  // CLIENT-ERR-8: a rejected country / region shows in the form's geo hint line (keyed on `errorCode`),
+  // so the banner stays empty for it.
+  const errorMessage =
+    mutation.error && !isGeoServerCode(apiError?.code) ? getErrorMessage(mutation.error) : null;
   const fields = apiError?.params?.fields;
   const errorFields =
     apiError?.code === 'VALIDATION_FAILED' && fields && typeof fields === 'object' ? Object.keys(fields) : [];

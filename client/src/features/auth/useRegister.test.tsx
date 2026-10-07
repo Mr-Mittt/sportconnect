@@ -118,6 +118,27 @@ describe('useRegister', () => {
     await i18next.changeLanguage('en');
   });
 
+  it.each(['REGION_UNKNOWN', 'COUNTRY_UNKNOWN', 'REGION_COUNTRY_REQUIRED'])(
+    'leaves the banner empty for %s (the geo hint line shows it) and still exposes the code',
+    async (code) => {
+      vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
+        isAxiosError: true,
+        response: {
+          status: 400,
+          data: { success: false, message: 'Unknown region', errorCode: code, data: null, timestamp: '' },
+        },
+      });
+
+      const { result } = renderHook(() => useRegister(), { wrapper });
+      act(() => {
+        result.current.register({ email: 'jordan@example.com', password: 'password123', fullName: 'Jordan Lee' });
+      });
+
+      await waitFor(() => expect(result.current.errorCode).toBe(code));
+      expect(result.current.errorMessage).toBeNull();
+    },
+  );
+
   it('shows the generic VALIDATION_FAILED copy and exposes the failed field names', async () => {
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
       isAxiosError: true,
