@@ -21,7 +21,10 @@ class GoogleMapsUrlResolverSpec extends Specification {
 
         then:
         0 * httpClient.send(*_)
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "LOCATION_MAPS_URL_UNSUPPORTED"
+        e.errorParams == null
+        e.message == "Only Google Maps URLs are supported"
     }
 
     def "rejects a malformed URL"() {
@@ -29,7 +32,10 @@ class GoogleMapsUrlResolverSpec extends Specification {
         resolver.resolve("not a url")
 
         then:
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "LOCATION_MAPS_URL_INVALID"
+        e.errorParams == null
+        e.message == "Not a valid URL"
     }
 
     @Unroll

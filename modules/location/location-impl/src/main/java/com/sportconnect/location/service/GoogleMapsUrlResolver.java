@@ -71,18 +71,18 @@ public class GoogleMapsUrlResolver {
         try {
             URI uri = URI.create(rawUrl);
             if (uri.getHost() == null) {
-                throw new BadRequestException("Not a valid URL");
+                throw new BadRequestException("LOCATION_MAPS_URL_INVALID", "Not a valid URL", null);
             }
             return uri;
         } catch (IllegalArgumentException e) {
-            throw new BadRequestException("Not a valid URL");
+            throw new BadRequestException("LOCATION_MAPS_URL_INVALID", "Not a valid URL", null);
         }
     }
 
     private String requireAllowedHost(URI uri) {
         String host = uri.getHost().toLowerCase();
         if (!ALLOWED_HOSTS.contains(host)) {
-            throw new BadRequestException("Only Google Maps URLs are supported");
+            throw new BadRequestException("LOCATION_MAPS_URL_UNSUPPORTED", "Only Google Maps URLs are supported", null);
         }
         return host;
     }

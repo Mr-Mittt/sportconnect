@@ -221,4 +221,19 @@ The module's four endpoints are public reads (plus `POST /resolve`); only the ge
 
 Deliberately **not coded**: the `POST /api/reference/resolve` request validation (more than 10 locales, a locale over 35 characters, a `timeZoneId` over 64, a coordinate out of range, only one of latitude/longitude) stays the generic `VALIDATION_FAILED` with per-field `errorParams`, because the browser pre-fill ignores a failed resolve; and the `GeoBoundaryResolver` `IllegalStateException`s, which happen at startup on bundled data and are not user-reachable. All four endpoints are public and run no `isActive` check; the selection check runs inside register and profile update, where a deactivated caller behaves as the U12 known gap describes (no check added here).
 
-Still to come: each remaining Phase B ticket (LOC-6, NTF-5) adds its section here.
+#### location (LOC-6, `LocationServiceImpl`, `GoogleMapsUrlResolver`, `LocationController`)
+
+Six user-reachable errors are coded. The two favorite stale-state errors moved from 400 to 409 (the A25 precedent for "already in the target state"); the client treats them as a double-click or second-tab case, refetches and shows no error (CLIENT-ERR-8; the cross-module review is part of CLIENT-ERR-9). A create against an unknown or deactivated sport reuses `SPORT_NOT_FOUND`. No `*_NOT_FOUND` response message carries the id any more (LOC-6 also stripped it from `SPORT_NOT_FOUND` and `COUNTRY_NOT_FOUND`); the id is logged server side.
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `LOCATION_NOT_FOUND` | 404 | none | `GET /api/locations/{id}` or `POST /api/locations/{id}/favorite` for a missing location. Also raised through `LocationService.getLocation` for session create/update and a group recurrence location, so those flows can return it. |
+| `LOCATION_SPORT_PROFILE_REQUIRED` | 400 | none | Favoriting a location whose sport the caller holds no active profile for. |
+| `LOCATION_ALREADY_FAVORITED` | 409 | none | Favoriting a location the caller already favorited (moved from 400 by LOC-6). |
+| `LOCATION_NOT_FAVORITED` | 409 | none | Unfavoriting a location the caller has not favorited (moved from 400 by LOC-6). |
+| `LOCATION_MAPS_URL_INVALID` | 400 | none | `POST /api/locations/resolve-maps-url` with text that is not a URL with a host. |
+| `LOCATION_MAPS_URL_UNSUPPORTED` | 400 | none | `POST /api/locations/resolve-maps-url` with a host that is not a Google Maps host. |
+
+Deliberately **not coded**: the `sportId is required` checks (search, favorites; the controller's required `sportId` request parameter already rejects a missing one before the service runs), the service-level `url is required` guard, and the `@Valid` field messages (stay `VALIDATION_FAILED`). Timezone derivation is best-effort and never throws, so it has no error surface.
+
+Still to come: the remaining Phase B ticket (NTF-5) adds its section here.

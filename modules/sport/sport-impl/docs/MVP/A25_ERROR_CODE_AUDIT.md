@@ -61,3 +61,5 @@ Phase B of the error-handling program for **sport**: (1) **check** every user-re
 - Results: sport-impl 91 tests, 0 failures; full `:server:test` 413 tests, 0 failures (BUILD SUCCESSFUL, 2m 18s); client `tsc -b` clean after the MSW handler change. Not run: client Vitest/e2e (no client source changed, only the MSW mock, which no current spec exercises for duplicate/resume), live `bootRun` smoke.
 
 **Divergences from the design:** none.
+
+**Delta (LOC-6, 2026-10-07, user decision):** the `SPORT_NOT_FOUND` response message no longer carries the id (`Sport not found`); the id is logged server side (`SportServiceImpl.sportNotFound`). Code, status and params are unchanged.

@@ -36,6 +36,9 @@ public interface LocationService {
      * Parses (or, for a short link, resolves via a redirect follow) coordinates out of a pasted
      * Google Maps URL. Does NOT persist anything — the caller reviews/edits the result and then
      * calls {@link #createLocation} separately.
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException 400 {@code LOCATION_MAPS_URL_INVALID} if the text is not a URL with a host,
+     *         or {@code LOCATION_MAPS_URL_UNSUPPORTED} if the host is not a Google Maps host (LOC-6); a blank url stays a generic 400
      */
     ResolvedMapsUrlResponse resolveGoogleMapsUrl(String url);
 
@@ -43,13 +46,18 @@ public interface LocationService {
      * Favorite a location (LOC-2). Requires the caller to hold an active {@code UserSportProfile}
      * for the location's sport (checked via {@code sport-api}'s
      * {@code UserSportProfileService.hasActiveProfileForActiveSport}, the same gate {@code createGroup} uses
-     * for group creation) — throws {@code BadRequestException} otherwise, or if already favorited.
-     * Throws {@code ResourceNotFoundException} if the location doesn't exist.
+     * for group creation).
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException 404 {@code LOCATION_NOT_FOUND} if the location doesn't exist
+     * @throws com.sportconnect.common.exception.BadRequestException 400 {@code LOCATION_SPORT_PROFILE_REQUIRED} without an active profile for the location's sport
+     * @throws com.sportconnect.common.exception.ConflictException 409 {@code LOCATION_ALREADY_FAVORITED} if the caller already favorited it (LOC-6; was a 400)
      */
     void favoriteLocation(UUID userId, Long locationId);
 
     /**
-     * Unfavorite a location. Throws {@code BadRequestException} if the caller hasn't favorited it.
+     * Unfavorite a location.
+     *
+     * @throws com.sportconnect.common.exception.ConflictException 409 {@code LOCATION_NOT_FAVORITED} if the caller hasn't favorited it (LOC-6; was a 400)
      */
     void unfavoriteLocation(UUID userId, Long locationId);
 

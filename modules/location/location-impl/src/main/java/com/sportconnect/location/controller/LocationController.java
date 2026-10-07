@@ -56,7 +56,7 @@ public class LocationController {
     @Operation(summary = "Get a location by id")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Location found"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found (LOCATION_NOT_FOUND)")
     })
     @GetMapping("/{locationId}")
     public ResponseEntity<ApiResponse<LocationResponse>> getLocation(@PathVariable Long locationId) {
@@ -81,7 +81,7 @@ public class LocationController {
     @Operation(summary = "Resolve a pasted Google Maps URL", description = "Parses (or resolves, for short links) coordinates from the URL. Does not persist anything.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Resolved (latitude/longitude may be null if not detected)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a valid or supported Maps URL"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not a valid URL (LOCATION_MAPS_URL_INVALID) or not a Google Maps URL (LOCATION_MAPS_URL_UNSUPPORTED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping("/resolve-maps-url")
@@ -95,9 +95,10 @@ public class LocationController {
     @Operation(summary = "Favorite a location", description = "Requires an active sport profile for the location's sport.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Favorited"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Already favorited, or no active profile for this sport"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "No active profile for this sport (LOCATION_SPORT_PROFILE_REQUIRED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Already favorited (LOCATION_ALREADY_FAVORITED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Location not found (LOCATION_NOT_FOUND)")
     })
     @PostMapping("/{locationId}/favorite")
     @PreAuthorize("hasRole('USER')")
@@ -111,7 +112,7 @@ public class LocationController {
     @Operation(summary = "Unfavorite a location")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Unfavorited"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not currently favorited"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Not currently favorited (LOCATION_NOT_FAVORITED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @DeleteMapping("/{locationId}/favorite")

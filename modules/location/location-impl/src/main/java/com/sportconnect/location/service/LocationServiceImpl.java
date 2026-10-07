@@ -1,6 +1,7 @@
 package com.sportconnect.location.service;
 
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.location.api.dto.CreateLocationRequest;
 import com.sportconnect.location.api.dto.LocationResponse;
@@ -80,7 +81,7 @@ public class LocationServiceImpl implements LocationService {
     @Transactional(readOnly = true)
     public LocationResponse getLocation(Long locationId) {
         Location location = locationRepository.findById(locationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Location", "id", locationId));
+                .orElseThrow(() -> locationNotFound(locationId));
         return toResponse(location, resolveSportName(location.getSportId()));
     }
 
@@ -125,13 +126,14 @@ public class LocationServiceImpl implements LocationService {
     @Transactional
     public void favoriteLocation(UUID userId, Long locationId) {
         Location location = locationRepository.findById(locationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Location", "id", locationId));
+                .orElseThrow(() -> locationNotFound(locationId));
 
         if (!userSportProfileService.hasActiveProfileForActiveSport(userId, location.getSportId())) {
-            throw new BadRequestException("You need an active profile for this location's sport to favorite it");
+            throw new BadRequestException("LOCATION_SPORT_PROFILE_REQUIRED",
+                    "You need an active profile for this location's sport to favorite it", null);
         }
         if (userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, locationId)) {
-            throw new BadRequestException("You have already favorited this location");
+            throw new ConflictException("LOCATION_ALREADY_FAVORITED", "You have already favorited this location", null);
         }
 
         UserFavoriteLocation favorite = UserFavoriteLocation.builder()
@@ -146,7 +148,7 @@ public class LocationServiceImpl implements LocationService {
     @Transactional
     public void unfavoriteLocation(UUID userId, Long locationId) {
         if (!userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, locationId)) {
-            throw new BadRequestException("You have not favorited this location");
+            throw new ConflictException("LOCATION_NOT_FAVORITED", "You have not favorited this location", null);
         }
         userFavoriteLocationRepository.deleteByUserIdAndLocationId(userId, locationId);
         log.info("User {} unfavorited location {}", userId, locationId);
@@ -162,6 +164,15 @@ public class LocationServiceImpl implements LocationService {
                 userId, sportId, pageable);
         Map<Long, String> sportNames = resolveSportNames(locations.getContent());
         return locations.map(l -> toResponse(l, sportNames.get(l.getSportId())));
+    }
+
+    /**
+     * LOC-6: 404 {@code LOCATION_NOT_FOUND}. The response message carries no id (the client localizes
+     * from the code); the id is logged here instead, since the exception handler does not log.
+     */
+    private ResourceNotFoundException locationNotFound(Long locationId) {
+        log.warn("Location {} not found", locationId);
+        return ResourceNotFoundException.coded("LOCATION_NOT_FOUND", "Location not found", null);
     }
 
     private String resolveSportName(Long sportId) {
