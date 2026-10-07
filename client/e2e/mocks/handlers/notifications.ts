@@ -9,8 +9,8 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string): ApiResponse<null> {
-  return { success: false, message, data: null, timestamp: new Date().toISOString() };
+function apiError(message: string, errorCode?: string): ApiResponse<null> {
+  return { success: false, message, data: null, timestamp: new Date().toISOString(), errorCode };
 }
 
 function requireAuth(request: Request): Response | null {
@@ -195,7 +195,7 @@ export const notificationHandlers: HttpHandler[] = [
     const all = notificationSessions.get(sessionId);
     const notification = all.find((n) => n.id === notificationId);
     if (!notification) {
-      return HttpResponse.json(apiError('Notification not found'), { status: 404 });
+      return HttpResponse.json(apiError('Notification not found', 'NOTIFICATION_NOT_FOUND'), { status: 404 });
     }
     notification.isRead = true;
     return HttpResponse.json(apiResponse(null, 'Notification marked read'));

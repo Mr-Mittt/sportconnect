@@ -58,8 +58,8 @@ public class NotificationController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Marked read"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not this caller's notification"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Notification not found")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not this caller's notification (NOTIFICATION_FORBIDDEN)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Notification not found (NOTIFICATION_NOT_FOUND)")
     })
     @PutMapping("/{notificationId}/read")
     @PreAuthorize("hasRole('USER')")

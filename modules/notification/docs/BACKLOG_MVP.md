@@ -24,7 +24,7 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [NTF-5](MVP/NTF-5_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the notification module — list/mark-read endpoints; smallest module. Pairs with CLIENT-ERR-8 | `TODO` |
+| — | _none open_ | | |
 
 ---
 
@@ -32,7 +32,8 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [NTF-4](MVP/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md) | `NotificationResponse` enrichment — actor names + entity title | `DONE` |
-| 2 | [NTF-1](MVP/NTF-1_MODULE_SCAFFOLDING.md) | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
-| 3 | [NTF-2](MVP/NTF-2_RABBITMQ_CONSUMER.md) | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `DONE` |
-| 4 | [NTF-3](MVP/NTF-3_STOMP_LIVE_DELIVERY.md) | STOMP-over-RabbitMQ live delivery to the client | `DONE` |
+| 1 | [NTF-5](MVP/NTF-5_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the notification module | `DONE` |
+| 2 | [NTF-4](MVP/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md) | `NotificationResponse` enrichment — actor names + entity title | `DONE` |
+| 3 | [NTF-1](MVP/NTF-1_MODULE_SCAFFOLDING.md) | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
+| 4 | [NTF-2](MVP/NTF-2_RABBITMQ_CONSUMER.md) | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `DONE` |
+| 5 | [NTF-3](MVP/NTF-3_STOMP_LIVE_DELIVERY.md) | STOMP-over-RabbitMQ live delivery to the client | `DONE` |

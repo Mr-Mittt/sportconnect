@@ -18,11 +18,13 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
@@ -78,8 +80,17 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public void markAsRead(UUID recipientUserId, Long notificationId) {
         Notification notification = notificationRepository.findById(notificationId).orElse(null);
+        // GlobalExceptionHandler does not log 404/403, and the response message carries no id, so
+        // the id is recorded here. A 403 means a crafted id: the list only returns the caller's own.
+        if (notification == null) {
+            log.warn("Notification {} not found", notificationId);
+        } else if (!notificationGate.isVisibleTo(notification, recipientUserId)) {
+            log.warn("User {} tried to mark notification {} read, but it belongs to someone else",
+                    recipientUserId, notificationId);
+        }
         notification = notificationGate.require(notification, recipientUserId,
-                "Notification not found", "You do not have access to this notification");
+                "NOTIFICATION_NOT_FOUND", "Notification not found",
+                "NOTIFICATION_FORBIDDEN", "You do not have access to this notification");
 
         if (!Boolean.TRUE.equals(notification.getIsRead())) {
             notification.setIsRead(true);

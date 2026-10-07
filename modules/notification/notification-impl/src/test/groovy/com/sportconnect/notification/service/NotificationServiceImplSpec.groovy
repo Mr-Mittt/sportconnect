@@ -190,7 +190,7 @@ class NotificationServiceImplSpec extends Specification {
         given:
         def notification = Notification.builder().id(7L).recipientUserId(recipientId).isRead(false).build()
         notificationRepository.findById(7L) >> Optional.of(notification)
-        notificationGate.require(notification, recipientId, _, _) >> notification
+        notificationGate.require(notification, recipientId, _, _, _, _) >> notification
 
         when:
         notificationService.markAsRead(recipientId, 7L)
@@ -203,7 +203,7 @@ class NotificationServiceImplSpec extends Specification {
         given:
         def notification = Notification.builder().id(7L).recipientUserId(recipientId).isRead(true).build()
         notificationRepository.findById(7L) >> Optional.of(notification)
-        notificationGate.require(notification, recipientId, _, _) >> notification
+        notificationGate.require(notification, recipientId, _, _, _, _) >> notification
 
         when:
         notificationService.markAsRead(recipientId, 7L)
@@ -215,26 +215,36 @@ class NotificationServiceImplSpec extends Specification {
     def "markAsRead propagates NotFoundException for a nonexistent notification"() {
         given:
         notificationRepository.findById(7L) >> Optional.empty()
-        notificationGate.require(null, recipientId, _, _) >> { throw new NotFoundException("Notification not found") }
-
         when:
         notificationService.markAsRead(recipientId, 7L)
 
         then:
-        thrown(NotFoundException)
+        1 * notificationGate.require(null, recipientId, "NOTIFICATION_NOT_FOUND", "Notification not found",
+                "NOTIFICATION_FORBIDDEN", "You do not have access to this notification") >> {
+            throw new NotFoundException("NOTIFICATION_NOT_FOUND", "Notification not found", null)
+        }
+        def e = thrown(NotFoundException)
+        e.errorCode == "NOTIFICATION_NOT_FOUND"
+        e.errorParams == null
+        e.message == "Notification not found"
     }
 
     def "markAsRead propagates ForbiddenException for someone else's notification"() {
         given:
         def notification = Notification.builder().id(7L).recipientUserId(UUID.randomUUID()).isRead(false).build()
         notificationRepository.findById(7L) >> Optional.of(notification)
-        notificationGate.require(notification, recipientId, _, _) >> { throw new ForbiddenException("You do not have access to this notification") }
-
         when:
         notificationService.markAsRead(recipientId, 7L)
 
         then:
-        thrown(ForbiddenException)
+        1 * notificationGate.require(notification, recipientId, "NOTIFICATION_NOT_FOUND", "Notification not found",
+                "NOTIFICATION_FORBIDDEN", "You do not have access to this notification") >> {
+            throw new ForbiddenException("NOTIFICATION_FORBIDDEN", "You do not have access to this notification", null)
+        }
+        def e = thrown(ForbiddenException)
+        e.errorCode == "NOTIFICATION_FORBIDDEN"
+        e.errorParams == null
+        e.message == "You do not have access to this notification"
     }
 
     def "getNotifications delegates to the repository ordered query and skips both enrichment calls when the page is empty"() {

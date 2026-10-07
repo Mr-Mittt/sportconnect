@@ -6,7 +6,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -55,7 +57,10 @@ class NotificationAccessGateIntegrationTest extends BaseIT {
         authenticateAs(UUID.randomUUID());
 
         mockMvc.perform(put("/api/notifications/{notificationId}/read", notificationId))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_FORBIDDEN"))
+                .andExpect(jsonPath("$.errorParams").doesNotExist())
+                .andExpect(jsonPath("$.message").value("You do not have access to this notification"));
     }
 
     @Test
@@ -63,7 +68,10 @@ class NotificationAccessGateIntegrationTest extends BaseIT {
         authenticateAs(UUID.randomUUID());
 
         mockMvc.perform(put("/api/notifications/{notificationId}/read", 999999L))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("NOTIFICATION_NOT_FOUND"))
+                .andExpect(jsonPath("$.errorParams").doesNotExist())
+                .andExpect(jsonPath("$.message").value("Notification not found"));
     }
 
     @Test
@@ -73,5 +81,17 @@ class NotificationAccessGateIntegrationTest extends BaseIT {
 
         mockMvc.perform(put("/api/notifications/{notificationId}/read", notificationId))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /** NTF-5: the list has no error path of its own; another user's rows are simply not in it. */
+    @Test
+    void list_onlyReturnsTheCallersOwnNotifications_andNeverErrors() throws Exception {
+        createNotification(UUID.randomUUID());
+        authenticateAs(UUID.randomUUID());
+
+        mockMvc.perform(get("/api/notifications"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.errorCode").doesNotExist())
+                .andExpect(jsonPath("$.data.content").isEmpty());
     }
 }
