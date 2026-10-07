@@ -17,6 +17,7 @@ import com.sportconnect.reference.repository.CountryRepository;
 import com.sportconnect.reference.repository.LanguageRepository;
 import com.sportconnect.reference.repository.RegionRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +32,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -65,7 +67,9 @@ public class ReferenceServiceImpl implements ReferenceService {
     @Override
     public List<RegionResponse> getActiveRegions(Long countryId) {
         if (countryId == null || !countryRepository.existsByIdAndIsActiveTrue(countryId)) {
-            throw ResourceNotFoundException.coded("COUNTRY_NOT_FOUND", "Country not found with id: '" + countryId + "'", null);
+            // LOC-6: the response message carries no id; it is logged instead (the exception handler does not log).
+            log.warn("Country {} not found or inactive", countryId);
+            throw ResourceNotFoundException.coded("COUNTRY_NOT_FOUND", "Country not found", null);
         }
         return regionRepository.findByCountryIdAndIsActiveTrueOrderByNameAsc(countryId).stream()
                 .map(this::toRegionResponse)

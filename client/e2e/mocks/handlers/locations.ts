@@ -8,8 +8,8 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string): ApiResponse<null> {
-  return { success: false, message, data: null, timestamp: new Date().toISOString() };
+function apiError(message: string, errorCode?: string): ApiResponse<null> {
+  return { success: false, message, data: null, timestamp: new Date().toISOString(), errorCode };
 }
 
 function requireAuth(request: Request): Response | null {
@@ -128,7 +128,7 @@ export const locationHandlers: HttpHandler[] = [
       .get(sessionIdFromRequest(request))
       .locationsState.find((candidate) => candidate.id === locationId);
     if (!location) {
-      return HttpResponse.json(apiError('Location not found'), { status: 404 });
+      return HttpResponse.json(apiError('Location not found', 'LOCATION_NOT_FOUND'), { status: 404 });
     }
     return HttpResponse.json(apiResponse(location, 'Location retrieved successfully'));
   }),
@@ -151,7 +151,7 @@ export const locationHandlers: HttpHandler[] = [
     const locationId = Number(params.locationId);
     const session = locationsSessions.get(sessionIdFromRequest(request));
     if (session.favoriteLocationIds.includes(locationId)) {
-      return HttpResponse.json(apiError('You have already favorited this location'), { status: 400 });
+      return HttpResponse.json(apiError('You have already favorited this location', 'LOCATION_ALREADY_FAVORITED'), { status: 409 });
     }
     session.favoriteLocationIds = [...session.favoriteLocationIds, locationId];
     return HttpResponse.json(apiResponse(null, 'Location favorited successfully'));
@@ -163,7 +163,7 @@ export const locationHandlers: HttpHandler[] = [
     const locationId = Number(params.locationId);
     const session = locationsSessions.get(sessionIdFromRequest(request));
     if (!session.favoriteLocationIds.includes(locationId)) {
-      return HttpResponse.json(apiError('You have not favorited this location'), { status: 400 });
+      return HttpResponse.json(apiError('You have not favorited this location', 'LOCATION_NOT_FAVORITED'), { status: 409 });
     }
     session.favoriteLocationIds = session.favoriteLocationIds.filter((id) => id !== locationId);
     return HttpResponse.json(apiResponse(null, 'Location unfavorited successfully'));

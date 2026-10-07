@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/location/location-impl`
-**Last updated:** 2026-09-25 (LOC-5 filed)
+**Last updated:** 2026-10-07 (LOC-6 done)
 
 ---
 
@@ -20,7 +20,6 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [LOC-5](MVP/LOC-5_VENUE_COUNTRY_REGION_LINKS.md) | Venue `Location` gains nullable `country_id`/`region_id`, auto-derived from coordinates on create (never rejects) + idempotent one-time backfill runner; new `location-impl` → `reference-api` edge. Needs REF-1 + REF-2 (`reference` backlog). Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
-| 2 | [LOC-6](MVP/LOC-6_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the location module — locations, favorites, timezone derivation; small. Pairs with CLIENT-ERR-8 | `TODO` |
 
 ---
 
@@ -28,7 +27,8 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [LOC-4](MVP/LOC-4_LOCATION_TIMEZONE.md) | Location gains a real IANA timezone, auto-derived from coordinates via `net.iakovlev:timeshape` (offline point-in-polygon lookup, no network call) — nullable, best-effort (no coordinates or no polygon match → null, never rejected/defaulted). Foundation for the session-impl location-timezone redesign (`documentation/md/LOCATION_TIMEZONE_DESIGN.md`, session `SESSION-33`/`34`/`35`). `V068` adds `locations.timezone`. Real deviation from plan: `TimeZoneEngine.initialize()`'s memory cost caused `OutOfMemoryError` across `:server:test`'s many Spring contexts when eagerly created as a normal bean — `@Lazy` didn't help (target class is `final`, then even on the non-final wrapping component it still didn't defer in practice) so `LocationTimeZoneResolver` self-manages a double-checked-locking lazy field instead. Also required bumping `commons-lang3` to 3.18.0+ in both `location-impl` and `server` (Spring BOM/an existing explicit pin conflicted with timeshape's `commons-compress` transitive dependency). Verified live end-to-end against real dev Postgres (real HTTP call, real HCMC coordinates → `Asia/Ho_Chi_Minh`). Green: session-impl (34 tests) + `:server:test` (231, only the 6 pre-existing SESSION-22 RabbitMQ-flake failures, confirmed unrelated via isolated re-run) | `DONE` (2026-09-16) |
-| 2 | [LOC-3](MVP/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md) | Drop DB-level FKs on location tables' cross-domain columns | `DONE` |
-| 3 | [LOC-2](MVP/LOC-2_FAVORITE_LOCATIONS.md) | Favorite locations | `DONE` |
-| 4 | [LOC-1](MVP/LOC-1_LOCATION_DOMAIN_BACKEND.md) | Location domain backend — shared, sport-scoped venue directory | `DONE` |
+| 1 | [LOC-6](MVP/LOC-6_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the location module (2026-10-07) — 6 codes (`LOCATION_NOT_FOUND`, `LOCATION_SPORT_PROFILE_REQUIRED`, `LOCATION_ALREADY_FAVORITED` / `LOCATION_NOT_FAVORITED` moved 400→409, `LOCATION_MAPS_URL_INVALID` / `_UNSUPPORTED`); `*_NOT_FOUND` messages no longer carry the id (also applied to `SPORT_NOT_FOUND`, `COUNTRY_NOT_FOUND`); new `LocationErrorCodesIntegrationTest`. Pairs with CLIENT-ERR-8 | `DONE` |
+| 2 | [LOC-4](MVP/LOC-4_LOCATION_TIMEZONE.md) | Location gains a real IANA timezone, auto-derived from coordinates via `net.iakovlev:timeshape` (offline point-in-polygon lookup, no network call) — nullable, best-effort (no coordinates or no polygon match → null, never rejected/defaulted). Foundation for the session-impl location-timezone redesign (`documentation/md/LOCATION_TIMEZONE_DESIGN.md`, session `SESSION-33`/`34`/`35`). `V068` adds `locations.timezone`. Real deviation from plan: `TimeZoneEngine.initialize()`'s memory cost caused `OutOfMemoryError` across `:server:test`'s many Spring contexts when eagerly created as a normal bean — `@Lazy` didn't help (target class is `final`, then even on the non-final wrapping component it still didn't defer in practice) so `LocationTimeZoneResolver` self-manages a double-checked-locking lazy field instead. Also required bumping `commons-lang3` to 3.18.0+ in both `location-impl` and `server` (Spring BOM/an existing explicit pin conflicted with timeshape's `commons-compress` transitive dependency). Verified live end-to-end against real dev Postgres (real HTTP call, real HCMC coordinates → `Asia/Ho_Chi_Minh`). Green: session-impl (34 tests) + `:server:test` (231, only the 6 pre-existing SESSION-22 RabbitMQ-flake failures, confirmed unrelated via isolated re-run) | `DONE` (2026-09-16) |
+| 3 | [LOC-3](MVP/LOC-3_DROP_LOCATION_CROSS_DOMAIN_FKS.md) | Drop DB-level FKs on location tables' cross-domain columns | `DONE` |
+| 4 | [LOC-2](MVP/LOC-2_FAVORITE_LOCATIONS.md) | Favorite locations | `DONE` |
+| 5 | [LOC-1](MVP/LOC-1_LOCATION_DOMAIN_BACKEND.md) | Location domain backend — shared, sport-scoped venue directory | `DONE` |

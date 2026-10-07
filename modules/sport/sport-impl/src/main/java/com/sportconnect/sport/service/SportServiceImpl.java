@@ -407,8 +407,9 @@ public class SportServiceImpl implements SportService {
 
     /** A25: 404 {@code SPORT_NOT_FOUND} for a missing or inactive sport on the user-reachable paths. */
     private static ResourceNotFoundException sportNotFound(Long sportId) {
-        return ResourceNotFoundException.coded("SPORT_NOT_FOUND",
-                String.format("Sport not found with id: '%s'", sportId), null);
+        // LOC-6: the response message carries no id; it is logged instead (the exception handler does not log).
+        log.warn("Sport {} not found", sportId);
+        return ResourceNotFoundException.coded("SPORT_NOT_FOUND", "Sport not found", null);
     }
 
     private Sport requireActiveSport(Long sportId) {

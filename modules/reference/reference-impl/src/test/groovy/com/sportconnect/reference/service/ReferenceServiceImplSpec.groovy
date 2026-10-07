@@ -102,7 +102,7 @@ class ReferenceServiceImplSpec extends Specification {
         then:
         def e = thrown(ResourceNotFoundException)
         e.errorCode == "COUNTRY_NOT_FOUND"
-        e.message == "Country not found with id: '${countryId}'"
+        e.message == "Country not found"
         0 * regionRepository._
 
         where:

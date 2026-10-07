@@ -23,3 +23,12 @@ Chat (`chatApiClient`, `useChatConversation`, the direct and group chat UIs) tal
 **Tests:** Vitest/RTL per updated hook or component (`useChatConversation` 403/404/5xx, send failure), a flow e2e case for a forbidden conversation (the MSW chat handlers already exist under `e2e/mocks`), scoped e2e; update `client/docs/E2E_OVERVIEW.md` if specs change.
 
 **On close:** update this ticket's row in the tracker table in `documentation/md/ERROR_HANDLING_DESIGN.md` (and `BACKLOG_MVP.md`/`PROGRESS.md` as usual).
+
+## Scope change (2026-10-07, from the LOC-6 scope discussion): cross-module "repeated action" review
+
+Added by user decision (replaces a separate CLIENT-LOC-2 ticket that was drafted and dropped): this is the last Phase C ticket, so by now every module's codes exist. Besides chat, it **reviews every toggle-style or "do once" mutation in the shipped client, all modules, not only location**, for the case where a double-click or a second tab produces an "already in the target state" error.
+
+- List the mutations (favorite, like/unlike for posts, sessions and comments, follow/unfollow, join/leave, friend actions, notification read, group join and so on). For each: is the control disabled while the request is in flight; is an optimistic state reconciled on an "already done" 409/400; does a repeat click show a toast or dialog where a silent refetch would serve better?
+- Cross-check against each module's "already in the target state" code (`LOCATION_ALREADY_FAVORITED`, `LOCATION_NOT_FAVORITED`, `SESSION_NOT_PARTICIPANT`, `SPORT_PROFILE_ALREADY_EXISTS`, the POST and GROUP equivalents).
+- Output: a findings table in the behavior table for sign-off; fix the cheap ones here and file the rest as their own tickets.
+- Location favorites themselves are implemented by CLIENT-ERR-8 (refetch, no error shown); this review only checks the rest and confirms ERR-8 matches the convention.

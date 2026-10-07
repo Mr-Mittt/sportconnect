@@ -392,6 +392,17 @@ CREATE TABLE IF NOT EXISTS locations (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- LOC-6: user_favorite_locations (V038), first needed when LocationErrorCodesIntegrationTest drove
+-- favorite/unfavorite end to end. Cross-domain user_id carries no FK here (V045 dropped it in
+-- production); location_id is in-domain and keeps its FK.
+CREATE TABLE IF NOT EXISTS user_favorite_locations (
+    id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL,
+    location_id BIGINT NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, location_id)
+);
+
 -- Create sessions / session_participants tables (needed once a real @SpringBootTest first
 -- exercised PostGate's SESSION_POST case for real — SESSION-10/A17,
 -- documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md §7's supersession note). Cross-domain columns

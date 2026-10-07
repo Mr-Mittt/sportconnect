@@ -397,7 +397,7 @@ export const sportHandlers: HttpHandler[] = [
     const session = sportSessions.get(sessionIdFromRequest(request));
     const sportId = Number(params.sportId);
     if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
-      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
     }
     return HttpResponse.json(
       apiResponse(
@@ -418,7 +418,7 @@ export const sportHandlers: HttpHandler[] = [
     const sportId = Number(params.sportId);
     const sport = session.adminSportCatalogState.find((entry) => entry.id === sportId);
     if (!sport || !sport.isActive) {
-      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
     }
     const rawSchema = session.attributeSchemaState[sportId] ?? null;
     return HttpResponse.json(
@@ -441,7 +441,7 @@ export const sportHandlers: HttpHandler[] = [
     const sportId = Number(params.sportId);
     const sport = session.adminSportCatalogState.find((entry) => entry.id === sportId);
     if (!sport || !sport.isActive) {
-      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
     }
     return HttpResponse.json(
       apiResponse(
@@ -458,7 +458,7 @@ export const sportHandlers: HttpHandler[] = [
     const sportId = Number(params.sportId);
     // findById server-side, not the active-only cache — an inactive sport IS writable.
     if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
-      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
     }
     const body = (await request.json()) as SportAttributeSchema | null;
     // One stand-in for the real validator, enough to exercise the "server rejected it,
@@ -487,7 +487,7 @@ export const sportHandlers: HttpHandler[] = [
     const session = sportSessions.get(sessionIdFromRequest(request));
     const sportId = Number(params.sportId);
     if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
-      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
     }
     return HttpResponse.json(
       apiResponse(
@@ -504,7 +504,7 @@ export const sportHandlers: HttpHandler[] = [
     const sportId = Number(params.sportId);
     // findById server-side, not the active-only cache — an inactive sport IS writable.
     if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
-      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
     }
     const body = (await request.json()) as SessionAttributeSchema | null;
     // Stand-ins for two of A17's validator rules — enough to exercise the "server rejected it,
@@ -531,7 +531,7 @@ export const sportHandlers: HttpHandler[] = [
     const sportId = Number(params.sportId);
     const existing = session.adminSportCatalogState.find((entry) => entry.id === sportId);
     if (!existing) {
-      return HttpResponse.json(apiError('Sport not found with id: ' + sportId), { status: 404 });
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
     }
     const body = (await request.json()) as Partial<SportResponse>;
     // sports.name is UNIQUE at the DB level. This used to arrive as an opaque 500 — no

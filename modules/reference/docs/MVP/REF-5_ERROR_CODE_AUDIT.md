@@ -62,3 +62,5 @@ Phase B of the error-handling program for **reference**: (1) **check** every use
 **Tests:** `ReferenceServiceImplSpec` (module `:modules:reference:reference-impl:test`): the four exception cases assert `errorCode`, `errorParams` and message. `:server:test` (full): **514 tests, 0 failures, 0 errors**.
 
 **Hand-off to CLIENT-ERR-8:** the final codes are `ERROR_CODES.md` § reference. The register form and the profile form show the three selection 400s today as the server's English text or a generic line; CLIENT-ERR-8 owns their en/vi copy and the region-picker refetch on `REGION_UNKNOWN`.
+
+**Delta (LOC-6, 2026-10-07, user decision):** the `COUNTRY_NOT_FOUND` response message no longer carries the id (`Country not found`); the id is logged server side (`ReferenceServiceImpl.getActiveRegions`). Code, status and params are unchanged.

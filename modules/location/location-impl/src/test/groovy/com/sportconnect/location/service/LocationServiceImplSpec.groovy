@@ -1,6 +1,7 @@
 package com.sportconnect.location.service
 
 import com.sportconnect.common.exception.BadRequestException
+import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.location.api.dto.CreateLocationRequest
 import com.sportconnect.location.entity.Location
@@ -148,7 +149,10 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         1 * locationRepository.findById(99L) >> Optional.empty()
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == "LOCATION_NOT_FOUND"
+        e.errorParams == null
+        e.message == "Location not found"
     }
 
     def "getLocationsByIds returns an empty map for an empty input list"() {
@@ -248,7 +252,9 @@ class LocationServiceImplSpec extends Specification {
         1 * locationRepository.findById(99L) >> Optional.empty()
         0 * userSportProfileService._
         0 * userFavoriteLocationRepository._
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == "LOCATION_NOT_FOUND"
+        e.message == "Location not found"
     }
 
     def "favoriteLocation rejects a caller with no active profile for the location's sport"() {
@@ -263,7 +269,10 @@ class LocationServiceImplSpec extends Specification {
         1 * locationRepository.findById(1L) >> Optional.of(location)
         1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 2L) >> false
         0 * userFavoriteLocationRepository._
-        thrown(BadRequestException)
+        def e = thrown(BadRequestException)
+        e.errorCode == "LOCATION_SPORT_PROFILE_REQUIRED"
+        e.errorParams == null
+        e.message == "You need an active profile for this location's sport to favorite it"
     }
 
     def "favoriteLocation rejects a duplicate favorite"() {
@@ -279,7 +288,10 @@ class LocationServiceImplSpec extends Specification {
         1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 2L) >> true
         1 * userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, 1L) >> true
         0 * userFavoriteLocationRepository.save(_)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == "LOCATION_ALREADY_FAVORITED"
+        e.errorParams == null
+        e.message == "You have already favorited this location"
     }
 
     def "unfavoriteLocation deletes an existing favorite"() {
@@ -304,7 +316,10 @@ class LocationServiceImplSpec extends Specification {
         then:
         1 * userFavoriteLocationRepository.existsByUserIdAndLocationId(userId, 1L) >> false
         0 * userFavoriteLocationRepository.deleteByUserIdAndLocationId(_, _)
-        thrown(BadRequestException)
+        def e = thrown(ConflictException)
+        e.errorCode == "LOCATION_NOT_FAVORITED"
+        e.errorParams == null
+        e.message == "You have not favorited this location"
     }
 
     def "getFavoriteLocations requires a sportId"() {

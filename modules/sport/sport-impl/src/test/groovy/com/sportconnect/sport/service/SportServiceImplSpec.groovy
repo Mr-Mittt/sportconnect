@@ -106,6 +106,7 @@ class SportServiceImplSpec extends Specification {
         def e = thrown(ResourceNotFoundException)
         e.errorCode == 'SPORT_NOT_FOUND'
         e.errorParams == null
+        e.message == 'Sport not found'
     }
 
     def "getActiveSportsByIds should return a map keyed by id for found sports"() {
