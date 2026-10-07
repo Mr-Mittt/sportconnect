@@ -58,7 +58,7 @@ public class ReferenceController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Resolved (possibly all-null)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
-                    description = "More than 10 locales, a locale over 35 characters, a coordinate out of range, or only one of latitude/longitude")
+                    description = "More than 10 locales, a locale over 35 characters, a coordinate out of range, or only one of latitude/longitude (errorCode VALIDATION_FAILED with per-field errorParams; deliberately no reference-specific code)")
     })
     @PostMapping("/resolve")
     public ResponseEntity<ApiResponse<ResolvedGeoResponse>> resolve(@Valid @RequestBody ResolveGeoRequest request) {
@@ -69,7 +69,7 @@ public class ReferenceController {
             description = "An active country with no seeded regions returns an empty list.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Regions retrieved"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Unknown or inactive country")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Unknown or inactive country (errorCode COUNTRY_NOT_FOUND)")
     })
     @GetMapping("/countries/{countryId}/regions")
     public ResponseEntity<ApiResponse<List<RegionResponse>>> getRegions(@PathVariable Long countryId) {

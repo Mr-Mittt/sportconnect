@@ -188,7 +188,8 @@ class ReferenceApiIntegrationTest extends BaseIT {
     @Test
     void getRegions_unknownCountry_returnsNotFound() throws Exception {
         mockMvc.perform(get("/api/reference/countries/{countryId}/regions", 999_999L).with(anonymous()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("COUNTRY_NOT_FOUND"));
     }
 
     @Test
@@ -198,7 +199,8 @@ class ReferenceApiIntegrationTest extends BaseIT {
         countryRepository.save(vietnam);
 
         mockMvc.perform(get("/api/reference/countries/{countryId}/regions", vietnamId).with(anonymous()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("COUNTRY_NOT_FOUND"));
         mockMvc.perform(get("/api/reference/countries").with(anonymous()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data", hasSize(0)));
@@ -392,7 +394,9 @@ class ReferenceApiIntegrationTest extends BaseIT {
                 "{\"latitude\": -90.5, \"longitude\": 0.0}",
                 "{\"latitude\": 0.0, \"longitude\": 181.0}",              // longitude out of range
                 "{\"latitude\": 0.0, \"longitude\": -180.5}")) {
-            resolve(body).andExpect(status().isBadRequest());
+            // Bean validation, deliberately not coded by REF-5: the generic C12 code, no reference code.
+            resolve(body).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
         }
     }
 

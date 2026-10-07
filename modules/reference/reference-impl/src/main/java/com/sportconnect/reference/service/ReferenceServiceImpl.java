@@ -59,12 +59,13 @@ public class ReferenceServiceImpl implements ReferenceService {
      * {@inheritDoc}
      *
      * <p>The country check comes first so an unknown or inactive country is a {@code 404} rather than
-     * being indistinguishable from an active country that simply has no regions (an empty list).
+     * being indistinguishable from an active country that simply has no regions (an empty list). The
+     * {@code 404} carries the code {@code COUNTRY_NOT_FOUND} (REF-5).
      */
     @Override
     public List<RegionResponse> getActiveRegions(Long countryId) {
         if (countryId == null || !countryRepository.existsByIdAndIsActiveTrue(countryId)) {
-            throw new ResourceNotFoundException("Country", "id", countryId);
+            throw ResourceNotFoundException.coded("COUNTRY_NOT_FOUND", "Country not found with id: '" + countryId + "'", null);
         }
         return regionRepository.findByCountryIdAndIsActiveTrueOrderByNameAsc(countryId).stream()
                 .map(this::toRegionResponse)
@@ -106,21 +107,26 @@ public class ReferenceServiceImpl implements ReferenceService {
      *
      * <p>Order matters: a region without a country is rejected before any lookup, then the country,
      * then the region against that country ({@code existsByIdAndCountryIdAndIsActiveTrue} covers
-     * unknown, inactive and foreign in one query).
+     * unknown, inactive and foreign in one query). REF-5 codes: {@code REGION_COUNTRY_REQUIRED},
+     * {@code COUNTRY_UNKNOWN} (params {@code country}) and {@code REGION_UNKNOWN} (params {@code region},
+     * {@code country}); all are {@code 400}, and a single code covers the three region causes because a
+     * client cannot act differently on them.
      */
     @Override
     public void requireValidSelection(Long countryId, Long regionId) {
         if (countryId == null) {
             if (regionId != null) {
-                throw new BadRequestException("A region cannot be selected without a country");
+                throw new BadRequestException("REGION_COUNTRY_REQUIRED", "A region cannot be selected without a country", null);
             }
             return;
         }
         if (!countryRepository.existsByIdAndIsActiveTrue(countryId)) {
-            throw new BadRequestException("Unknown or inactive country: " + countryId);
+            throw new BadRequestException("COUNTRY_UNKNOWN", "Unknown or inactive country: " + countryId, Map.of("country", countryId));
         }
         if (regionId != null && !regionRepository.existsByIdAndCountryIdAndIsActiveTrue(regionId, countryId)) {
-            throw new BadRequestException("Region " + regionId + " is unknown, inactive, or not in country " + countryId);
+            throw new BadRequestException("REGION_UNKNOWN",
+                    "Region " + regionId + " is unknown, inactive, or not in country " + countryId,
+                    Map.of("region", regionId, "country", countryId));
         }
     }
 

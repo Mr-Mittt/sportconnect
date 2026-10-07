@@ -117,7 +117,10 @@ class ProfileGeoUpdateIntegrationTest extends BaseIT {
         authenticateAs(userId);
 
         updateProfile(userId, "{\"countryId\": " + otherId + ", \"regionId\": " + saigonId + ", \"bio\": \"must not be saved\"}")
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("REGION_UNKNOWN"))
+                .andExpect(jsonPath("$.errorParams.region").value(saigonId.intValue()))
+                .andExpect(jsonPath("$.errorParams.country").value(otherId.intValue()));
 
         User unchanged = reload(userId);
         assertThat(unchanged.getCountryId()).isNull();
@@ -129,7 +132,9 @@ class ProfileGeoUpdateIntegrationTest extends BaseIT {
     void updateProfile_regionWithoutAnyCountry_isBadRequest() throws Exception {
         authenticateAs(userId);
 
-        updateProfile(userId, "{\"regionId\": " + saigonId + "}").andExpect(status().isBadRequest());
+        updateProfile(userId, "{\"regionId\": " + saigonId + "}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("REGION_COUNTRY_REQUIRED"));
 
         assertThat(reload(userId).getRegionId()).isNull();
     }
@@ -138,14 +143,19 @@ class ProfileGeoUpdateIntegrationTest extends BaseIT {
     void updateProfile_unknownAndInactiveCountryOrRegion_areBadRequests() throws Exception {
         authenticateAs(userId);
 
-        updateProfile(userId, "{\"countryId\": 999999}").andExpect(status().isBadRequest());
-        updateProfile(userId, "{\"countryId\": " + vietnamId + ", \"regionId\": 999999}").andExpect(status().isBadRequest());
+        updateProfile(userId, "{\"countryId\": 999999}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("COUNTRY_UNKNOWN"))
+                .andExpect(jsonPath("$.errorParams.country").value(999999));
+        updateProfile(userId, "{\"countryId\": " + vietnamId + ", \"regionId\": 999999}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("REGION_UNKNOWN"));
 
         jdbc.update("UPDATE regions SET is_active = FALSE WHERE id = ?", saigonId);
-        updateProfile(userId, "{\"countryId\": " + vietnamId + ", \"regionId\": " + saigonId + "}").andExpect(status().isBadRequest());
+        updateProfile(userId, "{\"countryId\": " + vietnamId + ", \"regionId\": " + saigonId + "}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("REGION_UNKNOWN"));
 
         jdbc.update("UPDATE countries SET is_active = FALSE WHERE id = ?", vietnamId);
-        updateProfile(userId, "{\"countryId\": " + vietnamId + "}").andExpect(status().isBadRequest());
+        updateProfile(userId, "{\"countryId\": " + vietnamId + "}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("COUNTRY_UNKNOWN"));
     }
 
     /** A lone regionId is checked against the country already on the profile, and an absent regionId clears it. */
