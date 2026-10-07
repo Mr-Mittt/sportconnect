@@ -115,7 +115,7 @@ The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) 
 
 Not coded by A25 (admin-only, no localization needed): duplicate sport name, the admin sport create/update/delete and schema `PUT`/`/all` 404s, and the `common.attributes` schema validators. Bean-validation failures on the profile body use `VALIDATION_FAILED`. The group-create gate `You must have a sport profile for this sport to create a group` is a group error (A11).
 
-Not coded by U21: the generic `User not found with id …` 404s (lookups, profile, password and preferences for a missing or deactivated caller use the category copy), and the three `ReferenceService.requireValidSelection` 400s (country/region selection), which belong to REF-5.
+Not coded by U21: the generic `User not found with id …` 404s (lookups, profile, password and preferences for a missing or deactivated caller use the category copy), and the three `ReferenceService.requireValidSelection` 400s (country/region selection), which REF-5 coded (§ reference).
 #### group (A11, `GroupServiceImpl`, `GroupController`)
 
 A11 also moved statuses: owner/admin/member/invitee permission failures went 400 → 403, state conflicts 400 → 409, and "Group no longer exists" 400 → 404 (consumer census in the ticket). The three 403 owner/admin/member codes are distinct on the wire but the client shows the same copy for each.
@@ -208,4 +208,17 @@ SESSION-45 moved statuses the same way A11 and A18 did: permission failures 400 
 
 Deliberately **not coded** (user decision, SESSION-45): the technical validation 400s — session attributes too large or unserializable, an invalid `viewerZoneId`, and the 11 `SessionController` query-parameter checks on upcoming/history/discover/counts. They keep their English `message`, the client shows the generic copy, and each throw site logs a `warn` with the offending value. A sport or location missing on create/update surfaces the `SPORT_NOT_FOUND` code (§ sport) or the location module's own error (LOC-6). A deactivated caller gets no special answer from any session endpoint (U12 known gap, no check added). A deleted group makes join/modify/cancel/approve answer a 403 group code rather than `SESSION_NOT_FOUND`, because the group membership check fails first.
 
-Still to come: each remaining Phase B ticket (REF-5, LOC-6, NTF-5) adds its section here.
+#### reference (REF-5, `ReferenceServiceImpl`, `ReferenceController`)
+
+The module's four endpoints are public reads (plus `POST /resolve`); only the geo-selection checks that user flows run through `ReferenceService.requireValidSelection` and the regions list can fail in a way a user can act on. No status moved: the 400s stay 400, the 404 stays 404. Language errors are `LANGUAGE_UNKNOWN` (§ user, coded by U21), not repeated here.
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `COUNTRY_NOT_FOUND` | 404 | none | `GET /api/reference/countries/{id}/regions` for an unknown or inactive country. |
+| `COUNTRY_UNKNOWN` | 400 | `{country}` | A country/region selection (register, profile update) naming an unknown or inactive country. |
+| `REGION_UNKNOWN` | 400 | `{region, country}` | The selected region is unknown, inactive, or not in the selected country (one code: a client cannot act differently on the three causes; a region deactivated by a data refresh such as REF-3 lands here). |
+| `REGION_COUNTRY_REQUIRED` | 400 | none | A region sent without any country. |
+
+Deliberately **not coded**: the `POST /api/reference/resolve` request validation (more than 10 locales, a locale over 35 characters, a `timeZoneId` over 64, a coordinate out of range, only one of latitude/longitude) stays the generic `VALIDATION_FAILED` with per-field `errorParams`, because the browser pre-fill ignores a failed resolve; and the `GeoBoundaryResolver` `IllegalStateException`s, which happen at startup on bundled data and are not user-reachable. All four endpoints are public and run no `isActive` check; the selection check runs inside register and profile update, where a deactivated caller behaves as the U12 known gap describes (no check added here).
+
+Still to come: each remaining Phase B ticket (LOC-6, NTF-5) adds its section here.

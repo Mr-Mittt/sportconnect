@@ -100,7 +100,9 @@ class ReferenceServiceImplSpec extends Specification {
         service.getActiveRegions(countryId)
 
         then:
-        thrown(ResourceNotFoundException)
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == "COUNTRY_NOT_FOUND"
+        e.message == "Country not found with id: '${countryId}'"
         0 * regionRepository._
 
         where:
@@ -235,6 +237,8 @@ class ReferenceServiceImplSpec extends Specification {
         then:
         def e = thrown(BadRequestException)
         e.message.contains("without a country")
+        e.errorCode == "REGION_COUNTRY_REQUIRED"
+        e.errorParams == null
         0 * countryRepository._
         0 * regionRepository._
     }
@@ -249,6 +253,8 @@ class ReferenceServiceImplSpec extends Specification {
         then:
         def e = thrown(BadRequestException)
         e.message.contains("999")
+        e.errorCode == "COUNTRY_UNKNOWN"
+        e.errorParams == [country: 999L]
     }
 
     def "requireValidSelection rejects a region that is not in the country, inactive, or unknown"() {
@@ -262,6 +268,8 @@ class ReferenceServiceImplSpec extends Specification {
         then:
         def e = thrown(BadRequestException)
         e.message.contains("80")
+        e.errorCode == "REGION_UNKNOWN"
+        e.errorParams == [region: 80L, country: 7L]
     }
 
     // ---------- resolve / resolveByCoordinates (REF-2) ----------

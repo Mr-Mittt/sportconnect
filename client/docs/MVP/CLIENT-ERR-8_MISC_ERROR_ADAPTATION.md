@@ -20,3 +20,5 @@ Phase C of the error-handling program for **reference / location / notification*
 **Tests:** Vitest/RTL per updated component or hook (code → localized text, unknown code → category copy → server prose), a `locale.spec.ts` or flow e2e case for the main flow in `vi`, scoped e2e; update `client/docs/E2E_OVERVIEW.md` if specs change.
 
 **On close:** update this ticket's row in the tracker table in `documentation/md/ERROR_HANDLING_DESIGN.md` (and the module's `BACKLOG_MVP.md`/`PROGRESS.md` as usual).
+
+**Carried over from REF-5 (2026-10-07):** the reference codes are final (`ERROR_CODES.md` § reference): `COUNTRY_NOT_FOUND` (404, regions list), `COUNTRY_UNKNOWN` (400, `{country}`), `REGION_UNKNOWN` (400, `{region, country}`), `REGION_COUNTRY_REQUIRED` (400). The three 400s come back from register and profile update; `REGION_UNKNOWN` is what a stale or REF-3-deactivated region id produces, so the region picker should refetch. The `resolve` endpoint's 400s are generic `VALIDATION_FAILED` and the pre-fill ignores them. This is client-actionable, so CLIENT-ERR-8 will not close as a no-op on REF-5's account.

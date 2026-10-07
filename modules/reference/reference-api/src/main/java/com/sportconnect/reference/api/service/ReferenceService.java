@@ -38,6 +38,7 @@ public interface ReferenceService {
      * yields an empty list, not an error.
      *
      * @throws com.sportconnect.common.exception.ResourceNotFoundException for an unknown or inactive country
+     *         (code {@code COUNTRY_NOT_FOUND})
      */
     List<RegionResponse> getActiveRegions(Long countryId);
 
@@ -57,8 +58,9 @@ public interface ReferenceService {
      * Validates a country/region selection. Valid: both {@code null}; a country alone; a country plus a
      * region that is active and belongs to that country.
      *
-     * @throws com.sportconnect.common.exception.BadRequestException for a region without a country, an
-     *         unknown or inactive country, or an unknown, inactive or foreign region
+     * @throws com.sportconnect.common.exception.BadRequestException for a region without a country (code
+     *         {@code REGION_COUNTRY_REQUIRED}), an unknown or inactive country ({@code COUNTRY_UNKNOWN}), or
+     *         an unknown, inactive or foreign region ({@code REGION_UNKNOWN})
      */
     void requireValidSelection(Long countryId, Long regionId);
 

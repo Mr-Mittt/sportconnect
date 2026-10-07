@@ -153,25 +153,30 @@ class RegistrationGeoIntegrationTest extends BaseIT {
 
         register("u16-mismatch@example.com", "\"countryId\": " + otherCountryId + ", \"regionId\": " + saigonId
                 + ", \"languageCode\": \"vi\"")
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("REGION_UNKNOWN"));
 
         assertNothingCreated("u16-mismatch@example.com");
     }
 
     @Test
     void register_regionWithoutCountry_isBadRequestAndCreatesNothing() throws Exception {
-        register("u16-noctry@example.com", "\"regionId\": " + saigonId).andExpect(status().isBadRequest());
+        register("u16-noctry@example.com", "\"regionId\": " + saigonId).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("REGION_COUNTRY_REQUIRED"));
 
         assertNothingCreated("u16-noctry@example.com");
     }
 
     @Test
     void register_unknownOrInactiveCountry_isBadRequestAndCreatesNothing() throws Exception {
-        register("u16-unk-country@example.com", "\"countryId\": 999999").andExpect(status().isBadRequest());
+        register("u16-unk-country@example.com", "\"countryId\": 999999").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("COUNTRY_UNKNOWN"))
+                .andExpect(jsonPath("$.errorParams.country").value(999999));
         assertNothingCreated("u16-unk-country@example.com");
 
         jdbc.update("UPDATE countries SET is_active = FALSE WHERE id = ?", vietnamId);
-        register("u16-off-country@example.com", "\"countryId\": " + vietnamId).andExpect(status().isBadRequest());
+        register("u16-off-country@example.com", "\"countryId\": " + vietnamId).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("COUNTRY_UNKNOWN"));
         assertNothingCreated("u16-off-country@example.com");
     }
 
