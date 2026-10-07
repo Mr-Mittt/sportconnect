@@ -32,13 +32,14 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
 }
 
-function apiError(message: string, errorCode?: string): ApiResponse<null> {
+function apiError(message: string, errorCode?: string, errorParams?: Record<string, unknown>): ApiResponse<null> {
   return {
     success: false,
     message,
     data: null,
     timestamp: new Date().toISOString(),
     ...(errorCode ? { errorCode } : {}),
+    ...(errorParams ? { errorParams } : {}),
   };
 }
 
@@ -714,7 +715,7 @@ export const sessionHandlers: HttpHandler[] = [
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const found = session.sessionsState.find((candidate) => candidate.id === sessionId);
     if (!found) {
-      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
     return HttpResponse.json(apiResponse(withCallerParticipation(session, found), 'Session retrieved successfully'));
   }),
@@ -726,7 +727,7 @@ export const sessionHandlers: HttpHandler[] = [
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
     if (!existing) {
-      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
     // The real request body is `UpdateSessionPayload` (a `locationId` number, not the resolved
     // `Location` object `Session.location` carries) — never `Partial<Session>`.
@@ -748,8 +749,8 @@ export const sessionHandlers: HttpHandler[] = [
     // SESSION-24: locationId/feeType are mutable via this endpoint only while PREPARING.
     if ((body.locationId !== undefined || body.feeType !== undefined) && existing.status !== 'PREPARING') {
       return HttpResponse.json(
-        apiError('Location and fee are immutable once the session is no longer being prepared'),
-        { status: 400 },
+        apiError('Location and fee are immutable once the session is no longer being prepared', 'SESSION_NOT_PREPARING'),
+        { status: 409 },
       );
     }
     const resolvedLocation = body.locationId !== undefined ? mockLocation : existing.location;
@@ -786,10 +787,10 @@ export const sessionHandlers: HttpHandler[] = [
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
     if (!existing) {
-      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
     if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
-      return HttpResponse.json(apiError('Session already completed or cancelled'), { status: 400 });
+      return HttpResponse.json(apiError('Session already completed or cancelled', 'SESSION_NOT_CANCELLABLE', { status: 'COMPLETED' }), { status: 409 });
     }
     const body = (request.headers.get('content-length') === '0' ? {} : await request.json().catch(() => ({}))) as {
       reason?: string;
@@ -816,7 +817,7 @@ export const sessionHandlers: HttpHandler[] = [
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
     if (!existing) {
-      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
     const participants = session.participantsState[sessionId] ?? [];
     const alreadyJoined = participants.some((p) => p.userId === mockUser.id && p.status === 'JOINED');
@@ -868,7 +869,7 @@ export const sessionHandlers: HttpHandler[] = [
         (p.status === 'JOINED' || p.status === 'INVITED' || p.status === 'REQUESTED'),
     );
     if (!row) {
-      return HttpResponse.json(apiError('Not currently a participant in this session'), { status: 400 });
+      return HttpResponse.json(apiError('Not currently a participant in this session', 'SESSION_NOT_PARTICIPANT'), { status: 409 });
     }
     row.status = 'LEFT';
     session.sessionsState = session.sessionsState.map((candidate) =>
@@ -903,7 +904,7 @@ export const sessionHandlers: HttpHandler[] = [
     const participants = session.participantsState[sessionId] ?? [];
     const row = participants.find((p) => p.userId === params.userId && p.status === 'REQUESTED');
     if (!row) {
-      return HttpResponse.json(apiError('No pending join request for this user'), { status: 400 });
+      return HttpResponse.json(apiError('No pending join request for this user', 'SESSION_JOIN_REQUEST_NOT_FOUND'), { status: 404 });
     }
     row.status = 'JOINED';
     session.sessionsState = session.sessionsState.map((candidate) =>
@@ -926,7 +927,7 @@ export const sessionHandlers: HttpHandler[] = [
     const participants = session.participantsState[sessionId] ?? [];
     const row = participants.find((p) => p.userId === params.userId && p.status === 'REQUESTED');
     if (!row) {
-      return HttpResponse.json(apiError('No pending join request for this user'), { status: 400 });
+      return HttpResponse.json(apiError('No pending join request for this user', 'SESSION_JOIN_REQUEST_NOT_FOUND'), { status: 404 });
     }
     const body = (request.headers.get('content-length') === '0' ? {} : await request.json().catch(() => ({}))) as {
       reason?: string;
@@ -1033,7 +1034,7 @@ export const sessionHandlers: HttpHandler[] = [
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
     if (!existing) {
-      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
     if (existing.isLikedByCurrentUser) {
       return HttpResponse.json(apiError('Already liked', 'POST_ALREADY_LIKED'), { status: 409 });
@@ -1053,7 +1054,7 @@ export const sessionHandlers: HttpHandler[] = [
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
     if (!existing) {
-      return HttpResponse.json(apiError('Session not found'), { status: 404 });
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
     if (!existing.isLikedByCurrentUser) {
       return HttpResponse.json(apiError('Not currently liked', 'POST_NOT_LIKED'), { status: 409 });

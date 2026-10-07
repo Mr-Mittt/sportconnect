@@ -116,6 +116,20 @@
     "COMMENT_SYSTEM_READONLY": "Không thể trả lời, thích hoặc xóa bình luận tự động.",
     "COMMENT_DELETE_FORBIDDEN": "Bạn chỉ có thể xóa bình luận của chính mình.",
     "COMMENT_ALREADY_LIKED": "Bạn đã thích bình luận này rồi.",
-    "COMMENT_NOT_LIKED": "Bạn chưa thích bình luận này."
+    "COMMENT_NOT_LIKED": "Bạn chưa thích bình luận này.",
+    "SESSION_NOT_FOUND": "Buổi chơi này không còn tồn tại.",
+    "SESSION_JOIN_REQUEST_NOT_FOUND": "Yêu cầu tham gia này không còn chờ duyệt.",
+    "SESSION_FORBIDDEN": "Bạn không có quyền truy cập buổi chơi này.",
+    "SESSION_GROUP_MEMBER_REQUIRED": "Chỉ thành viên của nhóm này mới làm được việc đó. Hãy tham gia nhóm trước.",
+    "SESSION_GROUP_ADMIN_REQUIRED": "Chỉ chủ nhóm hoặc quản trị viên mới làm được việc này.",
+    "SESSION_CREATOR_REQUIRED": "Chỉ người tạo buổi chơi mới làm được việc này.",
+    "SESSION_CANCELLED": "Buổi chơi này đã bị hủy.",
+    "SESSION_NOT_CANCELLABLE": "Buổi chơi này đã kết thúc hoặc đã bị hủy.",
+    "SESSION_NOT_PREPARING": "Chỉ có thể đổi địa điểm và phí khi buổi chơi còn đang chuẩn bị.",
+    "SESSION_NOT_PARTICIPANT": "Bạn không còn tham gia buổi chơi này.",
+    "SESSION_CREATOR_CANNOT_LEAVE": "Là người tạo, bạn không thể rời buổi chơi này. Hãy hủy buổi chơi.",
+    "SESSION_SPORT_REQUIRED": "Hãy chọn môn thể thao cho buổi chơi.",
+    "SESSION_LOCATION_SPORT_MISMATCH": "Địa điểm này không dành cho môn của buổi chơi. Hãy chọn địa điểm khác.",
+    "SESSION_FEE_AMOUNT_REQUIRED": "Hãy nhập mức phí."
   }
 }

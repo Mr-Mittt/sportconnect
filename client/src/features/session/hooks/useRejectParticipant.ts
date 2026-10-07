@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { reportSessionMutationError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 
 /**
@@ -9,6 +10,8 @@ import { sessionKeys } from '../queryKeys';
 export function useRejectParticipant() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
+    onError: reportSessionMutationError,
     mutationFn: async ({
       sessionId,
       userId,

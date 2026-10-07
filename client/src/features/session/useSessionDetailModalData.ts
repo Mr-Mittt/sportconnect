@@ -18,6 +18,7 @@ import { useSessionParticipants } from './hooks/useSessionParticipants';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
 import { useUnlikeSession } from './hooks/useUnlikeSession';
 import { useUpdateSession } from './hooks/useUpdateSession';
+import { isSessionDialogError, useSessionErrorGuard } from './sessionErrors';
 import type { UpdateSessionPayload } from './types';
 import { useSessionCommentsData } from './useSessionCommentsData';
 
@@ -41,9 +42,12 @@ const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
  * `sessionKeys.all` root on success, so this is a harmless duplicate mutation object, not a
  * correctness issue.
  */
-export function useSessionDetailModalData(sessionId: number | null) {
+export function useSessionDetailModalData(sessionId: number | null, closeDetail?: () => void) {
   const currentUserId = useAuthStore((state) => state.user?.id);
   const isDetailOpen = sessionId !== null;
+
+  // CLIENT-ERR-7: a dismissed 403 error dialog closes this modal (the user has no right to be in it).
+  useSessionErrorGuard(sessionId, closeDetail);
 
   const sessionQuery = useSession(sessionId ?? undefined, isDetailOpen);
   const participantsQuery = useSessionParticipants(sessionId ?? undefined, isDetailOpen);
@@ -169,6 +173,8 @@ export function useSessionDetailModalData(sessionId: number | null) {
     selectedSession: sessionQuery.data,
     isSessionLoading: sessionQuery.isLoading,
     isSessionError: sessionQuery.isError,
+    /** CLIENT-ERR-7: the raw detail-load failure, so the modal can pick the not-found / no-access state. */
+    sessionLoadError: sessionQuery.error,
     sessionAttributeSchema,
     // SPORT-16: profile schema for `#ref`→base `layout` inheritance in the read view.
     refBaseSchema,
@@ -185,18 +191,18 @@ export function useSessionDetailModalData(sessionId: number | null) {
     completionFavorites,
     onCompleteSession,
     isCompletingSession: updateSessionMutation.isPending,
-    isCompleteSessionError: updateSessionMutation.isError,
+    isCompleteSessionError: updateSessionMutation.isError && !isSessionDialogError(updateSessionMutation.error),
     onJoin: () => sessionId !== null && joinMutation.mutate(sessionId),
     isJoining: joinMutation.isPending,
-    isJoinError: joinMutation.isError,
+    isJoinError: joinMutation.isError && !isSessionDialogError(joinMutation.error),
     onLeave: () => sessionId !== null && leaveMutation.mutate(sessionId),
     isLeaving: leaveMutation.isPending,
-    isLeaveError: leaveMutation.isError,
+    isLeaveError: leaveMutation.isError && !isSessionDialogError(leaveMutation.error),
     onConfirmCancel: (reason: string) =>
       sessionId !== null &&
       cancelMutation.mutate({ sessionId, payload: { reason: reason || undefined } }),
     isCancelling: cancelMutation.isPending,
-    isCancelError: cancelMutation.isError,
+    isCancelError: cancelMutation.isError && !isSessionDialogError(cancelMutation.error),
     onToggleLike: () => {
       if (sessionId === null) return;
       if (sessionQuery.data?.isLikedByCurrentUser) {

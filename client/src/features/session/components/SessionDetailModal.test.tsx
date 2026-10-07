@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { AxiosError, type AxiosResponse } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
 import type { Comment } from '@/features/feed/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
@@ -203,6 +204,32 @@ describe('SessionDetailModal', () => {
 
   it('shows an error message on load failure', () => {
     render(<SessionDetailModal {...baseProps} session={undefined} isError participants={[]} />);
+    expect(screen.getByText("Couldn't load this session.")).toBeInTheDocument();
+  });
+
+  it.each([
+    [404, 'SESSION_NOT_FOUND', 'No longer available'],
+    [403, 'SESSION_FORBIDDEN', 'No access'],
+  ])('a %i (%s) detail load shows the "%s" state with a Close button that closes the modal', async (status, code, title) => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const error = new AxiosError('failed', 'ERR_BAD_REQUEST');
+    error.response = { status, data: { success: false, message: 'prose', errorCode: code } } as AxiosResponse;
+    render(
+      <SessionDetailModal {...baseProps} onClose={onClose} session={undefined} isError loadError={error} participants={[]} />,
+    );
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load this session.")).not.toBeInTheDocument();
+    // The state's own action (the dialog header also has an icon Close, so take the one in the body).
+    const buttons = screen.getAllByRole('button', { name: 'Close' });
+    await user.click(buttons[buttons.length - 1]);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('a 500 detail load keeps the generic line', () => {
+    const error = new AxiosError('failed', 'ERR_BAD_RESPONSE');
+    error.response = { status: 500, data: { success: false, message: 'boom' } } as AxiosResponse;
+    render(<SessionDetailModal {...baseProps} session={undefined} isError loadError={error} participants={[]} />);
     expect(screen.getByText("Couldn't load this session.")).toBeInTheDocument();
   });
 

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { reportSessionDialogError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 import type { Session, UpdateSessionPayload } from '../types';
 import type { ApiResponse } from '@/shared/types/api';
@@ -16,6 +17,7 @@ export function useUpdateSession() {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorDisplay: 'inline' },
+    onError: reportSessionDialogError,
     mutationFn: async ({ sessionId, payload }: { sessionId: number; payload: UpdateSessionPayload }) => {
       const response = await apiClient.put<ApiResponse<Session>>(`/sessions/${sessionId}`, payload);
       return response.data.data;

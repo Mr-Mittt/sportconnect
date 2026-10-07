@@ -657,6 +657,12 @@ describe('CreateSessionModal', () => {
 
     rerender(<CreateSessionModal {...baseProps} selectedLocation={location} isError />);
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't create the session");
+
+    // CLIENT-ERR-7: a coded 400 swaps the generic line for its specific copy.
+    rerender(
+      <CreateSessionModal {...baseProps} selectedLocation={location} isError errorText="Enter the fee amount." />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter the fee amount.');
   });
 
   it('"Invite your friend" shows nothing below 3 characters, then filters the friends list', async () => {

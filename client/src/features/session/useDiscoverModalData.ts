@@ -56,7 +56,7 @@ export function useDiscoverModalData(sportId: number | undefined) {
     setIsDiscoverModalOpen(false);
     setSelectedSessionId(sessionId);
   };
-  const sessionDetailData = useSessionDetailModalData(selectedSessionId);
+  const sessionDetailData = useSessionDetailModalData(selectedSessionId, () => setSelectedSessionId(null));
   const closeDetail = () => {
     // CLIENT-MODAL-1: this dialog reopens for a different session, so a join/leave/cancel
     // failure left un-reset would surface against whichever session is opened next.

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import type { AxiosError } from 'axios';
+import { getApiError } from '@/shared/lib/apiError';
 import type { Comment } from '@/features/feed/types';
 import { useCreateSessionComment } from './hooks/useCreateSessionComment';
 import { useDeleteSessionComment } from './hooks/useDeleteSessionComment';
@@ -28,7 +28,7 @@ export function useSessionCommentsData(sessionId: number | undefined, isOpen: bo
     [commentsQuery.data],
   );
 
-  const isForbidden = (commentsQuery.error as AxiosError | null)?.response?.status === 403;
+  const isForbidden = commentsQuery.isError && getApiError(commentsQuery.error).category === 'FORBIDDEN';
 
   const addComment = useCallback(
     (content: string) =>

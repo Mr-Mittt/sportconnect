@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { reportSessionDialogError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 import type { CancelSessionPayload, Session } from '../types';
 import type { ApiResponse } from '@/shared/types/api';
@@ -13,6 +14,7 @@ export function useCancelSession() {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorDisplay: 'inline' },
+    onError: reportSessionDialogError,
     mutationFn: async ({ sessionId, payload }: { sessionId: number; payload: CancelSessionPayload }) => {
       const response = await apiClient.post<ApiResponse<Session>>(`/sessions/${sessionId}/cancel`, payload);
       return response.data.data;

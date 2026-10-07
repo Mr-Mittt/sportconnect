@@ -20,8 +20,6 @@ const RAW_ERROR_READ = /isAxiosError\(|\.response\??\.(status|data)\b/;
 const ALLOWED: Record<string, string> = {
   'shared/lib/apiError.ts': 'the classifier itself',
   'app/apiClient.ts': 'owns the 401 silent-refresh flow; the classifier must not interfere with it',
-  'features/session/hooks/useSessionComments.ts': 'CLIENT-ERR-7: 403/404 skips retry',
-  'features/session/useSessionCommentsData.ts': 'CLIENT-ERR-7: isForbidden read from a 403',
 };
 
 function walk(dir: string, out: string[] = []): string[] {

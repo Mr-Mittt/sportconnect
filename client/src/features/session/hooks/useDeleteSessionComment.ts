@@ -5,6 +5,7 @@ import {
   restoreSessionCommentsCache,
   snapshotSessionCommentsCache,
 } from '../optimisticSessionCommentUpdates';
+import { reportSessionMutationError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 
 interface DeleteSessionCommentVariables {
@@ -22,6 +23,7 @@ interface DeleteSessionCommentVariables {
 export function useDeleteSessionComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: ({ commentId }: DeleteSessionCommentVariables) =>
       apiClient.delete(`/posts/comments/${commentId}`),
     onMutate: async ({ sessionId, commentId }: DeleteSessionCommentVariables) => {
@@ -30,7 +32,8 @@ export function useDeleteSessionComment() {
       removeCommentFromSessionCommentsCache(queryClient, sessionId, commentId);
       return { sessionId, previous };
     },
-    onError: (_err, _variables, context) => {
+    onError: (err, _variables, context) => {
+      reportSessionMutationError(err);
       if (context) restoreSessionCommentsCache(queryClient, context.sessionId, context.previous);
     },
     onSettled: (_data, _error, { sessionId }) => {

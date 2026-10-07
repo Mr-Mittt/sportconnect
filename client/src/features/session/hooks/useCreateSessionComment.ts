@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
 import type { CreateCommentPayload } from '@/features/feed/types';
+import { reportSessionMutationError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 
 interface CreateSessionCommentVariables {
@@ -18,6 +19,8 @@ interface CreateSessionCommentVariables {
 export function useCreateSessionComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
+    onError: reportSessionMutationError,
     mutationFn: ({ sessionId, payload }: CreateSessionCommentVariables) =>
       apiClient.post(`/sessions/${sessionId}/comments`, payload),
     onSuccess: (_data, { sessionId }) => {

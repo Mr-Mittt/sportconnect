@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
+import { AxiosError, type AxiosResponse } from 'axios';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
+import { useSessionErrorDialogStore } from '@/app/sessionErrorDialogStore';
+import * as errorToast from '@/shared/lib/errorToast';
 import type { ParticipantStatus } from '@/shared/types/session';
 import { sessionKeys } from '../queryKeys';
 import { useJoinSession } from './useJoinSession';
@@ -109,5 +112,45 @@ describe('useJoinSession (CLIENT-SESSION-30 feedback pop-up)', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(getSpy).not.toHaveBeenCalled();
     expect(useJoinFeedbackStore.getState().kind).toBeNull();
+  });
+});
+
+describe('useJoinSession failure reporting (CLIENT-ERR-7)', () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    useSessionErrorDialogStore.setState({ error: null, dismissals: 0, lastDismissedForbidden: false });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  function failure(status: number, errorCode: string) {
+    const error = new AxiosError('failed', 'ERR_BAD_REQUEST');
+    error.response = { status, data: { success: false, message: 'prose', errorCode } } as AxiosResponse;
+    return error;
+  }
+
+  it('opens the session error dialog for a session code and shows no toast', async () => {
+    const toast = vi.spyOn(errorToast, 'showErrorToast').mockImplementation(() => {});
+    const error = failure(409, 'SESSION_CANCELLED');
+    vi.spyOn(apiClient, 'post').mockRejectedValue(error);
+    const { result } = renderHook(() => useJoinSession(), { wrapper: createWrapper(queryClient) });
+
+    result.current.mutate(7);
+
+    await waitFor(() => expect(useSessionErrorDialogStore.getState().error).toBe(error));
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('keeps the toast for a failure with no session code', async () => {
+    const toast = vi.spyOn(errorToast, 'showErrorToast').mockImplementation(() => {});
+    vi.spyOn(apiClient, 'post').mockRejectedValue(failure(500, 'SOMETHING_ELSE'));
+    const { result } = renderHook(() => useJoinSession(), { wrapper: createWrapper(queryClient) });
+
+    result.current.mutate(7);
+
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    expect(useSessionErrorDialogStore.getState().error).toBeNull();
   });
 });

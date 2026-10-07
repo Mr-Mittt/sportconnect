@@ -174,7 +174,7 @@ export function useMatchesPageData(initialSessionId: number | null) {
   const { onParticipationAction, isParticipationActionPending } = useSessionParticipationAction();
 
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(initialSessionId);
-  const sessionDetailData = useSessionDetailModalData(selectedSessionId);
+  const sessionDetailData = useSessionDetailModalData(selectedSessionId, () => setSelectedSessionId(null));
 
   return {
     activeSport,

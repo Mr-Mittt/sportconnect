@@ -249,6 +249,8 @@ interface CreateSessionModalProps {
   onSubmit: (payload: CreateSessionPayload) => void;
   isSubmitting: boolean;
   isError: boolean;
+  /** CLIENT-ERR-7: specific copy for the inline error line when the server sent a code the client has copy for; falls back to the generic `create.error`. */
+  errorText?: string;
 
   /** CLIENT-SESSION-15: the chosen sport's resolved *session* attribute schema (A17), or `null`
    * when it has none — the "Session detail" section renders `SportAttributesFields` from it, or
@@ -379,6 +381,7 @@ export function CreateSessionModal({
   onSubmit,
   isSubmitting,
   isError,
+  errorText,
   sessionAttributeSchema,
   sessionAttributeValues,
   onSessionAttributeChange,
@@ -801,7 +804,7 @@ export function CreateSessionModal({
 
             {isError && (
               <p role="alert" className="text-2sm text-text-danger">
-                {t('create.error')}
+                {errorText ?? t('create.error')}
               </p>
             )}
           </div>

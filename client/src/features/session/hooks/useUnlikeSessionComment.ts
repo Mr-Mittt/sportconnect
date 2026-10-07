@@ -5,6 +5,7 @@ import {
   snapshotSessionCommentsCache,
   updateCommentInSessionCommentsCache,
 } from '../optimisticSessionCommentUpdates';
+import { reportSessionMutationError } from '../sessionErrors';
 import { sessionKeys } from '../queryKeys';
 
 interface UnlikeSessionCommentVariables {
@@ -16,6 +17,7 @@ interface UnlikeSessionCommentVariables {
 export function useUnlikeSessionComment() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
     mutationFn: ({ sessionId, commentId }: UnlikeSessionCommentVariables) =>
       apiClient.delete(`/sessions/${sessionId}/comments/${commentId}/like`),
     onMutate: async ({ sessionId, commentId }: UnlikeSessionCommentVariables) => {
@@ -28,7 +30,8 @@ export function useUnlikeSessionComment() {
       }));
       return { sessionId, previous };
     },
-    onError: (_err, _variables, context) => {
+    onError: (err, _variables, context) => {
+      reportSessionMutationError(err);
       if (context) restoreSessionCommentsCache(queryClient, context.sessionId, context.previous);
     },
     onSettled: (_data, _error, { sessionId }) => {

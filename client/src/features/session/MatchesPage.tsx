@@ -297,6 +297,7 @@ export function MatchesPage() {
         onSubmit={data.submitCreate}
         isSubmitting={data.isCreating}
         isError={data.isCreateError}
+        errorText={data.createErrorText}
         sessionAttributeSchema={data.sessionAttributeSchema}
         sessionAttributeValues={data.sessionAttributeValues}
         onSessionAttributeChange={data.onSessionAttributeChange}
@@ -321,6 +322,7 @@ export function MatchesPage() {
         refBaseSchema={data.detailRefBaseSchema}
         isLoading={data.isSessionLoading}
         isError={data.isSessionError}
+        loadError={data.sessionLoadError}
         participants={data.participants}
         isParticipantsLoading={data.isParticipantsLoading}
         isParticipantsError={data.isParticipantsError}

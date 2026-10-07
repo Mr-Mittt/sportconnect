@@ -52,5 +52,11 @@
     "cancel": "Cancel",
     "confirm": "Update broadcast",
     "updating": "Updating…"
+  },
+  "sessionActionError": {
+    "postActionError": {
+      "title": "Session unavailable",
+      "gotIt": "Got it"
+    }
   }
 }
