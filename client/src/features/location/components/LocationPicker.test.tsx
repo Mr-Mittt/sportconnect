@@ -242,4 +242,14 @@ describe('LocationPicker — create mode', () => {
     render(<LocationPicker {...createProps} isSaveError />);
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save this location");
   });
+
+  it('shows the coded save error text instead of the static line (CLIENT-ERR-8)', () => {
+    render(<LocationPicker {...createProps} isSaveError saveErrorText="That sport isn't available." />);
+    expect(screen.getByRole('alert')).toHaveTextContent("That sport isn't available.");
+  });
+
+  it('shows the coded resolve error text instead of the static line (CLIENT-ERR-8)', () => {
+    render(<LocationPicker {...createProps} isResolveError resolveErrorText="Only Google Maps links are supported." />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Only Google Maps links are supported.');
+  });
 });

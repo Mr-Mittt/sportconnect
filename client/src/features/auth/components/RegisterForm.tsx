@@ -1,5 +1,5 @@
 import { IconBrandApple, IconBrandFacebook, IconBrandGoogle, IconEye, IconEyeOff } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useLocaleStore } from '@/app/localeStore';
@@ -81,6 +81,12 @@ export function RegisterForm({ onSubmit, isPending, errorMessage, errorCode = nu
   const { t } = useTranslation('register');
   const setLocale = useLocaleStore((state) => state.setLocale);
   const geoLocale = useGeoLocaleFieldsData();
+  const { applyServerErrorCode } = geoLocale;
+
+  // CLIENT-ERR-8: a rejected country / region shows in the picker's own hint line (the banner skips it).
+  useEffect(() => {
+    applyServerErrorCode(errorCode);
+  }, [errorCode, applyServerErrorCode]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -285,7 +291,7 @@ export function RegisterForm({ onSubmit, isPending, errorMessage, errorCode = nu
           onRegionChange={geoLocale.onRegionChange}
         />
       </div>
-      <GeoLocaleLocationHint geoHint={geoLocale.geoHint} />
+      <GeoLocaleLocationHint geoHint={geoLocale.geoHint} serverGeoCode={geoLocale.serverGeoCode} />
       <GeoLocaleReferenceError isReferenceError={geoLocale.isReferenceError} />
 
       {/* Phone number + Language: one horizontal row, same 7:5 column ratio as Country/Region

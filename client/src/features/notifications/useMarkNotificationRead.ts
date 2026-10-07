@@ -6,6 +6,7 @@ import {
   restoreNotificationsCache,
   snapshotNotificationsCache,
 } from './optimisticNotificationUpdates';
+import { refetchWhenNotificationGone } from './notificationErrors';
 import { notificationKeys } from './queryKeys';
 
 /**
@@ -31,8 +32,9 @@ export function useMarkNotificationRead() {
       if (wasUnread) decrementUnreadCountCache(queryClient, 1);
       return { previous };
     },
-    onError: (_err, _notificationId, context) => {
+    onError: (err, _notificationId, context) => {
       if (context) restoreNotificationsCache(queryClient, context.previous);
+      refetchWhenNotificationGone(queryClient, err);
     },
   });
 }

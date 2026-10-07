@@ -130,6 +130,18 @@
     "SESSION_CREATOR_CANNOT_LEAVE": "Là người tạo, bạn không thể rời buổi chơi này. Hãy hủy buổi chơi.",
     "SESSION_SPORT_REQUIRED": "Hãy chọn môn thể thao cho buổi chơi.",
     "SESSION_LOCATION_SPORT_MISMATCH": "Địa điểm này không dành cho môn của buổi chơi. Hãy chọn địa điểm khác.",
-    "SESSION_FEE_AMOUNT_REQUIRED": "Hãy nhập mức phí."
+    "SESSION_FEE_AMOUNT_REQUIRED": "Hãy nhập mức phí.",
+    "COUNTRY_NOT_FOUND": "Quốc gia này không khả dụng. Hãy chọn quốc gia khác.",
+    "COUNTRY_UNKNOWN": "Quốc gia này không khả dụng. Hãy chọn quốc gia khác.",
+    "REGION_UNKNOWN": "Khu vực này không còn khả dụng. Hãy chọn khu vực khác.",
+    "REGION_COUNTRY_REQUIRED": "Hãy chọn quốc gia cùng với khu vực của bạn.",
+    "LOCATION_NOT_FOUND": "Địa điểm này không còn tồn tại.",
+    "LOCATION_SPORT_PROFILE_REQUIRED": "Hãy thêm hồ sơ cho môn này để lưu địa điểm.",
+    "LOCATION_ALREADY_FAVORITED": "Địa điểm này đã có trong danh sách yêu thích của bạn.",
+    "LOCATION_NOT_FAVORITED": "Địa điểm này không có trong danh sách yêu thích của bạn.",
+    "LOCATION_MAPS_URL_INVALID": "Liên kết này không hợp lệ.",
+    "LOCATION_MAPS_URL_UNSUPPORTED": "Chỉ hỗ trợ liên kết Google Maps.",
+    "NOTIFICATION_NOT_FOUND": "Thông báo này không khả dụng.",
+    "NOTIFICATION_FORBIDDEN": "Thông báo này không khả dụng."
   }
 }

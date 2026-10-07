@@ -74,7 +74,10 @@ export const referenceHandlers: HttpHandler[] = [
     const countryId = Number(params.countryId);
     const regions = mockRegionsByCountryId[countryId];
     if (regions === undefined) {
-      return HttpResponse.json(apiResponse(null, 'Unknown or inactive country'), { status: 404 });
+      return HttpResponse.json(
+        { success: false, message: 'Country not found', data: null, errorCode: 'COUNTRY_NOT_FOUND', timestamp: new Date().toISOString() },
+        { status: 404 },
+      );
     }
     return HttpResponse.json(apiResponse(regions));
   }),

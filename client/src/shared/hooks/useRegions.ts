@@ -17,6 +17,8 @@ export function useRegions(countryId: number | null): {
   data: RegionResponse[];
   isLoading: boolean;
   isError: boolean;
+  /** The failure behind `isError`, so a caller can branch on its `errorCode` (`COUNTRY_NOT_FOUND`). */
+  error: unknown;
 } {
   const query = useQuery({
     queryKey: regionsQueryKey(countryId ?? -1),
@@ -37,5 +39,6 @@ export function useRegions(countryId: number | null): {
     // `useSessionAttributeSchema`'s `sportId` check.
     isLoading: countryId !== null && query.isLoading,
     isError: query.isError,
+    error: query.error,
   };
 }

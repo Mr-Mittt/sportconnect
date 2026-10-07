@@ -160,6 +160,7 @@ export function AppShell() {
           }
           isSaving={accountSettingsSave.isSaving}
           errorMessage={accountSettingsSave.errorMessage}
+          geoErrorCode={accountSettingsSave.geoErrorCode}
         />
       )}
 

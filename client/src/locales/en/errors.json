@@ -130,6 +130,18 @@
     "SESSION_CREATOR_CANNOT_LEAVE": "As the creator you can't leave this session. Cancel it instead.",
     "SESSION_SPORT_REQUIRED": "Choose a sport for this session.",
     "SESSION_LOCATION_SPORT_MISMATCH": "This location isn't for the session's sport. Choose another one.",
-    "SESSION_FEE_AMOUNT_REQUIRED": "Enter the fee amount."
+    "SESSION_FEE_AMOUNT_REQUIRED": "Enter the fee amount.",
+    "COUNTRY_NOT_FOUND": "That country isn't available. Pick another one.",
+    "COUNTRY_UNKNOWN": "That country isn't available. Pick another one.",
+    "REGION_UNKNOWN": "That region is no longer available. Pick another one.",
+    "REGION_COUNTRY_REQUIRED": "Pick a country along with your region.",
+    "LOCATION_NOT_FOUND": "This location no longer exists.",
+    "LOCATION_SPORT_PROFILE_REQUIRED": "Add a profile for this sport to save its locations.",
+    "LOCATION_ALREADY_FAVORITED": "This location is already in your favorites.",
+    "LOCATION_NOT_FAVORITED": "This location isn't in your favorites.",
+    "LOCATION_MAPS_URL_INVALID": "That doesn't look like a valid link.",
+    "LOCATION_MAPS_URL_UNSUPPORTED": "Only Google Maps links are supported.",
+    "NOTIFICATION_NOT_FOUND": "This notification isn't available.",
+    "NOTIFICATION_FORBIDDEN": "This notification isn't available."
   }
 }
