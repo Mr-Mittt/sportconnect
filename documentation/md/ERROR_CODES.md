@@ -236,4 +236,15 @@ Six user-reachable errors are coded. The two favorite stale-state errors moved f
 
 Deliberately **not coded**: the `sportId is required` checks (search, favorites; the controller's required `sportId` request parameter already rejects a missing one before the service runs), the service-level `url is required` guard, and the `@Valid` field messages (stay `VALIDATION_FAILED`). Timezone derivation is best-effort and never throws, so it has no error surface.
 
-Still to come: the remaining Phase B ticket (NTF-5) adds its section here.
+#### notification (NTF-5, `NotificationServiceImpl`, `NotificationGate`, `NotificationController`)
+
+The only user-reachable error is `PUT /api/notifications/{id}/read`, raised by the coded `ResourceGate.require` overload (the same shape as `SESSION_*` and `POST_*`). No status moved. The id is not in the message; it is logged server side (a 404 is not logged by `GlobalExceptionHandler`, and a 403 here means a crafted id, since the list only returns the caller's own rows).
+
+| Code | Status | Params | When |
+|---|---|---|---|
+| `NOTIFICATION_NOT_FOUND` | 404 | none | Marking read a notification id that does not exist. |
+| `NOTIFICATION_FORBIDDEN` | 403 | none | Marking read a notification that belongs to another user. |
+
+Deliberately **not coded**: `GET /api/notifications` and `GET /api/notifications/unread-count` (scoped to the caller, no error path; an empty result is a 200); the STOMP `CONNECT` rejection (`StompAuthenticationException`, a WebSocket frame error outside the `ApiResponse` contract; the client reconnects after a token refresh); and the RabbitMQ consumers (no user surface). A deactivated caller gets the same answers as anyone else on REST and STOMP (U12 known gap, no check added).
+
+That completes the Phase B audits: every module's section is above.

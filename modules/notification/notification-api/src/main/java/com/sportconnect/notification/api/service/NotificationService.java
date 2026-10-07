@@ -21,9 +21,9 @@ public interface NotificationService {
     long getUnreadCount(UUID recipientUserId);
 
     /**
-     * Marks one notification read. Throws {@code NotFoundException} if it doesn't exist,
-     * {@code ForbiddenException} if it exists but doesn't belong to {@code recipientUserId} (see
-     * {@code NotificationGate}). Idempotent — marking an already-read row read again is a no-op.
+     * Marks one notification read. Throws {@code NotFoundException} ({@code NOTIFICATION_NOT_FOUND})
+     * if it doesn't exist, {@code ForbiddenException} ({@code NOTIFICATION_FORBIDDEN}) if it exists
+     * but doesn't belong to {@code recipientUserId} (see {@code NotificationGate}). Idempotent — marking an already-read row read again is a no-op.
      */
     void markAsRead(UUID recipientUserId, Long notificationId);
 
