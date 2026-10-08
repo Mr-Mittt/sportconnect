@@ -1,3 +1,4 @@
+import { installFakeChatSocket } from '../mocks/fakeChatSocket.ts';
 import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
@@ -145,6 +146,8 @@ for (const width of breakpoints) {
   test(`groups — chat-tab (one message sent) @ ${width}px`, async ({ page }) => {
     await page.clock.setFixedTime(FROZEN_TIME);
     await page.setViewportSize({ width, height: 900 });
+    // Without the fake socket the real WebSocket fails here and the chat shows its reconnect line.
+    await installFakeChatSocket(page);
     await seedAuthenticatedSession(page, '/groups');
 
     await openGroup(page, 'Friday Night Football');
