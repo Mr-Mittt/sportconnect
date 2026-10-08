@@ -122,6 +122,15 @@ Global concerns that multiple pages need — the active sport profile, the curre
 - `ProtectedRoute` wraps any route requiring a logged-in user, checks the in-memory auth state (and triggers a refresh-flow check on app load), and redirects to `/login` if that fails.
 - This depends on the backend change described above (cookie-based refresh instead of body-based) — don't build the new client's auth flow against the old body-based contract.
 
+## i18n (every ticket, not a follow-up)
+
+Any user-visible text a client ticket adds or changes ships with its `en` and `vi` strings in the same ticket (`src/locales/{en,vi}/`) — never English-only with a localization ticket to follow. Specifically:
+
+- **No server prose on screen.** The client shows its own copy keyed by the backend's stable `errorCode` (`errors:codes`, the C12 contract) or by HTTP status; `message` is a fallback only. Design: `documentation/md/ERROR_HANDLING_DESIGN.md`.
+- **Census duty (I18N-4).** If the ticket touches a form or flow that can show a server error, add or update its row in the consumer-census table of `documentation/md/I18N_READINESS.md` § I18N-4 — don't just note it in the ticket.
+- **Mirrored enums are translatable surface** (I18N-5): a new value in a backend enum the client mirrors needs its en/vi label too.
+- Tests stay pinned to English (I18N-9).
+
 ## Accessibility baseline (every page, not a one-time pass)
 
 - Keyboard-navigable, visible focus rings, `aria-current="page"` on active nav items.

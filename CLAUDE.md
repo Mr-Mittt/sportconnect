@@ -191,6 +191,8 @@ All REST responses use `ApiResponse<T>` from `modules/common` (`common/src/main/
 
 Base API path is `/api`. Public endpoints: `/api/auth/**`, `/api/sports/**`, `GET /api/reference/**`, and the one exact `POST /api/reference/resolve` (REF-2). All others require a Bearer JWT — including every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
 
+**User-facing errors are codes, not prose.** A new or changed error the client can show carries a stable `errorCode` (C12 contract, `documentation/md/ERROR_HANDLING_DESIGN.md`); the client owns the en/vi copy (`errors:codes`). Add that en/vi entry in the same change or file a client ticket straight away — never rely on the English `message` being rendered as-is. Same for a new value in a client-mirrored enum (I18N-5). See `client/CLAUDE.md` § i18n.
+
 ### API Change Discipline
 
 **Whenever a change touches an existing contract, do a consumer census *before* writing the change
