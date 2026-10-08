@@ -37,6 +37,19 @@
       "action": "Reload"
     }
   },
+  "chat": {
+    "unavailableDirect": "You can't chat with this person right now.",
+    "unavailableGroup": "You're no longer part of this group's chat.",
+    "loadFailed": "Couldn't load this conversation.",
+    "retry": "Retry",
+    "sendFailed": "Couldn't send. Your message is still in the box.",
+    "sendInvalid": "That message can't be sent. It may be empty or too long.",
+    "editFailed": "Couldn't edit that message.",
+    "deleteFailed": "Couldn't delete that message.",
+    "notOwner": "You can only change your own messages.",
+    "gone": "That message no longer exists.",
+    "reconnecting": "Reconnecting…"
+  },
   "codes": {
     "EMAIL_ALREADY_REGISTERED": "An account with this email already exists.",
     "INVALID_CREDENTIALS": "Invalid email or password.",

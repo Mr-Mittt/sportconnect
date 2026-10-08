@@ -1,6 +1,9 @@
 import { IconCheck, IconPencil, IconTrash, IconX } from '@tabler/icons-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { EmojiPickerButton } from '@/features/chat/components/EmojiPickerButton';
+import { ChatComposerNotices, ChatLoadFailureNotice, type ChatActionFailure } from '@/features/chat/components/ChatNotices';
+import type { ChatLoadFailure, ChatSendFailure } from '@/features/chat/chatErrors';
+import type { ConnectionStatus } from '@/features/chat/types';
 import type { ChatMessage } from '@/features/chat/types';
 import { formatTypingLabel, type TypingUser } from '@/features/chat/typingLabel';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
@@ -33,8 +36,14 @@ export interface GroupChatTabViewProps {
   messages: ChatMessage[] | undefined;
   isLoading: boolean;
   isError: boolean;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, onSuccess?: () => void) => void;
   isSending: boolean;
+  /** CLIENT-ERR-9 — all optional so a view driven by plain props (stories, tests) needs none of them. */
+  connectionStatus?: ConnectionStatus;
+  loadFailure?: ChatLoadFailure | null;
+  retryLoad?: () => void;
+  sendFailure?: ChatSendFailure | null;
+  actionFailure?: ChatActionFailure | null;
   editMessage: (messageId: number, content: string) => void;
   isEditing: boolean;
   deleteMessage: (messageId: number) => void;
@@ -72,6 +81,11 @@ export function GroupChatTabView({
   isError,
   sendMessage,
   isSending,
+  connectionStatus,
+  loadFailure,
+  retryLoad,
+  sendFailure,
+  actionFailure,
   editMessage,
   isEditing,
   deleteMessage,
@@ -191,8 +205,9 @@ export function GroupChatTabView({
   const send = () => {
     const text = draft.trim();
     if (!text) return;
-    sendMessage(text);
-    setDraft('');
+    // The draft is cleared only once the server accepted the message, so a failed send keeps the
+    // text (CLIENT-ERR-9); `d.trim() === text` leaves anything typed while the request was in flight.
+    sendMessage(text, () => setDraft((d) => (d.trim() === text ? '' : d)));
     stopTypingNow();
   };
 
@@ -223,9 +238,7 @@ export function GroupChatTabView({
         <div ref={containerRef} className="flex-1 overflow-y-auto p-3.5">
           {isLoading && <p className="text-2sm text-text-muted">{t('chat.loading')}</p>}
           {isError && (
-            <p role="alert" className="text-2sm text-text-danger">
-              {t('chat.loadError')}
-            </p>
+            <ChatLoadFailureNotice failure={loadFailure ?? 'transient'} variant="group" onRetry={retryLoad} />
           )}
           {!isLoading && !isError && (
             <>
@@ -405,6 +418,12 @@ export function GroupChatTabView({
             </>
           )}
         </div>
+        <ChatComposerNotices
+          connectionStatus={connectionStatus}
+          sendFailure={sendFailure}
+          actionFailure={actionFailure}
+          onRetrySend={send}
+        />
         {typingLabel && (
           <p className="px-3.5 pb-1 text-2xs text-text-muted" aria-live="polite">
             {typingLabel}

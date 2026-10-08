@@ -37,6 +37,19 @@
       "action": "Tải lại"
     }
   },
+  "chat": {
+    "unavailableDirect": "Hiện bạn không thể trò chuyện với người này.",
+    "unavailableGroup": "Bạn không còn trong cuộc trò chuyện của nhóm này.",
+    "loadFailed": "Không tải được cuộc trò chuyện này.",
+    "retry": "Thử lại",
+    "sendFailed": "Không gửi được. Tin nhắn của bạn vẫn còn trong ô soạn.",
+    "sendInvalid": "Không thể gửi tin nhắn này. Tin nhắn có thể trống hoặc quá dài.",
+    "editFailed": "Không sửa được tin nhắn đó.",
+    "deleteFailed": "Không xóa được tin nhắn đó.",
+    "notOwner": "Bạn chỉ có thể thay đổi tin nhắn của chính mình.",
+    "gone": "Tin nhắn đó không còn tồn tại.",
+    "reconnecting": "Đang kết nối lại…"
+  },
   "codes": {
     "EMAIL_ALREADY_REGISTERED": "Đã có tài khoản dùng email này.",
     "INVALID_CREDENTIALS": "Email hoặc mật khẩu không đúng.",

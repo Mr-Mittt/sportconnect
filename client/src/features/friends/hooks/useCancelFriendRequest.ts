@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { reportFriendMutationError } from '../friendErrors';
 import { friendKeys } from '../queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 
@@ -12,6 +13,8 @@ import type { ApiResponse } from '@/shared/types/api';
 export function useCancelFriendRequest() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
+    onError: reportFriendMutationError,
     mutationFn: async (requestId: string) => {
       await apiClient.delete<ApiResponse<void>>(`/users/friends/requests/${requestId}`);
       return requestId;

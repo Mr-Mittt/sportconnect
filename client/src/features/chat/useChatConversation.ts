@@ -7,6 +7,14 @@ import {
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { chatApiClient, buildChatWebSocketUrl } from './chatApiClient';
+import {
+  getChatActionFailureKind,
+  getChatLoadFailure,
+  getChatSendFailure,
+  type ChatLoadFailure,
+  type ChatSendFailure,
+} from './chatErrors';
+import type { ChatActionFailure } from './components/ChatNotices';
 import { chatKeys } from './queryKeys';
 import type { ChatMessage, ChatWebSocketEvent, ConnectionStatus, Conversation, TypingEventPayload } from './types';
 import type { TypingUser } from './typingLabel';
@@ -28,8 +36,17 @@ interface UseChatConversationResult {
   isLoading: boolean;
   isError: boolean;
   error: unknown;
-  sendMessage: (content: string) => void;
+  /** `onSuccess` runs when the server accepted the message (the view clears its draft then, so a failed send keeps the text). */
+  sendMessage: (content: string, onSuccess?: () => void) => void;
   isSending: boolean;
+  /** CLIENT-ERR-9: how the open or history failure is shown, `null` when nothing failed. */
+  loadFailure: ChatLoadFailure | null;
+  /** Refetches whichever of the conversation open or the history failed. */
+  retryLoad: () => void;
+  /** CLIENT-ERR-9: the last send's failure, `null` after a success or before any send. */
+  sendFailure: ChatSendFailure | null;
+  /** CLIENT-ERR-9: the last edit or delete failure, `null` when none. */
+  actionFailure: ChatActionFailure | null;
   editMessage: (messageId: number, content: string) => void;
   isEditing: boolean;
   deleteMessage: (messageId: number) => void;
@@ -76,7 +93,8 @@ export function useChatConversation(
   const conversationQuery = useQuery({
     queryKey: conversationQueryKey,
     queryFn: openConversation,
-    retry: false, // a 403 (not a member / not friends) is terminal, not transient
+    // CLIENT-ERR-9: no `retry` override — the app default (`shouldRetry`) already skips a 403/404
+    // (not a member / not friends) and retries a network or 5xx failure.
     staleTime: Infinity, // opening is idempotent server-side — nothing to re-derive once known
   });
 
@@ -152,8 +170,15 @@ export function useChatConversation(
       });
       return response.data;
     },
+    meta: { errorDisplay: 'silent' }, // CLIENT-ERR-9: reported inline above the composer
     onSuccess: mergeMessage,
   });
+
+  // A 403/404 on edit or delete means the list on screen is out of date (not the sender's, or gone).
+  const refetchMessagesAfterActionError = (error: unknown) => {
+    if (conversationId === undefined || getChatActionFailureKind(error) === 'failed') return;
+    void queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) });
+  };
 
   const editMutation = useMutation({
     mutationFn: async ({ messageId, content }: { messageId: number; content: string }) => {
@@ -166,7 +191,9 @@ export function useChatConversation(
       );
       return response.data;
     },
+    meta: { errorDisplay: 'silent' },
     onSuccess: replaceMessage,
+    onError: refetchMessagesAfterActionError,
   });
 
   const deleteMutation = useMutation({
@@ -179,7 +206,9 @@ export function useChatConversation(
       );
       return response.data;
     },
+    meta: { errorDisplay: 'silent' },
     onSuccess: replaceMessage,
+    onError: refetchMessagesAfterActionError,
   });
 
   // Ref-held (not state) so the cleanup function below always reaches the
@@ -311,13 +340,37 @@ export function useChatConversation(
     };
   }, [conversationId, mergeMessage, replaceMessage, queryClient, handleTypingEvent, clearTypingTimers]);
 
+  const loadError = conversationQuery.error ?? messagesQuery.error;
+  const sendFailure = sendMutation.error ? getChatSendFailure(sendMutation.error) : null;
+  // A send that the service refuses with 403/404 means the chat is gone for this user: show the same
+  // unavailable state as a failed open, and disable the composer.
+  const sendUnavailable = sendFailure === 'unavailable';
+  const loadFailure: ChatLoadFailure | null = loadError
+    ? getChatLoadFailure(loadError)
+    : sendUnavailable
+      ? 'unavailable'
+      : null;
+  const actionFailure: ChatActionFailure | null = editMutation.error
+    ? { action: 'edit', kind: getChatActionFailureKind(editMutation.error) }
+    : deleteMutation.error
+      ? { action: 'delete', kind: getChatActionFailureKind(deleteMutation.error) }
+      : null;
+
   return {
     data: messages,
     isLoading: conversationQuery.isLoading || messagesQuery.isLoading,
-    isError: conversationQuery.isError || messagesQuery.isError,
-    error: conversationQuery.error ?? messagesQuery.error,
-    sendMessage: (content: string) => sendMutation.mutate(content),
+    isError: conversationQuery.isError || messagesQuery.isError || sendUnavailable,
+    error: loadError,
+    loadFailure,
+    retryLoad: () => {
+      if (conversationQuery.isError) void conversationQuery.refetch();
+      else void messagesQuery.refetch();
+    },
+    sendMessage: (content: string, onSuccess?: () => void) =>
+      sendMutation.mutate(content, { onSuccess }),
     isSending: sendMutation.isPending,
+    sendFailure,
+    actionFailure,
     editMessage: (messageId: number, content: string) => editMutation.mutate({ messageId, content }),
     isEditing: editMutation.isPending,
     deleteMessage: (messageId: number) => deleteMutation.mutate(messageId),

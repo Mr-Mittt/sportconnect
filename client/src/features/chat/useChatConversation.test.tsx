@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { AxiosError, type AxiosResponse } from 'axios';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { chatApiClient } from './chatApiClient';
@@ -421,5 +422,129 @@ describe('useGroupChatData (via useChatConversation)', () => {
         expect(postSpy).toHaveBeenCalledWith('/conversations/7/typing', { isTyping: true }),
       );
     });
+  });
+});
+
+function failure(status: number, body: unknown = 'failed'): AxiosError {
+  const error = new AxiosError('failed', 'ERR_BAD_RESPONSE');
+  error.response = { status, data: body } as AxiosResponse;
+  return error;
+}
+
+describe('useChatConversation failures (CLIENT-ERR-9)', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function openOk() {
+    vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+    vi.spyOn(chatApiClient, 'get').mockResolvedValue({ data: [messageA] } as never);
+  }
+
+  it('reports a 403 on open as unavailable', async () => {
+    vi.spyOn(chatApiClient, 'post').mockRejectedValueOnce(failure(403, { error: 'forbidden', message: 'x' }));
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.loadFailure).toBe('unavailable');
+  });
+
+  it('reports a 500 on open as transient and retryLoad opens it again', async () => {
+    const post = vi
+      .spyOn(chatApiClient, 'post')
+      .mockRejectedValueOnce(failure(500))
+      .mockResolvedValueOnce({ data: conversation } as never);
+    vi.spyOn(chatApiClient, 'get').mockResolvedValue({ data: [messageA] } as never);
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.loadFailure).toBe('transient'));
+
+    act(() => result.current.retryLoad());
+
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(result.current.loadFailure).toBeNull();
+  });
+
+  it('keeps a failed send retryable and runs onSuccess only for the accepted one', async () => {
+    openOk();
+    const post = vi.mocked(chatApiClient.post);
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+
+    post.mockRejectedValueOnce(failure(503));
+    const failed = vi.fn();
+    act(() => result.current.sendMessage('hello', failed));
+    await waitFor(() => expect(result.current.sendFailure).toBe('transient'));
+    expect(failed).not.toHaveBeenCalled();
+    expect(result.current.isError).toBe(false);
+
+    post.mockResolvedValueOnce({ data: { ...messageB, content: 'hello' } } as never);
+    const accepted = vi.fn();
+    act(() => result.current.sendMessage('hello', accepted));
+    await waitFor(() => expect(accepted).toHaveBeenCalledTimes(1));
+    expect(result.current.sendFailure).toBeNull();
+  });
+
+  it('treats a 400 on send as invalid', async () => {
+    openOk();
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+    vi.mocked(chatApiClient.post).mockRejectedValueOnce(failure(400, { error: 'bad_request', message: 'x' }));
+    act(() => result.current.sendMessage('x'));
+    await waitFor(() => expect(result.current.sendFailure).toBe('invalid'));
+  });
+
+  it('turns a 403 on send into the unavailable state', async () => {
+    openOk();
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+    vi.mocked(chatApiClient.post).mockRejectedValueOnce(failure(403, { error: 'forbidden', message: 'x' }));
+    act(() => result.current.sendMessage('x'));
+    await waitFor(() => expect(result.current.loadFailure).toBe('unavailable'));
+    expect(result.current.isError).toBe(true);
+  });
+
+  it('reports a 403 on edit as notOwner and refetches the history', async () => {
+    openOk();
+    const get = vi.mocked(chatApiClient.get);
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+    const patch = vi.spyOn(chatApiClient, 'patch').mockRejectedValueOnce(failure(403, { error: 'forbidden', message: 'x' }));
+
+    act(() => result.current.editMessage(1, 'new'));
+
+    await waitFor(() => expect(result.current.actionFailure).toEqual({ action: 'edit', kind: 'notOwner' }));
+    expect(patch).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  });
+
+  it('reports a 500 on delete as failed without refetching', async () => {
+    openOk();
+    const get = vi.mocked(chatApiClient.get);
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(result.current.data).toEqual([messageA]));
+    vi.spyOn(chatApiClient, 'delete').mockRejectedValueOnce(failure(500));
+
+    act(() => result.current.deleteMessage(1));
+
+    await waitFor(() => expect(result.current.actionFailure).toEqual({ action: 'delete', kind: 'failed' }));
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports reconnecting when the socket drops', async () => {
+    openOk();
+    const { result } = renderHook(() => useGroupChatData(42), { wrapper });
+    await waitFor(() => expect(FakeWebSocket.instances.length).toBe(1));
+    act(() => FakeWebSocket.latest().triggerOpen());
+    expect(result.current.connectionStatus).toBe('open');
+
+    act(() => FakeWebSocket.latest().triggerClose());
+
+    expect(result.current.connectionStatus).toBe('reconnecting');
   });
 });

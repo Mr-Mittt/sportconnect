@@ -90,7 +90,7 @@ caller is authenticated and has one set, rather than treating the two as unrelat
 
 ### I18N-4 · Backend-authored, user-facing strings are English-only today
 **Date added:** 2026-08-24
-**Status:** `CONFIRMED` (2026-10-02 — direction 1 chosen: stable error codes + client-owned en/vi copy, no backend message catalog. Delivered through the error-handling program: global handling first, then a per-module audit that defines codes, then client adaptation. Design, phases and ticket tracker: `documentation/md/ERROR_HANDLING_DESIGN.md`. Contract in common **C12**, client foundation **CLIENT-ERR-1**, per-module Phase B/C pairs listed there; auth **A8** was folded in as the auth audit.)
+**Status:** `BUILT` (2026-10-08 — every cell of the error-handling program is `DONE`, CLIENT-ERR-9 being the last; it was `CONFIRMED` on 2026-10-02 — direction 1 chosen: stable error codes + client-owned en/vi copy, no backend message catalog. Delivered through the error-handling program: global handling first, then a per-module audit that defines codes, then client adaptation. Design, phases and ticket tracker: `documentation/md/ERROR_HANDLING_DESIGN.md`. Contract in common **C12**, client foundation **CLIENT-ERR-1**, per-module Phase B/C pairs listed there; auth **A8** was folded in as the auth audit.)
 **Source:** surfaced while scoping A13's resolution split (raw vs. resolved responses)
 
 `ApiResponse.message` and every domain exception's message (`BadRequestException`,
@@ -142,6 +142,8 @@ current whenever I18N-4 itself finally gets scoped:**
 | Create-session modal, Discover filter, session completion | Favorite / unfavorite a location (`LOCATION_ALREADY_FAVORITED`, `LOCATION_NOT_FAVORITED` silent; `LOCATION_NOT_FOUND`, `LOCATION_SPORT_PROFILE_REQUIRED` toast) | `reportLocationMutationError` | CLIENT-ERR-8 (done 2026-10-07) |
 | Location picker (create session, discover, completion) | Resolve Maps URL (`LOCATION_MAPS_URL_INVALID`, `LOCATION_MAPS_URL_UNSUPPORTED`) and create location | `LocationPicker.resolveErrorText` / `saveErrorText` (via `getCodedErrorMessage`) | CLIENT-ERR-8 (done 2026-10-07) |
 | Notification bell | Mark read / mark all read (`NOTIFICATION_NOT_FOUND`, `NOTIFICATION_FORBIDDEN`; silent, refetches) | `refetchWhenNotificationGone` | CLIENT-ERR-8 (done 2026-10-07) |
+| Direct and group chat panels | Open, history, send, edit, delete failures from the Go chat service (status only, no code; its English `message` is never shown) | `chatErrors.ts` classifies by category, `ChatNotices` shows `errors:chat.*` | CLIENT-ERR-9 (done 2026-10-08) |
+| Friends page | Send / accept / decline / cancel friend request (`ALREADY_FRIENDS`, `FRIEND_REQUEST_ALREADY_PENDING`, `FRIEND_REQUEST_NOT_FOUND` silent; others toast) | `reportFriendMutationError` | CLIENT-ERR-9 (done 2026-10-08) |
 | Admin | Sport fields editor | `useUpdateSport` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 | Admin | Sport attribute-schema editor | `useReplaceSportAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 | Admin | Session attribute-schema editor | `useReplaceSessionAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |

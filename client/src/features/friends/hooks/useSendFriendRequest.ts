@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
+import { reportFriendMutationError } from '../friendErrors';
 import { friendKeys } from '../queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 
@@ -13,6 +14,8 @@ import type { ApiResponse } from '@/shared/types/api';
 export function useSendFriendRequest() {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { errorDisplay: 'silent' },
+    onError: reportFriendMutationError,
     mutationFn: async (receiverId: string) => {
       await apiClient.post<ApiResponse<void>>('/users/friends/requests', { receiverId });
       return receiverId;
