@@ -103,6 +103,19 @@ Note the client's own compile-time guard covers only half of this: `Notification
 exhaustive union, so adding a member without a `getNotificationText` case fails the build — but
 nothing forces anyone to add the member in the first place. That gap is what this check exists for.
 
+**i18n check**, for client tickets and for any ticket that changes what the client can display:
+
+- *Client ticket:* every user-visible string added or changed gets `en` and `vi` keys in this
+  ticket (`client/CLAUDE.md` § i18n) — never English-only with a follow-up. If it touches a form or
+  flow that can show a server error, add or update its row in the I18N-4 consumer-census table in
+  `documentation/md/I18N_READINESS.md`. State in the plan which keys are added.
+- *Backend ticket:* a new or changed `errorCode`, a user-facing message the client renders, or a new
+  value in a client-mirrored enum (I18N-5) needs its `errors:codes` / label entry in en and vi.
+  Do it in this change or file a client ticket in `client/docs/BACKLOG_MVP.md` right away (per
+  CLAUDE.md § API Change Discipline, a prose mention doesn't count). Say which in the Phase 1 answer.
+  Backend ticket error codes follow C12 (`documentation/md/ERROR_HANDLING_DESIGN.md`) — no new
+  English-only prose the client would have to display as-is.
+
 ### Scope-change gate — always ask before Phase 2
 
 A ticket's scope can shift between when it was filed and when it's picked up — a new requirement
