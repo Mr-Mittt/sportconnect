@@ -1,6 +1,6 @@
 # A7 · Audit the public API surface and clean up unused endpoints
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-10-08)
 **Type:** Enhancement (Security)
 **Depends on:** none. Overlaps `user-impl` **U11** — see *Relationship to U11* below; the two are
 complementary and can land in either order.
@@ -10,6 +10,23 @@ blanket-`permitAll`, so the endpoint would have answered anonymous callers unles
 annotated. Pulling that thread surfaced (a) that `permitAll` and "public" are not the same thing
 anywhere in this app, (b) an app-wide bug where every `@PreAuthorize` denial returned 500 instead of
 403 (fixed in A9), and (c) that 13 of the 21 genuinely-public endpoints have no client caller at all.
+
+## Delta — pickup 2026-10-08
+
+- **Findings 1–2 predate U11 (DONE 2026-08-28), which removed `/api/users/**` from `permitAll`.** Every
+  `GET /api/users/**` now needs a JWT, so `email/{email}`, `username/{username}` and `check/*` are no
+  longer public and drop out of the 13-endpoint table (the `{userId}` lookup is authenticated too). The
+  audit's live surface is what `SecurityConfig` says today: `/api/auth/**` (minus logout), `/api/sports/**`
+  (minus the A21/A22 profile reads), `GET /api/hashtags/**`, `GET /api/posts/hashtag/**`, plus the
+  deliberate `/api/reference/**` rules (REF-1/REF-2). The per-endpoint decisions are made against that.
+- **Scope locked with the user at pickup:** audit only, no new features. Defaults: keep the auth-recovery
+  endpoints public (A10 / client AUTH-9 are about to use them); authenticate rather than delete an unused
+  read; delete nothing without a clear no-consumer finding across `client/`, `services/chat/`, scripts and
+  Swagger tooling; replace the `/api/auth/**` and `/api/sports/**` blanket matchers with explicit lists so
+  a new endpoint under either path defaults to authenticated. No role-model change (`RoleHierarchy`).
+- **A5 moved to V1 in this same change** (user decision 2026-10-08: not much user in MVP, need more user
+  first). File now at `V1/A5_LOGIN_REGISTRATION_RATE_LIMITING.md`; MVP and V1 backlogs updated. Folded in
+  here rather than a separate docs PR. The "Rate limiting — A5's job" out-of-scope bullet still holds.
 
 ## Why
 
@@ -145,3 +162,57 @@ the real pipeline, per root `CLAUDE.md`'s authorization-boundary rule. Note the 
 the codebase — so a `hasRole` denial case is new ground, not a pattern to copy from.
 
 ---
+
+## Implementation summary (2026-10-08)
+
+**Approved design.** Audit only, no new endpoints, DTOs or migrations: replace the two blanket matchers
+(`/api/auth/**`, `/api/sports/**`) and the two hashtag permits with an explicit public list in
+`SecurityConfig`; authenticate the sports and hashtag reads (user decisions (a) and (b) at plan
+approval); keep the auth-recovery endpoints public; delete nothing; file the Swagger exposure question
+as an infra ticket (decision (c)).
+
+**Per-endpoint outcome (the Scope-2 record)**
+
+| Endpoint(s) | Decision | Why |
+|---|---|---|
+| `POST /api/auth/register`, `login`, `refresh` | keep public | the `/login` and `/register` routes call them |
+| `POST /api/auth/verify-email`, `forgot-password`, `reset-password` | keep public | recovery flow; A10 + client AUTH-9 are about to use them |
+| `POST /api/auth/oauth-token` | keep public | Swagger Authorize helper; same exposure as `/login` by construction. Deployed-environment question filed as **INFRA-10** |
+| any other `/api/auth/*` path | **now authenticated** | explicit list instead of blanket — a new endpoint defaults closed |
+| `GET /api/sports`, `/{id}`, `/category/{c}` | **now authenticated** | no anonymous caller; signup logs the user in before sport selection |
+| every other `/api/sports/**` (admin, attribute-schema, profile writes) | **same gate, now 401 not 403** for anonymous | filter chain rejects before `@PreAuthorize` is reached |
+| `GET /api/hashtags/trending`, `/suggest`, `GET /api/posts/hashtag/{tag}` | **now authenticated** | no anonymous caller; `suggest` has no caller at all. `getPostsByHashtag` still accepts a null user internally — now unreachable anonymously, left as is |
+| `/api/users/**` | already authenticated (U11) | out of this audit's live surface |
+| `/api/reference/**`, `/images/**`, `/ws/**`, Swagger, `/actuator/health` | unchanged | deliberate / infrastructure |
+
+**Built.** `SecurityConfig` (matchers + comments); new `PublicSurfaceAccessIntegrationTest` (8 tests, through
+the real filter chain: each public endpoint is reachable anonymously — distinguishing the entry point's 401
+from a handler's own 401 via `errorCode` — and each closed path answers the entry point's 401); docs:
+root `CLAUDE.md` allowlist line, `auth-impl/CLAUDE.md`, `SPORT_THUMBNAIL_IMPLEMENTATION.md` (superseded
+note), `INFRA-2` smoke-check note, `PROGRESS.md`. **Filed INFRA-10** (infra backlog).
+
+**Account lifecycle.** No new endpoint, and moving paths behind auth does not inherit the old gap:
+`JwtAuthenticationFilter` checks revocation since U12.
+
+**Consumer census.** Client sports/hashtag hooks — compatible as-is (only authenticated pages call them;
+`apiClient` attaches the token); client MSW handlers — compatible (no auth modelling); `services/chat`,
+`.github`, infra scripts — no callers; `INFRA-2` doc smoke check — updated; 7 existing IT assertions —
+updated (below). No client ticket needed: no `errorCode`, message or mirrored enum changed (i18n: nothing
+to add).
+
+**IT changes (report)**
+- *Added* `PublicSurfaceAccessIntegrationTest` — public auth list reachable anonymously; `oauth-token` and
+  reference data reachable; an unlisted `/api/auth/*` path and `GET /api/auth/login` rejected; `logout`
+  still authenticated; sports catalogue reads, gated sports endpoints and hashtag reads answer 401
+  anonymously; an authenticated user still gets `GET /api/sports` 200.
+- *Updated* `InternalServiceFilterScopeIT` (1): its "public endpoint" is now `/api/reference/countries`.
+- *Updated* `SportAttributeSchemaIntegrationTest` (3) and `SessionAttributeSchemaIntegrationTest` (2): anonymous
+  `403` → `401` (renamed `…_withUnauthorized`). `GlobalExceptionMappingIntegrationTest` (2): the unknown-route
+  404 and wrong-method 405 cases now authenticate first (their anonymous premise was the old permit).
+
+**Verification.** `./gradlew :modules:auth:auth-impl:test :server:test` — green: 535 server tests, 0 skipped,
+0 failed, with Docker up (Redis/RabbitMQ Testcontainers included). A first full run found one more consumer
+the static grep had missed: `InternalServiceFilterScopeIT.publicEndpointIsReachableRegardlessOfTheInternalFilter`
+used `GET /api/sports` (through `TestRestTemplate`, not `MockMvc`) as its "public endpoint" and got 401; it
+now uses `GET /api/reference/countries`, the deliberate public GET. It is the only `RestTemplate`-based IT.
+Not run: `bootRun` (no manual walkthrough), and the client `e2e` project (no client code changed).

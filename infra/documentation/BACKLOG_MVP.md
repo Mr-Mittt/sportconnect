@@ -36,6 +36,7 @@ green run exists" pattern.
 | 5 | [INFRA-7](MVP/INFRA-7_REVERSE_PROXY_PATH_ROUTING_FOR_SERVICES_CHAT.md) | Reverse-proxy path-routing for `services/chat` | `TODO` |
 | 6 | [INFRA-8](MVP/INFRA-8_SERVICES_CHAT_DOCKERFILE_PUBLISH_WORKFLOW.md) | `services/chat` Dockerfile publish workflow | `TODO` |
 | 7 | [INFRA-9](MVP/INFRA-9_INTERNAL_NETWORK_ISOLATION.md) | `/internal/**` network isolation | `TODO` |
+| 8 | [INFRA-10](MVP/INFRA-10_SWAGGER_AND_OAUTH_TOKEN_EXPOSURE_IN_DEPLOYED_ENVIRONMENTS.md) | Swagger UI, `/api-docs` and `oauth-token` are public in every profile — decide what a deployed environment exposes; found during auth A7 | `TODO` |
 
 ---
 

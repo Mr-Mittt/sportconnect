@@ -3,6 +3,8 @@ package com.sportconnect.integration;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 
+import java.util.UUID;
+
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,13 +24,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * real {@code DispatcherServlet} + static-resource handler wiring (it throws
  * {@code NoResourceFoundException}, which standalone MockMvc can't reproduce). All paths here are
  * under {@code permitAll} prefixes, so the requests are anonymous and reach the dispatcher rather
- * than being stopped by the security filter chain.
+ * than being stopped by the security filter chain. A7: the two cases that used the old blanket
+ * {@code /api/auth/**} and {@code /api/sports/**} permits now sign in first, because an unknown
+ * auth path and the sports catalogue are authenticated.
  */
 class GlobalExceptionMappingIntegrationTest extends BaseIT {
 
     @Test
     void unknownRoute_is404_withApiResponseEnvelope() throws Exception {
-        mockMvc.perform(get("/api/auth/no-such-endpoint").with(anonymous()))
+        authenticateAs(UUID.randomUUID());
+        mockMvc.perform(get("/api/auth/no-such-endpoint"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Resource not found"))
@@ -39,7 +44,8 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
     @Test
     void wrongHttpMethod_is405() throws Exception {
         // /api/sports is mapped for GET (list) and POST (admin create) only.
-        mockMvc.perform(delete("/api/sports").with(anonymous()))
+        authenticateAs(UUID.randomUUID());
+        mockMvc.perform(delete("/api/sports"))
                 .andExpect(status().isMethodNotAllowed())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Request method not supported"))
@@ -73,8 +79,10 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
 
     @Test
     void pathVariableTypeMismatch_is400() throws Exception {
-        // GET /api/sports/{sportId} binds sportId to Long; "abc" can't convert.
-        mockMvc.perform(get("/api/sports/abc").with(anonymous()))
+        // GET /api/sports/{sportId} binds sportId to Long; "abc" can't convert. A7: the path is
+        // authenticated now, so the request must reach the handler as a signed-in caller.
+        authenticateAs(UUID.randomUUID());
+        mockMvc.perform(get("/api/sports/abc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Malformed request"))

@@ -63,7 +63,7 @@ Everything below ran locally against the real containers, not just `docker compo
 5. **Full end-to-end app boot**: `./gradlew :server:bootRun` against this exact compose stack —
    Liquibase ran all 24 changesets successfully (63 rows affected) including the PostGIS-dependent
    ones, Hibernate initialized with `hibernate-spatial`/PostGIS dialect support, app reported
-   `Started SportConnectApplication`, and `GET /api/sports` returned `200`. This is stronger
+   `Started SportConnectApplication`, and `GET /api/sports` returned `200` (at the time it was public; since auth A7 it needs a JWT — use `GET /actuator/health` for an unauthenticated smoke check). This is stronger
    verification than the ticket strictly required (it only asked for `docker compose up`), but
    confirms the compose file's values genuinely match what the app expects, not just that the
    containers start.

@@ -50,5 +50,5 @@ POST /api/auth/reset-password
 - `AuthResponse.user` is typed `Object` intentionally — avoids a circular dependency with user-api response types.
 - `JwtTokenServiceImpl` uses reflection (`getMethod/invoke`) to extract user fields — renaming fields on the `User` entity requires updating this.
 - Access token = 1 hour, refresh token = 7 days — configured in `application.yml` under `app.jwt`.
-- Public endpoints are declared in `SecurityConfig` here, not per-controller — add new public routes here.
+- Public endpoints are declared in `SecurityConfig` here, not per-controller — add new public routes here, **one explicit path each** (A7 removed the `/api/auth/**` and `/api/sports/**` blanket permits; an unlisted path is authenticated by default). `PublicSurfaceAccessIntegrationTest` pins the list.
 - `forgot-password` needs wiring to `UserService.getUserByEmail()` before it actually works.

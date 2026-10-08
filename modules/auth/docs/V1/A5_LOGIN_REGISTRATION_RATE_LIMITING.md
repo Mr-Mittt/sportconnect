@@ -2,6 +2,7 @@
 
 **Status:** `TODO`
 **Type:** Enhancement (Security)
+**Moved from:** `BACKLOG_MVP.md` (2026-10-08) — user decision: not much user in MVP, need more user first, so rate limiting is deprioritized to V1. Nothing in MVP depends on it (the client ticket that would surface the rate-limit error was never filed; AUTH-6 says to file it once A5 ships).
 **Origin:** flagged during the client's AUTH-6 (`client/docs/BACKLOG_MVP.md`) — that ticket's spec
 called for "surface the rate-limiting behavior described in the original auth design ... if the
 backend enforces it with a distinguishable error." Verified on 2026-07-12: it does not. A repo-wide
