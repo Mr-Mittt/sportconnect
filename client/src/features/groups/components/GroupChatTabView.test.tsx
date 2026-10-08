@@ -73,7 +73,7 @@ describe('GroupChatTabView', () => {
 
   it('shows an error state when opening the conversation failed', () => {
     render(<GroupChatTabView {...baseProps({ isError: true })} />);
-    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load this group's chat.");
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load this conversation.");
   });
 
   it('shows an empty state when there are no messages', () => {
@@ -202,7 +202,7 @@ describe('GroupChatTabView', () => {
   });
 
   it('sends a message and clears the draft', async () => {
-    const sendMessage = vi.fn();
+    const sendMessage = vi.fn((_content: string, onSuccess?: () => void) => onSuccess?.());
     const user = userEvent.setup();
     render(<GroupChatTabView {...baseProps({ sendMessage })} />);
 
@@ -210,7 +210,7 @@ describe('GroupChatTabView', () => {
     await user.type(input, 'Hey team, ready for Sunday?');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(sendMessage).toHaveBeenCalledWith('Hey team, ready for Sunday?');
+    expect(sendMessage).toHaveBeenCalledWith('Hey team, ready for Sunday?', expect.any(Function));
     expect(input).toHaveValue('');
   });
 
@@ -511,5 +511,65 @@ describe('GroupChatTabView', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));
       expect(sendTyping).toHaveBeenNthCalledWith(2, false);
     });
+  });
+});
+
+
+describe('GroupChatTabView — failures (CLIENT-ERR-9)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver);
+  });
+
+  it('shows the unavailable line with no Retry and a disabled composer for a 403/404 open', () => {
+    render(<GroupChatTabView {...baseProps({ isError: true, loadFailure: 'unavailable' })} />);
+    expect(screen.getByRole('alert')).toHaveTextContent("You're no longer part of this group's chat.");
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Message the group')).toBeDisabled();
+  });
+
+  it('offers Retry for a transient load failure', async () => {
+    const retryLoad = vi.fn();
+    const user = userEvent.setup();
+    render(<GroupChatTabView {...baseProps({ isError: true, loadFailure: 'transient', retryLoad })} />);
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retryLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the draft when the send fails and Retry sends it again', async () => {
+    const sendMessage = vi.fn();
+    const user = userEvent.setup();
+    render(<GroupChatTabView {...baseProps({ sendMessage, sendFailure: 'transient' })} />);
+    const input = screen.getByLabelText('Message the group');
+    await user.type(input, 'still here');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(input).toHaveValue('still here'); // the mock never reports success
+
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't send. Your message is still in the box.");
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows no Retry for a rejected (400) message', () => {
+    render(<GroupChatTabView {...baseProps({ sendFailure: 'invalid' })} />);
+    expect(screen.getByRole('alert')).toHaveTextContent("That message can't be sent");
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+
+  it('shows a muted Reconnecting line while the WebSocket is down, not while connecting', () => {
+    const { rerender } = render(<GroupChatTabView {...baseProps({ connectionStatus: 'connecting' })} />);
+    expect(screen.queryByText('Reconnecting…')).not.toBeInTheDocument();
+    rerender(<GroupChatTabView {...baseProps({ connectionStatus: 'reconnecting' })} />);
+    expect(screen.getByText('Reconnecting…')).toBeInTheDocument();
+    expect(screen.getByLabelText('Message the group')).toBeEnabled();
+  });
+
+  it.each([
+    ['edit', 'failed', "Couldn't edit that message."],
+    ['delete', 'failed', "Couldn't delete that message."],
+    ['edit', 'notOwner', 'You can only change your own messages.'],
+    ['delete', 'gone', 'That message no longer exists.'],
+  ] as const)('shows the %s %s line', (action, kind, copy) => {
+    render(<GroupChatTabView {...baseProps({ actionFailure: { action, kind } })} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(copy);
   });
 });

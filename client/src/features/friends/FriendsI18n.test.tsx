@@ -133,7 +133,7 @@ describe('Friends feature i18n', () => {
   it('FriendChatPanelView shows the Vietnamese load error', async () => {
     await i18n.changeLanguage('vi');
     render(<FriendChatPanelView {...chatProps} isError messages={undefined} />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Không thể tải cuộc trò chuyện này.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Không tải được cuộc trò chuyện này.');
   });
 
   it('UnfriendConfirmDialog interpolates the person name in Vietnamese', async () => {

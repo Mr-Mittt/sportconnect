@@ -59,7 +59,7 @@ Update the matching cell when a ticket closes (each ticket's **On close** line s
 | post | n/a | [A18](../../modules/social/post-impl/docs/MVP/A18_ERROR_CODE_AUDIT.md) `DONE` (2026-10-06) | [CLIENT-ERR-6](../../client/docs/MVP/CLIENT-ERR-6_POST_ERROR_ADAPTATION.md) `DONE` (2026-10-06) |
 | session | n/a | [SESSION-45](../../modules/session/docs/MVP/SESSION-45_ERROR_CODE_AUDIT.md) `DONE` (2026-10-06) | [CLIENT-ERR-7](../../client/docs/MVP/CLIENT-ERR-7_SESSION_ERROR_ADAPTATION.md) `DONE` (2026-10-07) |
 | reference / location / notification | n/a | [REF-5](../../modules/reference/docs/MVP/REF-5_ERROR_CODE_AUDIT.md) `DONE` (2026-10-07) · [LOC-6](../../modules/location/docs/MVP/LOC-6_ERROR_CODE_AUDIT.md) `DONE` (2026-10-07) · [NTF-5](../../modules/notification/docs/MVP/NTF-5_ERROR_CODE_AUDIT.md) `DONE` (2026-10-07) | [CLIENT-ERR-8](../../client/docs/MVP/CLIENT-ERR-8_MISC_ERROR_ADAPTATION.md) `DONE` (2026-10-07) |
-| chat (Go service, plain-text errors) | n/a | n/a (no `ApiResponse` envelope) | [CLIENT-ERR-9](../../client/docs/MVP/CLIENT-ERR-9_CHAT_ERROR_ADAPTATION.md) `TODO` |
+| chat (Go service, plain-text errors) | n/a | n/a (no `ApiResponse` envelope) | [CLIENT-ERR-9](../../client/docs/MVP/CLIENT-ERR-9_CHAT_ERROR_ADAPTATION.md) `DONE` (2026-10-08) |
 
 **Order:** C12 → CLIENT-ERR-1 → the B/C pairs in parallel per module (suggested: auth, user, sport, group, post, session, misc). A Phase C ticket depends on CLIENT-ERR-1 and its module's Phase B ticket; `/workon` stops if a dependency has not shipped.
 
