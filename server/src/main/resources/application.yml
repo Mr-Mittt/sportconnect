@@ -130,8 +130,13 @@ app:
 
   email:
     verification-url: ${EMAIL_VERIFICATION_URL:http://localhost:3000/verify-email}
-    reset-password-url: ${RESET_PASSWORD_URL:http://localhost:3000/reset-password}
+    # A10: default matches the new client's route (AUTH-9: /reset-password?token=…); prod sets RESET_PASSWORD_URL.
+    reset-password-url: ${RESET_PASSWORD_URL:http://localhost:5173/reset-password}
     from: ${EMAIL_FROM:noreply@sportconnect.com}
+
+  # A10: how long a password-reset link stays valid. One property, read by the token service and the email text.
+  password-reset:
+    expiration-minutes: ${PASSWORD_RESET_EXPIRATION_MINUTES:60}
 
 # Logging Configuration
 logging:

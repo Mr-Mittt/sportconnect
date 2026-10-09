@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -107,6 +108,32 @@ public interface UserService {
      * Check if user exists by email
      */
     boolean existsByEmail(String email);
+
+    /**
+     * Resolve a user id from an email address, <em>including deactivated accounts</em> (A10: a deactivated user may
+     * still reset their password).
+     *
+     * <p>Unlike {@link #getUserByEmail(String)}, which is active-only and throws on a miss, this never throws and
+     * returns no profile data — just the id — so the caller cannot learn more than "an account exists".
+     *
+     * @return the user's id, or empty when no user has that exact email
+     */
+    Optional<UUID> findUserIdByEmail(String email);
+
+    /**
+     * The language to write to this user in when no UI is involved (A10: the password-reset email), as an
+     * <em>active</em> reference language code. Includes deactivated users; returns only a code, no profile data.
+     *
+     * <p>Order: the user's stored {@code UserPreference.language} when it is an active language; otherwise the
+     * default language of the user's country ({@code countries.default_language_code}) when that is active.
+     * Empty when neither applies (no preference row and no country or default, or the stored languages were
+     * deactivated), leaving the caller to pick its own fallback. A preference row, once created, always carries a
+     * language (the entity defaults it to {@code en}), so a user who has opened their preferences without choosing
+     * is treated as having chosen {@code en}.
+     *
+     * @return an active {@code languages.code}, or empty
+     */
+    Optional<String> findPreferredLanguageCode(UUID userId);
 
     /**
      * Check if user exists by username

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 public class EmailService {
 
     private final JavaMailSender mailSender;
+    private final EmailMessages emailMessages;
 
     @Value("${app.email.from}")
     private String fromEmail;
@@ -23,6 +24,9 @@ public class EmailService {
 
     @Value("${app.email.reset-password-url}")
     private String resetPasswordUrl;
+
+    @Value("${app.password-reset.expiration-minutes:60}")
+    private long resetExpirationMinutes;
 
     @Async
     public void sendVerificationEmail(String toEmail, String token) {
@@ -53,30 +57,21 @@ public class EmailService {
         }
     }
 
+    /**
+     * Sends the password-reset email in {@code language} (A10), one of the codes {@link EmailMessages#resolveLanguage}
+     * returns, so a bundle always exists for it. Fire-and-forget: a send failure is logged, never propagated.
+     */
     @Async
-    public void sendPasswordResetEmail(String toEmail, String token) {
+    public void sendPasswordResetEmail(String toEmail, String token, String language) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
-            message.setSubject("Reset Your Password - SportConnect");
-            
-            String resetLink = resetPasswordUrl + "?token=" + token;
-            String emailBody = String.format(
-                "Hello,\n\n" +
-                "We received a request to reset your password for your SportConnect account.\n\n" +
-                "Click the link below to reset your password:\n\n" +
-                "%s\n\n" +
-                "This link will expire in 1 hour.\n\n" +
-                "If you didn't request a password reset, please ignore this email.\n\n" +
-                "Best regards,\n" +
-                "SportConnect Team",
-                resetLink
-            );
-            
-            message.setText(emailBody);
+            message.setSubject(emailMessages.resetPasswordSubject(language));
+            message.setText(emailMessages.resetPasswordBody(language, resetPasswordUrl + "?token=" + token,
+                    resetExpirationMinutes));
             mailSender.send(message);
-            
+
             log.info("Password reset email sent to: {}", toEmail);
         } catch (Exception e) {
             log.error("Failed to send password reset email to: {}", toEmail, e);

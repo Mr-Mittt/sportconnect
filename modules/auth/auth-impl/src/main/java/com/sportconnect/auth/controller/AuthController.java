@@ -187,15 +187,14 @@ public class AuthController {
     }
 
     @Operation(summary = "Request a password reset email", security = {},
-            description = "Placeholder — always returns success without actually sending anything (not yet wired to UserService lookup by email).")
+            description = "Emails a one-hour reset link when an account (active or deactivated) has this email. The answer is identical whether or not it does, so it cannot be used to discover which emails are registered.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Always returned, regardless of whether the email exists"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed")
     })
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        // Note: This endpoint needs user module integration to find user by email
-        // For now, it's a placeholder that will be completed when user module is integrated
+        passwordResetService.requestReset(request.getEmail());
         return ResponseEntity.ok(ApiResponse.success("If the email exists, a password reset link has been sent", null));
     }
 

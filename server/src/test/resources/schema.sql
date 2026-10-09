@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS email_verifications (
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id BIGSERIAL PRIMARY KEY,
-    user_id UUID NOT NULL,
+    user_id UUID NOT NULL UNIQUE,  -- V078 / A10: one reset token per user
     token VARCHAR(255) UNIQUE NOT NULL,
     expires_at TIMESTAMP NOT NULL,
     used_at TIMESTAMP,

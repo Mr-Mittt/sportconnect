@@ -49,3 +49,7 @@ early (only the TTL does) unless the design doc's intent is otherwise — confir
 distinguishable message instead of falling through to the generic error string.
 
 ---
+
+## Added 2026-10-09 (from A10): cover `POST /api/auth/forgot-password`
+
+A10 made `forgot-password` send real email. It is a public endpoint that triggers mail for any address, so it needs a limit per IP and per target email (a user must not be able to flood someone's inbox). Until this ticket ships it has none; the MVP accepted that because there is little traffic. Include this endpoint in the rate-limiting scope here.
