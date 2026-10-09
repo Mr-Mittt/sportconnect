@@ -172,8 +172,16 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   (`ConflictException`), every other status and all message text unchanged. New
   `AuthErrorCodesIntegrationTest` (12 tests). Found that `ACCOUNT_DEACTIVATED` on refresh is
   unreachable (the user lookup throws a 404 first), kept as is by user decision and filed as A9.
-- **MVP backlog:** 9 tickets (A2–A10) in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6/A8 `DONE`, A5, A7, A9,
-  A10 `TODO`
+- **A7 (2026-10-08, `DONE`, `modules/auth/docs/MVP/A7_AUDIT_PUBLIC_API_SURFACE_AND_REMOVE_UNUSED_ENDPOINTS.md`):**
+  audit of the public API surface. `/api/auth/**`, `/api/sports/**` and the hashtag reads were blanket
+  `permitAll` since the initial commit; the public surface is now an explicit list (7 `POST /api/auth/*`
+  paths + reference data + infrastructure), so a new endpoint defaults to authenticated. `/api/sports/**`
+  and the hashtag reads (no anonymous client caller) now answer an anonymous caller 401 instead of a
+  handler-level 403 / 200. No endpoint deleted. New `PublicSurfaceAccessIntegrationTest`; 8 existing IT
+  assertions updated; full `:server:test` green (535). Filed INFRA-10 (Swagger/`oauth-token` exposure in deployed environments). Also moved
+  A5 (rate limiting) to `BACKLOG_V1.md` (user decision: not much user in MVP).
+- **MVP backlog:** auth tickets A2–A11 in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6/A7/A8 `DONE`;
+  A9, A10, A11 `TODO`; A5 moved to V1
 
 #### `modules:user:user-api` + `modules:user:user-impl`
 - `User` entity: UUID PK, email/username unique, profile fields, PostGIS `geography(Point, 4326)` for location, soft delete (`isActive`), roles (ManyToMany eager)

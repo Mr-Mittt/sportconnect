@@ -2,7 +2,7 @@
 
 **Version:** V1  
 **Module:** `modules/auth/auth-impl`  
-**Last updated:** 2026-07-03  
+**Last updated:** 2026-10-08  
 **Prerequisite:** All MVP tickets in `modules/auth/docs/BACKLOG_MVP.md` must be `DONE` before starting V1.
 
 ---
@@ -21,6 +21,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | A1 | Apply Redis for refresh token storage | `TODO` |
+| 2 | [A5](V1/A5_LOGIN_REGISTRATION_RATE_LIMITING.md) | Login/registration rate limiting — moved from MVP 2026-10-08 (not much user in MVP, need more user first) | `TODO` |
 
 ---
 

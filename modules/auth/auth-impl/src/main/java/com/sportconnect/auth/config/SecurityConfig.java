@@ -86,34 +86,35 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
                         // Logout must be authenticated (derives the user from the principal, see
-                        // AuthController) — ordered before the broader /api/auth/** permit below
-                        // since Spring Security uses first-match-wins.
+                        // AuthController). It is not in the explicit permit list below, so it falls
+                        // through to authenticated either way; the rule stays to state the intent.
                         .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
 
-                        // Public endpoints
-                        .requestMatchers("/api/auth/**").permitAll()
-                        // A21: the caller's own sport profile by id —
-                        // GET /api/sports/profiles/{profileId} (one segment after profiles/),
-                        // owner-only via @PreAuthorize + a principal check.
-                        // A22: the caller's own profile list and per-sport read are caller-scoped —
-                        // GET /api/sports/profiles (exact) and
-                        // GET /api/sports/profiles/sport/{sportId}. A single "*" matches exactly one
-                        // path segment, so "/profiles/*" does NOT cover the two-segment
-                        // "/profiles/sport/{sportId}" — it is listed explicitly. Without the exact
-                        // "/api/sports/profiles" entry the /api/sports/** permit below would make
-                        // the list endpoint public. All ordered before that permit
-                        // (first-match-wins) so an anonymous caller is rejected by the filter chain
-                        // (401 via jwtAuthenticationEntryPoint) rather than reaching the controller
-                        // and getting a 403 from @PreAuthorize.
-                        .requestMatchers(HttpMethod.GET,
-                                "/api/sports/profiles",
-                                "/api/sports/profiles/*",
-                                "/api/sports/profiles/sport/*").authenticated()
-                        .requestMatchers("/api/sports/**").permitAll()
+                        // A7: the public auth surface is an explicit list, not "/api/auth/**" — a new
+                        // endpoint added under /api/auth must be a conscious permitAll here, otherwise it
+                        // defaults to authenticated. Everything below is reachable without a token because
+                        // the caller has none yet (or, for oauth-token, is Swagger UI's Authorize button
+                        // logging in — same exposure as /login; its deployed-environment question is
+                        // INFRA-10).
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/refresh",
+                                "/api/auth/verify-email",
+                                "/api/auth/forgot-password",
+                                "/api/auth/reset-password",
+                                "/api/auth/oauth-token").permitAll()
+                        // A7: nothing under /api/sports is public any more (it was a blanket permitAll
+                        // since the initial commit, with the real gating left to @PreAuthorize — which
+                        // answered an anonymous caller 403 instead of 401). The catalogue reads
+                        // (GET /api/sports, /{id}, /category/{c}) have no anonymous caller: the only
+                        // anonymous client routes are /login and /register, and signup logs the user in
+                        // before sport selection. The A21/A22 caller-scoped profile matchers that used to
+                        // sit here are covered by anyRequest().authenticated() below.
+
                         // REF-1: languages / countries / regions are public, read-only reference data — the
                         // sign-up form needs its dropdowns before an account exists. GET only, plus the one
-                        // exact POST below. Ordered before anyRequest (first-match-wins), same as the
-                        // /api/sports/** permit above.
+                        // exact POST below. Ordered before anyRequest (first-match-wins).
                         .requestMatchers(HttpMethod.GET, "/api/reference/**").permitAll()
                         // REF-2: the sign-up pre-fill sends browser signals (locales, timezone, optionally
                         // coordinates) and gets reference rows back. A POST only because it carries a body; it
@@ -124,8 +125,8 @@ public class SecurityConfig {
                         // had its own @PreAuthorize (search, friends/**, me/preferences) or gained
                         // one this ticket (the id/email/username lookups, the check/* endpoints,
                         // and the new /me). Nothing anonymous remains under this path.
-                        .requestMatchers(HttpMethod.GET, "/api/hashtags/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/posts/hashtag/**").permitAll()
+                        // A7: hashtag reads (trending, suggest, posts-by-hashtag) are authenticated too —
+                        // no anonymous client route calls them, and every other feed already requires a JWT.
 
                         // Static resources (images, etc.)
                         .requestMatchers("/images/**").permitAll()

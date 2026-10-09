@@ -130,17 +130,18 @@ class SessionAttributeSchemaIntegrationTest extends BaseIT {
     }
 
     @Test
-    void put_rejectsAnonymous_withForbidden() throws Exception {
+    void put_rejectsAnonymous_withUnauthorized() throws Exception {
         mockMvc.perform(put("/api/sports/{sportId}/session-attribute-schema", sportId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(toJson(sessionSchema())))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void memberGet_rejectsAnonymous_withForbidden() throws Exception {
+    void memberGet_rejectsAnonymous_withUnauthorized() throws Exception {
+        // A7: the path is authenticated, so an anonymous caller gets the filter chain's 401.
         mockMvc.perform(get("/api/sports/{sportId}/session-attribute-schema", sportId))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

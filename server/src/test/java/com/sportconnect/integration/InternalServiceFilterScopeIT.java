@@ -50,7 +50,8 @@ class InternalServiceFilterScopeIT extends RedisTestContainerBase {
 
     @Test
     void publicEndpointIsReachableRegardlessOfTheInternalFilter() {
-        ResponseEntity<String> response = restTemplate.getForEntity(url("/api/sports"), String.class);
+        // A7: /api/sports is authenticated now; reference data is the deliberate public GET.
+        ResponseEntity<String> response = restTemplate.getForEntity(url("/api/reference/countries"), String.class);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }

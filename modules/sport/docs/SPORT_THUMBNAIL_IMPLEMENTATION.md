@@ -166,7 +166,7 @@ Add this line to the authorizeHttpRequests section:
 .requestMatchers("/images/**").permitAll()
 ```
 
-**Note**: `/api/sports/**` is already configured as public, allowing unregistered users to load the sport list for profile initialization.
+**Note**: `/api/sports/**` was configured as public when this was written, allowing unregistered users to load the sport list for profile initialization. **Superseded by A7 (2026-10-08):** it is authenticated now — signup logs the user in before sport selection, and no anonymous client route reads the catalogue. The thumbnail files themselves (`/images/**`) are still public.
 
 ### Step 5: Verify SportResponse DTO
 

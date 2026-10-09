@@ -130,21 +130,21 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
     }
 
     @Test
-    void put_rejectsAnonymous_withForbidden() throws Exception {
-        // No authenticateAs call: /api/sports/** is permitAll, so the request reaches method
-        // security, which is what must reject it.
+    void put_rejectsAnonymous_withUnauthorized() throws Exception {
+        // No authenticateAs call. A7: /api/sports/** is no longer permitAll, so the filter chain
+        // answers 401 before method security is reached (it used to be a handler-level 403).
         mockMvc.perform(put("/api/sports/{sportId}/attribute-schema", sportId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(toJson(validSchema())))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void get_rejectsAnonymous_withForbidden() throws Exception {
-        // The case the blanket permitAll makes easy to get wrong: without @PreAuthorize this would
-        // be a 200, since the path itself is public.
+    void get_rejectsAnonymous_withUnauthorized() throws Exception {
+        // Before A7 the blanket permitAll made this easy to get wrong: without @PreAuthorize it
+        // would have been a 200. Now the path itself is authenticated.
         mockMvc.perform(get("/api/sports/{sportId}/attribute-schema", sportId))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -354,11 +354,10 @@ class SportAttributeSchemaIntegrationTest extends BaseIT {
     }
 
     @Test
-    void adminGetAll_rejectsAnonymous_withForbidden() throws Exception {
-        // Same trap as get_rejectsAnonymous_withForbidden above: /api/sports/** is blanket
-        // permitAll, so without @PreAuthorize this path would answer anonymous callers.
+    void adminGetAll_rejectsAnonymous_withUnauthorized() throws Exception {
+        // Same as get_rejectsAnonymous_withUnauthorized above (A7: the path is authenticated).
         mockMvc.perform(get("/api/sports/all/{sportId}/attribute-schema", sportId))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
