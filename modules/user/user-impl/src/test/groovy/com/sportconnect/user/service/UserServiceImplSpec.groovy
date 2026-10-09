@@ -10,6 +10,7 @@ import com.sportconnect.reference.api.dto.RegionResponse
 import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.UserSportProfileService
+import com.sportconnect.user.api.dto.CredentialCheck
 import com.sportconnect.user.api.dto.FriendRequestResponse
 import com.sportconnect.user.api.dto.LocationRequest
 import com.sportconnect.user.api.dto.UpdateProfileRequest
@@ -904,79 +905,117 @@ class UserServiceImplSpec extends Specification {
         thrown(ResourceNotFoundException)
     }
 
-    // ── verifyPassword ───────────────────────────────────────────────────────
+    // ── verifyCredentials / reactivateUserByEmail (A9) ───────────────────────
 
-    def "verifyPassword returns true when password matches an active user"() {
-        given:
-        def email = "test@example.com"
-        def user = User.builder()
+    private User credentialUser(String email, boolean active) {
+        return User.builder()
                 .id(UUID.randomUUID())
                 .email(email)
                 .passwordHash("storedHash")
-                .isActive(true)
+                .isActive(active)
                 .roles([] as Set)
                 .build()
+    }
+
+    def "verifyCredentials returns MATCH when the password matches an active user"() {
+        given:
+        def email = "test@example.com"
 
         when:
-        def result = userService.verifyPassword(email, "rawPassword")
+        def result = userService.verifyCredentials(email, "rawPassword")
 
         then:
-        1 * userRepository.findByEmail(email) >> Optional.of(user)
+        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, true))
         1 * passwordEncoder.matches("rawPassword", "storedHash") >> true
-        result == true
+        result == CredentialCheck.MATCH
     }
 
-    def "verifyPassword returns false when password does not match"() {
+    def "verifyCredentials returns NO_MATCH when the password does not match"() {
         given:
         def email = "test@example.com"
-        def user = User.builder()
-                .id(UUID.randomUUID())
-                .email(email)
-                .passwordHash("storedHash")
-                .isActive(true)
-                .roles([] as Set)
-                .build()
 
         when:
-        def result = userService.verifyPassword(email, "wrongPassword")
+        def result = userService.verifyCredentials(email, "wrongPassword")
 
         then:
-        1 * userRepository.findByEmail(email) >> Optional.of(user)
+        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, true))
         1 * passwordEncoder.matches("wrongPassword", "storedHash") >> false
-        result == false
+        result == CredentialCheck.NO_MATCH
     }
 
-    def "verifyPassword returns false for an inactive (soft-deleted) user without checking the hash"() {
+    def "verifyCredentials returns MATCH_INACTIVE for a deactivated user with the correct password"() {
         given:
         def email = "deleted@example.com"
-        def user = User.builder()
-                .id(UUID.randomUUID())
-                .email(email)
-                .passwordHash("storedHash")
-                .isActive(false)
-                .roles([] as Set)
-                .build()
 
         when:
-        def result = userService.verifyPassword(email, "rawPassword")
+        def result = userService.verifyCredentials(email, "rawPassword")
 
         then:
-        1 * userRepository.findByEmail(email) >> Optional.of(user)
-        0 * passwordEncoder.matches(_, _)
-        result == false
+        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, false))
+        1 * passwordEncoder.matches("rawPassword", "storedHash") >> true
+        result == CredentialCheck.MATCH_INACTIVE
     }
 
-    def "verifyPassword returns false when user does not exist"() {
+    def "verifyCredentials returns NO_MATCH, not MATCH_INACTIVE, for a deactivated user with a wrong password"() {
+        given:
+        def email = "deleted@example.com"
+
+        when:
+        def result = userService.verifyCredentials(email, "wrongPassword")
+
+        then:
+        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, false))
+        1 * passwordEncoder.matches("wrongPassword", "storedHash") >> false
+        result == CredentialCheck.NO_MATCH
+    }
+
+    def "verifyCredentials returns NO_MATCH when the user does not exist"() {
         given:
         def email = "notfound@example.com"
 
         when:
-        def result = userService.verifyPassword(email, "rawPassword")
+        def result = userService.verifyCredentials(email, "rawPassword")
 
         then:
         1 * userRepository.findByEmail(email) >> Optional.empty()
         0 * passwordEncoder.matches(_, _)
-        result == false
+        result == CredentialCheck.NO_MATCH
+    }
+
+    def "reactivateUserByEmail activates a deactivated user"() {
+        given:
+        def email = "deleted@example.com"
+        def user = credentialUser(email, false)
+
+        when:
+        def result = userService.reactivateUserByEmail(email)
+
+        then:
+        1 * userRepository.findByEmailForUpdate(email) >> Optional.of(user)
+        1 * userRepository.save({ it.isActive }) >> { args -> args[0] }
+        result.isActive == true
+    }
+
+    def "reactivateUserByEmail leaves an already active user alone"() {
+        given:
+        def email = "active@example.com"
+
+        when:
+        def result = userService.reactivateUserByEmail(email)
+
+        then:
+        1 * userRepository.findByEmailForUpdate(email) >> Optional.of(credentialUser(email, true))
+        0 * userRepository.save(_)
+        result.isActive == true
+    }
+
+    def "reactivateUserByEmail throws ResourceNotFoundException for an unknown email"() {
+        when:
+        userService.reactivateUserByEmail("nobody@example.com")
+
+        then:
+        1 * userRepository.findByEmailForUpdate("nobody@example.com") >> Optional.empty()
+        thrown(ResourceNotFoundException)
     }
 
     // ── updateLastLogin ──────────────────────────────────────────────────────

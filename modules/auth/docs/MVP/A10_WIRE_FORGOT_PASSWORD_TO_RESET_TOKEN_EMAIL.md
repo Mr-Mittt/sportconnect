@@ -10,7 +10,7 @@
 
 Wire it:
 1. Look up the user by email through `UserService` (`-api` only; `existsByEmail` / `getUserByEmail` exist). Prefer a lookup that does not throw for an unknown email.
-2. If the user exists **and is active**, call `createAndSendResetToken(userId, email)`. A deactivated user gets no email (CLAUDE.md § Account lifecycle).
+2. If the user exists, call `createAndSendResetToken(userId, email)` **whether or not the account is active** (changed 2026-10-09 by the **A9** scope change: a deactivated user may reset their password, and the account stays deactivated until they log in and confirm re-activation). Resetting the password must not re-activate the account and must not issue tokens. This needs a by-email lookup that includes inactive users (`getUserByEmail` is active-only today).
 3. Always return the same 200 and message whether or not the email exists (anti-enumeration), and keep the response time close for both paths where practical (send the email without making the caller wait on it, or accept and document the residual timing signal).
 4. Invalidate any earlier unused reset token for that user when issuing a new one, so only the latest link works (decide at pickup; check what `createAndSendResetToken` does today).
 5. `resetPassword` should revoke the user's refresh tokens once the password changes, so a stolen session does not outlive the reset (verify what `PasswordResetService.resetPassword` does today before adding).
@@ -24,7 +24,7 @@ Wire it:
 
 ## Tests
 
-- Spock: existing active user → token created and email sent; unknown email → no token, same response; deactivated user → no token, same response.
+- Spock: existing active user → token created and email sent; unknown email → no token, same response; deactivated user → token created and email sent, same response; after `reset-password` the account is still deactivated.
 - IT (`server/.../integration/`): register a user, call `forgot-password`, read the saved token row, call `reset-password` with it and log in with the new password; unknown and deactivated email return the identical 200 body. This is the path that has never run end to end.
 
 ## Out of scope

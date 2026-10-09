@@ -29,7 +29,8 @@ JWT token lifecycle, Spring Security filter chain, email verification, and passw
 
 ```
 POST /api/auth/register
-POST /api/auth/login
+POST /api/auth/login               ← correct password on a deactivated account: 401 ACCOUNT_DEACTIVATED, no tokens (A9)
+POST /api/auth/reactivate         ← A9: re-verifies credentials, re-activates, logs in (same cookie contract as login)
 POST /api/auth/refresh
 POST /api/auth/logout             ← caller derived from the JWT principal, no userId param
 POST /api/auth/verify-email
@@ -51,4 +52,5 @@ POST /api/auth/reset-password
 - `JwtTokenServiceImpl` uses reflection (`getMethod/invoke`) to extract user fields — renaming fields on the `User` entity requires updating this.
 - Access token = 1 hour, refresh token = 7 days — configured in `application.yml` under `app.jwt`.
 - Public endpoints are declared in `SecurityConfig` here, not per-controller — add new public routes here, **one explicit path each** (A7 removed the `/api/auth/**` and `/api/sports/**` blanket permits; an unlisted path is authenticated by default). `PublicSurfaceAccessIntegrationTest` pins the list.
-- `forgot-password` needs wiring to `UserService.getUserByEmail()` before it actually works.
+- **A deactivated user is not locked out forever (A9).** `UserService.verifyCredentials` returns `NO_MATCH` / `MATCH` / `MATCH_INACTIVE`; login turns `MATCH_INACTIVE` into `ACCOUNT_DEACTIVATED` and `reactivate` re-activates. Refresh never says `ACCOUNT_DEACTIVATED`. Forgot/reset password must keep working for a deactivated account and must not re-activate it (A10 wires the email side).
+- `forgot-password` needs wiring to a by-email lookup that includes deactivated users (`getUserByEmail` is active-only) before it actually works (A10).

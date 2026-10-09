@@ -99,6 +99,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login",
+                                // A9: confirms a re-activation after login answered ACCOUNT_DEACTIVATED; the caller
+                                // has no token (it was withheld), and the credentials are re-verified in the handler.
+                                "/api/auth/reactivate",
                                 "/api/auth/refresh",
                                 "/api/auth/verify-email",
                                 "/api/auth/forgot-password",

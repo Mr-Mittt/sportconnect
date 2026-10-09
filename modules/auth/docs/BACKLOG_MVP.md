@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/auth/auth-impl`  
-**Last updated:** 2026-10-08
+**Last updated:** 2026-10-09
 
 ---
 
@@ -19,9 +19,8 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [A9](MVP/A9_REFRESH_INACTIVE_USER_DEAD_BRANCH_AND_404_LEAK.md) | Refresh for an inactive user: dead `ACCOUNT_DEACTIVATED` branch and a 404 that leaks the user id — found during A8, user decision to keep behavior for now | `TODO` |
-| 2 | [A10](MVP/A10_WIRE_FORGOT_PASSWORD_TO_RESET_TOKEN_EMAIL.md) | Wire `forgot-password` to issue and email a reset token — it is a placeholder today, so no password reset works end to end; found during CLIENT-ERR-2. Keeps the endpoint A7 would otherwise flag as unused | `TODO` |
-| 3 | [A11](MVP/A11_REDIS_OUTAGE_DEGRADATION_TOKEN_REVOCATION.md) | Redis outage must not take down authentication — token-revocation cache falls back to the DB watermark with a WARN; found while filing post A19 | `TODO` |
+| 1 | [A10](MVP/A10_WIRE_FORGOT_PASSWORD_TO_RESET_TOKEN_EMAIL.md) | Wire `forgot-password` to issue and email a reset token — it is a placeholder today, so no password reset works end to end; found during CLIENT-ERR-2. Keeps the endpoint A7 would otherwise flag as unused | `TODO` |
+| 2 | [A11](MVP/A11_REDIS_OUTAGE_DEGRADATION_TOKEN_REVOCATION.md) | Redis outage must not take down authentication — token-revocation cache falls back to the DB watermark with a WARN; found while filing post A19 | `TODO` |
 
 ---
 
@@ -29,12 +28,13 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [A7](MVP/A7_AUDIT_PUBLIC_API_SURFACE_AND_REMOVE_UNUSED_ENDPOINTS.md) | Audit the public API surface (2026-10-08): blanket `permitAll` on `/api/auth/**`, `/api/sports/**` and the hashtag reads replaced by an explicit public list; nothing deleted; `PublicSurfaceAccessIntegrationTest`; INFRA-10 filed | `DONE` |
-| 2 | [A8](MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) | **[Error handling · Phase B]** Auth error-code audit (2026-10-05): 12 sites coded, register duplicate email 400 → 409, codes in `ERROR_CODES.md`, `AuthErrorCodesIntegrationTest` | `DONE` |
-| 3 | [A6](MVP/A6_DROP_AUTH_TABLES_USER_ID_FKS.md) | Drop DB-level FKs on auth tables' `user_id` columns (cross-domain, violates domain-scoped-tables rule) | `DONE` |
-| 4 | [A4](MVP/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md) | JWT `jti` claim for guaranteed token uniqueness | `DONE` |
-| 5 | [A2](MVP/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md) | Refresh token via httpOnly cookie (client epic's BE-1) | `DONE` |
-| 6 | [A3](MVP/A3_FIX_LOGOUT_AUTHORIZATION.md) | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
+| 1 | [A9](MVP/A9_REFRESH_INACTIVE_USER_DEAD_BRANCH_AND_404_LEAK.md) | Deactivated accounts (2026-10-09): login answers `ACCOUNT_DEACTIVATED` for correct credentials, new public `POST /api/auth/reactivate` re-activates and logs in, refresh gives the generic 401 instead of a 404; `AccountReactivationIntegrationTest`; client AUTH-10 filed | `DONE` |
+| 2 | [A7](MVP/A7_AUDIT_PUBLIC_API_SURFACE_AND_REMOVE_UNUSED_ENDPOINTS.md) | Audit the public API surface (2026-10-08): blanket `permitAll` on `/api/auth/**`, `/api/sports/**` and the hashtag reads replaced by an explicit public list; nothing deleted; `PublicSurfaceAccessIntegrationTest`; INFRA-10 filed | `DONE` |
+| 3 | [A8](MVP/A8_STRUCTURED_ERROR_CODES_ON_APIRESPONSE_ERROR.md) | **[Error handling · Phase B]** Auth error-code audit (2026-10-05): 12 sites coded, register duplicate email 400 → 409, codes in `ERROR_CODES.md`, `AuthErrorCodesIntegrationTest` | `DONE` |
+| 4 | [A6](MVP/A6_DROP_AUTH_TABLES_USER_ID_FKS.md) | Drop DB-level FKs on auth tables' `user_id` columns (cross-domain, violates domain-scoped-tables rule) | `DONE` |
+| 5 | [A4](MVP/A4_JTI_REFRESH_TOKEN_UNIQUENESS.md) | JWT `jti` claim for guaranteed token uniqueness | `DONE` |
+| 6 | [A2](MVP/A2_REFRESH_TOKEN_HTTPONLY_COOKIE.md) | Refresh token via httpOnly cookie (client epic's BE-1) | `DONE` |
+| 7 | [A3](MVP/A3_FIX_LOGOUT_AUTHORIZATION.md) | Fix `/api/auth/logout` authorization (client epic's BE-2) | `DONE` |
 
 ---
 
