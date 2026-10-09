@@ -651,6 +651,88 @@ class UserServiceImplSpec extends Specification {
         result == true
     }
 
+    def "findUserIdByEmail returns the id of a deactivated user too, without any active filter (A10)"() {
+        given:
+        def user = User.builder().id(UUID.randomUUID()).email("gone@example.com").isActive(false).build()
+
+        when:
+        def result = userService.findUserIdByEmail("gone@example.com")
+
+        then:
+        1 * userRepository.findByEmail("gone@example.com") >> Optional.of(user)
+        0 * userRepository.findByEmailAndIsActiveTrue(_)
+        result == Optional.of(user.id)
+    }
+
+    def "findPreferredLanguageCode: an active stored preference wins over the country default (A10)"() {
+        given:
+        def id = UUID.randomUUID()
+
+        when:
+        def result = userService.findPreferredLanguageCode(id)
+
+        then:
+        1 * userPreferenceRepository.findByUserId(id) >> Optional.of(UserPreference.builder().userId(id).language("vi").build())
+        1 * referenceService.isActiveLanguage("vi") >> true
+        0 * userRepository.findById(_)
+        result == Optional.of("vi")
+    }
+
+    def "findPreferredLanguageCode: no preference row falls back to the country's default language (A10)"() {
+        given:
+        def id = UUID.randomUUID()
+        def user = User.builder().id(id).countryId(704L).isActive(false).build()
+
+        when:
+        def result = userService.findPreferredLanguageCode(id)
+
+        then:
+        1 * userPreferenceRepository.findByUserId(id) >> Optional.empty()
+        1 * userRepository.findById(id) >> Optional.of(user)
+        1 * referenceService.getCountriesByIds([704L]) >> [704L: CountryResponse.builder().id(704L).defaultLanguageCode("vi").build()]
+        1 * referenceService.isActiveLanguage("vi") >> true
+        result == Optional.of("vi")
+    }
+
+    def "findPreferredLanguageCode: an inactive stored language is skipped for the country default (A10)"() {
+        given:
+        def id = UUID.randomUUID()
+
+        when:
+        def result = userService.findPreferredLanguageCode(id)
+
+        then:
+        1 * userPreferenceRepository.findByUserId(id) >> Optional.of(UserPreference.builder().userId(id).language("xx").build())
+        1 * referenceService.isActiveLanguage("xx") >> false
+        1 * userRepository.findById(id) >> Optional.of(User.builder().id(id).countryId(704L).build())
+        1 * referenceService.getCountriesByIds([704L]) >> [704L: CountryResponse.builder().id(704L).defaultLanguageCode("vi").build()]
+        1 * referenceService.isActiveLanguage("vi") >> true
+        result == Optional.of("vi")
+    }
+
+    def "findPreferredLanguageCode: empty when there is no preference, no country, or no default (A10)"() {
+        given:
+        def id = UUID.randomUUID()
+
+        when:
+        def result = userService.findPreferredLanguageCode(id)
+
+        then:
+        1 * userPreferenceRepository.findByUserId(id) >> Optional.empty()
+        1 * userRepository.findById(id) >> Optional.of(User.builder().id(id).build())
+        0 * referenceService.getCountriesByIds(_)
+        result == Optional.empty()
+    }
+
+    def "findUserIdByEmail returns empty, without throwing, for an unknown email (A10)"() {
+        when:
+        def result = userService.findUserIdByEmail("nobody@example.com")
+
+        then:
+        1 * userRepository.findByEmail("nobody@example.com") >> Optional.empty()
+        result == Optional.empty()
+    }
+
     def "existsByEmail should return false when email does not exist"() {
         given:
         def email = "notexists@example.com"

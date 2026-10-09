@@ -34,7 +34,7 @@ POST /api/auth/reactivate         ← A9: re-verifies credentials, re-activates,
 POST /api/auth/refresh
 POST /api/auth/logout             ← caller derived from the JWT principal, no userId param
 POST /api/auth/verify-email
-POST /api/auth/forgot-password    ← PLACEHOLDER (returns 200, does nothing)
+POST /api/auth/forgot-password    ← A10: emails a reset link if the account exists (active or deactivated); identical 200 either way
 POST /api/auth/reset-password
 ```
 
@@ -53,4 +53,4 @@ POST /api/auth/reset-password
 - Access token = 1 hour, refresh token = 7 days — configured in `application.yml` under `app.jwt`.
 - Public endpoints are declared in `SecurityConfig` here, not per-controller — add new public routes here, **one explicit path each** (A7 removed the `/api/auth/**` and `/api/sports/**` blanket permits; an unlisted path is authenticated by default). `PublicSurfaceAccessIntegrationTest` pins the list.
 - **A deactivated user is not locked out forever (A9).** `UserService.verifyCredentials` returns `NO_MATCH` / `MATCH` / `MATCH_INACTIVE`; login turns `MATCH_INACTIVE` into `ACCOUNT_DEACTIVATED` and `reactivate` re-activates. Refresh never says `ACCOUNT_DEACTIVATED`. Forgot/reset password must keep working for a deactivated account and must not re-activate it (A10 wires the email side).
-- `forgot-password` needs wiring to a by-email lookup that includes deactivated users (`getUserByEmail` is active-only) before it actually works (A10).
+- **Password reset (A10).** `PasswordResetService.requestReset` uses `UserService.findUserIdByEmail` (includes deactivated), replaces the user's token in a `TransactionTemplate` (one row per user: unique `user_id`, V078) and emails after the commit, in the user's language (`UserService.findPreferredLanguageCode`, gated by `EmailMessages` bundles `email/reset-password_{en,vi}.properties`; verification and welcome emails still English, A13); the unique-key race is caught outside the transaction. `resetPassword` revokes refresh tokens. Expiry: `app.password-reset.expiration-minutes`. Known gap: revocation does not evict the Redis watermark (A12).

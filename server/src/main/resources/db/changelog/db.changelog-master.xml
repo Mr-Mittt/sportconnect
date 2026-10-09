@@ -214,4 +214,7 @@
     <!-- U21: users.shoe_size_cm -> shoe_size_mm (renamed, existing values x10). -->
     <include file="db/changelog/changes/V077__rename_shoe_size_cm_to_mm.sql" relativeToChangelogFile="false"/>
 
+    <!-- A10: password_reset_tokens.user_id unique (one reset token per user, enforced by the DB). -->
+    <include file="db/changelog/changes/V078__password_reset_tokens_unique_user_id.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

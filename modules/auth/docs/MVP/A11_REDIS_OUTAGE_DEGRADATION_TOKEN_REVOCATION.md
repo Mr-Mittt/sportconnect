@@ -13,3 +13,7 @@ Wanted: treat Redis as the cache it is. On a Redis read failure, go straight to 
 **Out of scope:** the post/comment caches (post `A19`); the chat-sync stream publishes (already guarded); a revocation-list redesign; Redis HA, alerting or circuit breakers; U12's `isActive` recheck. No client-visible enum or event change.
 
 **Tests:** Spock spec with a `StringRedisTemplate` mock throwing `RedisConnectionFailureException` (watermark comes from the repository, write-back skipped, a revoked token still returns `true`); a `:server` IT through the real filter chain with Redis unreachable: a valid token authenticates (200) and a token minted before a logout is still rejected (401).
+
+## Relation to A12 (added 2026-10-09)
+
+**A12** adds a Redis eviction of the revocation watermark on logout and deactivation. That write needs the same outage guard as the reads here, so do the two in one pass (A12 first, it is the security bug) and share one guard helper.

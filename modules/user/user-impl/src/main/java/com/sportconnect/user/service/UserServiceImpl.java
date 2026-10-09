@@ -53,6 +53,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -330,6 +331,28 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmail(email);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> findUserIdByEmail(String email) {
+        return userRepository.findByEmail(email).map(User::getId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> findPreferredLanguageCode(UUID userId) {
+        Optional<String> stored = userPreferenceRepository.findByUserId(userId)
+                .map(UserPreference::getLanguage)
+                .filter(referenceService::isActiveLanguage);
+        if (stored.isPresent()) {
+            return stored;
+        }
+        return userRepository.findById(userId)
+                .map(User::getCountryId)
+                .map(countryId -> referenceService.getCountriesByIds(List.of(countryId)).get(countryId))
+                .map(CountryResponse::getDefaultLanguageCode)
+                .filter(referenceService::isActiveLanguage);
     }
 
     @Override
