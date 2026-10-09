@@ -67,8 +67,8 @@
 | `INVALID_CREDENTIALS` | 401 | none | `POST /api/auth/login`: wrong password, unknown email, or a deactivated account (indistinguishable by design). |
 | `REFRESH_TOKEN_MISSING` | 401 | none | `POST /api/auth/refresh` without the refresh cookie. |
 | `REFRESH_TOKEN_INVALID` | 401 | none | `POST /api/auth/refresh` with a token that is not in the store. |
-| `REFRESH_TOKEN_EXPIRED_OR_REVOKED` | 401 | none | `POST /api/auth/refresh` with an expired or revoked token (what a deactivated user normally gets). |
-| `ACCOUNT_DEACTIVATED` | 401 | none | Refresh for a deactivated user. **Currently unreachable**: the user lookup throws a 404 first (ticket A9). |
+| `REFRESH_TOKEN_EXPIRED_OR_REVOKED` | 401 | none | `POST /api/auth/refresh` with an expired or revoked token. Also what a refresh gets when its user was deactivated meanwhile (A9): the generic "logged out, log in again", never `ACCOUNT_DEACTIVATED`, never a 404. |
+| `ACCOUNT_DEACTIVATED` | 401 | none | `POST /api/auth/login` with the **correct** credentials of a deactivated account (A9): no tokens, no cookie; the client offers re-activation via `POST /api/auth/reactivate`. A wrong password stays `INVALID_CREDENTIALS`. Never returned by refresh. |
 | `VERIFICATION_TOKEN_INVALID` | 404 | none | `POST /api/auth/verify-email` with an unknown token. |
 | `EMAIL_ALREADY_VERIFIED` | 400 | none | `POST /api/auth/verify-email` with an already-used token. |
 | `VERIFICATION_TOKEN_EXPIRED` | 400 | none | `POST /api/auth/verify-email` with an expired token. |

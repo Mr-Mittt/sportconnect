@@ -1,5 +1,6 @@
 package com.sportconnect.user.api.service;
 
+import com.sportconnect.user.api.dto.CredentialCheck;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserRegistrationDetails;
@@ -146,10 +147,21 @@ public interface UserService {
     Set<String> getUserRoles(UUID userId);
 
     /**
-     * Verify user password (for authentication)
-     * Returns true if password matches, false otherwise
+     * Checks an email and password pair (for authentication). The password is checked for deactivated
+     * accounts too, so {@link CredentialCheck#MATCH_INACTIVE} is only returned when the password is
+     * correct and a wrong password never reveals whether the account exists or is deactivated.
      */
-    boolean verifyPassword(String email, String rawPassword);
+    CredentialCheck verifyCredentials(String email, String rawPassword);
+
+    /**
+     * A9: re-activates the account with this email (sets {@code isActive = true}) and returns it. A no-op for an
+     * already active account. The caller must have verified the password first
+     * ({@link #verifyCredentials}); this method does not. Takes the same exclusive row lock as
+     * {@code deleteUser}, so it serializes with a concurrent deactivation. Does not issue or revoke any token.
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no account has this email
+     */
+    UserResponse reactivateUserByEmail(String email);
 
     /**
      * Update user's last login timestamp

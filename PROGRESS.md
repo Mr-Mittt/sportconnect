@@ -180,8 +180,16 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   handler-level 403 / 200. No endpoint deleted. New `PublicSurfaceAccessIntegrationTest`; 8 existing IT
   assertions updated; full `:server:test` green (535). Filed INFRA-10 (Swagger/`oauth-token` exposure in deployed environments). Also moved
   A5 (rate limiting) to `BACKLOG_V1.md` (user decision: not much user in MVP).
-- **MVP backlog:** auth tickets A2–A11 in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6/A7/A8 `DONE`;
-  A9, A10, A11 `TODO`; A5 moved to V1
+- **A9 (2026-10-09, `DONE`, `modules/auth/docs/MVP/A9_REFRESH_INACTIVE_USER_DEAD_BRANCH_AND_404_LEAK.md`):**
+  deactivation is reversible by the user. Login with the correct password of a deactivated account now
+  answers 401 `ACCOUNT_DEACTIVATED` (no tokens); new public `POST /api/auth/reactivate` re-verifies the
+  credentials, re-activates and logs in; refresh for a deactivated user is the generic
+  `REFRESH_TOKEN_EXPIRED_OR_REVOKED` (was a 404 leaking the user id); a deactivated email still blocks
+  register (409) and forgot/reset password stays allowed without re-activating (rule recorded in A10).
+  `verifyPassword` replaced by `verifyCredentials`. New `AccountReactivationIntegrationTest` (9); full
+  `:server:test` green (544). Client follow-up filed as AUTH-10.
+- **MVP backlog:** auth tickets A2–A11 in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6/A7/A8/A9 `DONE`;
+  A10, A11 `TODO`; A5 moved to V1
 
 #### `modules:user:user-api` + `modules:user:user-impl`
 - `User` entity: UUID PK, email/username unique, profile fields, PostGIS `geography(Point, 4326)` for location, soft delete (`isActive`), roles (ManyToMany eager)

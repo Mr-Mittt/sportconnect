@@ -10,7 +10,9 @@ import com.sportconnect.auth.repository.PasswordResetTokenRepository
 import com.sportconnect.auth.repository.RefreshTokenRepository
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ConflictException
+import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.common.exception.UnauthorizedException
+import com.sportconnect.user.api.dto.CredentialCheck
 import com.sportconnect.user.api.dto.UserRegistrationDetails
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserService
@@ -193,7 +195,7 @@ class AuthServiceImplSpec extends Specification {
     def "login with bad credentials throws UnauthorizedException coded INVALID_CREDENTIALS"() {
         given:
         def request = LoginRequest.builder().email("a@example.com").password("wrong").build()
-        userService.verifyPassword(request.email, request.password) >> false
+        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.NO_MATCH
 
         when:
         authService.login(request)
@@ -204,23 +206,104 @@ class AuthServiceImplSpec extends Specification {
         e.errorCode == "INVALID_CREDENTIALS"
     }
 
-    def "refresh for a deactivated user throws UnauthorizedException coded ACCOUNT_DEACTIVATED"() {
+    def "login with the correct password for a deactivated account throws ACCOUNT_DEACTIVATED and issues no tokens"() {
+        given:
+        def request = LoginRequest.builder().email("gone@example.com").password("right").build()
+        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH_INACTIVE
+
+        when:
+        authService.login(request)
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.message == "Account is deactivated"
+        e.errorCode == "ACCOUNT_DEACTIVATED"
+        0 * userService.getUserByEmail(_)
+        0 * userService.updateLastLogin(_)
+        0 * jwtTokenService.generateAccessToken(_)
+        0 * refreshTokenRepository.save(_)
+    }
+
+    def "refresh for a user who is no longer active throws the generic REFRESH_TOKEN_EXPIRED_OR_REVOKED, not a 404 or ACCOUNT_DEACTIVATED"() {
         given:
         def userId = UUID.randomUUID()
         def token = RefreshToken.builder().id(1L).userId(userId).token("t")
                 .expiresAt(LocalDateTime.now().plusDays(7)).build()
         refreshTokenRepository.findByToken("t") >> Optional.of(token)
-        def user = Mock(UserResponse)
-        user.getIsActive() >> false
-        userService.getActiveUserForUpdate(userId) >> user
+        userService.getActiveUserForUpdate(userId) >> { throw new ResourceNotFoundException("User", "id", userId) }
 
         when:
         authService.refreshToken("t")
 
         then:
         def e = thrown(UnauthorizedException)
-        e.message == "Account is deactivated"
-        e.errorCode == "ACCOUNT_DEACTIVATED"
+        e.errorCode == "REFRESH_TOKEN_EXPIRED_OR_REVOKED"
+        !e.message.contains(userId.toString())
+        0 * refreshTokenRepository.save(_)
+        0 * jwtTokenService.generateAccessToken(_)
+    }
+
+    private UserResponse reactivationUser(String email) {
+        def userResponse = Mock(UserResponse)
+        userResponse.getId() >> UUID.randomUUID()
+        userResponse.getEmail() >> email
+        userResponse.getFirstName() >> "John"
+        userResponse.getLastName() >> "Doe"
+        userResponse.getUsername() >> null
+        userResponse.getRoles() >> new HashSet<>(["USER"])
+        userResponse.getIsActive() >> true
+        jwtTokenService.generateAccessToken(_) >> "access-token"
+        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
+        jwtTokenService.getRefreshExpiration() >> 604800000L
+        jwtProperties.getExpiration() >> 3600000L
+        return userResponse
+    }
+
+    def "reactivate re-activates a deactivated account and logs the user in"() {
+        given:
+        def request = LoginRequest.builder().email("gone@example.com").password("right").build()
+        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH_INACTIVE
+        def user = reactivationUser(request.email)
+
+        when:
+        def result = authService.reactivate(request)
+
+        then:
+        1 * userService.reactivateUserByEmail(request.email) >> user
+        1 * userService.updateLastLogin(_)
+        1 * refreshTokenRepository.save(_)
+        result.accessToken == "access-token"
+        result.refreshToken == "refresh-token"
+    }
+
+    def "reactivate with a wrong password throws INVALID_CREDENTIALS and reactivates nothing"() {
+        given:
+        def request = LoginRequest.builder().email("gone@example.com").password("wrong").build()
+        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.NO_MATCH
+
+        when:
+        authService.reactivate(request)
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.errorCode == "INVALID_CREDENTIALS"
+        0 * userService.reactivateUserByEmail(_)
+        0 * refreshTokenRepository.save(_)
+    }
+
+    def "reactivate for an already active account just logs the user in"() {
+        given:
+        def request = LoginRequest.builder().email("live@example.com").password("right").build()
+        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH
+        def user = reactivationUser(request.email)
+
+        when:
+        def result = authService.reactivate(request)
+
+        then:
+        0 * userService.reactivateUserByEmail(_)
+        1 * userService.getUserByEmail(request.email) >> user
+        result.accessToken == "access-token"
     }
 
     def "should login user successfully"() {
@@ -231,7 +314,7 @@ class AuthServiceImplSpec extends Specification {
             .build()
 
         and: "password verification succeeds"
-        userService.verifyPassword(request.email, request.password) >> true
+        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH
 
         and: "user service returns user"
         def userResponse = Mock(UserResponse)

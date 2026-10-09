@@ -5,6 +5,7 @@ import com.sportconnect.auth.api.service.AuthService;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
+import com.sportconnect.user.api.dto.CredentialCheck;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.Gender;
 import com.sportconnect.user.api.dto.LocationResponse;
@@ -470,13 +471,26 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean verifyPassword(String email, String rawPassword) {
+    public CredentialCheck verifyCredentials(String email, String rawPassword) {
         User user = userRepository.findByEmail(email)
                 .orElse(null);
-        if (user == null || !user.getIsActive()) {
-            return false;
+        if (user == null || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+            return CredentialCheck.NO_MATCH;
         }
-        return passwordEncoder.matches(rawPassword, user.getPasswordHash());
+        return user.getIsActive() ? CredentialCheck.MATCH : CredentialCheck.MATCH_INACTIVE;
+    }
+
+    @Override
+    @Transactional
+    public UserResponse reactivateUserByEmail(String email) {
+        User user = userRepository.findByEmailForUpdate(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
+        if (!user.getIsActive()) {
+            user.setIsActive(true);
+            userRepository.save(user);
+            log.info("Re-activated user: {}", user.getId());
+        }
+        return toUserResponse(user);
     }
 
     @Override

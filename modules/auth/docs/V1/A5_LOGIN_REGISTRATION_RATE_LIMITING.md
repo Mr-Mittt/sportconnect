@@ -36,6 +36,8 @@ countdown instead of parsing the message string — decide which at implementati
 the choice since the client ticket will need it verified, not guessed, same as every other
 AuthResponse-shape ticket in this backlog).
 
+**Also covers `POST /api/auth/reactivate` (added by A9, 2026-10-09):** it verifies a password exactly like login, so it is as open to guessing as login and needs the same per-IP limit (share the login counter or add its own).
+
 **Tests:** 6th login attempt within the window → 429, not delegated to `AuthService`; window reset
 after TTL expires allows a subsequent attempt; registration and password-reset counters are
 independent of the login counter and of each other; a successful login does not reset the counter

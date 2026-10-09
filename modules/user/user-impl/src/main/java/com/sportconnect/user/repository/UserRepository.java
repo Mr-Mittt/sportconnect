@@ -41,6 +41,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT u FROM User u WHERE u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") UUID id);
 
+    /** A9: same exclusive lock as {@link #findByIdForUpdate}, looked up by email, active or not (re-activation). */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.email = :email")
+    Optional<User> findByEmailForUpdate(@Param("email") String email);
+
     /**
      * U12: shared row lock ({@code SELECT ... FOR SHARE}) — multiple concurrent callers of this
      * method for the same user don't block each other, but a concurrent {@link #findByIdForUpdate}

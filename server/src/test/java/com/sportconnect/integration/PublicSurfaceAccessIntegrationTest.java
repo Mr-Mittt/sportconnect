@@ -59,7 +59,7 @@ class PublicSurfaceAccessIntegrationTest extends BaseIT {
     @Test
     void publicAuthEndpoints_areReachableAnonymously() throws Exception {
         for (String path : new String[] {
-                "/api/auth/register", "/api/auth/login", "/api/auth/refresh", "/api/auth/verify-email",
+                "/api/auth/register", "/api/auth/login", "/api/auth/reactivate", "/api/auth/refresh", "/api/auth/verify-email",
                 "/api/auth/forgot-password", "/api/auth/reset-password"}) {
             assertReachedHandler(mockMvc.perform(post(path).with(anonymous())
                             .contentType(MediaType.APPLICATION_JSON).content("{}"))

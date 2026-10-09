@@ -71,7 +71,7 @@ public class AuthController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid email or password, or account deactivated")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid email or password (errorCode INVALID_CREDENTIALS), or correct credentials for a deactivated account (errorCode ACCOUNT_DEACTIVATED, no tokens issued -- see /reactivate)")
     })
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
@@ -79,6 +79,26 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response.getRefreshToken()).toString())
                 .body(ApiResponse.success("Login successful", response));
+    }
+
+    /**
+     * A9: the user's confirmation after login answered {@code ACCOUNT_DEACTIVATED}. Re-verifies the credentials,
+     * re-activates the account, and logs in with the same refresh-token-cookie contract as {@link #login}. Public
+     * for the same reason login is (the caller has no token), and as open to password guessing as login is.
+     */
+    @Operation(summary = "Re-activate a deactivated account and log in", security = {},
+            description = "Takes the same credentials as login. If they are correct, a deactivated account is re-activated and the user is logged in (same cookie contract as login); an already active account is simply logged in.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account active and logged in"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid email or password (errorCode INVALID_CREDENTIALS); the account is left as it was")
+    })
+    @PostMapping("/reactivate")
+    public ResponseEntity<ApiResponse<AuthResponse>> reactivate(@Valid @RequestBody LoginRequest request) {
+        AuthResponse response = authService.reactivate(request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response.getRefreshToken()).toString())
+                .body(ApiResponse.success("Account re-activated", response));
     }
 
     /**
