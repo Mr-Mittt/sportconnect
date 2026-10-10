@@ -32,6 +32,7 @@ public class PasswordResetService {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final PlatformTransactionManager transactionManager;
+    private final TokenRevocationChecker tokenRevocationChecker;
 
     @Value("${app.password-reset.expiration-minutes:60}")
     private long expirationMinutes;
@@ -113,12 +114,14 @@ public class PasswordResetService {
      * Sets the new (already validated) password and revokes all of the user's refresh tokens, so a session
      * that was open before the reset (for example a stolen one) does not outlive it (A10). Does not touch
      * {@code isActive}: a deactivated account stays deactivated.
+     * Evicts the cached revocation watermark after commit so the revoked tokens stop working immediately (A12).
      */
     @Transactional
     public void resetPassword(UUID userId, String newPassword) {
         String encodedPassword = passwordEncoder.encode(newPassword);
         userService.updateUserPassword(userId, encodedPassword);
         refreshTokenRepository.revokeAllUserTokens(userId, LocalDateTime.now());
+        tokenRevocationChecker.evictAfterCommit(userId);
         log.info("Password reset completed for user: {}", userId);
     }
 }

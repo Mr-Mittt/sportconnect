@@ -1,6 +1,6 @@
 # A12 · Revoking a user's sessions must evict the cached revocation watermark
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-10-10, see [A12_IMPLEMENTATION_SUMMARY.md](A12_IMPLEMENTATION_SUMMARY.md))
 **Type:** Bug (security, pre-existing)
 **Depends on:** none (touches the same class as `A11`, `TokenRevocationChecker`; do them in one pass if both are picked up together)
 

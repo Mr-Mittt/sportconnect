@@ -27,10 +27,11 @@ class PasswordResetServiceSpec extends Specification {
     EmailMessages emailMessages = new EmailMessages()
     UserService userService = Mock()
     PasswordEncoder passwordEncoder = Mock()
+    TokenRevocationChecker tokenRevocationChecker = Mock()
 
     @Subject
     PasswordResetService service = new PasswordResetService(repository, refreshTokenRepository, emailService, emailMessages,
-            userService, passwordEncoder, transactionManager)
+            userService, passwordEncoder, transactionManager, tokenRevocationChecker)
 
     def setup() {
         service.expirationMinutes = 60
@@ -112,6 +113,7 @@ class PasswordResetServiceSpec extends Specification {
         then:
         1 * userService.updateUserPassword(userId, "hashed")
         1 * refreshTokenRepository.revokeAllUserTokens(userId, _ as LocalDateTime)
+        1 * tokenRevocationChecker.evictAfterCommit(userId)  // A12
     }
 
     // ---------- A8: error codes ----------

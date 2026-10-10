@@ -39,8 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *       only the two real accounts get a token row;</li>
  *   <li>a deactivated account that resets its password stays deactivated;</li>
  *   <li>expired and reused tokens are rejected with {@code RESET_TOKEN_EXPIRED} / {@code RESET_TOKEN_USED};</li>
- *   <li>the reset revokes the user's refresh tokens, and an access token issued before it (and not yet cached by
- *       the revocation check — see auth A12) stops working;</li>
+ *   <li>the reset revokes the user's refresh tokens, and an access token issued before it stops working even
+ *       after an earlier request cached "never revoked" for the user (A12 evicts that entry after commit);</li>
  *   <li>a second forgot-password replaces the first token (the old link dies), and the database itself refuses a
  *       second row for the same user (V078).</li>
  * </ul>
@@ -220,10 +220,10 @@ class PasswordResetIntegrationTest extends RedisBaseIT {
         MvcResult registered = register("a10-revoke@example.com");
         UUID userId = userIdOf(registered);
         String oldAccessToken = accessTokenOf(registered);
-        // Deliberately no authenticated request with this token before the reset: such a request caches "never
-        // revoked" in Redis, and revocation does not evict it, so the token would stay valid until the cache entry
-        // expires. That is a pre-existing gap shared with logout and deactivation (auth A12), not something A10
-        // introduces; this test pins down what A10 does guarantee (refresh tokens revoked, watermark stamped).
+        // A12: an authenticated request first, so Redis caches "never revoked" for this user. Before A12 the reset
+        // did not evict that entry and the old token stayed valid until it expired.
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + oldAccessToken))
+                .andExpect(status().isOk());
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL", Integer.class, userId))
                 .isPositive();
