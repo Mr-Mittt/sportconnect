@@ -1,6 +1,6 @@
 # A11 · Redis outage must not take down authentication (token revocation cache)
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-10-09), see [A11_IMPLEMENTATION_SUMMARY.md](A11_IMPLEMENTATION_SUMMARY.md)
 **Type:** Enhancement (Architecture)
 **Depends on:** none (shares an approach with post `A19`, `modules/social/post-impl/docs/MVP/A19_REDIS_OUTAGE_DEGRADATION.md`; reuse its guard helper if it lands in `common`)
 
@@ -17,3 +17,7 @@ Wanted: treat Redis as the cache it is. On a Redis read failure, go straight to 
 ## Relation to A12 (added 2026-10-09)
 
 **A12** adds a Redis eviction of the revocation watermark on logout and deactivation. That write needs the same outage guard as the reads here, so do the two in one pass (A12 first, it is the security bug) and share one guard helper.
+
+## Delta (2026-10-09, found at pickup)
+
+The ticket says an outage makes every authenticated request fail with a 500 "from the filter chain". That is not what happens: `JwtAuthenticationFilter` wraps its check in `catch (Exception)`, so the exception from `isRevoked` is logged at ERROR (with a stack trace, per request) and the request continues **unauthenticated**, so protected endpoints answer 401/403. The outcome is the same (every authenticated user locked out, failing closed) but the symptom is a 401 and a log flood, not a 500. Confirmed by running the new IT against the pre-fix code: a valid token gets 401.

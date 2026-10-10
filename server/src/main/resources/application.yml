@@ -51,6 +51,9 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       timeout: 2000ms
+      # A11: bound the wait when Redis is blackholed (packets dropped, not refused). Lettuce's default is 10s, and with
+      # the guarded revocation check every authenticated request would pay it for the length of the outage.
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1000ms}
       lettuce:
         pool:
           max-active: 8

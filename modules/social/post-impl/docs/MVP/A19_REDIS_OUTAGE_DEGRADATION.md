@@ -13,3 +13,7 @@ Wanted: Redis is a cache, so an outage degrades and does not fail. A failed coun
 **Out of scope:** `TokenRevocationChecker` in auth (its own ticket, auth `A11`: a JWT-filter read/write, so an outage there fails every authenticated request); the chat-sync stream publishes in group/user (verified 2026-10-05: already catch `Exception` and log a `WARN`, not a gap here); Redis HA, alerting, retries or circuit breakers. No client-visible enum or event change.
 
 **Tests:** Spock specs for both services with a `StringRedisTemplate` mock throwing `RedisConnectionFailureException` (counts fall back to the DB, writes skipped, WARN logged); a `:server` IT that reaches post mapping with Redis unreachable and expects 200. Once it lands, `GroupErrorCodesIntegrationTest` no longer needs `RedisBaseIT` for its pin cases (optional cleanup).
+
+## Update 2026-10-09: the shared guard already exists
+
+Auth **A11** shipped `com.sportconnect.common.cache.CacheGuard` (`read(what, supplier, fallback)` and `run(what, runnable)`; catches `DataAccessException`, one throttled WARN per minute per label with no stack trace, one INFO on recovery). Use it for the ~10 sites in `PostServiceImpl` and `CommentServiceImpl` instead of writing a new helper. A11 also added `spring.data.redis.connect-timeout` (1 s); the command timeout was already 2 s.
