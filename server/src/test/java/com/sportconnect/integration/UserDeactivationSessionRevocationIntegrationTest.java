@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -147,5 +148,62 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
         mockMvc.perform(get("/api/users/me")
                         .header("Authorization", "Bearer " + accessToken))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // ---------- A12: a revocation must evict the cached "never revoked" watermark ----------
+
+    @Test
+    void deactivation_rejectsAnAccessToken_evenAfterARequestCachedNeverRevoked() throws Exception {
+        UUID userId = createActiveUser();
+        String accessToken = mintAccessToken(userId);
+        mintRefreshToken(userId);
+
+        // Populates auth:revoked-before:<id> with the "never revoked" sentinel.
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk());
+
+        // Make sure the token was issued strictly before the revocation instant.
+        Thread.sleep(1100);
+        userServiceImpl.deleteUser(userId);
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void logout_rejectsTheAccessToken_evenAfterARequestCachedNeverRevoked() throws Exception {
+        UUID userId = createActiveUser();
+        String accessToken = mintAccessToken(userId);
+        mintRefreshToken(userId);
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk());
+
+        Thread.sleep(1100);
+        mockMvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theNeverRevokedSentinel_isCachedWithAShortTtl_aRealWatermarkWithTheFullOne() throws Exception {
+        UUID userId = createActiveUser();
+        String accessToken = mintAccessToken(userId);
+        mintRefreshToken(userId);
+        String key = "auth:revoked-before:" + userId;
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk());
+        Long sentinelTtl = stringRedisTemplate.getExpire(key);
+        // Short sentinel TTL (default 5 s), nowhere near the access-token lifetime.
+        assertThat(sentinelTtl).isBetween(1L, 5L);
+
+        Thread.sleep(1100);
+        userServiceImpl.deleteUser(userId);
+        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+        assertThat(stringRedisTemplate.getExpire(key)).isGreaterThan(60L);
     }
 }

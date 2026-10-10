@@ -107,6 +107,7 @@ app:
     secret: ${JWT_SECRET:your-secret-key-change-this-in-production-min-256-bits}
     expiration: 86400000 # 24 hours in milliseconds
     refresh-expiration: 604800000 # 7 days in milliseconds
+    revocation-sentinel-ttl: 5000 # A12: ms the "never revoked" cache marker lives (see JwtProperties)
 
   # Gates /internal/** (services/chat's cold-start bootstrap pull, see
   # services/chat/docs/SYNC_DESIGN.md) — no dev default, unlike JWT's fallback above: a missing

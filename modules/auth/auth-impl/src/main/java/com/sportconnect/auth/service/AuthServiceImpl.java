@@ -45,6 +45,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final UserService userService;
     private final JwtProperties jwtProperties;
+    private final TokenRevocationChecker tokenRevocationChecker;
 
     @Override
     @Transactional
@@ -211,6 +212,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void logout(UUID userId) {
         refreshTokenRepository.revokeAllUserTokens(userId, LocalDateTime.now());
+        tokenRevocationChecker.evictAfterCommit(userId);
         log.info("Logged out user: {}", userId);
     }
 

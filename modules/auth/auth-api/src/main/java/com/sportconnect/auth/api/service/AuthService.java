@@ -40,7 +40,10 @@ public interface AuthService {
     AuthResponse refreshToken(String refreshToken);
 
     /**
-     * Logout user and revoke tokens
+     * Logs the user out everywhere: revokes all of their refresh tokens (one shared {@code revoked_at}, which is also
+     * the watermark that rejects their earlier access tokens) and, once the transaction commits, evicts the cached
+     * watermark so the revocation takes effect on the next request (A12). Also the deactivation path
+     * ({@code UserService.deleteUser}). A Redis failure during eviction is logged and never fails the logout.
      */
     void logout(UUID userId);
 }

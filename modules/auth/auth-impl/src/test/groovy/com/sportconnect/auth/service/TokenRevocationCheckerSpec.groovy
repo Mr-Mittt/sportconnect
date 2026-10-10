@@ -14,6 +14,9 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
+
 /**
  * U12: cache-aside deny-list lookup. RefreshTokenRepository is the durable source of truth
  * (revokeAllUserTokens already writes it); Redis here is purely a read-through cache in front of
@@ -99,8 +102,8 @@ class TokenRevocationCheckerSpec extends Specification {
         then:
         !result
 
-        and: "caches the sentinel so the next request for this user hits the cache, not Postgres"
-        1 * valueOps.set("auth:revoked-before:" + userId, "", Duration.ofMillis(3600000L))
+        and: "caches the sentinel for the short A12 TTL (not the access-token lifetime) so a stale one self-heals"
+        1 * valueOps.set("auth:revoked-before:" + userId, "", Duration.ofMillis(5000L))
     }
 
     // ---------- A11: Redis outage ----------
@@ -151,5 +154,92 @@ class TokenRevocationCheckerSpec extends Specification {
 
         then:
         thrown(IllegalStateException)
+    }
+
+    // ---------- A12: eviction on revoke ----------
+
+    def "the sentinel TTL follows app.jwt.revocation-sentinel-ttl"() {
+        given:
+        jwtProperties.revocationSentinelTtl = 1500L
+        def userId = UUID.randomUUID()
+        valueOps.get("auth:revoked-before:" + userId) >> null
+        refreshTokenRepository.findLatestRevocationTimestamp(userId) >> null
+
+        when:
+        checker.isRevoked(userId, Instant.now())
+
+        then:
+        1 * valueOps.set("auth:revoked-before:" + userId, "", Duration.ofMillis(1500L))
+    }
+
+    def "evict deletes the user's watermark key"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        checker.evict(userId)
+
+        then:
+        1 * stringRedisTemplate.delete("auth:revoked-before:" + userId)
+    }
+
+    def "a Redis failure while evicting is swallowed"() {
+        given:
+        def userId = UUID.randomUUID()
+        stringRedisTemplate.delete(_ as String) >> { throw new RedisConnectionFailureException("Unable to connect to Redis") }
+
+        when:
+        checker.evict(userId)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "evictAfterCommit evicts immediately when there is no transaction"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        checker.evictAfterCommit(userId)
+
+        then:
+        1 * stringRedisTemplate.delete("auth:revoked-before:" + userId)
+    }
+
+    def "evictAfterCommit waits for the commit, and does not evict on rollback"() {
+        given:
+        def userId = UUID.randomUUID()
+        TransactionSynchronizationManager.initSynchronization()
+
+        when: "called inside a transaction"
+        checker.evictAfterCommit(userId)
+
+        then: "nothing is evicted yet"
+        0 * stringRedisTemplate.delete(_ as String)
+
+        when: "the transaction commits"
+        TransactionSynchronizationManager.getSynchronizations().each { it.afterCommit() }
+
+        then:
+        1 * stringRedisTemplate.delete("auth:revoked-before:" + userId)
+
+        cleanup:
+        TransactionSynchronizationManager.clearSynchronization()
+    }
+
+    def "a rolled-back transaction never evicts"() {
+        given:
+        def userId = UUID.randomUUID()
+        TransactionSynchronizationManager.initSynchronization()
+        checker.evictAfterCommit(userId)
+
+        when:
+        TransactionSynchronizationManager.getSynchronizations().each { it.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK) }
+
+        then:
+        0 * stringRedisTemplate.delete(_ as String)
+
+        cleanup:
+        TransactionSynchronizationManager.clearSynchronization()
     }
 }

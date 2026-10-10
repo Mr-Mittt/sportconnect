@@ -33,6 +33,7 @@ class AuthServiceImplSpec extends Specification {
     PasswordResetTokenRepository passwordResetTokenRepository
     UserService userService
     JwtProperties jwtProperties
+    TokenRevocationChecker tokenRevocationChecker
 
     @Subject
     AuthServiceImpl authService
@@ -46,6 +47,7 @@ class AuthServiceImplSpec extends Specification {
         passwordResetTokenRepository = Mock(PasswordResetTokenRepository)
         userService = Mock(UserService)
         jwtProperties = Mock(JwtProperties)
+        tokenRevocationChecker = Mock(TokenRevocationChecker)
 
         authService = new AuthServiceImpl(
             refreshTokenRepository,
@@ -55,7 +57,8 @@ class AuthServiceImplSpec extends Specification {
             emailVerificationRepository,
             passwordResetTokenRepository,
             userService,
-            jwtProperties
+            jwtProperties,
+            tokenRevocationChecker
         )
     }
 
@@ -456,6 +459,9 @@ class AuthServiceImplSpec extends Specification {
 
         then: "should revoke all user tokens"
         1 * refreshTokenRepository.revokeAllUserTokens(userId, _)
+
+        and: "A12: evicts the cached revocation watermark once the transaction commits"
+        1 * tokenRevocationChecker.evictAfterCommit(userId)
     }
 
     def "should create refresh token with correct expiration"() {

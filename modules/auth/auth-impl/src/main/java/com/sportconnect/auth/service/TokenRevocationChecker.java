@@ -6,6 +6,8 @@ import com.sportconnect.common.cache.CacheGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -19,7 +21,7 @@ import java.util.UUID;
  * expires (a plain JWT has no way to be told "revoke me" after issuance; this is the external
  * state that supplies that).
  *
- * <p>Cache-aside, not write-through: this class never writes a revocation event on its own.
+ * <p>Cache-aside, not write-through: this class never writes a revocation watermark on its own; revocations evict the key (A12, {@link #evictAfterCommit}).
  * {@code AuthService.logout(userId)} (called by both a plain user-initiated logout and
  * {@code UserServiceImpl.deleteUser()}'s deactivation path) already durably stamps every one of a
  * user's {@code refresh_tokens} rows with the same {@code revokedAt} in one statement
@@ -78,14 +80,46 @@ public class TokenRevocationChecker {
 
         Instant revokedAt = loadWatermark(userId);
 
-        // TTL matches the access-token lifetime: past that window every pre-revocation token has
-        // expired naturally anyway, so the cache entry can safely disappear rather than grow
-        // unbounded. A failed write-back is only a missed optimisation, so it is skipped.
+        // A real watermark lives for the access-token lifetime: past that window every pre-revocation token has
+        // expired naturally anyway, and a watermark only ever moves forward, so a cached one cannot wrongly let a
+        // token through. The "never revoked" sentinel gets a short TTL instead (A12): a request that read the DB
+        // just before a logout committed can write it back just after the eviction, and a long-lived stale
+        // sentinel would then accept every pre-logout token. A failed write-back is only a missed optimisation.
+        Duration ttl = revokedAt != null
+                ? Duration.ofMillis(jwtProperties.getExpiration())
+                : Duration.ofMillis(jwtProperties.getRevocationSentinelTtl());
         cacheGuard.run("revocation watermark write", () -> stringRedisTemplate.opsForValue().set(
                 key,
                 revokedAt != null ? String.valueOf(revokedAt.toEpochMilli()) : NEVER_REVOKED_SENTINEL,
-                Duration.ofMillis(jwtProperties.getExpiration())));
+                ttl));
         return revokedAt;
+    }
+
+    /**
+     * A12: drops the user's cached watermark so the next request reloads it from the DB. Call this once the DB
+     * revocation is durable; see {@link #evictAfterCommit}. A Redis failure is logged (throttled WARN) and
+     * skipped: the DB stamp is the source of truth, and the cache entry still expires on its own.
+     */
+    public void evict(UUID userId) {
+        cacheGuard.run("revocation watermark evict", () -> stringRedisTemplate.delete(REDIS_KEY_PREFIX + userId));
+    }
+
+    /**
+     * A12: {@link #evict} once the surrounding transaction commits, so a request cannot reload the old DB value
+     * between the eviction and the commit. With no active transaction it evicts immediately. A rollback never
+     * evicts, which is correct: nothing was revoked.
+     */
+    public void evictAfterCommit(UUID userId) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            evict(userId);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                evict(userId);
+            }
+        });
     }
 
     /** The durable watermark: the latest {@code revoked_at} over the user's refresh tokens, or {@code null}. */

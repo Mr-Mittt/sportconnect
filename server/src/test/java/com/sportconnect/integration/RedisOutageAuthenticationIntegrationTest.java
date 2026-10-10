@@ -107,6 +107,7 @@ class RedisOutageAuthenticationIntegrationTest extends BaseIT {
         mintRefreshToken(userId);
         String accessToken = mintAccessToken(userId);
 
+        // A12: logout also tries to evict the Redis watermark; with Redis down that must be skipped, not thrown.
         authService.logout(userId);
 
         mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
