@@ -2,6 +2,8 @@ package com.sportconnect.auth.service
 
 import com.sportconnect.auth.config.JwtProperties
 import com.sportconnect.auth.repository.RefreshTokenRepository
+import com.sportconnect.common.cache.CacheGuard
+import org.springframework.data.redis.RedisConnectionFailureException
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
 import spock.lang.Specification
@@ -25,7 +27,7 @@ class TokenRevocationCheckerSpec extends Specification {
     JwtProperties jwtProperties = new JwtProperties(expiration: 3600000L)
 
     @Subject
-    TokenRevocationChecker checker = new TokenRevocationChecker(stringRedisTemplate, refreshTokenRepository, jwtProperties)
+    TokenRevocationChecker checker = new TokenRevocationChecker(stringRedisTemplate, new CacheGuard(), refreshTokenRepository, jwtProperties)
 
     def setup() {
         stringRedisTemplate.opsForValue() >> valueOps
@@ -99,5 +101,55 @@ class TokenRevocationCheckerSpec extends Specification {
 
         and: "caches the sentinel so the next request for this user hits the cache, not Postgres"
         1 * valueOps.set("auth:revoked-before:" + userId, "", Duration.ofMillis(3600000L))
+    }
+
+    // ---------- A11: Redis outage ----------
+
+    def "when Redis is down the watermark comes from the DB: a token issued before a revocation is still rejected"() {
+        given:
+        def userId = UUID.randomUUID()
+        valueOps.get("auth:revoked-before:" + userId) >> { throw new RedisConnectionFailureException("Unable to connect to Redis") }
+        refreshTokenRepository.findLatestRevocationTimestamp(userId) >> LocalDateTime.now().minusMinutes(1)
+
+        expect:
+        checker.isRevoked(userId, Instant.now().minusSeconds(300))
+        !checker.isRevoked(userId, Instant.now().plusSeconds(60))
+    }
+
+    def "when Redis is down a never-revoked user is let through, and no write-back is attempted"() {
+        given:
+        def userId = UUID.randomUUID()
+        valueOps.get("auth:revoked-before:" + userId) >> { throw new RedisConnectionFailureException("Unable to connect to Redis") }
+        refreshTokenRepository.findLatestRevocationTimestamp(userId) >> null
+
+        when:
+        def result = checker.isRevoked(userId, Instant.now())
+
+        then:
+        !result
+        0 * valueOps.set(*_)
+    }
+
+    def "when only the cache write-back fails the request still answers correctly from the DB"() {
+        given:
+        def userId = UUID.randomUUID()
+        valueOps.get("auth:revoked-before:" + userId) >> null
+        refreshTokenRepository.findLatestRevocationTimestamp(userId) >> LocalDateTime.now().minusMinutes(1)
+        valueOps.set(*_) >> { throw new RedisConnectionFailureException("Connection reset") }
+
+        expect:
+        checker.isRevoked(userId, Instant.now().minusSeconds(300))
+    }
+
+    def "a failure that is not a Redis outage is not swallowed"() {
+        given:
+        def userId = UUID.randomUUID()
+        valueOps.get("auth:revoked-before:" + userId) >> { throw new IllegalStateException("bug") }
+
+        when:
+        checker.isRevoked(userId, Instant.now())
+
+        then:
+        thrown(IllegalStateException)
     }
 }

@@ -33,4 +33,4 @@ Redis outage degradation (A11); an `isActive` recheck per request (U12).
 
 ## Relation to A11 (added 2026-10-09)
 
-A11 makes the JWT filter's Redis *reads* survive an outage. This ticket adds a Redis *write* (the eviction) on the logout and deactivation path, so it must be guarded the same way: a failed eviction logs a `WARN` and never fails the logout or deactivation (the DB stamp is the source of truth). Pick A12 and A11 up in one pass, A12 first (it is the security bug), and share one guard helper (introduced by whichever lands first; post A19 may already provide one in `common`) rather than writing two.
+A11 makes the JWT filter's Redis *reads* survive an outage. This ticket adds a Redis *write* (the eviction) on the logout and deactivation path, so it must be guarded the same way: a failed eviction logs a `WARN` and never fails the logout or deactivation (the DB stamp is the source of truth). Pick A12 and A11 up in one pass, A12 first (it is the security bug), and use `com.sportconnect.common.cache.CacheGuard` (added by A11, 2026-10-09) for the eviction rather than writing a second guard.

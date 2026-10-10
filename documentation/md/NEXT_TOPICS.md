@@ -26,7 +26,7 @@ use it, and no other Java Redis client exists, see candidate 3 for the Go chat s
 | Class | Use | Guarded today? | Ticket |
 |---|---|---|---|
 | `PostServiceImpl`, `CommentServiceImpl` (post) | like/comment counters, comment-preview cache | No, a Redis failure is a 500 on every post read | post [`A19`](../../modules/social/post-impl/docs/MVP/A19_REDIS_OUTAGE_DEGRADATION.md) `TODO` |
-| `TokenRevocationChecker` (auth) | per-request revocation watermark cache, over a DB source of truth | No, a Redis failure fails **every authenticated request** | auth [`A11`](../../modules/auth/docs/MVP/A11_REDIS_OUTAGE_DEGRADATION_TOKEN_REVOCATION.md) `TODO` |
+| `TokenRevocationChecker` (auth) | per-request revocation watermark cache, over a DB source of truth | **Yes (A11, 2026-10-09)**, via `common.cache.CacheGuard`; falls back to the DB watermark | auth [`A11`](../../modules/auth/docs/MVP/A11_REDIS_OUTAGE_DEGRADATION_TOKEN_REVOCATION.md) `DONE` |
 | `GroupServiceImpl`, `UserServiceImpl`, `UserFriendServiceImpl` (chat-sync event publish) | `XADD` to the domain-events stream | **Yes**, catch `Exception` + `log.warn` | none needed for the failure mode; see the candidate below |
 
 **Design notes shared by the two tickets.**
@@ -35,8 +35,8 @@ use it, and no other Java Redis client exists, see candidate 3 for the Go chat s
 - Auth needs no fail-open decision: the DB watermark keeps revocation exact; the cost is one DB query
   per authenticated request while Redis is down. Its log line must be rate-limited (it runs per
   request).
-- If post `A19`'s guard helper lands in `common`, auth `A11` should reuse it. File order is free;
-  whichever is picked up first decides where the helper lives.
+- A11 picked up first, so the shared guard is `common.cache.CacheGuard`; post `A19` and auth `A12` reuse it. (Was: file order is free;
+  whichever is picked up first decides where the helper lives.)
 
 **Related, already done.** post `A8` (`server:test` Redis via Testcontainers), post `B3` (Redis like
 counters), post `B4` (comment preview cache). `RedisBaseIT` in `server/src/test/java/.../integration/`

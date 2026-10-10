@@ -2,6 +2,7 @@ package com.sportconnect.auth.service;
 
 import com.sportconnect.auth.config.JwtProperties;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
+import com.sportconnect.common.cache.CacheGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,12 @@ import java.util.UUID;
  * hot path (every authenticated request), and a cache miss — including Redis having lost its data
  * entirely — falls back to {@link RefreshTokenRepository#findLatestRevocationTimestamp}, which is
  * still correct because the durable write already happened before this class is ever consulted.
+ *
+ * <p><b>Redis outage (A11):</b> every Redis call here goes through {@link CacheGuard}. If Redis is unreachable the
+ * lookup is answered from the DB watermark (one indexed query per authenticated request while it lasts, no write-back
+ * attempted) and a throttled WARN is logged; revocation stays exact, so a revoked or deactivated user is still rejected.
+ * Before A11 the exception reached {@code JwtAuthenticationFilter}, which swallowed it and left every request
+ * unauthenticated.
  */
 @Component
 @RequiredArgsConstructor
@@ -37,8 +44,12 @@ public class TokenRevocationChecker {
     // "not cached at all" so a never-revoked user's requests still hit the cache instead of
     // Postgres every time.
     private static final String NEVER_REVOKED_SENTINEL = "";
+    // Returned by the guarded read when Redis is unreachable. Cannot collide with a stored value (those are either
+    // the empty sentinel above or a decimal epoch-millis string).
+    private static final String CACHE_UNAVAILABLE = "unavailable";
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final CacheGuard cacheGuard;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtProperties jwtProperties;
 
@@ -54,23 +65,34 @@ public class TokenRevocationChecker {
 
     private Instant revocationWatermark(UUID userId) {
         String key = REDIS_KEY_PREFIX + userId;
-        String cached = stringRedisTemplate.opsForValue().get(key);
+        String cached = cacheGuard.read("revocation watermark read",
+                () -> stringRedisTemplate.opsForValue().get(key), CACHE_UNAVAILABLE);
+        if (CACHE_UNAVAILABLE.equals(cached)) {
+            // A11: Redis is unreachable. The DB watermark is exact, so answer from it and skip the write-back (it
+            // would only fail again, doubling the cost of every request for the length of the outage).
+            return loadWatermark(userId);
+        }
         if (cached != null) {
             return cached.isEmpty() ? null : Instant.ofEpochMilli(Long.parseLong(cached));
         }
 
-        LocalDateTime latestRevokedAt = refreshTokenRepository.findLatestRevocationTimestamp(userId);
-        Instant revokedAt = latestRevokedAt != null
-                ? latestRevokedAt.atZone(ZoneId.systemDefault()).toInstant()
-                : null;
+        Instant revokedAt = loadWatermark(userId);
 
         // TTL matches the access-token lifetime: past that window every pre-revocation token has
         // expired naturally anyway, so the cache entry can safely disappear rather than grow
-        // unbounded.
-        stringRedisTemplate.opsForValue().set(
+        // unbounded. A failed write-back is only a missed optimisation, so it is skipped.
+        cacheGuard.run("revocation watermark write", () -> stringRedisTemplate.opsForValue().set(
                 key,
                 revokedAt != null ? String.valueOf(revokedAt.toEpochMilli()) : NEVER_REVOKED_SENTINEL,
-                Duration.ofMillis(jwtProperties.getExpiration()));
+                Duration.ofMillis(jwtProperties.getExpiration())));
         return revokedAt;
+    }
+
+    /** The durable watermark: the latest {@code revoked_at} over the user's refresh tokens, or {@code null}. */
+    private Instant loadWatermark(UUID userId) {
+        LocalDateTime latestRevokedAt = refreshTokenRepository.findLatestRevocationTimestamp(userId);
+        return latestRevokedAt != null
+                ? latestRevokedAt.atZone(ZoneId.systemDefault()).toInstant()
+                : null;
     }
 }
