@@ -28,6 +28,8 @@ include 'modules:notification:notification-api'
 include 'modules:notification:notification-impl'
 include 'modules:reference:reference-api'
 include 'modules:reference:reference-impl'
+include 'modules:email:email-api'
+include 'modules:email:email-impl'
 
 // Frontend (pnpm/Vite project wrapped by the node-gradle plugin)
 include 'client'

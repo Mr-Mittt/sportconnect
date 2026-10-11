@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `infra` (repo-level infrastructure: CI/CD, environments, deployment)
-**Last updated:** 2026-07-08
+**Last updated:** 2026-10-11
 
 ---
 
@@ -37,6 +37,7 @@ green run exists" pattern.
 | 6 | [INFRA-8](MVP/INFRA-8_SERVICES_CHAT_DOCKERFILE_PUBLISH_WORKFLOW.md) | `services/chat` Dockerfile publish workflow | `TODO` |
 | 7 | [INFRA-9](MVP/INFRA-9_INTERNAL_NETWORK_ISOLATION.md) | `/internal/**` network isolation | `TODO` |
 | 8 | [INFRA-10](MVP/INFRA-10_SWAGGER_AND_OAUTH_TOKEN_EXPOSURE_IN_DEPLOYED_ENVIRONMENTS.md) | Swagger UI, `/api-docs` and `oauth-token` are public in every profile — decide what a deployed environment exposes; found during auth A7 | `TODO` |
+| 9 | [INFRA-11](MVP/INFRA-11_EMAIL_CONFIGURATION_IN_DEPLOYED_ENVIRONMENTS.md) | Email configuration (`MAIL_*`, `EMAIL_FROM`, link URLs) per environment; nothing sets them today | `TODO` |
 
 ---
 
