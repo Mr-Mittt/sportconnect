@@ -5,6 +5,8 @@ import com.sportconnect.auth.repository.PasswordResetTokenRepository;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.NotFoundException;
+import com.sportconnect.email.api.EmailMessage;
+import com.sportconnect.email.api.EmailSender;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,12 +29,15 @@ public class PasswordResetService {
 
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final EmailService emailService;
+    private final EmailSender emailSender;
     private final EmailMessages emailMessages;
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final PlatformTransactionManager transactionManager;
     private final TokenRevocationChecker tokenRevocationChecker;
+
+    @Value("${app.email.reset-password-url}")
+    private String resetPasswordUrl;
 
     @Value("${app.password-reset.expiration-minutes:60}")
     private long expirationMinutes;
@@ -71,7 +76,11 @@ public class PasswordResetService {
         }
 
         String language = emailMessages.resolveLanguage(userService.findPreferredLanguageCode(userId.get()));
-        emailService.sendPasswordResetEmail(email, token, language);
+        emailSender.send(EmailMessage.builder()
+                .to(email)
+                .subject(emailMessages.resetPasswordSubject(language))
+                .body(emailMessages.resetPasswordBody(language, resetPasswordUrl + "?token=" + token, expirationMinutes))
+                .build());
         log.info("Password reset token sent to user: {}", userId.get());
     }
 

@@ -46,7 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * </ul>
  * Real Spring wiring, real Redis (the JWT filter's revocation check), real {@code UserServiceImpl.deleteUser()} for
  * the deactivation. The reset email is {@code @Async} and its sender is unconfigured here, so a send failure is
- * swallowed by {@code EmailService}; the tests read the token from the table instead of the mail.
+ * swallowed by {@code SmtpEmailSender}; the tests read the token from the table instead of the mail (the sent mail itself is covered by {@link EmailModuleIntegrationTest}).
  */
 class PasswordResetIntegrationTest extends RedisBaseIT {
 

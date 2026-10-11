@@ -40,6 +40,8 @@ dependencies {
     implementation project(':modules:notification:notification-api')
     implementation project(':modules:reference:reference-impl')
     implementation project(':modules:reference:reference-api')
+    implementation project(':modules:email:email-impl')
+    implementation project(':modules:email:email-api')
     implementation project(':modules:common')
     
     // Spring Boot Starters

@@ -28,7 +28,6 @@ class AuthServiceImplSpec extends Specification {
     RefreshTokenRepository refreshTokenRepository
     PasswordEncoder passwordEncoder
     JwtTokenService jwtTokenService
-    EmailService emailService
     EmailVerificationRepository emailVerificationRepository
     PasswordResetTokenRepository passwordResetTokenRepository
     UserService userService
@@ -42,7 +41,6 @@ class AuthServiceImplSpec extends Specification {
         refreshTokenRepository = Mock(RefreshTokenRepository)
         passwordEncoder = Mock(PasswordEncoder)
         jwtTokenService = Mock(JwtTokenService)
-        emailService = Mock(EmailService)
         emailVerificationRepository = Mock(EmailVerificationRepository)
         passwordResetTokenRepository = Mock(PasswordResetTokenRepository)
         userService = Mock(UserService)
@@ -53,7 +51,6 @@ class AuthServiceImplSpec extends Specification {
             refreshTokenRepository,
             passwordEncoder,
             jwtTokenService,
-            emailService,
             emailVerificationRepository,
             passwordResetTokenRepository,
             userService,

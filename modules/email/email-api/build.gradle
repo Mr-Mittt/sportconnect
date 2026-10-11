@@ -1,0 +1,8 @@
+dependencies {
+    // Bean-validation annotations on EmailMessage (same starter auth-api uses)
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}

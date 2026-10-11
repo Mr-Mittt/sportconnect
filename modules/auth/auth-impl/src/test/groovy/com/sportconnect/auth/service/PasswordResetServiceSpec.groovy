@@ -9,6 +9,8 @@ import com.sportconnect.user.api.service.UserService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.transaction.PlatformTransactionManager
+import com.sportconnect.email.api.EmailMessage
+import com.sportconnect.email.api.EmailSender
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -23,18 +25,19 @@ class PasswordResetServiceSpec extends Specification {
     PasswordResetTokenRepository repository = Mock()
     RefreshTokenRepository refreshTokenRepository = Mock()
     PlatformTransactionManager transactionManager = Mock()
-    EmailService emailService = Mock()
+    EmailSender emailSender = Mock()
     EmailMessages emailMessages = new EmailMessages()
     UserService userService = Mock()
     PasswordEncoder passwordEncoder = Mock()
     TokenRevocationChecker tokenRevocationChecker = Mock()
 
     @Subject
-    PasswordResetService service = new PasswordResetService(repository, refreshTokenRepository, emailService, emailMessages,
+    PasswordResetService service = new PasswordResetService(repository, refreshTokenRepository, emailSender, emailMessages,
             userService, passwordEncoder, transactionManager, tokenRevocationChecker)
 
     def setup() {
         service.expirationMinutes = 60
+        service.resetPasswordUrl = "http://x/reset-password"
     }
 
     // ---------- A10: requestReset ----------
@@ -53,10 +56,13 @@ class PasswordResetServiceSpec extends Specification {
         1 * repository.saveAndFlush({ PasswordResetToken t ->
             t.userId == userId && t.token != null && t.expiresAt.isAfter(LocalDateTime.now().plusMinutes(59))
         }) >> { PasswordResetToken t -> t }
-        1 * emailService.sendPasswordResetEmail("a@x.com", { it != null }, "en")
+        1 * emailSender.send({ EmailMessage m ->
+            m.to == "a@x.com" && m.subject == "Reset Your Password - SportConnect" &&
+                    m.body.contains("http://x/reset-password?token=") && m.body.contains("expire in 60 minutes")
+        })
     }
 
-    def "the reset email is sent in the user's resolved language: #resolved gives #sent"() {
+    def "the reset email is sent in the user's resolved language: #resolved gives #subject"() {
         given:
         userService.findUserIdByEmail("a@x.com") >> Optional.of(UUID.randomUUID())
         userService.findPreferredLanguageCode(_) >> resolved
@@ -66,14 +72,14 @@ class PasswordResetServiceSpec extends Specification {
         service.requestReset("a@x.com")
 
         then:
-        1 * emailService.sendPasswordResetEmail("a@x.com", _, sent)
+        1 * emailSender.send({ EmailMessage m -> m.to == "a@x.com" && m.subject == subject })
 
         where:
-        resolved              | sent
-        Optional.of("vi")     | "vi"
-        Optional.of("vi-VN")  | "vi"
-        Optional.of("fr")     | "en"   // active language, but no email bundle
-        Optional.empty()      | "en"
+        resolved              | subject
+        Optional.of("vi")     | "Đặt lại mật khẩu - SportConnect"
+        Optional.of("vi-VN")  | "Đặt lại mật khẩu - SportConnect"
+        Optional.of("fr")     | "Reset Your Password - SportConnect"   // active language, but no email bundle
+        Optional.empty()      | "Reset Your Password - SportConnect"
     }
 
     def "an unknown email does nothing: no token, no email, no error"() {
@@ -86,7 +92,7 @@ class PasswordResetServiceSpec extends Specification {
         then:
         noExceptionThrown()
         0 * repository._
-        0 * emailService._
+        0 * emailSender._
     }
 
     def "losing a concurrent-request race on the unique user_id sends no email and does not throw"() {
@@ -99,7 +105,7 @@ class PasswordResetServiceSpec extends Specification {
 
         then:
         noExceptionThrown()
-        0 * emailService._
+        0 * emailSender._
     }
 
     def "resetting the password also revokes every refresh token of the user"() {

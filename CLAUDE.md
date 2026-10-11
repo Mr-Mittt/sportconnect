@@ -172,6 +172,9 @@ modules/
   reference/
     reference-api/   # ReferenceService interface, Language/Country/Region DTOs
     reference-impl/  # Language, Country, Region entities (public, read-only reference data; depends on common only)
+  email/
+    email-api/       # EmailSender interface + EmailMessage (plain text; the caller writes subject and body)
+    email-impl/      # Async SMTP sender; knows nothing about languages or templates (depends on its own api only)
 server/            # Main application entry point; depends on all *-impl modules
 client/            # New SportHub client — Vite + React 18 + TS + Tailwind v4 + pnpm (scaffolded by HF-00; old CRA app removed 2026-07-06)
 services/

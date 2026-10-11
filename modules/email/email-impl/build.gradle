@@ -1,0 +1,26 @@
+plugins {
+    id 'groovy'
+}
+
+dependencies {
+    // The email domain depends on its own api only; every other domain depends on email-api, never the reverse.
+    implementation project(':modules:email:email-api')
+
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation platform('org.spockframework:spock-bom:2.3-groovy-4.0')
+    testImplementation 'org.spockframework:spock-core'
+    testImplementation 'org.spockframework:spock-spring'
+    testImplementation 'org.apache.groovy:groovy:4.0.15'
+}
+
+test {
+    useJUnitPlatform()
+}
