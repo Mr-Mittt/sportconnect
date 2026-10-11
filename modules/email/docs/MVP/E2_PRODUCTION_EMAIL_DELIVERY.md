@@ -8,6 +8,8 @@ Nothing in the repo configures real delivery: no `MAIL_*` / `EMAIL_FROM` in `inf
 
 **To decide in Phase 1.** Recommendation: **Amazon SES over its SMTP endpoint** (the target is AWS, `SmtpEmailSender` and `application.yml` already speak SMTP, so provider choice is configuration only, port 587 with STARTTLS, never 25 on EC2). Alternative: the SES API through a new `EmailSender` implementation, if SMTP limits get in the way (the `-api` already allows it).
 
+**Gmail SMTP as a staging-only alternative.** `smtp.gmail.com` rewrites `From` to the login account unless `EMAIL_FROM` is that account or a registered "Send mail as" alias, so `noreply@sportconnect.com` needs Google Workspace on the domain (or a confirmed alias), an app password, and SPF (`include:_spf.google.com`), DKIM and DMARC on the domain or it lands in spam. Capped at roughly 500 (personal) or 2,000 (Workspace) messages a day, so not for production signups. Behaviour as known, not tested against a real account.
+
 **Work**
 - Verify the sending domain with SES (DKIM, SPF, a DMARC record) and set `EMAIL_FROM` to an address on it. Leave the SES sandbox (production access request), otherwise only verified recipients get mail.
 - Fail loudly: in a non-dev profile, refuse to start (or log a startup ERROR) when `MAIL_HOST`/credentials are the Gmail-and-empty defaults, instead of failing on the first user's reset.
