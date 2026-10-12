@@ -8,8 +8,8 @@
 Today the logout call revokes every session of the user. Once A15 ships, plain logout affects only the current session, so the client needs to:
 
 - keep the existing logout flow working against the A15 contract (clear in-memory token, call logout, redirect);
-- add a "Log out everywhere" action (endpoint per A15's final contract);
-- if A15 includes a device list, show sessions ("Chrome on Windows, last active …") with a per-session revoke.
+- add a "Log out everywhere" action calling the new `POST /api/auth/logout-all` (authenticated, no body, idempotent; scope decision of 2026-10-11, A15). It clears the in-memory token and redirects exactly like plain logout; the server also clears the refresh cookie;
+- the device list is **not** part of A15 (split out as backend A18 and client **AUTH-12**); this ticket covers plain logout and "Log out everywhere" only.
 
 ## Notes
 

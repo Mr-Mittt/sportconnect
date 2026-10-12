@@ -74,6 +74,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 16 | [AUTH-10](MVP/AUTH-10_REACTIVATE_DEACTIVATED_ACCOUNT_ON_LOGIN.md) | Offer to re-activate a deactivated account when login answers `ACCOUNT_DEACTIVATED` — confirm dialog reusing the just-typed credentials (no re-entry), `POST /api/auth/reactivate`, en/vi copy; **blocked on backend A9** | `TODO` |
 | 17 | [ACCOUNT-3](MVP/ACCOUNT-3_CHANGE_PASSWORD.md) | Change-password section in Account Settings (`PUT /api/users/me/password`; no client UI exists today); inline `CURRENT_PASSWORD_INCORRECT` handling; found during CLIENT-ERR-3 | `TODO` |
 | 18 | [AUTH-11](MVP/AUTH-11_LOG_OUT_THIS_DEVICE_ONLY.md) | "Log out" signs out this device only once backend per-session logout ships, plus a "Log out everywhere" action (and a device list if A15 includes one), en/vi copy; **blocked on backend A15** | `TODO` |
+| 19 | [AUTH-12](MVP/AUTH-12_ACTIVE_SESSIONS_LIST.md) | Active sessions list with per-session sign-out, against backend A18 (split out of AUTH-11) | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
