@@ -99,38 +99,63 @@ public class PasswordResetService {
         return token;
     }
 
-    @Transactional
-    public UUID validateAndUseToken(String token) {
-        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
-                .orElseThrow(() -> new NotFoundException("RESET_TOKEN_INVALID", "Invalid reset token", null));
-
-        if (resetToken.isUsed()) {
-            throw new BadRequestException("RESET_TOKEN_USED", "Reset token already used", null);
-        }
-
-        if (resetToken.isExpired()) {
-            throw new BadRequestException("RESET_TOKEN_EXPIRED", "Reset token has expired", null);
-        }
-
-        resetToken.setUsedAt(LocalDateTime.now());
-        passwordResetTokenRepository.save(resetToken);
-
-        log.info("Password reset token validated for user: {}", resetToken.getUserId());
-        return resetToken.getUserId();
-    }
-
     /**
-     * Sets the new (already validated) password and revokes all of the user's refresh tokens, so a session
-     * that was open before the reset (for example a stolen one) does not outlive it (A10). Does not touch
+     * Consumes the reset token and sets the new password in one transaction (A21).
+     *
+     * <p>Flow: claim the token with a conditional update (unused and unexpired, so two concurrent submits cannot
+     * both win); change the password through {@link UserService}; revoke all of the user's refresh tokens so a
+     * session open before the reset (for example a stolen one) does not outlive it (A10); evict the cached
+     * revocation watermark after commit so the revoked tokens stop working at once (A12). Does not touch
      * {@code isActive}: a deactivated account stays deactivated.
-     * Evicts the cached revocation watermark after commit so the revoked tokens stop working immediately (A12).
+     *
+     * <p>Everything shares one transaction, so if the password update fails the token is <em>not</em> consumed
+     * and the same link still works (before A21 the token was stamped used in a separate commit first).
+     *
+     * @throws NotFoundException   {@code RESET_TOKEN_INVALID} when no such token exists
+     * @throws BadRequestException {@code RESET_TOKEN_USED} or {@code RESET_TOKEN_EXPIRED}
      */
     @Transactional
-    public void resetPassword(UUID userId, String newPassword) {
-        String encodedPassword = passwordEncoder.encode(newPassword);
-        userService.updateUserPassword(userId, encodedPassword);
+    public void completeReset(String token, String newPassword) {
+        if (passwordResetTokenRepository.claimUnusedToken(token, LocalDateTime.now()) == 0) {
+            throw rejectionFor(token);
+        }
+        UUID userId = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new NotFoundException("RESET_TOKEN_INVALID", "Invalid reset token", null))
+                .getUserId();
+
+        userService.updateUserPassword(userId, passwordEncoder.encode(newPassword));
         refreshTokenRepository.revokeAllUserTokens(userId, LocalDateTime.now());
         tokenRevocationChecker.evictAfterCommit(userId);
         log.info("Password reset completed for user: {}", userId);
+    }
+
+    /**
+     * Read-only check that a reset link can still be used (A21), for the client to call when the reset page
+     * opens. Does not consume the token. Every unusable token (unknown, used, expired) gets the <em>same</em>
+     * {@code RESET_TOKEN_INVALID}, so this endpoint reveals nothing about why; the specific used/expired code
+     * still comes from {@link #completeReset}.
+     *
+     * @throws NotFoundException {@code RESET_TOKEN_INVALID} when the token cannot be used
+     */
+    @Transactional(readOnly = true)
+    public void checkToken(String token) {
+        boolean usable = passwordResetTokenRepository.findByToken(token)
+                .map(t -> !t.isUsed() && !t.isExpired())
+                .orElse(false);
+        if (!usable) {
+            throw new NotFoundException("RESET_TOKEN_INVALID", "Invalid reset token", null);
+        }
+    }
+
+    /** Why {@code claimUnusedToken} found nothing: unknown, already used, or expired (a lost race counts as used). */
+    private RuntimeException rejectionFor(String token) {
+        PasswordResetToken existing = passwordResetTokenRepository.findByToken(token).orElse(null);
+        if (existing == null) {
+            return new NotFoundException("RESET_TOKEN_INVALID", "Invalid reset token", null);
+        }
+        if (existing.isExpired() && !existing.isUsed()) {
+            return new BadRequestException("RESET_TOKEN_EXPIRED", "Reset token has expired", null);
+        }
+        return new BadRequestException("RESET_TOKEN_USED", "Reset token already used", null);
     }
 }

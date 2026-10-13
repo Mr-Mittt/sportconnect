@@ -72,7 +72,7 @@
 | `VERIFICATION_TOKEN_INVALID` | 404 | none | `POST /api/auth/verify-email` with an unknown token. |
 | `EMAIL_ALREADY_VERIFIED` | 400 | none | `POST /api/auth/verify-email` with an already-used token. |
 | `VERIFICATION_TOKEN_EXPIRED` | 400 | none | `POST /api/auth/verify-email` with an expired token. |
-| `RESET_TOKEN_INVALID` | 404 | none | `POST /api/auth/reset-password` with an unknown token. |
+| `RESET_TOKEN_INVALID` | 404 | none | `POST /api/auth/reset-password` with an unknown token. Also (A21) the one generic answer of `POST /api/auth/reset-password/validate` for an unknown, used **or** expired token. |
 | `RESET_TOKEN_USED` | 400 | none | `POST /api/auth/reset-password` with an already-used token. |
 | `RESET_TOKEN_EXPIRED` | 400 | none | `POST /api/auth/reset-password` with an expired token. |
 

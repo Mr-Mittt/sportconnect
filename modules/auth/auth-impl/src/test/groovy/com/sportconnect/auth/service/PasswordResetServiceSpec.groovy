@@ -108,13 +108,17 @@ class PasswordResetServiceSpec extends Specification {
         0 * emailSender._
     }
 
-    def "resetting the password also revokes every refresh token of the user"() {
+    // ---------- A21: completeReset ----------
+
+    def "completing a reset claims the token, sets the password and revokes every refresh token"() {
         given:
         def userId = UUID.randomUUID()
         passwordEncoder.encode("new-pass-123") >> "hashed"
+        repository.claimUnusedToken("t", _ as LocalDateTime) >> 1
+        repository.findByToken("t") >> Optional.of(PasswordResetToken.builder().token("t").userId(userId).build())
 
         when:
-        service.resetPassword(userId, "new-pass-123")
+        service.completeReset("t", "new-pass-123")
 
         then:
         1 * userService.updateUserPassword(userId, "hashed")
@@ -122,14 +126,30 @@ class PasswordResetServiceSpec extends Specification {
         1 * tokenRevocationChecker.evictAfterCommit(userId)  // A12
     }
 
-    // ---------- A8: error codes ----------
+    def "a token that cannot be claimed changes nothing: no password update, no revocation"() {
+        given:
+        repository.claimUnusedToken("t", _ as LocalDateTime) >> 0
+        repository.findByToken("t") >> Optional.empty()
+
+        when:
+        service.completeReset("t", "new-pass-123")
+
+        then:
+        thrown(NotFoundException)
+        0 * userService.updateUserPassword(*_)
+        0 * refreshTokenRepository.revokeAllUserTokens(*_)
+        0 * tokenRevocationChecker.evictAfterCommit(_)
+    }
+
+    // ---------- A8 (via A21's completeReset): error codes ----------
 
     def "an unknown token is a 404 NotFoundException coded RESET_TOKEN_INVALID"() {
         given:
+        repository.claimUnusedToken("nope", _ as LocalDateTime) >> 0
         repository.findByToken("nope") >> Optional.empty()
 
         when:
-        service.validateAndUseToken("nope")
+        service.completeReset("nope", "new-pass-123")
 
         then:
         def e = thrown(NotFoundException)
@@ -139,11 +159,12 @@ class PasswordResetServiceSpec extends Specification {
 
     def "an already used token is a BadRequestException coded RESET_TOKEN_USED"() {
         given:
+        repository.claimUnusedToken("t", _ as LocalDateTime) >> 0
         repository.findByToken("t") >> Optional.of(PasswordResetToken.builder()
                 .token("t").expiresAt(LocalDateTime.now().plusHours(1)).usedAt(LocalDateTime.now()).build())
 
         when:
-        service.validateAndUseToken("t")
+        service.completeReset("t", "new-pass-123")
 
         then:
         def e = thrown(BadRequestException)
@@ -153,15 +174,68 @@ class PasswordResetServiceSpec extends Specification {
 
     def "an expired token is a BadRequestException coded RESET_TOKEN_EXPIRED"() {
         given:
+        repository.claimUnusedToken("t", _ as LocalDateTime) >> 0
         repository.findByToken("t") >> Optional.of(PasswordResetToken.builder()
                 .token("t").expiresAt(LocalDateTime.now().minusMinutes(1)).build())
 
         when:
-        service.validateAndUseToken("t")
+        service.completeReset("t", "new-pass-123")
 
         then:
         def e = thrown(BadRequestException)
         e.message == "Reset token has expired"
         e.errorCode == "RESET_TOKEN_EXPIRED"
+    }
+
+    def "a token that is both used and expired reports used, as before"() {
+        given:
+        repository.claimUnusedToken("t", _ as LocalDateTime) >> 0
+        repository.findByToken("t") >> Optional.of(PasswordResetToken.builder()
+                .token("t").expiresAt(LocalDateTime.now().minusMinutes(1)).usedAt(LocalDateTime.now().minusMinutes(5)).build())
+
+        when:
+        service.completeReset("t", "new-pass-123")
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == "RESET_TOKEN_USED"
+    }
+
+    // ---------- A21: checkToken ----------
+
+    def "checkToken accepts an unused, unexpired token and does not consume it"() {
+        given:
+        repository.findByToken("t") >> Optional.of(PasswordResetToken.builder()
+                .token("t").expiresAt(LocalDateTime.now().plusMinutes(5)).build())
+
+        when:
+        service.checkToken("t")
+
+        then:
+        noExceptionThrown()
+        0 * repository.claimUnusedToken(*_)
+        0 * repository.save(_)
+    }
+
+    def "checkToken gives the same RESET_TOKEN_INVALID for unknown, used and expired tokens"() {
+        given:
+        repository.findByToken("t") >> found
+
+        when:
+        service.checkToken("t")
+
+        then:
+        def e = thrown(NotFoundException)
+        e.errorCode == "RESET_TOKEN_INVALID"
+        e.message == "Invalid reset token"
+
+        where:
+        found << [
+                Optional.empty(),
+                Optional.of(PasswordResetToken.builder().token("t")
+                        .expiresAt(LocalDateTime.now().plusHours(1)).usedAt(LocalDateTime.now()).build()),
+                Optional.of(PasswordResetToken.builder().token("t")
+                        .expiresAt(LocalDateTime.now().minusMinutes(1)).build())
+        ]
     }
 }

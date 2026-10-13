@@ -228,6 +228,7 @@ e2e/
     signup-locale.spec.ts     # CLIENT-REF-2
     error-handling.spec.ts    # CLIENT-ERR-1
     auth-errors.spec.ts       # CLIENT-ERR-2
+    password-reset.spec.ts    # AUTH-9
     user-errors.spec.ts       # CLIENT-ERR-3
     sport-errors.spec.ts      # CLIENT-ERR-4
     group-errors.spec.ts      # CLIENT-ERR-5
@@ -417,7 +418,7 @@ helpers called.
 | `Escape closes only the open Time/Location popover, then a second Escape closes the "Join a match" modal` | Selects the Badminton pill → "Join a match" → Time → asserts the popover's Before button is visible → **Escape** → popover gone **and dialog still visible** → same for the Location filter (search input) → a third Escape (no popover open) closes the dialog | **CLIENT-SESSION-27 (2026-09-24).** Radix `react-dialog`/`react-menu` resolved `react-dismissable-layer` 1.1.15 while `react-popover` resolved 1.1.19; the layer stack is a module-level context, so two copies = two independent stacks, each layer thought it was the highest and both answered the same Escape. Fixed by `pnpm.overrides` in `client/package.json` pinning one copy — a dependency-graph regression, no component code changed. Verified to **fail without the fix** (dialog gone after the first Escape) |
 | `every "Join a match" filter popover stays inside the dialog @ 375px` / `@ 320px` (one `test()` per width) | Sets the viewport → Badminton pill → "Join a match" → for each of Time / Location / Status / Fee: opens the popover, `expect.poll`s until its bounding box lies within the dialog's box (±0.5px), then closes it with Escape and asserts the dialog is still open | **CLIENT-SESSION-32 (2026-09-24).** `DialogContent` is `overflow-hidden` and a nested popover portals into it (CLIENT-SESSION-29), but Radix Popper collided against the viewport only, so at 375px the Location popover (`w-72`) fit the viewport yet ran 16px past the 343px dialog and was clipped. Fixed at the shared `PopoverContent` (`collisionBoundary` = the dialog's Content node, `collisionPadding` 8, `max-w-[var(--radix-popover-content-available-width)]`). 320px additionally exercises the `max-w` cap (there `w-72` exceeds the whole 288px dialog; Time's `w-auto` popover already overhung). Verified to **fail without the fix** at both widths. jsdom has no layout — real-browser only |
 
-### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + GRP-3 + FRIEND-1 + PROFILE-7 + ACCOUNT-1, several independent `test()`s)
+### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + AUTH-9 + GRP-3 + FRIEND-1 + PROFILE-7 + ACCOUNT-1, several independent `test()`s)
 
 | Test(s) | What it checks | Notes |
 |---|---|---|
@@ -433,7 +434,7 @@ helpers called.
 | `profile page — Account settings modal open — axe reports no critical/serious violations` | Same axe gate, `AccountSettingsModal` open via the avatar dropdown | ACCOUNT-1 |
 | `/login`/`/register` @ {375,768,1280}px — no horizontal overflow (×6) | Same overflow check, logged-out pages | No `seedAuthenticatedSession` — these routes aren't behind `ProtectedRoute` |
 | `/login`/`/register` @ {375,768,1280}px — axe violations (×6) | Same axe gate | |
-| `/login: Tab reaches every control in order` | Explicit Tab sequence: Email → Password → "Show password" toggle → Log in → "Create an account" link | `getByLabel('Password', { exact: true })` — substring matching would collide with the toggle's `aria-label="Show password"` |
+| `/login: Tab reaches every control in order` | Explicit Tab sequence: Email → "Forgot password?" link (AUTH-9) → Password → "Show password" toggle → Log in → "Create an account" link | `getByLabel('Password', { exact: true })` — substring matching would collide with the toggle's `aria-label="Show password"` |
 | `/register: Tab reaches every control in order` | Email → Password → toggle → Full name → Phone (optional) → Create account → "Log in" link | |
 
 ### `e2e/flows/auth-journey.spec.ts` (AUTH-8, 3 `test()`s)
@@ -1021,6 +1022,23 @@ The auth forms' server errors localized from the error code. The auth handler (`
 | validation failure (vi) | Same, in Vietnamese ("Kiểm tra: Mật khẩu."). |
 | invalid credentials (vi) | Login 401: "Email hoặc mật khẩu không đúng.", stays on `/login`, email kept. |
 | login 400 VALIDATION_FAILED | `page.route` answers 400 with field detail; the banner shows only "Invalid email or password." |
+
+### `e2e/flows/password-reset.spec.ts` (AUTH-9, 13 `test()`s)
+
+The forgot-password and reset-password screens. The auth handler (`e2e/mocks/handlers/auth.ts`) mirrors the real backend: `forgot-password` always answers 200 (400 only for a blank email); `reset-password/validate` answers 200 for `mockResetToken` and one generic 404 `RESET_TOKEN_INVALID` for every other token; `reset-password` answers 200 for `mockResetToken`, 400 `RESET_TOKEN_USED` / `RESET_TOKEN_EXPIRED` for `mockUsedResetToken` / `mockExpiredResetToken`, 404 `RESET_TOKEN_INVALID` for any other token and 400 `VALIDATION_FAILED` for a password under 8 characters (all three tokens in `fixtures.ts`). `a11y.spec.ts` also gained the two new routes in its `authPages` matrix (overflow + axe at 375/768/1280, 6 more tests) and its `/login` Tab-order test now expects the "Forgot password?" link between Email and Password. Related docs: `client/docs/MVP/AUTH-9_FORGOT_AND_RESET_PASSWORD_SCREENS.md`.
+
+| Test | What it checks |
+|---|---|
+| login → forgot password → confirmation | Email typed on `/login` prefills `/forgot-password`; submitting shows the neutral "If an account exists…" status and removes the form; "Back to sign in" returns to `/login`. |
+| unknown email | An address with no account gets the identical confirmation. |
+| reset with a valid link | New password + confirmation, "Update password" → `/login` with "Password updated. Sign in with your new password." |
+| mismatched passwords | Inline "The passwords don't match." and the URL stays on `/reset-password`. |
+| missing token | `/reset-password` with no `token` shows the invalid-link alert; "Request a new link" goes to `/forgot-password`. |
+| dead link on load (×3) | `reset-token-used`, `reset-token-expired` and an unknown token each show the problem state with "Request a new link" as soon as the page opens, before any submit (backend A21 check: one generic 404 `RESET_TOKEN_INVALID`); the form is absent. |
+| check request shape | The page-load check is a `POST` to `/api/auth/reset-password/validate` with `{"token":…}` in the body, and a live token shows the form. |
+| link goes bad after load | `page.route` answers the submit with 400 `RESET_TOKEN_USED`; the page lands on the problem state. |
+| vi: forgot + dead link on load | Vietnamese heading, button, confirmation, and the dead-link copy shown on load for an expired token. |
+| vi: successful reset | Vietnamese "Đã cập nhật mật khẩu." notice on `/login`. |
 
 ### `e2e/flows/user-errors.spec.ts` (CLIENT-ERR-3, 4 `test()`s)
 

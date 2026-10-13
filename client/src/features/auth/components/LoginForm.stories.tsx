@@ -48,3 +48,8 @@ export const InvalidSubmit: Story = {
     await expect(canvas.getByText('Password is required.')).toBeInTheDocument();
   },
 };
+
+/** AUTH-9: shown on /login right after a successful password reset. */
+export const PasswordResetNotice: Story = {
+  args: { showPasswordResetNotice: true },
+};

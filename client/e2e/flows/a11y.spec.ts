@@ -168,11 +168,13 @@ test('profile page — Account settings modal open — axe reports no critical/s
 const authPages = [
   { path: '/login', heading: 'Welcome back' },
   { path: '/register', heading: 'Create your account' },
+  { path: '/forgot-password', heading: 'Forgot your password?' },
+  { path: '/reset-password?token=reset-token-valid', heading: 'Choose a new password' },
 ] as const;
 
 async function loadAuthPage(
   page: import('@playwright/test').Page,
-  path: '/login' | '/register',
+  path: string,
   heading: string,
   width: number,
 ) {
@@ -208,6 +210,10 @@ test('/login: Tab reaches every control in order', async ({ page }) => {
 
   await page.keyboard.press('Tab');
   await expect(page.getByLabel('Email', { exact: true })).toBeFocused();
+
+  await page.keyboard.press('Tab');
+  // AUTH-9: the "Forgot password?" link sits in the password label row, before the field.
+  await expect(page.getByRole('link', { name: 'Forgot password?' })).toBeFocused();
 
   await page.keyboard.press('Tab');
   // exact: true — getByLabel does substring matching by default, and

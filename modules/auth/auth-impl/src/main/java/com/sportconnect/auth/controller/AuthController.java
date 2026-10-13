@@ -5,6 +5,7 @@ import com.sportconnect.auth.api.dto.ForgotPasswordRequest;
 import com.sportconnect.auth.api.dto.LoginRequest;
 import com.sportconnect.auth.api.dto.RegisterRequest;
 import com.sportconnect.auth.api.dto.ResetPasswordRequest;
+import com.sportconnect.auth.api.dto.ValidateResetTokenRequest;
 import com.sportconnect.auth.api.dto.VerifyEmailRequest;
 import com.sportconnect.auth.api.service.AuthService;
 import com.sportconnect.auth.config.CookieProperties;
@@ -29,7 +30,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -207,8 +207,20 @@ public class AuthController {
     })
     @PostMapping("/reset-password")
     public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        UUID userId = passwordResetService.validateAndUseToken(request.getToken());
-        passwordResetService.resetPassword(userId, request.getNewPassword());
+        passwordResetService.completeReset(request.getToken(), request.getNewPassword());
         return ResponseEntity.ok(ApiResponse.success("Password reset successfully", null));
+    }
+
+    @Operation(summary = "Check that a password-reset link can still be used", security = {},
+            description = "Does not consume the token. Every unusable token (unknown, already used, expired) gets the same 404 RESET_TOKEN_INVALID, so this cannot be used to learn why a token failed.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "The token can be used"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "The token cannot be used (unknown, used or expired)")
+    })
+    @PostMapping("/reset-password/validate")
+    public ResponseEntity<ApiResponse<Void>> validateResetToken(@Valid @RequestBody ValidateResetTokenRequest request) {
+        passwordResetService.checkToken(request.getToken());
+        return ResponseEntity.ok(ApiResponse.success("Reset token is valid", null));
     }
 }

@@ -50,3 +50,19 @@ export interface AuthResult {
   expiresIn: number;
   user: User;
 }
+
+// AUTH-9: both bodies match the backend's request DTOs (`ForgotPasswordRequest`,
+// `ResetPasswordRequest`); both endpoints answer `ApiResponse<Void>`.
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  newPassword: string;
+}
+
+// AUTH-9 / backend A21: body of `POST /api/auth/reset-password/validate`.
+export interface ValidateResetTokenPayload {
+  token: string;
+}

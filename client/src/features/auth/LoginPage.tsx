@@ -17,14 +17,20 @@ export function LoginPage() {
   const { t } = useTranslation('login');
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  const state = location.state as { from?: string; passwordReset?: boolean } | null;
+  const from = state?.from ?? '/';
   const { login, isPending, errorMessage } = useLogin({
     onSuccess: () => navigate(from, { replace: true }),
   });
 
   return (
     <AuthShell tagline={t('tagline')}>
-      <LoginForm onSubmit={login} isPending={isPending} errorMessage={errorMessage} />
+      <LoginForm
+        onSubmit={login}
+        isPending={isPending}
+        errorMessage={errorMessage}
+        showPasswordResetNotice={state?.passwordReset === true}
+      />
     </AuthShell>
   );
 }

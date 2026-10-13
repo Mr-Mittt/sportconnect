@@ -52,6 +52,10 @@ export const mockAdminUser: User = {
 export const mockPassword = 'password123';
 // CLIENT-ERR-2: sign-up with this address gets the duplicate-email 409 from the auth handler.
 export const mockTakenEmail = 'taken@example.com';
+// AUTH-9: reset tokens the auth handler recognises (anything else answers RESET_TOKEN_INVALID).
+export const mockResetToken = 'reset-token-valid';
+export const mockUsedResetToken = 'reset-token-used';
+export const mockExpiredResetToken = 'reset-token-expired';
 export const mockAccessToken = 'mock-access-token';
 
 // A distinct refresh-token string used only to simulate the httpOnly cookie
