@@ -133,3 +133,46 @@ describe('useLogin', () => {
     await waitFor(() => expect(result.current.errorMessage).toBe('Invalid email or password.'));
   });
 });
+
+describe('useLogin · onAccountDeactivated (AUTH-10)', () => {
+  const rejection = (errorCode: string) => ({
+    isAxiosError: true,
+    response: {
+      status: 401,
+      data: { success: false, message: 'x', errorCode, data: null, timestamp: new Date().toISOString() },
+    },
+  });
+
+  beforeEach(() => {
+    useAuthStore.getState().clearSession();
+    vi.restoreAllMocks();
+  });
+
+  it('passes the submitted credentials to onAccountDeactivated on ACCOUNT_DEACTIVATED', async () => {
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce(rejection('ACCOUNT_DEACTIVATED'));
+    const onAccountDeactivated = vi.fn();
+    const { result } = renderHook(() => useLogin({ onAccountDeactivated }), { wrapper });
+
+    act(() => {
+      result.current.login({ email: 'jordan@example.com', password: 'password123' });
+    });
+
+    await waitFor(() =>
+      expect(onAccountDeactivated).toHaveBeenCalledWith({ email: 'jordan@example.com', password: 'password123' }),
+    );
+    expect(result.current.errorMessage).toBe('This account has been deactivated.');
+  });
+
+  it('does not call onAccountDeactivated for INVALID_CREDENTIALS', async () => {
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce(rejection('INVALID_CREDENTIALS'));
+    const onAccountDeactivated = vi.fn();
+    const { result } = renderHook(() => useLogin({ onAccountDeactivated }), { wrapper });
+
+    act(() => {
+      result.current.login({ email: 'jordan@example.com', password: 'wrong' });
+    });
+
+    await waitFor(() => expect(result.current.errorMessage).not.toBeNull());
+    expect(onAccountDeactivated).not.toHaveBeenCalled();
+  });
+});

@@ -5,6 +5,7 @@ import {
   mockAccessToken,
   mockAdminRefreshToken,
   mockAdminUser,
+  mockDeactivatedEmail,
   mockExpiredResetToken,
   mockPassword,
   mockRefreshToken,
@@ -99,6 +100,9 @@ export const authHandlers: HttpHandler[] = [
     }
     // ADMIN-1: two accounts now exist. Each gets its own refresh-token string so
     // a later bootstrap refresh can tell them apart (see sessionFor).
+    if (body.email === mockDeactivatedEmail) {
+      return HttpResponse.json(apiError('Account is deactivated', 'ACCOUNT_DEACTIVATED'), { status: 401 });
+    }
     if (body.email === mockAdminUser.email) {
       return HttpResponse.json(apiResponse(adminAuthResult, 'Login successful'), {
         status: 200,
@@ -112,6 +116,37 @@ export const authHandlers: HttpHandler[] = [
       status: 200,
       headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
     });
+  }),
+
+  // AUTH-10 / backend A9: same body as login; re-verifies the credentials and, for the deactivated
+  // fixture account with the right password, "re-activates" it and logs in. Anything else is the
+  // generic INVALID_CREDENTIALS.
+  http.post('/api/auth/reactivate', async ({ request }) => {
+    const body = (await request.json()) as LoginPayload;
+    if (body.email !== mockDeactivatedEmail || body.password !== mockPassword) {
+      return HttpResponse.json(apiError('Invalid email or password', 'INVALID_CREDENTIALS'), { status: 401 });
+    }
+    return HttpResponse.json(apiResponse(authResult, 'Account reactivated'), {
+      status: 200,
+      headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
+    });
+  }),
+
+  // ACCOUNT-4 / backend U22: self-deactivation. The right password answers 200; anything else is the
+  // 400 CURRENT_PASSWORD_INCORRECT the real service throws. (Stateless like the rest of this file: the
+  // mock account is not actually marked inactive.)
+  http.post('/api/users/me/deactivate', async ({ request }) => {
+    const body = (await request.json()) as { currentPassword?: string };
+    if (!body.currentPassword?.trim()) {
+      return HttpResponse.json(
+        apiError('Validation failed', 'VALIDATION_FAILED', { fields: { currentPassword: 'Current password is required' } }),
+        { status: 400 },
+      );
+    }
+    if (body.currentPassword !== mockPassword) {
+      return HttpResponse.json(apiError('Current password is incorrect', 'CURRENT_PASSWORD_INCORRECT'), { status: 400 });
+    }
+    return HttpResponse.json(apiResponse(null, 'Account deactivated successfully'));
   }),
 
   // Reads the real browser cookie jar (via the `cookies` resolver arg) — the

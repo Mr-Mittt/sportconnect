@@ -639,6 +639,75 @@ class UserServiceImplSpec extends Specification {
         0 * authService.logout(_)
     }
 
+    def "deactivateOwnAccount deactivates and revokes sessions when the password matches"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .passwordHash("hash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        userService.deactivateOwnAccount(userId, "raw")
+
+        then:
+        1 * userRepository.findByIdForUpdate(userId) >> Optional.of(user)
+        1 * passwordEncoder.matches("raw", "hash") >> true
+        1 * userRepository.save(_) >> { User saved ->
+            assert saved.isActive == false
+            return saved
+        }
+        1 * authService.logout(userId)
+    }
+
+    def "deactivateOwnAccount throws CURRENT_PASSWORD_INCORRECT and changes nothing on a wrong password"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder()
+                .id(userId)
+                .email("test@example.com")
+                .passwordHash("hash")
+                .isActive(true)
+                .roles([] as Set)
+                .build()
+
+        when:
+        userService.deactivateOwnAccount(userId, "wrong")
+
+        then:
+        1 * userRepository.findByIdForUpdate(userId) >> Optional.of(user)
+        1 * passwordEncoder.matches("wrong", "hash") >> false
+        0 * userRepository.save(_)
+        0 * authService.logout(_)
+        def e = thrown(BadRequestException)
+        e.errorCode == "CURRENT_PASSWORD_INCORRECT"
+        user.isActive
+    }
+
+    def "deactivateOwnAccount throws not-found for an unknown or already deactivated account"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.deactivateOwnAccount(userId, "raw")
+
+        then:
+        1 * userRepository.findByIdForUpdate(userId) >> found
+        0 * passwordEncoder.matches(_, _)
+        0 * userRepository.save(_)
+        0 * authService.logout(_)
+        thrown(ResourceNotFoundException)
+
+        where:
+        found << [
+                Optional.empty(),
+                Optional.of(User.builder().id(UUID.randomUUID()).isActive(false).roles([] as Set).build())
+        ]
+    }
+
     def "existsByEmail should return true when email exists"() {
         given:
         def email = "exists@example.com"

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/app/authStore';
 import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
 import { usePostErrorDialogStore } from '@/app/postErrorDialogStore';
 import { useLogout } from '@/features/auth/useLogout';
+import { useDeactivateAccount } from '@/features/profile/useDeactivateAccount';
 import { useEditProfileSave } from '@/features/profile/useEditProfileSave';
 import { useMyProfile } from '@/features/profile/useMyProfile';
 import { useUserPreferences } from '@/features/profile/useUserPreferences';
@@ -18,6 +19,7 @@ import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { AccountSettingsModal } from './AccountSettingsModal';
+import { DeactivateAccountDialog } from './DeactivateAccountDialog';
 import { AuthLoadingState } from './AuthLoadingState';
 import { JoinFeedbackDialog } from './JoinFeedbackDialog';
 import { PostActionErrorDialog } from './PostActionErrorDialog';
@@ -110,6 +112,18 @@ export function AppShell() {
   const profileQuery = useMyProfile();
   const preferencesQuery = useUserPreferences();
   const accountSettingsSave = useEditProfileSave();
+  // ACCOUNT-4: deactivating one's own account. The confirmation dialog stacks on top of the settings
+  // modal (which keeps its unsaved edits, and is where Cancel/Esc returns to) and is mounted only
+  // while open, so the typed password never outlives it.
+  const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
+  const deactivateAccount = useDeactivateAccount({
+    // No explicit navigate(): clearing the session makes ProtectedRoute redirect to /login once this
+    // render commits, by which time the settings modal (and its unsaved-changes route blocker) is gone.
+    onSuccess: () => {
+      setIsDeactivateOpen(false);
+      setIsAccountSettingsOpen(false);
+    },
+  });
 
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const sessionDetailData = useSessionDetailModalData(selectedSessionId, () => setSelectedSessionId(null));
@@ -161,6 +175,20 @@ export function AppShell() {
           isSaving={accountSettingsSave.isSaving}
           errorMessage={accountSettingsSave.errorMessage}
           geoErrorCode={accountSettingsSave.geoErrorCode}
+          onDeactivate={() => setIsDeactivateOpen(true)}
+        />
+      )}
+
+      {isDeactivateOpen && (
+        <DeactivateAccountDialog
+          isOpen={isDeactivateOpen}
+          onClose={() => {
+            deactivateAccount.reset();
+            setIsDeactivateOpen(false);
+          }}
+          onConfirm={deactivateAccount.deactivate}
+          isSubmitting={deactivateAccount.isPending}
+          errorMessage={deactivateAccount.errorMessage}
         />
       )}
 

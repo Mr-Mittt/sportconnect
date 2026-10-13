@@ -18,6 +18,8 @@ interface LoginFormProps {
   errorMessage: string | null;
   /** AUTH-9: true right after a password reset, shows the "Password updated, sign in" notice. */
   showPasswordResetNotice?: boolean;
+  /** ACCOUNT-4: true right after the user deactivated their own account, shows the "you can re-activate by logging in" notice. */
+  showDeactivatedNotice?: boolean;
 }
 
 /**
@@ -45,7 +47,13 @@ interface LoginFormProps {
  * form is required, so a visual "*" on both adds no information a `RegisterForm`-style optional/
  * required distinction would; `aria-required="true"` still carries the a11y signal.
  */
-export function LoginForm({ onSubmit, isPending, errorMessage, showPasswordResetNotice = false }: LoginFormProps) {
+export function LoginForm({
+  onSubmit,
+  isPending,
+  errorMessage,
+  showPasswordResetNotice = false,
+  showDeactivatedNotice = false,
+}: LoginFormProps) {
   const { t } = useTranslation('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,6 +78,15 @@ export function LoginForm({ onSubmit, isPending, errorMessage, showPasswordReset
     <form onSubmit={handleSubmit} noValidate>
       <h1 className="mb-1 text-xl font-semibold tracking-tight text-text-primary">{t('heading')}</h1>
       <p className="mb-6 text-2sm text-text-secondary">{t('subheading')}</p>
+
+      {showDeactivatedNotice && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border-hairline border-border bg-bg-accent px-3 py-2 text-2sm text-text-primary"
+        >
+          {t('notice.accountDeactivated')}
+        </div>
+      )}
 
       {showPasswordResetNotice && (
         <div

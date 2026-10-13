@@ -43,6 +43,7 @@ GET    /api/users/username/{username}
 GET    /api/users/check/email?email=
 GET    /api/users/check/username?username=
 PUT    /api/users/{userId}/profile       ROLE_USER
+POST   /api/users/me/deactivate          ROLE_USER  (U22: body { currentPassword }; soft-deletes the caller + revokes sessions)
 DELETE /api/users/{userId}               ROLE_ADMIN
 ```
 

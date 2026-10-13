@@ -1,7 +1,8 @@
 {
   "tagline": "Đồng đội, trận đấu và hội bạn — tất cả trong một nơi.",
   "notice": {
-    "passwordReset": "Đã cập nhật mật khẩu. Hãy đăng nhập bằng mật khẩu mới."
+    "passwordReset": "Đã cập nhật mật khẩu. Hãy đăng nhập bằng mật khẩu mới.",
+    "accountDeactivated": "Tài khoản của bạn đã bị vô hiệu hóa. Hãy đăng nhập lại bất cứ lúc nào để kích hoạt lại."
   },
   "heading": "Chào mừng trở lại",
   "subheading": "Đăng nhập để tiếp tục nơi bạn đã dừng lại.",
@@ -32,5 +33,12 @@
     },
     "newToSportHub": "Chưa có tài khoản?",
     "createAccount": "Tạo tài khoản"
+  },
+  "reactivate": {
+    "title": "Kích hoạt lại tài khoản?",
+    "body": "Tài khoản của bạn đã bị vô hiệu hóa. Bạn có muốn kích hoạt lại không?",
+    "confirm": "Kích hoạt lại",
+    "confirming": "Đang kích hoạt…",
+    "cancel": "Hủy"
   }
 }

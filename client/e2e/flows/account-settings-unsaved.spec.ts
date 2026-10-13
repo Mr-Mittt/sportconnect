@@ -1,0 +1,59 @@
+import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { expect, test } from '../mocks/test.ts';
+
+/*
+ * ACCOUNT-5: closing Account Settings with unsaved edits asks first (Keep editing / Discard / Save);
+ * closing it untouched does not.
+ */
+
+async function openAccountSettings(page: import('@playwright/test').Page) {
+  await seedAuthenticatedSession(page, '/profile');
+  await page.getByRole('button', { name: 'Your account' }).click();
+  await page.getByRole('menuitem', { name: 'Account settings' }).click();
+  return page.getByRole('dialog', { name: 'Account settings' });
+}
+
+test('closing without edits just closes', async ({ page }) => {
+  const settings = await openAccountSettings(page);
+
+  await page.keyboard.press('Escape');
+
+  await expect(settings).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeHidden();
+});
+
+test('Esc with edits asks first; Close keeps the edits, Discard closes without saving', async ({ page }) => {
+  let saves = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && request.url().includes('/profile')) saves += 1;
+  });
+  const settings = await openAccountSettings(page);
+  await settings.getByLabel('Bio').fill('Edited but not saved');
+
+  await page.keyboard.press('Escape');
+  const prompt = page.getByRole('dialog', { name: 'Unsaved changes' });
+  await expect(prompt).toBeVisible();
+
+  await prompt.getByRole('button', { name: 'Close' }).click();
+  await expect(prompt).toBeHidden();
+  await expect(settings.getByLabel('Bio')).toHaveValue('Edited but not saved');
+
+  await settings.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('dialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Discard changes' }).click();
+
+  await expect(settings).toBeHidden();
+  expect(saves).toBe(0);
+});
+
+test('Save in the prompt saves the edits and closes everything', async ({ page }) => {
+  const settings = await openAccountSettings(page);
+  await settings.getByLabel('Bio').fill('Saved from the prompt');
+
+  const save = page.waitForRequest((request) => request.method() === 'PUT' && request.url().includes('/profile'));
+  await page.keyboard.press('Escape');
+  await page.getByRole('dialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Save changes' }).click();
+
+  expect((await save).postDataJSON()).toMatchObject({ bio: 'Saved from the prompt' });
+  await expect(settings).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeHidden();
+});

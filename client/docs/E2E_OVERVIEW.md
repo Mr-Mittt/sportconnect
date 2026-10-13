@@ -229,6 +229,9 @@ e2e/
     error-handling.spec.ts    # CLIENT-ERR-1
     auth-errors.spec.ts       # CLIENT-ERR-2
     password-reset.spec.ts    # AUTH-9
+    auth-reactivate.spec.ts   # AUTH-10
+    account-deactivate.spec.ts # ACCOUNT-4
+    account-settings-unsaved.spec.ts # ACCOUNT-5
     user-errors.spec.ts       # CLIENT-ERR-3
     sport-errors.spec.ts      # CLIENT-ERR-4
     group-errors.spec.ts      # CLIENT-ERR-5
@@ -1022,6 +1025,38 @@ The auth forms' server errors localized from the error code. The auth handler (`
 | validation failure (vi) | Same, in Vietnamese ("Kiểm tra: Mật khẩu."). |
 | invalid credentials (vi) | Login 401: "Email hoặc mật khẩu không đúng.", stays on `/login`, email kept. |
 | login 400 VALIDATION_FAILED | `page.route` answers 400 with field detail; the banner shows only "Invalid email or password." |
+
+### `e2e/flows/auth-reactivate.spec.ts` (AUTH-10, 3 `test()`s)
+
+Re-activating a deactivated account from the login page. The auth handler mirrors backend A9: `mockDeactivatedEmail` (`fixtures.ts`) with the right password gets 401 `ACCOUNT_DEACTIVATED` on `/auth/login`, and `POST /auth/reactivate` logs that account in (anything else: 401 `INVALID_CREDENTIALS`). Related docs: `client/docs/MVP/AUTH-10_REACTIVATE_DEACTIVATED_ACCOUNT_ON_LOGIN.md`.
+
+| Test | What it checks |
+|---|---|
+| confirm | The dialog "Re-activate your account?" opens; Re-activate posts the typed email and password to `/auth/reactivate` and the user leaves `/login`. |
+| decline | Cancel closes the dialog, no `/auth/reactivate` request is made, the user stays on `/login` with the email kept. |
+| wrong password on re-activation | A 401 `INVALID_CREDENTIALS` from `/auth/reactivate` keeps the dialog open with "Invalid email or password." in its alert. |
+
+### `e2e/flows/account-settings-unsaved.spec.ts` (ACCOUNT-5, 3 `test()`s)
+
+The unsaved-changes guard on Account Settings. Related docs: `client/docs/MVP/ACCOUNT-5_ACCOUNT_SETTINGS_UNSAVED_CHANGES_GUARD.md`.
+
+| Test | What it checks |
+|---|---|
+| closing without edits | Esc closes the modal and no "Unsaved changes" dialog appears (the seeded user has no stored language, so this also proves detection pre-fills do not count). |
+| Esc, keep editing, Discard | With a Bio edit, Esc opens the prompt; its Close keeps the modal and the edit; Discard closes the modal and no profile `PUT` was sent. |
+| Save from the prompt | Saves the edit (`PUT` body carries the new bio) and closes everything. |
+
+### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, 5 `test()`s)
+
+Deactivating one's own account from Account Settings. The auth handler (`e2e/mocks/handlers/auth.ts`) mirrors backend U22: `POST /api/users/me/deactivate` answers 200 for `mockPassword`, 400 `CURRENT_PASSWORD_INCORRECT` for any other, 400 `VALIDATION_FAILED` for blank. Related docs: `client/docs/MVP/ACCOUNT-4_DEACTIVATE_ACCOUNT.md`.
+
+| Test | What it checks |
+|---|---|
+| right password | Avatar menu > Account settings > Deactivate account opens the password dialog; the typed password is posted as `{ currentPassword }`; the user lands on `/login` and sees the re-activate hint. |
+| wrong password | The dialog stays open with "Your current password is incorrect."; the URL does not change. |
+| stacks over settings | The dialog opens over Account settings; Cancel returns to it with an unsaved Bio edit intact and nothing is sent. |
+| Esc | Esc closes only the confirmation; Account settings stays open. |
+| deactivate with unsaved edits | An unsaved Bio edit does not trap the sign-out: the user lands on `/login` and the "Unsaved changes" prompt never appears (ACCOUNT-5). |
 
 ### `e2e/flows/password-reset.spec.ts` (AUTH-9, 13 `test()`s)
 

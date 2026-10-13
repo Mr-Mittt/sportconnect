@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/user/user-impl`  
-**Last updated:** 2026-10-05 (U21 DONE)
+**Last updated:** 2026-10-13 (U22 DONE)
 
 ---
 
@@ -27,6 +27,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 0 | [U22](MVP/U22_SELF_SERVICE_ACCOUNT_DEACTIVATION.md) | Self-service account deactivation (2026-10-13) — `POST /api/users/me/deactivate` with `{ currentPassword }`: re-confirms the password (`400 CURRENT_PASSWORD_INCORRECT`), soft-deletes the caller and revokes every session exactly like the admin path (U12); a deactivated caller is `404`; the account can come back through A9; `SelfDeactivationIntegrationTest` (6); client ACCOUNT-4 | `DONE` |
 | 1 | [U21](MVP/U21_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the user module — 17 sites coded (`USER_PROFILE_NOT_OWNED`, `HEIGHT/WEIGHT/SHOE_SIZE_OUT_OF_RANGE` with `{min,max}`, `GENDER_INVALID`, `LANGUAGE_UNKNOWN`, `LOCATION_*`, `CURRENT_PASSWORD_INCORRECT`, `SEARCH_KEYWORD_TOO_SHORT`, friend codes); the four friend-state conflicts moved **400 → 409**; `USER_NOT_FOUND`/`FRIEND_REQUEST_NOT_FOUND` coded; **shoe size is now millimetres** (`shoeSizeCm` → `shoeSizeMm`, V077 renames the column and multiplies by 10, client renamed in the same change). Spock 185 + new `UserErrorCodesIntegrationTest` (21); `:server:test` 401/401; V077 verified on real Postgres. Pairs with CLIENT-ERR-3 | `DONE` (2026-10-05) |
 | 2 | [U20](MVP/U20_GENDER_AS_VALIDATED_ENUM.md) | `gender` is now a closed set (`MALE` / `FEMALE`) — `Gender` enum in `user-api`, strict upper-case validation in `updateProfile` (`400` "gender must be one of: MALE, FEMALE"; `""` clears, `null` skips), migration `V076` normalising legacy rows (+ `CHECK` constraint); wire contract still a string. Spock + new `ProfileGenderIntegrationTest` (6); `:server:test` 367/367; migration verified on real Postgres | `DONE` (2026-10-02) |
 | 3 | [U18](MVP/U18_DEDICATED_USER_SUMMARY_BATCH_LOOKUP.md) | Dedicated `getUserSummariesByIds` — a PII-free `{id, fullName, avatarUrl}` batch method migrated onto all 16 real `getUsersByIds` call sites (notification/session/group/post-impl); none read anything beyond those two fields | `DONE` |

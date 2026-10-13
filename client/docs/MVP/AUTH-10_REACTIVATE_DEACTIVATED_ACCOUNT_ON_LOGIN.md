@@ -1,6 +1,6 @@
 # AUTH-10 · Offer to re-activate a deactivated account when login answers `ACCOUNT_DEACTIVATED`
 
-**Status:** `TODO` · **Type:** Feature · **Depends on:** backend **A9** (auth backlog) — adds `POST /api/auth/reactivate` and makes login answer `ACCOUNT_DEACTIVATED`. Do not start before A9 ships.
+**Status:** `DONE` (2026-10-13) · **Type:** Feature · **Depends on:** backend **A9** (auth backlog) — adds `POST /api/auth/reactivate` and makes login answer `ACCOUNT_DEACTIVATED`. Do not start before A9 ships.
 **Filed:** 2026-10-09, client half of A9.
 
 ## Contract (from A9)
@@ -28,3 +28,34 @@
 ## Tests
 
 Vitest/RTL for the dialog and hook (confirm path, decline path, wrong password on reactivate, credentials cleared); Storybook story for the dialog; an e2e flow for login → dialog → confirm → logged in, and login → dialog → decline → still on login.
+
+---
+
+## Implementation summary (2026-10-13)
+
+### Design (approved plan)
+
+- `useLogin` gains an `onAccountDeactivated(payload)` option, fired from the mutation's `onError` with the submitted `variables` when the code is `ACCOUNT_DEACTIVATED`; the inline "This account has been deactivated." line stays as the fallback.
+- New `useReactivate` (next to `useLogin`): `POST /auth/reactivate` with the same `LoginPayload`, sets the session like login, returns `{ reactivate, isPending, errorMessage, reset }`.
+- New presentational `ReactivateAccountDialog` (visible title and body, Re-activate and Cancel, inline `role="alert"` for a failed re-activation).
+- `LoginPage` holds `pendingReactivation: LoginPayload | null` in local state only; Confirm re-sends it, Cancel/close/Esc clear it and `reset()` the mutation; success navigates away (the page unmounts).
+- `/auth/reactivate` added to `NO_RETRY_URLS` in `apiClient.ts`.
+
+### What was built
+
+`useReactivate.ts`, `components/ReactivateAccountDialog.tsx` (+ test, stories: Default/Submitting/ErrorState), `LoginPage.tsx` wiring, `useLogin.ts` option (stale TSDoc line about deactivated accounts getting `INVALID_CREDENTIALS` corrected), `login:reactivate.*` keys in en and vi, MSW (`mockDeactivatedEmail`; login answers 401 `ACCOUNT_DEACTIVATED` for it, new `/auth/reactivate` handler), `e2e/flows/auth-reactivate.spec.ts` (3 tests), `E2E_OVERVIEW.md` catalog, I18N-4 census row for `/login`.
+
+### Decisions
+
+- A wrong password on re-activation keeps the dialog open with the `INVALID_CREDENTIALS` line (confirmed at the scope gate).
+- Declining leaves the form's fallback `ACCOUNT_DEACTIVATED` line visible under the login form.
+- No change to the consumers of `useLogin` beyond `LoginPage`; the `NO_RETRY_URLS` change only adds an entry.
+- No new backend contract: A9 is done and the endpoint was confirmed in `AuthController`/`SecurityConfig`.
+
+### Verification
+
+- tsc and eslint clean. Scoped Vitest (`src/features/auth`, `src/app`, `src/locales`): 32 files, 206 tests; one failure, the 5 s timeout in `noRawServerError.test.ts` under load, passes in isolation (2/2).
+- **E2E:** `e2e` project, scoped to the specs touching login/auth (`auth-reactivate`, `auth-errors`, `msw-setup`, `password-reset`, `auth-journey`, `a11y`, `locale`): 80 passed (25 + 55). The full e2e suite was not run.
+- **Visual-regression expectation:** no baselined surface touched (`/login` has no baseline, see AUTH-13) — no baseline change expected; a failing `visual-regression` run is the Windows noise floor, not a regression. Not run.
+- Not verified against a live backend: MSW mirrors the contract read from `AuthController`, and `AccountReactivationIntegrationTest` covers the server side (A9).
+- Storybook stories added, not opened in a browser.

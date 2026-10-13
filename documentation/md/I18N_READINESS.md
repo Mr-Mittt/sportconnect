@@ -119,11 +119,12 @@ current whenever I18N-4 itself finally gets scoped:**
 
 | Page | Form/flow | Hook | Phase C ticket |
 |---|---|---|---|
-| `/login` | Log in | `useLogin` | CLIENT-ERR-2 |
+| `/login` | Log in (and the re-activate dialog after `ACCOUNT_DEACTIVATED`; its wrong-password failure shows the `INVALID_CREDENTIALS` copy inside the dialog) | `useLogin`, `useReactivate` | CLIENT-ERR-2, AUTH-10 (done 2026-10-13) |
 | `/register` | Sign up | `useRegister` | CLIENT-ERR-2 |
 | `/forgot-password` | Request a reset link (the server answers 200 whether or not the email exists; only a malformed email or a transport failure shows an error, via the shared classifier) | `useForgotPassword` | AUTH-9 (done 2026-10-13) |
 | `/reset-password` | Set a new password (`RESET_TOKEN_INVALID`/`_USED`/`_EXPIRED` replace the form with an inline state using `errors:codes` copy; `VALIDATION_FAILED` stays a banner; the link is also checked on page load through `useResetTokenCheck`, one generic `RESET_TOKEN_INVALID`) | `useResetPassword`, `useResetTokenCheck` | AUTH-9 (done 2026-10-13) |
 | Any page (avatar dropdown) | Account Settings modal (ACCOUNT-1 — was the `/profile` Edit Profile modal's body) | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) | CLIENT-ERR-3 (done 2026-10-05) |
+| Any page (avatar dropdown) | Account Settings > Deactivate account (password-confirm dialog; a wrong password shows `CURRENT_PASSWORD_INCORRECT` from `errors:codes`, anything else the shared classifier line) | `useDeactivateAccount` | ACCOUNT-4 (done 2026-10-13) |
 | `/profile` | Edit Profile modal (ACCOUNT-1 — avatar/cover URL only) | `useUpdateMyProfile` (its client fallback is now localized; the server message is still shown verbatim) | CLIENT-ERR-3 (done 2026-10-05) |
 | `/profile` | Settings tab — per-sport profile editor | `useUpdateSportProfile` | CLIENT-ERR-4 (done 2026-10-05) |
 | `/profile` | Settings tab — deactivate/reactivate a sport profile | `useDeactivateSportProfile` | CLIENT-ERR-4 (done 2026-10-05) |

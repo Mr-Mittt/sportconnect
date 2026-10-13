@@ -75,7 +75,7 @@ type RetryableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 //   session" — there's no original session to restore, and silently refreshing
 //   could resurrect a stale one from an unrelated valid cookie the user didn't
 //   ask for (e.g. a login-page retry with different, still-wrong credentials).
-const NO_RETRY_URLS = ['/auth/refresh', '/auth/login', '/auth/register'];
+const NO_RETRY_URLS = ['/auth/refresh', '/auth/login', '/auth/register', '/auth/reactivate'];
 
 // Shared across concurrent 401s so a page that fires several authenticated
 // requests at once (all with the same stale token) triggers exactly one
