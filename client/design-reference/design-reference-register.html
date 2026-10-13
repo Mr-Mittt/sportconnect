@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Register</title>
+<!-- AUTH-13: frozen reference for Register. Static and dependency-free, same two-column shell and tokens as
+     design-reference-login.html (the community illustration is reduced to its globe disc here — it is identical on every
+     auth screen and fully captured in the login reference). Default state. Not consumed by any spec: the visual-regression
+     baselines are taken from the built page (e2e/visual/auth-screens.spec.ts). -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  a { color: #185FA5; text-decoration: none; }
+  :root {
+    --surface-0:#f7f7f4; --surface-1:#f1efe8; --surface-2:#fff; --text-primary:#1a1a18; --text-secondary:#5f5e5a;
+    --text-muted:#6e6d66; --text-accent:#185fa5; --text-danger:#a32d2d; --bg-accent:#e6f1fb;
+    --accent-solid:#185fa5; --border:rgba(44,44,42,.12); --border-strong:rgba(44,44,42,.24); --border-accent:#378add;
+    --overlay:rgba(26,26,24,.5);
+  }
+  .page { min-height:100vh; background:var(--surface-0); color:var(--text-primary); display:flex; align-items:center;
+    justify-content:center; padding:32px 16px; font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .card { width:900px; max-width:100%; background:var(--surface-2); border:.5px solid var(--border); border-radius:16px; overflow:hidden;
+    display:grid; grid-template-columns:1fr 1fr; box-shadow:0 1px 3px rgba(44,44,42,.06),0 12px 40px rgba(44,44,42,.06); }
+  .left { border-right:.5px solid var(--border); padding:40px; min-height:520px; display:flex; flex-direction:column; justify-content:space-between; }
+  .brand { display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:36px; font-weight:600; letter-spacing:-.01em; }
+  .brand i { width:26px; height:26px; border-radius:7px; background:var(--border-accent); display:block; }
+  .globe { flex:1; display:flex; align-items:center; justify-content:center; }
+  .globe div { width:304px; height:304px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#fff 0%,#f5f4f0 42%,#e7e6de 74%,#d4d3cb 100%);
+    box-shadow:0 22px 44px rgba(44,44,42,.2),-14px -16px 34px rgba(44,44,42,.1) inset,10px 10px 24px rgba(255,255,255,.75) inset; }
+  .tagline { max-width:320px; margin:0; font-size:24px; font-weight:600; letter-spacing:-.02em; }
+  .right { padding:36px; display:flex; flex-direction:column; justify-content:center; }
+  h1 { margin:0 0 4px; font-size:20px; font-weight:600; letter-spacing:-.01em; }
+  .sub { margin:0 0 24px; font-size:13px; color:var(--text-secondary); }
+  .notice { margin:0 0 16px; padding:8px 12px; font-size:13px; background:var(--bg-accent); border:.5px solid var(--border); border-radius:8px; }
+  label { display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:var(--text-secondary); }
+  .row { display:flex; align-items:baseline; justify-content:space-between; }
+  .row a { font-size:12px; }
+  .field { margin-bottom:16px; position:relative; }
+  input { width:100%; height:40px; font:inherit; font-size:14px; color:var(--text-primary); background:var(--surface-2);
+    border:.5px solid var(--border-strong); border-radius:8px; padding:0 12px; }
+  .eye { position:absolute; right:4px; top:50%; transform:translateY(-50%); padding:8px; color:var(--text-muted); font-size:12px; }
+  .btn { display:flex; align-items:center; justify-content:center; width:100%; height:36px; margin-top:4px; font-size:13px; font-weight:500;
+    color:#fff; background:var(--accent-solid); border:0; border-radius:8px; }
+  .btn.out { color:var(--text-primary); background:transparent; border:.5px solid var(--border-strong); margin-top:10px; opacity:.9; }
+  .or { display:flex; align-items:center; gap:12px; margin:20px 0; font-size:12px; color:var(--text-muted); }
+  .or hr { flex:1; border:0; height:.5px; background:var(--border); margin:0; }
+  .foot { margin-top:24px; text-align:center; font-size:13px; color:var(--text-secondary); }
+  .alert { margin:0 0 24px; font-size:13px; color:var(--text-secondary); }
+  @media (max-width: 767px) { .card { grid-template-columns:1fr; } .left { display:none; } }
+</style></head>
+<body><div class="page"><div class="card">
+  <div class="left"><div class="brand"><i></i>SportHub</div><div class="globe"><div></div></div>
+    <p class="tagline">Your teams, matches, and crew — all in one place.</p></div>
+  <div class="right">
+    <h1>Create your account</h1><p class="sub">Join SportHub - Join your sport community.</p>
+    <div class="field"><label for="r-name">Full name</label><input id="r-name" type="text" value=""></div><div class="field"><label for="r-email">Email</label><input id="r-email" type="email" value=""></div><div class="field"><label for="r-phone">Phone number</label><input id="r-phone" type="tel" value=""></div><div class="field"><label for="r-pw">Password</label><input id="r-pw" type="password" value=""><span class="eye">◉</span></div>
+    <div class="btn">Create account</div>
+    <div class="or"><hr>or<hr></div>
+    <div class="btn out">Continue with Facebook</div><div class="btn out">Continue with Google</div><div class="btn out">Continue with Apple</div>
+    <div class="foot">Already have an account? <a href="#">Log in</a></div></div>
+</div></div></body></html>

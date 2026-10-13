@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account settings</title>
+<!-- AUTH-13: frozen reference for the Account Settings modal's Password and Deactivate sections and the two dialogs
+     stacked on it (ACCOUNT-3 change password, ACCOUNT-4 deactivate). Static and dependency-free; the modal's profile /
+     contact / personal form sections are covered by design-reference-profile.html's edit surfaces and omitted here.
+     Not consumed by any spec — the baselines come from the built page (e2e/visual/account-settings.spec.ts). -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  a { color: #185FA5; text-decoration: none; }
+  :root {
+    --surface-0:#f7f7f4; --surface-1:#f1efe8; --surface-2:#fff; --text-primary:#1a1a18; --text-secondary:#5f5e5a;
+    --text-muted:#6e6d66; --text-accent:#185fa5; --text-danger:#a32d2d; --bg-accent:#e6f1fb;
+    --accent-solid:#185fa5; --border:rgba(44,44,42,.12); --border-strong:rgba(44,44,42,.24); --border-accent:#378add;
+    --overlay:rgba(26,26,24,.5);
+  }
+  .page { min-height:100vh; background:var(--surface-0); color:var(--text-primary); display:flex; align-items:center;
+    justify-content:center; padding:32px 16px; font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .card { width:900px; max-width:100%; background:var(--surface-2); border:.5px solid var(--border); border-radius:16px; overflow:hidden;
+    display:grid; grid-template-columns:1fr 1fr; box-shadow:0 1px 3px rgba(44,44,42,.06),0 12px 40px rgba(44,44,42,.06); }
+  .left { border-right:.5px solid var(--border); padding:40px; min-height:520px; display:flex; flex-direction:column; justify-content:space-between; }
+  .brand { display:flex; align-items:center; justify-content:flex-end; gap:8px; font-size:36px; font-weight:600; letter-spacing:-.01em; }
+  .brand i { width:26px; height:26px; border-radius:7px; background:var(--border-accent); display:block; }
+  .globe { flex:1; display:flex; align-items:center; justify-content:center; }
+  .globe div { width:304px; height:304px; border-radius:50%; background:radial-gradient(circle at 36% 30%,#fff 0%,#f5f4f0 42%,#e7e6de 74%,#d4d3cb 100%);
+    box-shadow:0 22px 44px rgba(44,44,42,.2),-14px -16px 34px rgba(44,44,42,.1) inset,10px 10px 24px rgba(255,255,255,.75) inset; }
+  .tagline { max-width:320px; margin:0; font-size:24px; font-weight:600; letter-spacing:-.02em; }
+  .right { padding:36px; display:flex; flex-direction:column; justify-content:center; }
+  h1 { margin:0 0 4px; font-size:20px; font-weight:600; letter-spacing:-.01em; }
+  .sub { margin:0 0 24px; font-size:13px; color:var(--text-secondary); }
+  .notice { margin:0 0 16px; padding:8px 12px; font-size:13px; background:var(--bg-accent); border:.5px solid var(--border); border-radius:8px; }
+  label { display:block; margin-bottom:6px; font-size:12px; font-weight:500; color:var(--text-secondary); }
+  .row { display:flex; align-items:baseline; justify-content:space-between; }
+  .row a { font-size:12px; }
+  .field { margin-bottom:16px; position:relative; }
+  input { width:100%; height:40px; font:inherit; font-size:14px; color:var(--text-primary); background:var(--surface-2);
+    border:.5px solid var(--border-strong); border-radius:8px; padding:0 12px; }
+  .eye { position:absolute; right:4px; top:50%; transform:translateY(-50%); padding:8px; color:var(--text-muted); font-size:12px; }
+  .btn { display:flex; align-items:center; justify-content:center; width:100%; height:36px; margin-top:4px; font-size:13px; font-weight:500;
+    color:#fff; background:var(--accent-solid); border:0; border-radius:8px; }
+  .btn.out { color:var(--text-primary); background:transparent; border:.5px solid var(--border-strong); margin-top:10px; opacity:.9; }
+  .or { display:flex; align-items:center; gap:12px; margin:20px 0; font-size:12px; color:var(--text-muted); }
+  .or hr { flex:1; border:0; height:.5px; background:var(--border); margin:0; }
+  .foot { margin-top:24px; text-align:center; font-size:13px; color:var(--text-secondary); }
+  .alert { margin:0 0 24px; font-size:13px; color:var(--text-secondary); }
+  @media (max-width: 767px) { .card { grid-template-columns:1fr; } .left { display:none; } }
+
+  .stack { display:flex; flex-direction:column; gap:32px; align-items:center; }
+  .sec { font-size:13px; font-weight:600; margin:0 0 6px; }
+  .desc { font-size:13px; color:var(--text-secondary); margin:0 0 10px; }
+  .sbtn { display:inline-flex; align-items:center; height:32px; padding:0 12px; font-size:13px; font-weight:500; border-radius:8px; border:.5px solid var(--border-strong); }
+  .sbtn.danger { color:var(--text-danger); }
+  .btn.dlg-actions { width:auto; padding:0 12px; margin:0; }
+</style></head>
+<body><div class="page"><div class="stack">
+  <div style="background:var(--surface-2);border:.5px solid var(--border);border-radius:12px;padding:24px;width:560px;max-width:100%">
+    <h1>Account settings</h1><p class="sub">Profile, contact and personal sections omitted — see the profile reference.</p>
+    <p class="sec">Password</p><div class="sbtn" style="margin-bottom:20px">Change password</div>
+    <p class="sec">Deactivate account</p>
+    <p class="desc">Your profile and activity are hidden and you are signed out everywhere. You can bring the account back any time by logging in again.</p>
+    <div class="sbtn danger">Deactivate account</div>
+  </div>
+  
+  <div style="background:var(--surface-2);border:.5px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(44,44,42,.18);padding:20px;width:380px;max-width:100%">
+    <h1 style="font-size:16px">Change your password</h1><p class="sub" style="margin-bottom:16px">Enter your current password, then choose a new one of at least 8 characters.</p>
+    <div class="field"><label for="c-cur">Current password</label><input id="c-cur" type="password" value=""><span class="eye">◉</span></div><div class="field"><label for="c-new">New password</label><input id="c-new" type="password" value=""><span class="eye">◉</span></div><div class="field"><label for="c-conf">Confirm new password</label><input id="c-conf" type="password" value=""><span class="eye">◉</span></div><div style="display:flex;gap:8px;margin-top:8px"><div class="btn dlg-actions" style="opacity:.5">Change password</div><div class="btn out dlg-actions">Cancel</div></div></div>
+  
+  <div style="background:var(--surface-2);border:.5px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(44,44,42,.18);padding:20px;width:380px;max-width:100%">
+    <h1 style="font-size:16px">Deactivate your account?</h1><p class="sub" style="margin-bottom:16px">You will be signed out on every device. To come back, log in again and choose to re-activate the account.</p>
+    <div class="field"><label for="d-pw">Confirm with your password</label><input id="d-pw" type="password" value=""></div><div style="display:flex;gap:8px;margin-top:8px"><div class="btn dlg-actions" style="background:var(--text-danger);opacity:.5">Deactivate</div><div class="btn out dlg-actions">Cancel</div></div></div>
+</div></div></body></html>

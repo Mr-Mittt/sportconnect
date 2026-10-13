@@ -251,6 +251,8 @@ e2e/
     app-notification-bell.spec.ts  # CLIENT-NOTIF-2
     app-profile.spec.ts       # PROFILE-7
     app-sport-reactivate.spec.ts  # SPORT-12
+    auth-screens.spec.ts      # AUTH-13
+    account-settings.spec.ts  # AUTH-13
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
   mocks/
     mockServer.ts            # the standalone Node HTTP server
@@ -1484,3 +1486,31 @@ byte-identical.
 - Adding new stateful mock data? Use `createSessionStore`, never a module-level `let` (see §2).
 - Visual-regression spec touching a new page? Freeze the clock before the first navigation if the page
   renders any relative timestamp.
+
+### `e2e/visual/auth-screens.spec.ts` (AUTH-13, `visual-regression` project)
+
+Full-page screenshots of the four public auth screens (none had visual coverage before). Parameterized: 3 breakpoints × 7 states = **21 test instances**, `<screen> — <state> @ <width>px`. No login needed — every screen is public.
+
+| State | Setup | Baseline |
+|---|---|---|
+| login — default | `goto('/login')` | `auth-login-default-{width}.png` |
+| login — password updated notice | completes a reset with `mockResetToken` (the notice travels via `accountNoticeStore`, so it cannot be deep-linked) | `auth-login-password-updated-{width}.png` |
+| register — default | `goto('/register')` | `auth-register-default-{width}.png` |
+| forgot password — form | `goto('/forgot-password')` | `auth-forgot-password-form-{width}.png` |
+| forgot password — sent | submits `mockUser.email` | `auth-forgot-password-sent-{width}.png` |
+| reset password — form | `/reset-password?token=${mockResetToken}` | `auth-reset-password-form-{width}.png` |
+| reset password — link problem | `/reset-password?token=${mockExpiredResetToken}` (the mock validate endpoint 404s every token but the live one) | `auth-reset-password-link-problem-{width}.png` |
+
+Every instance freezes the clock, blurs the active element, waits for `document.fonts.ready` and passes `animations: 'disabled'` (the community illustration floats continuously). Baselines are Linux-rendered via the `client-ci` `update-baselines` dispatch (never a Windows host) and committed — all 21 current as of AUTH-13. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
+
+### `e2e/visual/account-settings.spec.ts` (AUTH-13 scope change, `visual-regression` project)
+
+3 breakpoints × 3 states = **9 test instances**, opened the same way as `account-settings-unsaved.spec.ts` (avatar menu → "Account settings"). Element-scoped shots, as the sport status confirm dialogs.
+
+| State | Setup | Baseline |
+|---|---|---|
+| account settings modal — default | open the modal; wait for the Language select to be pre-filled (async detection — without this the shot flaked by 10 px) and for network idle | `account-settings-default-{width}.png` |
+| change password dialog | "Change password" in the modal; shoots the stacked `Change your password` dialog, empty | `account-settings-change-password-{width}.png` |
+| deactivate dialog | "Deactivate account" in the modal; shoots the stacked `Deactivate your account?` dialog, empty | `account-settings-deactivate-{width}.png` |
+
+All 9 baselines are Linux-rendered and committed (current as of AUTH-13). Error / validation states and the unsaved-changes prompt are out of scope. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
