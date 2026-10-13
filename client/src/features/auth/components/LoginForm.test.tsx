@@ -127,4 +127,21 @@ describe('LoginForm', () => {
       expect(screen.queryByText('Email is required.')).not.toBeInTheDocument();
     });
   });
+
+  describe('AUTH-9 password recovery entry', () => {
+    it('links to /forgot-password', () => {
+      renderForm();
+      expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password');
+    });
+
+    it('shows the password-updated notice only when asked', () => {
+      renderForm({ showPasswordResetNotice: true });
+      expect(screen.getByRole('status')).toHaveTextContent('Password updated. Sign in with your new password.');
+    });
+
+    it('shows no notice by default', () => {
+      renderForm();
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+  });
 });

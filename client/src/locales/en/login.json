@@ -1,5 +1,8 @@
 {
   "tagline": "Your teams, matches, and crew — all in one place.",
+  "notice": {
+    "passwordReset": "Password updated. Sign in with your new password."
+  },
   "heading": "Welcome back",
   "subheading": "Log in to pick up where you left off.",
   "form": {
@@ -18,6 +21,7 @@
         "required": "Password is required."
       }
     },
+    "forgotPassword": "Forgot password?",
     "submit": "Log in",
     "submitting": "Logging in…",
     "or": "or",

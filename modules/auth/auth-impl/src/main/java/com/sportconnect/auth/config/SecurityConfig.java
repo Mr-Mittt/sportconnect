@@ -106,6 +106,7 @@ public class SecurityConfig {
                                 "/api/auth/verify-email",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
+                                "/api/auth/reset-password/validate",
                                 "/api/auth/oauth-token").permitAll()
                         // A7: nothing under /api/sports is public any more (it was a blanket permitAll
                         // since the initial commit, with the real gating left to @PreAuthorize — which

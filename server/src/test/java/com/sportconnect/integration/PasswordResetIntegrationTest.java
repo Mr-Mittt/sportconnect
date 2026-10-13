@@ -241,6 +241,75 @@ class PasswordResetIntegrationTest extends RedisBaseIT {
     }
 
 
+    // ---------- A21: check endpoint and atomic reset ----------
+
+    private ResultActions validate(String token) throws Exception {
+        return postJson("/api/auth/reset-password/validate", "{\"token\": \"" + token + "\"}");
+    }
+
+    private boolean isUsed(String token) {
+        return jdbc.queryForObject("SELECT used_at FROM password_reset_tokens WHERE token = ?",
+                java.sql.Timestamp.class, token) != null;
+    }
+
+    @Test
+    void validate_acceptsAFreshToken_withoutConsumingIt() throws Exception {
+        UUID userId = userIdOf(register("a21-fresh@example.com"));
+        forgot("a21-fresh@example.com");
+        String token = tokenOf(userId);
+
+        validate(token).andExpect(status().isOk());
+        validate(token).andExpect(status().isOk());
+
+        assertThat(isUsed(token)).isFalse();
+        reset(token, NEW_PASSWORD).andExpect(status().isOk());
+    }
+
+    @Test
+    void validate_answersIdentically_forUnknownUsedAndExpiredTokens() throws Exception {
+        UUID usedUser = userIdOf(register("a21-used@example.com"));
+        forgot("a21-used@example.com");
+        String usedToken = tokenOf(usedUser);
+        reset(usedToken, NEW_PASSWORD).andExpect(status().isOk());
+
+        UUID expiredUser = userIdOf(register("a21-expired@example.com"));
+        forgot("a21-expired@example.com");
+        String expiredToken = tokenOf(expiredUser);
+        var row = passwordResetTokenRepository.findByToken(expiredToken).orElseThrow();
+        row.setExpiresAt(LocalDateTime.now().minusMinutes(1));
+        passwordResetTokenRepository.save(row);
+
+        String unknown = withoutTimestamp(validate("no-such-token").andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("RESET_TOKEN_INVALID"))
+                .andReturn().getResponse().getContentAsString());
+        String used = withoutTimestamp(validate(usedToken).andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString());
+        String expired = withoutTimestamp(validate(expiredToken).andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString());
+
+        assertThat(used).isEqualTo(unknown);
+        assertThat(expired).isEqualTo(unknown);
+    }
+
+    @Test
+    void validate_rejectsABlankToken_asAValidationFailure() throws Exception {
+        validate("").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void aFailedPasswordUpdate_doesNotConsumeTheToken() throws Exception {
+        // A token for a user id that does not exist: the claim succeeds, then updateUserPassword throws, and the
+        // single transaction must roll the claim back. Before A21 the token was stamped used in an earlier commit.
+        passwordResetTokenRepository.save(com.sportconnect.auth.entity.PasswordResetToken.builder()
+                .userId(UUID.randomUUID()).token("orphan-token").expiresAt(LocalDateTime.now().plusHours(1)).build());
+
+        reset("orphan-token", NEW_PASSWORD).andExpect(status().is4xxClientError());
+
+        assertThat(isUsed("orphan-token")).isFalse();
+        validate("orphan-token").andExpect(status().isOk());
+    }
+
     // ---------- email language (A10 scope change) ----------
 
     private long vietnamId() {

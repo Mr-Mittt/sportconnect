@@ -2,7 +2,9 @@ import { createBrowserRouter, createRoutesFromElements, Route } from 'react-rout
 import { AdminIndex } from './features/admin/AdminIndex';
 import { AdminLayout } from './features/admin/AdminLayout';
 import { AdminSportsPage } from './features/admin/AdminSportsPage';
+import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage';
 import { LoginPage } from './features/auth/LoginPage';
+import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { FriendsPage } from './features/friends/FriendsPage';
 import { GroupsPage } from './features/groups/GroupsPage';
@@ -45,6 +47,22 @@ export const routes = createRoutesFromElements(
       element={
         <PublicOnlyRoute>
           <RegisterPage />
+        </PublicOnlyRoute>
+      }
+    />
+    <Route
+      path="/forgot-password"
+      element={
+        <PublicOnlyRoute>
+          <ForgotPasswordPage />
+        </PublicOnlyRoute>
+      }
+    />
+    <Route
+      path="/reset-password"
+      element={
+        <PublicOnlyRoute>
+          <ResetPasswordPage />
         </PublicOnlyRoute>
       }
     />

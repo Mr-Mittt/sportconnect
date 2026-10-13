@@ -3,6 +3,8 @@ import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
 import enumsEn from '@/locales/en/enums.json';
 import errorsEn from '@/locales/en/errors.json';
+import forgotPasswordEn from '@/locales/en/forgotPassword.json';
+import resetPasswordEn from '@/locales/en/resetPassword.json';
 import friendsEn from '@/locales/en/friends.json';
 import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
@@ -19,6 +21,8 @@ import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import enumsVi from '@/locales/vi/enums.json';
 import errorsVi from '@/locales/vi/errors.json';
+import forgotPasswordVi from '@/locales/vi/forgotPassword.json';
+import resetPasswordVi from '@/locales/vi/resetPassword.json';
 import friendsVi from '@/locales/vi/friends.json';
 import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
@@ -124,6 +128,8 @@ void i18next.use(initReactI18next).init({
       profile: profileEn,
       profilePage: profilePageEn,
       login: loginEn,
+      forgotPassword: forgotPasswordEn,
+      resetPassword: resetPasswordEn,
       shell: shellEn,
       sharedDialogs: sharedDialogsEn,
       homeFeed: homeFeedEn,
@@ -142,6 +148,8 @@ void i18next.use(initReactI18next).init({
       profile: profileVi,
       profilePage: profilePageVi,
       login: loginVi,
+      forgotPassword: forgotPasswordVi,
+      resetPassword: resetPasswordVi,
       shell: shellVi,
       sharedDialogs: sharedDialogsVi,
       homeFeed: homeFeedVi,
@@ -157,7 +165,7 @@ void i18next.use(initReactI18next).init({
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session', 'errors'],
+  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'forgotPassword', 'resetPassword', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session', 'errors'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

@@ -5,9 +5,12 @@ import {
   mockAccessToken,
   mockAdminRefreshToken,
   mockAdminUser,
+  mockExpiredResetToken,
   mockPassword,
   mockRefreshToken,
+  mockResetToken,
   mockTakenEmail,
+  mockUsedResetToken,
   mockUser,
 } from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
@@ -135,6 +138,56 @@ export const authHandlers: HttpHandler[] = [
       status: 200,
       headers: { 'Set-Cookie': refreshCookie(token, 604800) },
     });
+  }),
+
+  // AUTH-9: mirrors AuthController.forgotPassword — the same 200 whether or not the email has an
+  // account (anti-enumeration), 400 only for a blank/malformed address.
+  http.post('/api/auth/forgot-password', async ({ request }) => {
+    const body = (await request.json()) as { email?: string };
+    if (!body.email?.trim()) {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { email: 'Email is required' } }), {
+        status: 400,
+      });
+    }
+    return HttpResponse.json(apiResponse(null, 'If the email exists, a password reset link has been sent'));
+  }),
+
+  // AUTH-9: mirrors AuthController.resetPassword and the A8 codes — 404 RESET_TOKEN_INVALID for an
+  // unknown token, 400 RESET_TOKEN_USED / RESET_TOKEN_EXPIRED for the two fixed tokens, 400
+  // VALIDATION_FAILED for a password under 8 characters.
+  http.post('/api/auth/reset-password', async ({ request }) => {
+    const body = (await request.json()) as { token?: string; newPassword?: string };
+    if (!body.newPassword || body.newPassword.length < 8) {
+      return HttpResponse.json(
+        apiError('Validation failed', 'VALIDATION_FAILED', { fields: { newPassword: 'Password must be at least 8 characters' } }),
+        { status: 400 },
+      );
+    }
+    if (body.token === mockUsedResetToken) {
+      return HttpResponse.json(apiError('Reset token already used', 'RESET_TOKEN_USED'), { status: 400 });
+    }
+    if (body.token === mockExpiredResetToken) {
+      return HttpResponse.json(apiError('Reset token expired', 'RESET_TOKEN_EXPIRED'), { status: 400 });
+    }
+    if (body.token !== mockResetToken) {
+      return HttpResponse.json(apiError('Invalid reset token', 'RESET_TOKEN_INVALID'), { status: 404 });
+    }
+    return HttpResponse.json(apiResponse(null, 'Password reset successfully'));
+  }),
+
+  // AUTH-9 / backend A21: the page-load check. 200 only for the one live token; every other token
+  // (unknown, used, expired) gets the same generic 404 RESET_TOKEN_INVALID, like the real backend.
+  http.post('/api/auth/reset-password/validate', async ({ request }) => {
+    const body = (await request.json()) as { token?: string };
+    if (!body.token?.trim()) {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { token: 'Token is required' } }), {
+        status: 400,
+      });
+    }
+    if (body.token !== mockResetToken) {
+      return HttpResponse.json(apiError('Invalid reset token', 'RESET_TOKEN_INVALID'), { status: 404 });
+    }
+    return HttpResponse.json(apiResponse(null, 'Reset token is valid'));
   }),
 
   http.post('/api/auth/logout', ({ request }) => {
