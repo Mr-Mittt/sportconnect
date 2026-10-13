@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { toast } from 'sonner';
 import { AxiosError, type AxiosResponse } from 'axios';
 import { showErrorToast } from '@/shared/lib/errorToast';
 import { Button } from '@/shared/ui/button';
@@ -25,6 +26,7 @@ const meta = {
       <Button onClick={() => showErrorToast(failure(404))}>Not found</Button>
       <Button onClick={() => showErrorToast(failure(409))}>Conflict (server text)</Button>
       <Button onClick={() => showErrorToast(failure(null))}>Offline</Button>
+      <Button onClick={() => toast.success('Your password was updated.')}>Success</Button>
     </div>
   ),
 } satisfies Meta<typeof ErrorToaster>;

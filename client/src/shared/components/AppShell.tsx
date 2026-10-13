@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/app/authStore';
 import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
 import { usePostErrorDialogStore } from '@/app/postErrorDialogStore';
 import { useLogout } from '@/features/auth/useLogout';
+import { useChangePassword } from '@/features/profile/useChangePassword';
 import { useDeactivateAccount } from '@/features/profile/useDeactivateAccount';
 import { useEditProfileSave } from '@/features/profile/useEditProfileSave';
 import { useMyProfile } from '@/features/profile/useMyProfile';
@@ -19,6 +22,7 @@ import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { AccountSettingsModal } from './AccountSettingsModal';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeactivateAccountDialog } from './DeactivateAccountDialog';
 import { AuthLoadingState } from './AuthLoadingState';
 import { JoinFeedbackDialog } from './JoinFeedbackDialog';
@@ -125,6 +129,17 @@ export function AppShell() {
     },
   });
 
+  const { t } = useTranslation();
+  // ACCOUNT-3: changing the password. Same stacking and mount-while-open rule as the deactivate dialog.
+  // The session continues on success (the server revokes nothing), so it only closes and confirms.
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const changePassword = useChangePassword({
+    onSuccess: () => {
+      setIsChangePasswordOpen(false);
+      toast.success(t('accountSettings:password.success'));
+    },
+  });
+
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const sessionDetailData = useSessionDetailModalData(selectedSessionId, () => setSelectedSessionId(null));
   const sportProfilesQuery = useSportProfiles();
@@ -169,13 +184,33 @@ export function AppShell() {
           }}
           user={profileQuery.data}
           languageCode={preferencesQuery.data?.language ?? null}
-          onSave={(payload) =>
-            accountSettingsSave.save(payload, { onSuccess: () => setIsAccountSettingsOpen(false) })
+          onSave={(payload, options) =>
+            accountSettingsSave.save(payload, {
+              onSuccess: () => {
+                toast.success(t('accountSettings:saved'));
+                options?.onSuccess?.();
+              },
+            })
           }
           isSaving={accountSettingsSave.isSaving}
           errorMessage={accountSettingsSave.errorMessage}
           geoErrorCode={accountSettingsSave.geoErrorCode}
           onDeactivate={() => setIsDeactivateOpen(true)}
+          onChangePassword={() => setIsChangePasswordOpen(true)}
+        />
+      )}
+
+      {isChangePasswordOpen && (
+        <ChangePasswordDialog
+          isOpen={isChangePasswordOpen}
+          onClose={() => {
+            changePassword.reset();
+            setIsChangePasswordOpen(false);
+          }}
+          onSubmit={changePassword.changePassword}
+          isSubmitting={changePassword.isPending}
+          errorMessage={changePassword.errorMessage}
+          isCurrentPasswordError={changePassword.isCurrentPasswordError}
         />
       )}
 

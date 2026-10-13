@@ -98,6 +98,9 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 
+/** ACCOUNT-3: the Password section shows once `AppShell` passes the change-password handler. */
+export const WithChangePassword: Story = { args: { onChangePassword: () => {} } };
+
 /** Every optional field unset — the empty-state layout, including no Country/Region/Language
  * chosen yet (CLIENT-REF-3). */
 export const EmptyProfile: Story = {

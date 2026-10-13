@@ -44,7 +44,9 @@ interface AccountSettingsModalProps {
   /** The caller's current language preference (`UserPreferenceResponse.language`), for seeding —
    * not editable here except through this modal's own Language field. */
   languageCode: string | null;
-  onSave: (payload: AccountSettingsSavePayload) => void;
+  /** Saves; `options.onSuccess` runs once the save fully succeeded. The modal stays open on success unless the
+   * caller closes it — the Save button keeps it open (ACCOUNT-3), the unsaved-changes prompt closes it. */
+  onSave: (payload: AccountSettingsSavePayload, options?: { onSuccess?: () => void }) => void;
   isSaving: boolean;
   errorMessage: string | null;
   /** CLIENT-ERR-8: the reference code the last save was rejected with (`REGION_UNKNOWN` and friends), shown
@@ -53,6 +55,8 @@ interface AccountSettingsModalProps {
   /** ACCOUNT-4: opens the deactivate-account confirmation (owned by `AppShell`). When absent the
    * "Deactivate account" section is not rendered. */
   onDeactivate?: () => void;
+  /** ACCOUNT-3: opens the change-password dialog (owned by `AppShell`). When absent the "Password" section is not rendered. */
+  onChangePassword?: () => void;
   /** CLIENT-I18N-6 convention: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -102,6 +106,7 @@ export function AccountSettingsModal({
   errorMessage,
   geoErrorCode = null,
   onDeactivate,
+  onChangePassword,
   i18nOverridePrefix,
 }: AccountSettingsModalProps) {
   const t = useOverridableText('accountSettings', i18nOverridePrefix);
@@ -156,7 +161,10 @@ export function AccountSettingsModal({
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={(event) => {
               event.preventDefault();
-              onSave({ profile: profilePayload, languageCode: changedLanguageCode });
+              onSave(
+                { profile: profilePayload, languageCode: changedLanguageCode },
+                { onSuccess: () => setHasGeoEdit(false) },
+              );
             }}
           >
             <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
@@ -338,6 +346,15 @@ export function AccountSettingsModal({
                 </p>
               )}
 
+              {onChangePassword && (
+                <section className="mt-1 border-t border-border pt-3.5">
+                  <h4 className="mb-2 text-2sm font-semibold text-text-secondary">{t('section.password')}</h4>
+                  <Button type="button" variant="outline" size="sm" onClick={onChangePassword}>
+                    {t('password.action')}
+                  </Button>
+                </section>
+              )}
+
               {onDeactivate && (
                 <section className="mt-1 border-t border-border pt-3.5">
                   <h4 className="text-2sm font-semibold text-text-danger">{t('section.deactivate')}</h4>
@@ -375,7 +392,17 @@ export function AccountSettingsModal({
           leaveGuard.proceed();
           onClose();
         }}
-        onSave={() => onSave({ profile: profilePayload, languageCode: changedLanguageCode })}
+        onSave={() =>
+          onSave(
+            { profile: profilePayload, languageCode: changedLanguageCode },
+            {
+              onSuccess: () => {
+                leaveGuard.proceed();
+                onClose();
+              },
+            },
+          )
+        }
         isSaving={isSaving}
         saveErrorMessage={errorMessage}
       />

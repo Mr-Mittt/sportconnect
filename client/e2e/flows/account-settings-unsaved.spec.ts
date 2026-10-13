@@ -56,4 +56,24 @@ test('Save in the prompt saves the edits and closes everything', async ({ page }
   expect((await save).postDataJSON()).toMatchObject({ bio: 'Saved from the prompt' });
   await expect(settings).toBeHidden();
   await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeHidden();
+  // ACCOUNT-3: a successful save confirms with a toast.
+  await expect(page.getByText('Your account settings were saved.')).toBeVisible();
+});
+
+test('the Save button saves and confirms with a toast, keeps the modal open, and closing afterwards does not prompt', async ({ page }) => {
+  const settings = await openAccountSettings(page);
+  await settings.getByLabel('Bio').fill('Saved from the button');
+
+  const save = page.waitForRequest((request) => request.method() === 'PUT' && request.url().includes('/profile'));
+  await settings.getByRole('button', { name: 'Save changes' }).click();
+
+  expect((await save).postDataJSON()).toMatchObject({ bio: 'Saved from the button' });
+  await expect(page.getByText('Your account settings were saved.')).toBeVisible();
+  await expect(settings).toBeVisible();
+  await expect(settings.getByLabel('Bio')).toHaveValue('Saved from the button');
+  await expect(settings.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeHidden();
 });
