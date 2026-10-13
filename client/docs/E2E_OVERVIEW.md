@@ -1501,7 +1501,7 @@ Full-page screenshots of the four public auth screens (none had visual coverage 
 | reset password — form | `/reset-password?token=${mockResetToken}` | `auth-reset-password-form-{width}.png` |
 | reset password — link problem | `/reset-password?token=${mockExpiredResetToken}` (the mock validate endpoint 404s every token but the live one) | `auth-reset-password-link-problem-{width}.png` |
 
-Every instance freezes the clock, blurs the active element, waits for `document.fonts.ready` and passes `animations: 'disabled'` (the community illustration floats continuously). Baselines come from the `client-ci` `update-baselines` dispatch, never a Windows host. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
+Every instance freezes the clock, blurs the active element, waits for `document.fonts.ready` and passes `animations: 'disabled'` (the community illustration floats continuously). Baselines are Linux-rendered via the `client-ci` `update-baselines` dispatch (never a Windows host) and committed — all 21 current as of AUTH-13. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
 
 ### `e2e/visual/account-settings.spec.ts` (AUTH-13 scope change, `visual-regression` project)
 
@@ -1513,4 +1513,4 @@ Every instance freezes the clock, blurs the active element, waits for `document.
 | change password dialog | "Change password" in the modal; shoots the stacked `Change your password` dialog, empty | `account-settings-change-password-{width}.png` |
 | deactivate dialog | "Deactivate account" in the modal; shoots the stacked `Deactivate your account?` dialog, empty | `account-settings-deactivate-{width}.png` |
 
-Error / validation states and the unsaved-changes prompt are out of scope. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
+All 9 baselines are Linux-rendered and committed (current as of AUTH-13). Error / validation states and the unsaved-changes prompt are out of scope. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
