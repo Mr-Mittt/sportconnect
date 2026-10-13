@@ -4,7 +4,8 @@
     "profile": "Profile",
     "contact": "Contact",
     "personal": "Personal",
-    "deactivate": "Deactivate account"
+    "deactivate": "Deactivate account",
+    "password": "Password"
   },
   "field": {
     "firstName": "First name",
@@ -21,6 +22,7 @@
   "legacyCountry": "Currently set to \"{{country}}\" — pick a country below to replace it.",
   "save": "Save changes",
   "saving": "Saving…",
+  "saved": "Your account settings were saved.",
   "deactivate": {
     "description": "Your profile and activity are hidden and you are signed out everywhere. You can bring the account back any time by logging in again.",
     "action": "Deactivate account"
@@ -39,5 +41,29 @@
     "discard": "Discard changes",
     "save": "Save changes",
     "saving": "Saving…"
+  },
+  "password": {
+    "action": "Change password",
+    "success": "Your password was updated."
+  },
+  "changePasswordDialog": {
+    "title": "Change your password",
+    "body": "Enter your current password, then choose a new one of at least 8 characters.",
+    "currentLabel": "Current password",
+    "newLabel": "New password",
+    "confirmLabel": "Confirm new password",
+    "submit": "Change password",
+    "submitting": "Changing…",
+    "cancel": "Cancel",
+    "showCurrent": "Show current password",
+    "hideCurrent": "Hide current password",
+    "showNew": "Show new password",
+    "hideNew": "Hide new password",
+    "showConfirm": "Show confirmation password",
+    "hideConfirm": "Hide confirmation password",
+    "error": {
+      "tooShort": "Password must be at least 8 characters.",
+      "mismatch": "The two passwords don’t match."
+    }
   }
 }

@@ -197,7 +197,7 @@ describe('AccountSettingsModal', () => {
     await testUser.type(screen.getByLabelText('Bio'), 'New bio');
     await testUser.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    expect(onSave).toHaveBeenCalledWith({ profile: { bio: 'New bio' }, languageCode: undefined });
+    expect(onSave).toHaveBeenCalledWith({ profile: { bio: 'New bio' }, languageCode: undefined }, expect.anything());
   });
 
   it('omits a cleared height/weight/shoe-size/date-of-birth rather than sending it as 0/empty', async () => {
@@ -220,7 +220,7 @@ describe('AccountSettingsModal', () => {
     await testUser.type(screen.getByLabelText('Bio'), 'New bio');
     await testUser.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    expect(onSave).toHaveBeenCalledWith({ profile: { bio: 'New bio' }, languageCode: undefined });
+    expect(onSave).toHaveBeenCalledWith({ profile: { bio: 'New bio' }, languageCode: undefined }, expect.anything());
   });
 
   it('renders the server error message when passed', () => {
@@ -325,7 +325,7 @@ describe('AccountSettingsModal', () => {
       await testUser.selectOptions(screen.getByLabelText('Language'), 'en');
       await testUser.click(screen.getByRole('button', { name: 'Save changes' }));
 
-      expect(onSave).toHaveBeenCalledWith({ profile: {}, languageCode: 'en' });
+      expect(onSave).toHaveBeenCalledWith({ profile: {}, languageCode: 'en' }, expect.anything());
     });
 
     it('Save is enabled by a language-only change', async () => {
@@ -363,7 +363,7 @@ describe('AccountSettingsModal', () => {
     await testUser.selectOptions(gender, 'FEMALE');
     await testUser.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    expect(onSave).toHaveBeenCalledWith({ profile: { gender: 'FEMALE' }, languageCode: undefined });
+    expect(onSave).toHaveBeenCalledWith({ profile: { gender: 'FEMALE' }, languageCode: undefined }, expect.anything());
   });
 
   it('preselects a stored gender without marking the form dirty (ACCOUNT-2)', () => {
@@ -385,7 +385,7 @@ describe('AccountSettingsModal', () => {
     await testUser.selectOptions(screen.getByLabelText('Gender'), '');
     await testUser.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    expect(onSave).toHaveBeenCalledWith({ profile: { gender: '' }, languageCode: undefined });
+    expect(onSave).toHaveBeenCalledWith({ profile: { gender: '' }, languageCode: undefined }, expect.anything());
   });
 
   it('shows the gender-validation message from the server verbatim (ACCOUNT-2)', () => {
@@ -511,6 +511,24 @@ describe('AccountSettingsModal · deactivate account (ACCOUNT-4)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Deactivate account' }));
 
     expect(onDeactivate).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('has no password section when no change-password handler is given (ACCOUNT-3)', () => {
+    renderWithProviders(<AccountSettingsModal {...baseProps} user={user()} />);
+    expect(screen.queryByRole('button', { name: 'Change password' })).not.toBeInTheDocument();
+  });
+
+  it('shows the password section and calls onChangePassword, without saving (ACCOUNT-3)', async () => {
+    const onChangePassword = vi.fn();
+    const onSave = vi.fn();
+    renderWithProviders(
+      <AccountSettingsModal {...baseProps} onSave={onSave} user={user()} onChangePassword={onChangePassword} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Change password' }));
+
+    expect(onChangePassword).toHaveBeenCalledTimes(1);
     expect(onSave).not.toHaveBeenCalled();
   });
 });

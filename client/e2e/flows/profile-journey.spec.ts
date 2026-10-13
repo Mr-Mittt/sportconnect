@@ -184,7 +184,15 @@ test('Profile journey', async ({ page, context }) => {
     expect(body.gender).toBe('FEMALE');
     expect(body.location).toEqual({ latitude: 10.7769, longitude: 106.7009 });
 
-    await expect(dialog).not.toBeVisible();
+    // ACCOUNT-3: a save confirms with a toast and keeps Account settings open. Closing it afterwards
+    // must not prompt, even though country/region/language were touched (the edit flags reset on save).
+    // The saved language (vi) flips the UI locale before the toast and dialog title render, so match both.
+    const settingsDialog = page.getByRole('dialog', { name: /Account settings|Cài đặt tài khoản/ });
+    await expect(page.getByText(/Your account settings were saved\.|Đã lưu cài đặt tài khoản của bạn\./)).toBeVisible();
+    await expect(settingsDialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: /Unsaved changes|Thay đổi chưa lưu/ })).toBeHidden();
+    await expect(settingsDialog).not.toBeVisible();
     await expect(page.getByText('Now coaching weekend badminton clinics too.')).toBeVisible();
     // ProfileHeader now shows the newly-set region — no more legacy-city fallback.
     await expect(page.getByText('@jordanlee · Ho Chi Minh City')).toBeVisible();

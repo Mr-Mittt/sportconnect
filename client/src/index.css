@@ -176,3 +176,11 @@ body {
 .discover-open-slots-input {
   -moz-appearance: textfield;
 }
+
+/* Edge/IE draw their own "reveal password" (and clear) button inside password inputs, on focus. The app
+   offers its own show/hide toggle where one is wanted, so the native one only duplicates it (and shows
+   up inconsistently: first focus only, on fields that have no toggle). */
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}

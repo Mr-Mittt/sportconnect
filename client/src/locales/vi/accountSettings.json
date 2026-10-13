@@ -4,7 +4,8 @@
     "profile": "Hồ sơ",
     "contact": "Liên hệ",
     "personal": "Cá nhân",
-    "deactivate": "Vô hiệu hóa tài khoản"
+    "deactivate": "Vô hiệu hóa tài khoản",
+    "password": "Mật khẩu"
   },
   "field": {
     "firstName": "Tên",
@@ -21,6 +22,7 @@
   "legacyCountry": "Hiện đang đặt là \"{{country}}\" — chọn một quốc gia bên dưới để thay thế.",
   "save": "Lưu thay đổi",
   "saving": "Đang lưu…",
+  "saved": "Đã lưu cài đặt tài khoản của bạn.",
   "deactivate": {
     "description": "Hồ sơ và hoạt động của bạn sẽ bị ẩn và bạn sẽ bị đăng xuất khỏi mọi thiết bị. Bạn có thể khôi phục tài khoản bất cứ lúc nào bằng cách đăng nhập lại.",
     "action": "Vô hiệu hóa tài khoản"
@@ -39,5 +41,29 @@
     "discard": "Hủy thay đổi",
     "save": "Lưu thay đổi",
     "saving": "Đang lưu…"
+  },
+  "password": {
+    "action": "Đổi mật khẩu",
+    "success": "Mật khẩu của bạn đã được cập nhật."
+  },
+  "changePasswordDialog": {
+    "title": "Đổi mật khẩu của bạn",
+    "body": "Nhập mật khẩu hiện tại, sau đó chọn mật khẩu mới có ít nhất 8 ký tự.",
+    "currentLabel": "Mật khẩu hiện tại",
+    "newLabel": "Mật khẩu mới",
+    "confirmLabel": "Xác nhận mật khẩu mới",
+    "submit": "Đổi mật khẩu",
+    "submitting": "Đang đổi…",
+    "cancel": "Hủy",
+    "showCurrent": "Hiện mật khẩu hiện tại",
+    "hideCurrent": "Ẩn mật khẩu hiện tại",
+    "showNew": "Hiện mật khẩu mới",
+    "hideNew": "Ẩn mật khẩu mới",
+    "showConfirm": "Hiện mật khẩu xác nhận",
+    "hideConfirm": "Ẩn mật khẩu xác nhận",
+    "error": {
+      "tooShort": "Mật khẩu phải có ít nhất 8 ký tự.",
+      "mismatch": "Hai mật khẩu không khớp."
+    }
   }
 }

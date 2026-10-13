@@ -149,6 +149,23 @@ export const authHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(null, 'Account deactivated successfully'));
   }),
 
+  // ACCOUNT-3: PUT /api/users/me/password mirrors UserController.changePassword — @NotBlank current,
+  // @Size(min = 8) new (400 VALIDATION_FAILED with per-field errors), then 400 CURRENT_PASSWORD_INCORRECT.
+  http.put('/api/users/me/password', async ({ request }) => {
+    const body = (await request.json()) as { currentPassword?: string; newPassword?: string };
+    const fields: Record<string, string> = {};
+    if (!body.currentPassword?.trim()) fields.currentPassword = 'Current password is required';
+    if (!body.newPassword?.trim()) fields.newPassword = 'New password is required';
+    else if (body.newPassword.length < 8) fields.newPassword = 'Password must be at least 8 characters';
+    if (Object.keys(fields).length > 0) {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields }), { status: 400 });
+    }
+    if (body.currentPassword !== mockPassword) {
+      return HttpResponse.json(apiError('Current password is incorrect', 'CURRENT_PASSWORD_INCORRECT'), { status: 400 });
+    }
+    return HttpResponse.json(apiResponse(null, 'Password changed successfully'));
+  }),
+
   // Reads the real browser cookie jar (via the `cookies` resolver arg) — the
   // mock server sits above the cookie layer as a genuine HTTP endpoint, same
   // as production (MSW-1: no longer a Service Worker synthesizing this, a

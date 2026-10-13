@@ -230,6 +230,7 @@ e2e/
     auth-errors.spec.ts       # CLIENT-ERR-2
     password-reset.spec.ts    # AUTH-9
     auth-reactivate.spec.ts   # AUTH-10
+    account-change-password.spec.ts # ACCOUNT-3
     account-deactivate.spec.ts # ACCOUNT-4
     account-settings-unsaved.spec.ts # ACCOUNT-5
     user-errors.spec.ts       # CLIENT-ERR-3
@@ -1036,7 +1037,7 @@ Re-activating a deactivated account from the login page. The auth handler mirror
 | decline | Cancel closes the dialog, no `/auth/reactivate` request is made, the user stays on `/login` with the email kept. |
 | wrong password on re-activation | A 401 `INVALID_CREDENTIALS` from `/auth/reactivate` keeps the dialog open with "Invalid email or password." in its alert. |
 
-### `e2e/flows/account-settings-unsaved.spec.ts` (ACCOUNT-5, 3 `test()`s)
+### `e2e/flows/account-settings-unsaved.spec.ts` (ACCOUNT-5, 4 `test()`s)
 
 The unsaved-changes guard on Account Settings. Related docs: `client/docs/MVP/ACCOUNT-5_ACCOUNT_SETTINGS_UNSAVED_CHANGES_GUARD.md`.
 
@@ -1044,7 +1045,19 @@ The unsaved-changes guard on Account Settings. Related docs: `client/docs/MVP/AC
 |---|---|
 | closing without edits | Esc closes the modal and no "Unsaved changes" dialog appears (the seeded user has no stored language, so this also proves detection pre-fills do not count). |
 | Esc, keep editing, Discard | With a Bio edit, Esc opens the prompt; its Close keeps the modal and the edit; Discard closes the modal and no profile `PUT` was sent. |
-| Save from the prompt | Saves the edit (`PUT` body carries the new bio) and closes everything. |
+| Save from the prompt | Saves the edit (`PUT` body carries the new bio), shows the "saved" toast and closes everything. |
+| Save button (ACCOUNT-3) | Saves, shows the toast, keeps the modal open with the value and Save disabled again; Esc then closes without the prompt. |
+
+### `e2e/flows/account-change-password.spec.ts` (ACCOUNT-3, 4 `test()`s)
+
+Changing one's own password from Account Settings. The auth handler mirrors `UserController.changePassword`: `PUT /api/users/me/password` answers 200, 400 `VALIDATION_FAILED` (new password under 8 characters) or 400 `CURRENT_PASSWORD_INCORRECT`. Related docs: `client/docs/MVP/ACCOUNT-3_CHANGE_PASSWORD.md`.
+
+| Test | What it checks |
+|---|---|
+| right password | Account settings > Change password opens the dialog; the three fields post `{ currentPassword, newPassword }`; the dialog closes, a "Your password was updated." toast shows and the user stays on `/profile` with Account settings still open. |
+| wrong current password | The dialog stays open; "Your current password is incorrect." sits on the current-password field (alert + accessible description). |
+| client validation | A new password under 8 characters, then a mismatched confirm, each show their hint and send no request. |
+| Esc | Esc closes only the dialog; Account settings stays open. |
 
 ### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, 5 `test()`s)
 

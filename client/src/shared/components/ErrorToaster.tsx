@@ -9,11 +9,15 @@ const TOAST_STYLE = {
   '--error-bg': 'var(--color-surface-2)',
   '--error-text': 'var(--color-text-danger)',
   '--error-border': 'var(--color-border-strong)',
+  '--success-bg': 'var(--color-surface-2)',
+  '--success-text': 'var(--color-text-success)',
+  '--success-border': 'var(--color-border-strong)',
 } as CSSProperties;
 
 /**
  * CLIENT-ERR-1: the single toast host, mounted once in `RootLayout`. Toasts come from
- * `showErrorToast` (the global mutation-failure handler); sonner renders an `aria-live` region, so
+ * `showErrorToast` (the global mutation-failure handler) and, for the few success confirmations that
+ * have no other feedback (ACCOUNT-3: password changed, Account Settings saved), `toast.success`; sonner renders an `aria-live` region, so
  * screen readers announce them. Light theme only — the app has no dark mode.
  */
 export function ErrorToaster() {

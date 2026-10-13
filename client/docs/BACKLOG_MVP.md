@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-10-13 (AUTH-10, ACCOUNT-4, ACCOUNT-5 done)  
+**Last updated:** 2026-10-13 (AUTH-10, ACCOUNT-3, ACCOUNT-4, ACCOUNT-5 done)  
 
 ---
 
@@ -70,7 +70,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 |---|---|---|---|
 | 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
-| 17 | [ACCOUNT-3](MVP/ACCOUNT-3_CHANGE_PASSWORD.md) | Change-password section in Account Settings (`PUT /api/users/me/password`; no client UI exists today); inline `CURRENT_PASSWORD_INCORRECT` handling; found during CLIENT-ERR-3 | `TODO` |
 | 18 | [AUTH-11](MVP/AUTH-11_LOG_OUT_THIS_DEVICE_ONLY.md) | "Log out" signs out this device only once backend per-session logout ships, plus a "Log out everywhere" action (and a device list if A15 includes one), en/vi copy; **blocked on backend A15** | `TODO` |
 | 19 | [AUTH-12](MVP/AUTH-12_ACTIVE_SESSIONS_LIST.md) | Active sessions list with per-session sign-out, against backend A18 (split out of AUTH-11) | `TODO` |
 | 20 | [AUTH-13](MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md) | New `visual-regression` coverage (and frozen `design-reference-*` HTML for the three that lack one) for `/login`, `/register`, `/forgot-password`, `/reset-password` — no auth screen has any today; found at AUTH-9 pickup; baselines come from the `update-baselines` dispatch | `TODO` |
@@ -123,6 +122,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 28 | [ACCOUNT-3](MVP/ACCOUNT-3_CHANGE_PASSWORD.md) | Change password from Account Settings (2026-10-13) — a "Password" section in `AccountSettingsModal` opens a stacked `ChangePasswordDialog` (current / new / confirm, each with its own show-hide toggle; new password ≥ 8 and the confirm match are checked on the client); calls `PUT /api/users/me/password` via `useChangePassword`; a wrong current password shows the localized `CURRENT_PASSWORD_INCORRECT` line on that field, other failures as a general line; success closes the dialog with a "Your password was updated." toast and the session continues (the server revokes nothing — A15/A18); en/vi copy; MSW handler; `account-change-password.spec.ts` (4); no backend change (current-password validation already existed) | `DONE` |
 | 27 | [ACCOUNT-5](MVP/ACCOUNT-5_ACCOUNT_SETTINGS_UNSAVED_CHANGES_GUARD.md) | Unsaved-changes guard on Account Settings (2026-10-13) — closing the modal (close, Esc, outside click) with edits stacks a Keep editing / Discard / Save prompt via `useUnsavedChangesGuard`; "edited" is narrower than `isDirty` so detection pre-fills (no stored language/country) do not trigger it; deactivation no longer navigates itself so the route blocker cannot trap it; en/vi copy; `account-settings-unsaved.spec.ts` (3) | `DONE` |
 | 26 | [ACCOUNT-4](MVP/ACCOUNT-4_DEACTIVATE_ACCOUNT.md) | Deactivate account from Account Settings (2026-10-13) — a "Deactivate account" section in `AccountSettingsModal` opens a password-confirm dialog; calls backend **U22**'s `POST /api/users/me/deactivate`, signs out and lands on `/login` with a "log in again to re-activate" hint (carried by a small `accountNoticeStore`, since router state is overwritten by `ProtectedRoute`); a wrong password keeps the dialog open with the localized `CURRENT_PASSWORD_INCORRECT` line; en/vi copy; MSW handler; `account-deactivate.spec.ts` (4) | `DONE` |
 | 25 | [AUTH-10](MVP/AUTH-10_REACTIVATE_DEACTIVATED_ACCOUNT_ON_LOGIN.md) | Re-activate a deactivated account from the login page (2026-10-13) — a login answering `ACCOUNT_DEACTIVATED` opens a confirm dialog; Confirm calls `POST /api/auth/reactivate` with the credentials just typed (kept in `LoginPage` state only, dropped on close) and runs the normal login success path; Cancel/Esc sends nothing; a wrong password keeps the dialog open with the `INVALID_CREDENTIALS` line; `/auth/reactivate` added to `NO_RETRY_URLS`; en/vi copy; MSW handlers; `auth-reactivate.spec.ts` | `DONE` |
