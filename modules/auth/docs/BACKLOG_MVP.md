@@ -20,9 +20,11 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [A14](MVP/A14_NARROW_JWT_FILTER_CATCH_ALL.md) | Low priority: narrow `JwtAuthenticationFilter`'s catch-all so unexpected failures (DB, claim bugs) surface as a 5xx with an `errorCode` instead of a silent 401 that triggers client refresh churn; found during A11 | `TODO` |
-| 2 | [A15](MVP/A15_PER_SESSION_LOGOUT.md) | Per-session logout: a server-generated `sessionId` (not a MAC address, which browsers cannot read) carried in the access token and refresh row, so logging out on one device no longer signs out the others; deactivation, password reset and "log out everywhere" keep the per-user watermark; client **AUTH-11** filed; do after A12 | `TODO` |
+| 2 | [A15](MVP/A15_PER_SESSION_LOGOUT.md) | Per-session logout: a server-generated `sessionId` (not a MAC address, which browsers cannot read) carried in the access token and refresh row, so logging out on one device no longer signs out the others; deactivation, password reset and new `logout-all` keep a per-user watermark; **now also fixes A19** (refresh rotation stamped `revoked_at`, which fed that watermark, so a routine refresh rejected other devices' valid tokens), so the watermark gets a clean source and a migration; client **AUTH-11** filed; **on hold 2026-10-12** while a Keycloak integration is considered (design written, not approved; see the ticket) | `ON HOLD` |
 | 3 | [A16](MVP/A16_SERIALIZE_REFRESH_WITH_PLAIN_LOGOUT.md) | Low priority: a refresh racing a plain `logout` is not serialized by the U12 `users` row lock (only `deleteUser` takes it), so a refresh in flight can mint a live token pair just after logout; found during A12 | `TODO` |
 | 4 | [A17](MVP/A17_WIRE_VERIFICATION_AND_WELCOME_EMAILS.md) | Wire the verification email into `register` (after commit) and the welcome email into `verify-email`; neither is sent today, A13 only localises them; needs a decision on gating on verified email | `TODO` |
+| 5 | [A18](MVP/A18_SESSION_LIST_AND_REVOKE_ONE.md) | Active-session list and revoke-one (`GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`) with display-only `User-Agent`/IP; split out of A15; client **AUTH-12** | `TODO` |
+| 6 | [A20](MVP/A20_WEBSOCKET_AND_CHAT_ACCEPT_REVOKED_TOKENS.md) | Security gap, medium: the STOMP `CONNECT` interceptor (notification-impl) and the chat service verify signature and expiry only, so a token that REST rejects as revoked (logout, deactivation, password reset) still opens a socket or chat until it expires; found by the A15 census; do after A15 | `TODO` |
 
 ---
 
@@ -64,4 +66,5 @@ A5 (rate limiting) moved to V1 on 2026-10-08 — see Removed / Deferred.
 | Ticket | Decision |
 |---|---|
 | A1 · Apply Redis for refresh token storage | Moved to `modules/auth/docs/BACKLOG_V1.md` (2026-07-03) — deprioritized to V1 |
+| [A19](MVP/A19_REFRESH_ROTATION_POISONS_REVOCATION_WATERMARK.md) · Refresh rotation poisons the revocation watermark | Folded into **A15** (2026-10-11) — user decision; priority lowered to medium after a hand test showed the client's retry recovers (one wasted 401 + one extra refresh per affected device) |
 | A5 · Login/registration rate limiting | Moved to `modules/auth/docs/BACKLOG_V1.md` (2026-10-08) — user decision: not much user in MVP, need more user first |
