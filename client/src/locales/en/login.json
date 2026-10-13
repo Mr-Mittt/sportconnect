@@ -1,7 +1,8 @@
 {
   "tagline": "Your teams, matches, and crew — all in one place.",
   "notice": {
-    "passwordReset": "Password updated. Sign in with your new password."
+    "passwordReset": "Password updated. Sign in with your new password.",
+    "accountDeactivated": "Your account has been deactivated. Log in again any time to re-activate it."
   },
   "heading": "Welcome back",
   "subheading": "Log in to pick up where you left off.",
@@ -32,5 +33,12 @@
     },
     "newToSportHub": "New to SportHub?",
     "createAccount": "Create an account"
+  },
+  "reactivate": {
+    "title": "Re-activate your account?",
+    "body": "Your account has been deactivated. Do you want to re-activate it?",
+    "confirm": "Re-activate",
+    "confirming": "Re-activating…",
+    "cancel": "Cancel"
   }
 }

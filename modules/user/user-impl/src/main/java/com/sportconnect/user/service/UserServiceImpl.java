@@ -321,10 +321,35 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(UUID userId) {
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        deactivate(user);
+        log.info("Soft deleted user: {}", userId);
+    }
+
+    /**
+     * U22: the caller deactivates their own account. Same lock order as {@link #deleteUser} (users row first,
+     * refresh_tokens second); a deactivated caller gets the same not-found as {@link #changePassword}, and a wrong
+     * password leaves everything untouched.
+     */
+    @Override
+    @Transactional
+    public void deactivateOwnAccount(UUID userId, String currentPassword) {
+        User user = userRepository.findByIdForUpdate(userId)
+                .filter(User::getIsActive)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new BadRequestException("CURRENT_PASSWORD_INCORRECT", "Current password is incorrect", null);
+        }
+
+        deactivate(user);
+        log.info("User deactivated their own account: {}", userId);
+    }
+
+    /** Flips {@code isActive} off and revokes every session (U12); the caller already holds the row lock. */
+    private void deactivate(User user) {
         user.setIsActive(false);
         userRepository.save(user);
-        authService.logout(userId);
-        log.info("Soft deleted user: {}", userId);
+        authService.logout(user.getId());
     }
 
     @Override

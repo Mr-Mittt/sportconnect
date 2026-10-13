@@ -3,7 +3,8 @@
   "section": {
     "profile": "Hồ sơ",
     "contact": "Liên hệ",
-    "personal": "Cá nhân"
+    "personal": "Cá nhân",
+    "deactivate": "Vô hiệu hóa tài khoản"
   },
   "field": {
     "firstName": "Tên",
@@ -19,5 +20,24 @@
   },
   "legacyCountry": "Hiện đang đặt là \"{{country}}\" — chọn một quốc gia bên dưới để thay thế.",
   "save": "Lưu thay đổi",
-  "saving": "Đang lưu…"
+  "saving": "Đang lưu…",
+  "deactivate": {
+    "description": "Hồ sơ và hoạt động của bạn sẽ bị ẩn và bạn sẽ bị đăng xuất khỏi mọi thiết bị. Bạn có thể khôi phục tài khoản bất cứ lúc nào bằng cách đăng nhập lại.",
+    "action": "Vô hiệu hóa tài khoản"
+  },
+  "deactivateDialog": {
+    "title": "Vô hiệu hóa tài khoản của bạn?",
+    "body": "Bạn sẽ bị đăng xuất trên mọi thiết bị. Để quay lại, hãy đăng nhập lại và chọn kích hoạt lại tài khoản.",
+    "passwordLabel": "Xác nhận bằng mật khẩu của bạn",
+    "submit": "Vô hiệu hóa",
+    "submitting": "Đang vô hiệu hóa…",
+    "cancel": "Hủy"
+  },
+  "unsaved": {
+    "title": "Thay đổi chưa lưu",
+    "message": "Bạn có thay đổi chưa lưu trong cài đặt tài khoản. Hủy bỏ chúng, hay lưu trước khi đóng?",
+    "discard": "Hủy thay đổi",
+    "save": "Lưu thay đổi",
+    "saving": "Đang lưu…"
+  }
 }

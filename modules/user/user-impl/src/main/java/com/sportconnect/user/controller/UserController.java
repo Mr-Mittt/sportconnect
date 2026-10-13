@@ -2,6 +2,7 @@ package com.sportconnect.user.controller;
 
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.user.api.dto.ChangePasswordRequest;
+import com.sportconnect.user.api.dto.DeactivateAccountRequest;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserResponse;
@@ -21,6 +22,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -135,6 +137,22 @@ public class UserController {
             @Valid @RequestBody ChangePasswordRequest request) {
         userService.changePassword(UUID.fromString(callerIdStr), request.getCurrentPassword(), request.getNewPassword());
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
+    }
+
+    @Operation(summary = "Deactivate the caller's own account", description = "U22. Re-confirms the caller's password, soft-deletes the account (isActive=false) and revokes every session. The account can be brought back through POST /api/auth/reactivate (A9).")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account deactivated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or the password is incorrect (errorCode CURRENT_PASSWORD_INCORRECT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or already deactivated")
+    })
+    @PostMapping("/me/deactivate")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> deactivateOwnAccount(
+            @AuthenticationPrincipal String callerIdStr,
+            @Valid @RequestBody DeactivateAccountRequest request) {
+        userService.deactivateOwnAccount(UUID.fromString(callerIdStr), request.getCurrentPassword());
+        return ResponseEntity.ok(ApiResponse.success("Account deactivated successfully", null));
     }
 
     @Operation(summary = "Delete a user", description = "Admin-only. Soft delete (isActive=false).")

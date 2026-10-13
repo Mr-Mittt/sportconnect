@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/app/i18n';
 import { apiClient } from '@/app/apiClient';
@@ -47,7 +48,13 @@ beforeEach(() => {
 
 function renderWithProviders(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  // The unsaved-changes guard (ACCOUNT-5) uses `useBlocker`, which needs a data router.
+  const router = createMemoryRouter([{ path: '/', element: ui }]);
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
 }
 
 function user(overrides: Partial<UserResponse> = {}): UserResponse {
@@ -476,5 +483,150 @@ describe('AccountSettingsModal', () => {
       // Untouched keys fall back to the default namespace.
       expect(screen.getByLabelText('First name')).toBeInTheDocument();
     });
+  });
+});
+
+describe('AccountSettingsModal · deactivate account (ACCOUNT-4)', () => {
+  const baseProps = {
+    isOpen: true,
+    onClose: vi.fn(),
+    languageCode: 'en',
+    onSave: vi.fn(),
+    isSaving: false,
+    errorMessage: null,
+  };
+
+  it('has no deactivate section when no handler is given', () => {
+    renderWithProviders(<AccountSettingsModal {...baseProps} user={user()} />);
+    expect(screen.queryByRole('button', { name: 'Deactivate account' })).not.toBeInTheDocument();
+  });
+
+  it('shows the section and calls onDeactivate, without saving or submitting the form', async () => {
+    const onDeactivate = vi.fn();
+    const onSave = vi.fn();
+    renderWithProviders(
+      <AccountSettingsModal {...baseProps} onSave={onSave} user={user()} onDeactivate={onDeactivate} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Deactivate account' }));
+
+    expect(onDeactivate).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccountSettingsModal · unsaved-changes guard (ACCOUNT-5)', () => {
+  function setup(overrides: Partial<React.ComponentProps<typeof AccountSettingsModal>> = {}) {
+    const props = {
+      isOpen: true,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+      isSaving: false,
+      errorMessage: null,
+      languageCode: 'en',
+      user: user(),
+      ...overrides,
+    };
+    renderWithProviders(<AccountSettingsModal {...props} />);
+    return props;
+  }
+
+  async function editBio() {
+    await userEvent.type(screen.getByLabelText('Bio'), ' Edited');
+  }
+
+  it('closes straight away when nothing was edited', async () => {
+    const props = setup();
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+  });
+
+  it('asks first when closing with edits, and Close/Esc do not close the modal', async () => {
+    const props = setup();
+    await editBio();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Unsaved changes' })).toBeInTheDocument();
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('Esc with edits asks first', async () => {
+    const props = setup();
+    await editBio();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(await screen.findByRole('dialog', { name: 'Unsaved changes' })).toBeInTheDocument();
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('Discard closes the modal without saving', async () => {
+    const props = setup();
+    await editBio();
+    await userEvent.keyboard('{Escape}');
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
+
+    expect(props.onClose).toHaveBeenCalled();
+    expect(props.onSave).not.toHaveBeenCalled();
+  });
+
+  it('Save in the prompt runs the modal save with the edited payload', async () => {
+    const props = setup();
+    await editBio();
+    await userEvent.keyboard('{Escape}');
+
+    const prompt = await screen.findByRole('dialog', { name: 'Unsaved changes' });
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Save changes' }));
+
+    expect(props.onSave).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(props.onSave).mock.calls[0][0].profile).toEqual({ bio: 'Weekend baller. Edited' });
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('closing the prompt keeps the modal and the edits', async () => {
+    const props = setup();
+    await editBio();
+    await userEvent.keyboard('{Escape}');
+    const prompt = await screen.findByRole('dialog', { name: 'Unsaved changes' });
+
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument());
+    expect(props.onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Bio')).toHaveValue('Weekend baller. Edited');
+  });
+
+  it('does not count detection pre-fills (no stored language or country) as unsaved edits', async () => {
+    const props = setup({ languageCode: null, user: user({ countryId: null, regionId: null, regionName: null, country: null }) });
+    // Wait for the reference data so any detection pre-fill has landed.
+    await waitFor(() => expect(screen.getByLabelText('Language')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Unsaved changes' })).not.toBeInTheDocument();
+  });
+
+  it('counts a hand-picked language as an unsaved edit', async () => {
+    const props = setup({ languageCode: 'en' });
+    await waitFor(() => expect(screen.getByLabelText('Language')).toHaveValue('en'));
+
+    await userEvent.selectOptions(screen.getByLabelText('Language'), 'vi');
+    await userEvent.keyboard('{Escape}');
+
+    expect(await screen.findByRole('dialog', { name: 'Unsaved changes' })).toBeInTheDocument();
+    expect(props.onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows the save error inside the prompt', async () => {
+    setup({ errorMessage: 'Something went wrong on our side. Try again.' });
+    await editBio();
+    await userEvent.keyboard('{Escape}');
+
+    const prompt = await screen.findByRole('dialog', { name: 'Unsaved changes' });
+    expect(within(prompt).getByRole('alert')).toHaveTextContent('Something went wrong on our side. Try again.');
   });
 });

@@ -105,6 +105,16 @@ public interface UserService {
     void deleteUser(UUID userId);
 
     /**
+     * Self-service deactivation (U22). Takes the same exclusive row lock as {@link #deleteUser}, requires the account
+     * to still be active, verifies {@code currentPassword}, then deactivates and revokes every session exactly like
+     * {@code deleteUser}. The account stays recoverable through the A9 re-activation flow.
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if the account does not exist or is already deactivated
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code CURRENT_PASSWORD_INCORRECT} on a wrong password (nothing changes)
+     */
+    void deactivateOwnAccount(UUID userId, String currentPassword);
+
+    /**
      * Check if user exists by email
      */
     boolean existsByEmail(String email);

@@ -3,7 +3,8 @@
   "section": {
     "profile": "Profile",
     "contact": "Contact",
-    "personal": "Personal"
+    "personal": "Personal",
+    "deactivate": "Deactivate account"
   },
   "field": {
     "firstName": "First name",
@@ -19,5 +20,24 @@
   },
   "legacyCountry": "Currently set to \"{{country}}\" — pick a country below to replace it.",
   "save": "Save changes",
-  "saving": "Saving…"
+  "saving": "Saving…",
+  "deactivate": {
+    "description": "Your profile and activity are hidden and you are signed out everywhere. You can bring the account back any time by logging in again.",
+    "action": "Deactivate account"
+  },
+  "deactivateDialog": {
+    "title": "Deactivate your account?",
+    "body": "You will be signed out on every device. To come back, log in again and choose to re-activate the account.",
+    "passwordLabel": "Confirm with your password",
+    "submit": "Deactivate",
+    "submitting": "Deactivating…",
+    "cancel": "Cancel"
+  },
+  "unsaved": {
+    "title": "Unsaved changes",
+    "message": "You have unsaved changes to your account settings. Discard them, or save before closing?",
+    "discard": "Discard changes",
+    "save": "Save changes",
+    "saving": "Saving…"
+  }
 }

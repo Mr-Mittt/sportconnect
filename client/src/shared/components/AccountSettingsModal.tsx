@@ -17,6 +17,7 @@ import {
   GeoLocaleRegionField,
 } from '@/shared/components/GeoLocaleFields';
 import { useGeoLocaleFieldsData } from '@/shared/hooks/useGeoLocaleFieldsData';
+import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { digitsOnlyInputProps, phoneNumberInputProps } from '@/shared/lib/inputGuards';
 import { cn } from '@/shared/lib/utils';
@@ -26,6 +27,7 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
+import { AccountSettingsUnsavedChangesDialog } from './AccountSettingsUnsavedChangesDialog';
 
 /** What `AccountSettingsModal` hands its parent on Save — a profile-field payload (may be empty) plus
  * an optional language code, present only when it actually changed from the seeded preference.
@@ -48,6 +50,9 @@ interface AccountSettingsModalProps {
   /** CLIENT-ERR-8: the reference code the last save was rejected with (`REGION_UNKNOWN` and friends), shown
    * in the geo hint line instead of `errorMessage`. */
   geoErrorCode?: string | null;
+  /** ACCOUNT-4: opens the deactivate-account confirmation (owned by `AppShell`). When absent the
+   * "Deactivate account" section is not rendered. */
+  onDeactivate?: () => void;
   /** CLIENT-I18N-6 convention: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -77,6 +82,15 @@ interface AccountSettingsModalProps {
  * not a profile field — `onSave` reports it separately from `profile`, only when it actually
  * changed, so the parent can save it via its own `PUT /users/me/preferences` call in the same Save
  * action without conflating the two endpoints' error states.
+ *
+ * **Unsaved-changes guard (ACCOUNT-5):** every way of closing the modal (header close, Esc, outside
+ * click) goes through `useUnsavedChangesGuard(isDirty)`: with edits pending it stacks
+ * `AccountSettingsUnsavedChangesDialog` (Keep editing / Discard / Save) instead of closing. The
+ * hook also blocks an in-app route change (browser Back) and adds the native `beforeunload` prompt.
+ * It needs the app's data router (`useBlocker`); the parent unmounts the modal on a successful save
+ * or discard. "Unsaved" here means *the user edited something* (`hasUserEdits`), deliberately narrower
+ * than `isDirty` (what enables Save): a user with no stored language or country gets the UI locale and
+ * the silent geo-detection pre-filled, which makes `isDirty` true on open without a single edit. The deactivate flow signs out by unmounting this modal first, so it never trips the guard.
  */
 export function AccountSettingsModal({
   isOpen,
@@ -87,6 +101,7 @@ export function AccountSettingsModal({
   isSaving,
   errorMessage,
   geoErrorCode = null,
+  onDeactivate,
   i18nOverridePrefix,
 }: AccountSettingsModalProps) {
   const t = useOverridableText('accountSettings', i18nOverridePrefix);
@@ -102,6 +117,15 @@ export function AccountSettingsModal({
   useEffect(() => {
     applyServerErrorCode(geoErrorCode);
   }, [geoErrorCode, applyServerErrorCode]);
+
+  // Geo/language fields are pre-filled by detection, so "the user touched one" is tracked at the handlers.
+  const [hasGeoEdit, setHasGeoEdit] = useState(false);
+  const markGeoEdit =
+    <Args extends unknown[]>(handler: (...args: Args) => void) =>
+    (...args: Args) => {
+      setHasGeoEdit(true);
+      handler(...args);
+    };
 
   const set = <K extends keyof ProfileEditDraft>(key: K, value: ProfileEditDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -120,210 +144,241 @@ export function AccountSettingsModal({
       ? geoLocale.languageCode
       : undefined;
   const isDirty = Object.keys(profilePayload).length > 0 || changedLanguageCode !== undefined;
+  const hasUserEdits = Object.keys(textPayload).length > 0 || hasGeoEdit;
+  const leaveGuard = useUnsavedChangesGuard(hasUserEdits);
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
-        <DialogHeader title={t('title')} className="border-hairline-b border-border px-4 py-3" />
-        <form
-          className="flex min-h-0 flex-1 flex-col"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSave({ profile: profilePayload, languageCode: changedLanguageCode });
-          }}
-        >
-          <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
-            <h4 className="text-2sm font-semibold text-text-secondary">{t('section.profile')}</h4>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label htmlFor="account-settings-first-name">{t('field.firstName')}</Label>
-                <Input
-                  id="account-settings-first-name"
-                  value={draft.firstName}
-                  onChange={(event) => set('firstName', event.target.value)}
-                />
-              </div>
-              <div className="flex-1">
-                <Label htmlFor="account-settings-last-name">{t('field.lastName')}</Label>
-                <Input
-                  id="account-settings-last-name"
-                  value={draft.lastName}
-                  onChange={(event) => set('lastName', event.target.value)}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="account-settings-username">{t('field.username')}</Label>
-              <Input
-                id="account-settings-username"
-                value={draft.username}
-                onChange={(event) => set('username', event.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="account-settings-bio">{t('field.bio')}</Label>
-              <Textarea
-                id="account-settings-bio"
-                value={draft.bio}
-                maxLength={MAX_BIO_LENGTH}
-                onChange={(event) => set('bio', event.target.value.slice(0, MAX_BIO_LENGTH))}
-              />
-              <p className="mt-1 text-right text-2xs text-text-muted">
-                {draft.bio.length}/{MAX_BIO_LENGTH}
-              </p>
-            </div>
-
-            {/* CLIENT-REF-3: Country + Region replace the old free-text City/Country row — same
-                icon-button-beside-select composition RegisterForm uses (GeoLocaleCountrySelect has
-                no Label of its own, see that component's doc comment). Legacy-unmatched-text edge
-                case: user.countryId === null but user.country holds old free text — shown read-only
-                above the (empty) select until a real country is picked. */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label htmlFor="geo-locale-country">{tCommon('geoLocaleFields.country')}</Label>
-                {user.countryId === null && user.country !== null && (
-                  <p className="mb-1 text-2xs text-text-muted">{t('legacyCountry', { country: user.country })}</p>
-                )}
-                <div className="flex items-center gap-2">
-                  <GeoLocaleLocationButton
-                    isGeolocationSupported={geoLocale.isGeolocationSupported}
-                    isRequestingLocation={geoLocale.isRequestingLocation}
-                    onUseMyLocation={geoLocale.onUseMyLocation}
-                    className="shrink-0"
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && leaveGuard.guard(onClose)}>
+        <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
+          <DialogHeader title={t('title')} className="border-hairline-b border-border px-4 py-3" />
+          <form
+            className="flex min-h-0 flex-1 flex-col"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSave({ profile: profilePayload, languageCode: changedLanguageCode });
+            }}
+          >
+            <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-4 py-3.5">
+              <h4 className="text-2sm font-semibold text-text-secondary">{t('section.profile')}</h4>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-first-name">{t('field.firstName')}</Label>
+                  <Input
+                    id="account-settings-first-name"
+                    value={draft.firstName}
+                    onChange={(event) => set('firstName', event.target.value)}
                   />
-                  <div className="min-w-0 flex-1">
-                    <GeoLocaleCountrySelect
-                      countries={geoLocale.countries}
-                      isReferenceError={geoLocale.isReferenceError}
-                      countryId={geoLocale.countryId}
-                      onCountryChange={geoLocale.onCountryChange}
-                    />
-                  </div>
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-last-name">{t('field.lastName')}</Label>
+                  <Input
+                    id="account-settings-last-name"
+                    value={draft.lastName}
+                    onChange={(event) => set('lastName', event.target.value)}
+                  />
                 </div>
               </div>
-              <div className="flex-1">
-                <GeoLocaleRegionField
-                  regions={geoLocale.regions}
-                  countryId={geoLocale.countryId}
-                  isReferenceError={geoLocale.isReferenceError}
-                  isRegionsError={geoLocale.isRegionsError}
-                  regionId={geoLocale.regionId}
-                  onRegionChange={geoLocale.onRegionChange}
+              <div>
+                <Label htmlFor="account-settings-username">{t('field.username')}</Label>
+                <Input
+                  id="account-settings-username"
+                  value={draft.username}
+                  onChange={(event) => set('username', event.target.value)}
                 />
               </div>
-            </div>
-            <GeoLocaleLocationHint geoHint={geoLocale.geoHint} serverGeoCode={geoLocale.serverGeoCode} />
-            <GeoLocaleReferenceError isReferenceError={geoLocale.isReferenceError} />
+              <div>
+                <Label htmlFor="account-settings-bio">{t('field.bio')}</Label>
+                <Textarea
+                  id="account-settings-bio"
+                  value={draft.bio}
+                  maxLength={MAX_BIO_LENGTH}
+                  onChange={(event) => set('bio', event.target.value.slice(0, MAX_BIO_LENGTH))}
+                />
+                <p className="mt-1 text-right text-2xs text-text-muted">
+                  {draft.bio.length}/{MAX_BIO_LENGTH}
+                </p>
+              </div>
 
-            <h4 className="mt-1 text-2sm font-semibold text-text-secondary">{t('section.contact')}</h4>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label htmlFor="account-settings-phone-number">{t('field.phoneNumber')}</Label>
-                <Input
-                  id="account-settings-phone-number"
-                  value={draft.phoneNumber}
-                  maxLength={20}
-                  type="tel"
-                  {...phoneNumberInputProps}
-                  onChange={(event) => set('phoneNumber', event.target.value)}
-                />
+              {/* CLIENT-REF-3: Country + Region replace the old free-text City/Country row — same
+                  icon-button-beside-select composition RegisterForm uses (GeoLocaleCountrySelect has
+                  no Label of its own, see that component's doc comment). Legacy-unmatched-text edge
+                  case: user.countryId === null but user.country holds old free text — shown read-only
+                  above the (empty) select until a real country is picked. */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Label htmlFor="geo-locale-country">{tCommon('geoLocaleFields.country')}</Label>
+                  {user.countryId === null && user.country !== null && (
+                    <p className="mb-1 text-2xs text-text-muted">{t('legacyCountry', { country: user.country })}</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <GeoLocaleLocationButton
+                      isGeolocationSupported={geoLocale.isGeolocationSupported}
+                      isRequestingLocation={geoLocale.isRequestingLocation}
+                      onUseMyLocation={markGeoEdit(geoLocale.onUseMyLocation)}
+                      className="shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <GeoLocaleCountrySelect
+                        countries={geoLocale.countries}
+                        isReferenceError={geoLocale.isReferenceError}
+                        countryId={geoLocale.countryId}
+                        onCountryChange={markGeoEdit(geoLocale.onCountryChange)}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <GeoLocaleRegionField
+                    regions={geoLocale.regions}
+                    countryId={geoLocale.countryId}
+                    isReferenceError={geoLocale.isReferenceError}
+                    isRegionsError={geoLocale.isRegionsError}
+                    regionId={geoLocale.regionId}
+                    onRegionChange={markGeoEdit(geoLocale.onRegionChange)}
+                  />
+                </div>
               </div>
-              {/* CLIENT-REF-3: Language pairs with Phone number, same pairing RegisterForm uses. */}
-              <div className="flex-1">
-                <GeoLocaleLanguageField
-                  languages={geoLocale.languages}
-                  isReferenceError={geoLocale.isReferenceError}
-                  languageCode={geoLocale.languageCode}
-                  onLanguageChange={geoLocale.onLanguageChange}
-                />
+              <GeoLocaleLocationHint geoHint={geoLocale.geoHint} serverGeoCode={geoLocale.serverGeoCode} />
+              <GeoLocaleReferenceError isReferenceError={geoLocale.isReferenceError} />
+
+              <h4 className="mt-1 text-2sm font-semibold text-text-secondary">{t('section.contact')}</h4>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-phone-number">{t('field.phoneNumber')}</Label>
+                  <Input
+                    id="account-settings-phone-number"
+                    value={draft.phoneNumber}
+                    maxLength={20}
+                    type="tel"
+                    {...phoneNumberInputProps}
+                    onChange={(event) => set('phoneNumber', event.target.value)}
+                  />
+                </div>
+                {/* CLIENT-REF-3: Language pairs with Phone number, same pairing RegisterForm uses. */}
+                <div className="flex-1">
+                  <GeoLocaleLanguageField
+                    languages={geoLocale.languages}
+                    isReferenceError={geoLocale.isReferenceError}
+                    languageCode={geoLocale.languageCode}
+                    onLanguageChange={markGeoEdit(geoLocale.onLanguageChange)}
+                  />
+                </div>
               </div>
+
+              <h4 className="mt-1 text-2sm font-semibold text-text-secondary">{t('section.personal')}</h4>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-date-of-birth">{t('field.dateOfBirth')}</Label>
+                  <Input
+                    id="account-settings-date-of-birth"
+                    type="date"
+                    value={draft.dateOfBirth}
+                    onChange={(event) => set('dateOfBirth', event.target.value)}
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-gender">{t('field.gender')}</Label>
+                  <Select
+                    id="account-settings-gender"
+                    value={draft.gender}
+                    onChange={(event) => set('gender', event.target.value)}
+                  >
+                    <option value="">{tEnums('gender.unspecified')}</option>
+                    {GENDERS.map((gender) => (
+                      <option key={gender} value={gender}>
+                        {tEnums(`gender.${gender}`)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-height">{t('field.heightCm')}</Label>
+                  <Input
+                    id="account-settings-height"
+                    type="number"
+                    {...digitsOnlyInputProps}
+                    min={50}
+                    max={300}
+                    value={draft.heightCm}
+                    onChange={(event) => set('heightCm', event.target.value)}
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-weight">{t('field.weightKg')}</Label>
+                  <Input
+                    id="account-settings-weight"
+                    type="number"
+                    {...digitsOnlyInputProps}
+                    min={20}
+                    max={300}
+                    value={draft.weightKg}
+                    onChange={(event) => set('weightKg', event.target.value)}
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="account-settings-shoe-size">{t('field.shoeSizeMm')}</Label>
+                  <Input
+                    id="account-settings-shoe-size"
+                    type="number"
+                    {...digitsOnlyInputProps}
+                    min={10}
+                    max={500}
+                    value={draft.shoeSizeMm}
+                    onChange={(event) => set('shoeSizeMm', event.target.value)}
+                  />
+                </div>
+              </div>
+
+              {errorMessage !== null && (
+                <p role="alert" className="text-2sm text-text-danger">
+                  {errorMessage}
+                </p>
+              )}
+
+              {onDeactivate && (
+                <section className="mt-1 border-t border-border pt-3.5">
+                  <h4 className="text-2sm font-semibold text-text-danger">{t('section.deactivate')}</h4>
+                  <p className="mt-1 mb-2 text-2sm text-text-secondary">{t('deactivate.description')}</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onDeactivate}
+                    className="border-text-danger text-text-danger hover:bg-bg-accent"
+                  >
+                    {t('deactivate.action')}
+                  </Button>
+                </section>
+              )}
             </div>
 
-            <h4 className="mt-1 text-2sm font-semibold text-text-secondary">{t('section.personal')}</h4>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label htmlFor="account-settings-date-of-birth">{t('field.dateOfBirth')}</Label>
-                <Input
-                  id="account-settings-date-of-birth"
-                  type="date"
-                  value={draft.dateOfBirth}
-                  onChange={(event) => set('dateOfBirth', event.target.value)}
-                />
-              </div>
-              <div className="flex-1">
-                <Label htmlFor="account-settings-gender">{t('field.gender')}</Label>
-                <Select
-                  id="account-settings-gender"
-                  value={draft.gender}
-                  onChange={(event) => set('gender', event.target.value)}
-                >
-                  <option value="">{tEnums('gender.unspecified')}</option>
-                  {GENDERS.map((gender) => (
-                    <option key={gender} value={gender}>
-                      {tEnums(`gender.${gender}`)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
+            <div className="border-hairline-t flex justify-end border-border px-4 py-3">
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!isDirty || isSaving}
+                className={cn('cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
+              >
+                {isSaving ? t('saving') : t('save')}
+              </Button>
             </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label htmlFor="account-settings-height">{t('field.heightCm')}</Label>
-                <Input
-                  id="account-settings-height"
-                  type="number"
-                  {...digitsOnlyInputProps}
-                  min={50}
-                  max={300}
-                  value={draft.heightCm}
-                  onChange={(event) => set('heightCm', event.target.value)}
-                />
-              </div>
-              <div className="flex-1">
-                <Label htmlFor="account-settings-weight">{t('field.weightKg')}</Label>
-                <Input
-                  id="account-settings-weight"
-                  type="number"
-                  {...digitsOnlyInputProps}
-                  min={20}
-                  max={300}
-                  value={draft.weightKg}
-                  onChange={(event) => set('weightKg', event.target.value)}
-                />
-              </div>
-              <div className="flex-1">
-                <Label htmlFor="account-settings-shoe-size">{t('field.shoeSizeMm')}</Label>
-                <Input
-                  id="account-settings-shoe-size"
-                  type="number"
-                  {...digitsOnlyInputProps}
-                  min={10}
-                  max={500}
-                  value={draft.shoeSizeMm}
-                  onChange={(event) => set('shoeSizeMm', event.target.value)}
-                />
-              </div>
-            </div>
-
-            {errorMessage !== null && (
-              <p role="alert" className="text-2sm text-text-danger">
-                {errorMessage}
-              </p>
-            )}
-          </div>
-
-          <div className="border-hairline-t flex justify-end border-border px-4 py-3">
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={!isDirty || isSaving}
-              className={cn('cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
-            >
-              {isSaving ? t('saving') : t('save')}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <AccountSettingsUnsavedChangesDialog
+        isOpen={leaveGuard.isLeaveDialogOpen}
+        onCancel={leaveGuard.cancelLeave}
+        onDiscard={() => {
+          leaveGuard.proceed();
+          onClose();
+        }}
+        onSave={() => onSave({ profile: profilePayload, languageCode: changedLanguageCode })}
+        isSaving={isSaving}
+        saveErrorMessage={errorMessage}
+      />
+    </>
   );
 }

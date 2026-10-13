@@ -1,5 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState, type ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { apiClient } from '@/app/apiClient';
 import type { CountryResponse, LanguageResponse, RegionResponse } from '@/shared/types/reference';
 import type { UserResponse } from '@/features/profile/types';
@@ -32,6 +34,12 @@ function mockGet(url: string): { data: unknown } {
 apiClient.get = (async (url: string) => mockGet(url)) as typeof apiClient.get;
 apiClient.post = (async () =>
   apiResponse({ language: null, country: null, region: null, source: null })) as typeof apiClient.post;
+
+/** The modal's unsaved-changes guard (ACCOUNT-5) uses `useBlocker`, which needs a data router. */
+function WithDataRouter({ children }: { children: ReactNode }) {
+  const [router] = useState(() => createMemoryRouter([{ path: '/', element: children }]));
+  return <RouterProvider router={router} />;
+}
 
 const baseUser: UserResponse = {
   id: 'user-1',
@@ -68,7 +76,9 @@ const meta = {
   decorators: [
     (Story) => (
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <Story />
+        <WithDataRouter>
+          <Story />
+        </WithDataRouter>
       </QueryClientProvider>
     ),
   ],

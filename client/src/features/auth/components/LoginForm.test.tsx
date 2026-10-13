@@ -145,3 +145,23 @@ describe('LoginForm', () => {
     });
   });
 });
+
+describe('LoginForm · account-deactivated notice (ACCOUNT-4)', () => {
+  it('shows the re-activate hint only when asked', () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <LoginForm onSubmit={vi.fn()} isPending={false} errorMessage={null} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter>
+        <LoginForm onSubmit={vi.fn()} isPending={false} errorMessage={null} showDeactivatedNotice />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Your account has been deactivated. Log in again any time to re-activate it.',
+    );
+  });
+});
