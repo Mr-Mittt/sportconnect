@@ -55,7 +55,7 @@ class UserServiceImplSpec extends Specification {
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository)
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository, Mock(UserAccessStateCache))
 
     def "getUserById should return user when found and active"() {
         given:

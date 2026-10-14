@@ -2,11 +2,13 @@ package com.sportconnect.auth.service;
 
 import com.sportconnect.auth.api.service.JwtTokenService;
 import com.sportconnect.auth.config.JwtProperties;
-import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
@@ -21,12 +23,23 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * Two halves that no longer match (A25):
+ * <ul>
+ *   <li><b>Reading</b> a token ({@code validateToken}, {@code getUserIdFromToken}, ...) verifies a <em>Keycloak</em>
+ *       access token through the {@link JwtDecoder} (RS256, JWKS, issuer, audience). {@code StompAuthChannelInterceptor}
+ *       reads tokens through this interface, so the WebSocket handshake accepts exactly what REST accepts.</li>
+ *   <li><b>Minting</b> ({@code generate*}) is the legacy HS256 token the old login still returns. Nothing accepts it
+ *       any more; it stays only until A26 (the Keycloak callback) replaces login and A28 deletes it.</li>
+ * </ul>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class JwtTokenServiceImpl implements JwtTokenService {
 
     private final JwtProperties jwtProperties;
+    private final JwtDecoder jwtDecoder;
 
     @Override
     public String generateAccessToken(Object userObj) {
@@ -43,13 +56,10 @@ public class JwtTokenServiceImpl implements JwtTokenService {
     @Override
     public boolean validateToken(String token) {
         try {
-            Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token);
+            jwtDecoder.decode(token);
             return true;
-        } catch (Exception e) {
-            log.error("Invalid JWT token: {}", e.getMessage());
+        } catch (JwtException e) {
+            log.debug("Invalid JWT token: {}", e.getMessage());
             return false;
         }
     }
@@ -57,41 +67,34 @@ public class JwtTokenServiceImpl implements JwtTokenService {
     @Override
     public boolean isTokenExpired(String token) {
         try {
-            Claims claims = extractAllClaims(token);
-            return claims.getExpiration().before(new Date());
-        } catch (Exception e) {
+            Instant expiresAt = jwtDecoder.decode(token).getExpiresAt();
+            return expiresAt == null || !expiresAt.isAfter(Instant.now());
+        } catch (JwtException e) {
             return true;
         }
     }
 
     @Override
     public String getUserIdFromToken(String token) {
-        Claims claims = extractAllClaims(token);
-        return claims.getSubject();
+        return jwtDecoder.decode(token).getSubject();
     }
 
+    /** The {@code email} claim, which Keycloak omits for an account that has no email (U23). */
     @Override
     public String getEmailFromToken(String token) {
-        Claims claims = extractAllClaims(token);
-        return claims.get("email", String.class);
+        return jwtDecoder.decode(token).getClaimAsString("email");
     }
 
     @Override
     public Instant getIssuedAtFromToken(String token) {
-        Claims claims = extractAllClaims(token);
-        return claims.getIssuedAt().toInstant();
+        Jwt jwt = jwtDecoder.decode(token);
+        return jwt.getIssuedAt();
     }
 
+    /** Always empty: roles live in our database ({@code UserService.getAccessState}), never in the token. */
     @Override
     public List<String> getAuthoritiesFromToken(String token) {
-        Claims claims = extractAllClaims(token);
-        List<?> roles = claims.get("roles", List.class);
-        if (roles == null) {
-            return Collections.emptyList();
-        }
-        return roles.stream()
-                .map(Object::toString)
-                .collect(Collectors.toList());
+        return Collections.emptyList();
     }
 
     @Override
@@ -124,14 +127,6 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 .compact();
     }
 
-    private Claims extractAllClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-    }
-
     private SecretKey getSigningKey() {
         byte[] keyBytes = jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
@@ -142,7 +137,7 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         if (userObj instanceof Map) {
             return (Map<String, Object>) userObj;
         }
-        
+
         // If it's a User entity, extract fields via reflection or casting
         Map<String, Object> userData = new HashMap<>();
         try {
@@ -150,7 +145,7 @@ public class JwtTokenServiceImpl implements JwtTokenService {
             userData.put("id", userClass.getMethod("getId").invoke(userObj));
             userData.put("email", userClass.getMethod("getEmail").invoke(userObj));
             userData.put("username", userClass.getMethod("getUsername").invoke(userObj));
-            
+
             Object roles = userClass.getMethod("getRoles").invoke(userObj);
             if (roles instanceof Collection) {
                 List<String> roleNames = ((Collection<?>) roles).stream()
@@ -170,7 +165,7 @@ public class JwtTokenServiceImpl implements JwtTokenService {
             log.error("Error extracting user data: {}", e.getMessage());
             throw new RuntimeException("Failed to extract user data for token generation");
         }
-        
+
         return userData;
     }
 }

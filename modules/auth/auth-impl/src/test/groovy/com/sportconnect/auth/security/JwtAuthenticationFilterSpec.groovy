@@ -1,201 +1,160 @@
 package com.sportconnect.auth.security
 
-import com.sportconnect.auth.api.service.JwtTokenService
-import com.sportconnect.auth.service.TokenRevocationChecker
+import com.sportconnect.user.api.dto.UserAccessState
+import com.sportconnect.user.api.service.UserService
+import org.springframework.http.HttpStatus
 import org.springframework.mock.web.MockFilterChain
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.security.oauth2.jwt.BadJwtException
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.oauth2.jwt.JwtException
 import spock.lang.Specification
 import spock.lang.Subject
 
 import java.time.Instant
 
+/** A25: the filter turns a verified Keycloak token plus the cached account state into an authentication. */
 class JwtAuthenticationFilterSpec extends Specification {
 
-    JwtTokenService jwtTokenService
-    TokenRevocationChecker tokenRevocationChecker
+    JwtDecoder jwtDecoder = Mock()
+    UserService userService = Mock()
 
     @Subject
-    JwtAuthenticationFilter jwtAuthenticationFilter
+    JwtAuthenticationFilter filter = new JwtAuthenticationFilter(jwtDecoder, userService)
+
+    MockHttpServletRequest request = new MockHttpServletRequest()
+    MockHttpServletResponse response = new MockHttpServletResponse()
+    MockFilterChain chain = new MockFilterChain()
 
     def setup() {
-        jwtTokenService = Mock(JwtTokenService)
-        tokenRevocationChecker = Mock(TokenRevocationChecker)
-        jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenService, tokenRevocationChecker)
         SecurityContextHolder.clearContext()
+        request.addHeader("Authorization", "Bearer some.token")
     }
 
     def cleanup() {
         SecurityContextHolder.clearContext()
     }
 
-    def "should set authentication when valid JWT token is provided"() {
-        given: "a valid JWT token"
-        def token = "valid.jwt.token"
-        def userId = UUID.randomUUID().toString()
-        def email = "test@example.com"
-        def roles = ["USER"]
-        
-        and: "a request with Authorization header"
-        def request = new MockHttpServletRequest()
-        request.addHeader("Authorization", "Bearer " + token)
-        def response = new MockHttpServletResponse()
-        def filterChain = new MockFilterChain()
-        
-        and: "jwt service validates and extracts data"
-        jwtTokenService.validateToken(token) >> true
-        jwtTokenService.getUserIdFromToken(token) >> userId
-        jwtTokenService.getIssuedAtFromToken(token) >> Instant.now()
-        jwtTokenService.getEmailFromToken(token) >> email
-        jwtTokenService.getAuthoritiesFromToken(token) >> roles
-
-        and: "the token has not been revoked"
-        tokenRevocationChecker.isRevoked(_, _) >> false
-
-        when: "filter processes request"
-        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain)
-
-        then: "authentication should be set in security context"
-        def authentication = SecurityContextHolder.getContext().getAuthentication()
-        authentication != null
-        // Principal is the userId, not the email — SecurityUtils.extractUserId() across the app
-        // (GroupController, PostController, AuthController's own logout, etc.) parses the
-        // principal as a UUID; this assertion was stale from before that convention landed.
-        authentication.principal == userId
-        authentication.authorities.size() == 1
-        authentication.authorities[0].authority == "ROLE_USER"
+    private static Jwt jwt(String sub) {
+        Jwt.withTokenValue("t").header("alg", "RS256").subject(sub)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300)).build()
     }
 
-    // U12
-    def "should not set authentication when token is revoked"() {
-        given: "a valid, but revoked, JWT token"
-        def token = "valid.jwt.token"
-        def userId = UUID.randomUUID().toString()
+    def "an active user is authenticated with the roles from the database, principal = sub"() {
+        given:
+        def id = UUID.randomUUID()
 
-        and: "a request with Authorization header"
-        def request = new MockHttpServletRequest()
-        request.addHeader("Authorization", "Bearer " + token)
-        def response = new MockHttpServletResponse()
-        def filterChain = new MockFilterChain()
+        when:
+        filter.doFilterInternal(request, response, chain)
 
-        and: "jwt service validates the token, but it was issued before the user's revocation watermark"
-        jwtTokenService.validateToken(token) >> true
-        jwtTokenService.getUserIdFromToken(token) >> userId
-        jwtTokenService.getIssuedAtFromToken(token) >> Instant.now()
-        tokenRevocationChecker.isRevoked(_, _) >> true
-
-        when: "filter processes request"
-        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain)
-
-        then: "authentication should not be set"
-        SecurityContextHolder.getContext().getAuthentication() == null
-
-        and: "the authorities/email claims are never even read for a revoked token"
-        0 * jwtTokenService.getAuthoritiesFromToken(_)
+        then:
+        1 * jwtDecoder.decode("some.token") >> jwt(id.toString())
+        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(true, ["USER", "ADMIN"]))
+        def auth = SecurityContextHolder.context.authentication
+        auth.principal == id.toString()
+        auth.authorities*.authority as Set == ["ROLE_USER", "ROLE_ADMIN"] as Set
+        chain.request != null
     }
 
-    def "should not set authentication when token is invalid"() {
-        given: "an invalid JWT token"
-        def token = "invalid.jwt.token"
-        
-        and: "a request with Authorization header"
-        def request = new MockHttpServletRequest()
-        request.addHeader("Authorization", "Bearer " + token)
-        def response = new MockHttpServletResponse()
-        def filterChain = new MockFilterChain()
-        
-        and: "jwt service rejects token"
-        jwtTokenService.validateToken(token) >> false
+    def "a deactivated user stays anonymous"() {
+        given:
+        def id = UUID.randomUUID()
 
-        when: "filter processes request"
-        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain)
+        when:
+        filter.doFilterInternal(request, response, chain)
 
-        then: "authentication should not be set"
-        SecurityContextHolder.getContext().getAuthentication() == null
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(id.toString())
+        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(false, ["USER"]))
+        SecurityContextHolder.context.authentication == null
+        chain.request != null
+        request.getAttribute(JwtAuthenticationFilter.FAILURE_ATTRIBUTE) == null
     }
 
-    def "should not set authentication when no Authorization header"() {
-        given: "a request without Authorization header"
-        def request = new MockHttpServletRequest()
-        def response = new MockHttpServletResponse()
-        def filterChain = new MockFilterChain()
+    def "a sub that was never provisioned stays anonymous"() {
+        when:
+        filter.doFilterInternal(request, response, chain)
 
-        when: "filter processes request"
-        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain)
-
-        then: "authentication should not be set"
-        SecurityContextHolder.getContext().getAuthentication() == null
-        
-        and: "jwt service should not be called"
-        0 * jwtTokenService.validateToken(_)
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(UUID.randomUUID().toString())
+        1 * userService.getAccessState(_) >> Optional.empty()
+        SecurityContextHolder.context.authentication == null
     }
 
-    def "should not set authentication when Authorization header is malformed"() {
-        given: "a request with malformed Authorization header"
-        def request = new MockHttpServletRequest()
-        request.addHeader("Authorization", "InvalidFormat token")
-        def response = new MockHttpServletResponse()
-        def filterChain = new MockFilterChain()
+    def "a token the decoder rejects stays anonymous and never reaches the user lookup"() {
+        when:
+        filter.doFilterInternal(request, response, chain)
 
-        when: "filter processes request"
-        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain)
-
-        then: "authentication should not be set"
-        SecurityContextHolder.getContext().getAuthentication() == null
-        
-        and: "jwt service should not be called"
-        0 * jwtTokenService.validateToken(_)
+        then:
+        1 * jwtDecoder.decode(_) >> { throw new BadJwtException("expired") }
+        0 * userService._
+        SecurityContextHolder.context.authentication == null
+        request.getAttribute(JwtAuthenticationFilter.FAILURE_ATTRIBUTE) == null
+        chain.request != null
     }
 
-    def "should handle multiple roles correctly"() {
-        given: "a valid JWT token with multiple roles"
-        def token = "valid.jwt.token"
-        def userId = UUID.randomUUID().toString()
-        def email = "admin@example.com"
-        def roles = ["USER", "ADMIN", "MODERATOR"]
-        
-        and: "a request with Authorization header"
-        def request = new MockHttpServletRequest()
-        request.addHeader("Authorization", "Bearer " + token)
-        def response = new MockHttpServletResponse()
-        def filterChain = new MockFilterChain()
-        
-        and: "jwt service validates and extracts data"
-        jwtTokenService.validateToken(token) >> true
-        jwtTokenService.getUserIdFromToken(token) >> userId
-        jwtTokenService.getIssuedAtFromToken(token) >> Instant.now()
-        jwtTokenService.getEmailFromToken(token) >> email
-        jwtTokenService.getAuthoritiesFromToken(token) >> roles
+    def "a sub that is not a UUID is rejected"() {
+        when:
+        filter.doFilterInternal(request, response, chain)
 
-        and: "the token has not been revoked"
-        tokenRevocationChecker.isRevoked(_, _) >> false
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(sub)
+        0 * userService._
+        SecurityContextHolder.context.authentication == null
 
-        when: "filter processes request"
-        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain)
-
-        then: "authentication should have all roles with ROLE_ prefix"
-        def authentication = SecurityContextHolder.getContext().getAuthentication()
-        authentication != null
-        authentication.authorities.size() == 3
-        authentication.authorities*.authority.containsAll(["ROLE_USER", "ROLE_ADMIN", "ROLE_MODERATOR"])
+        where:
+        sub << ["not-a-uuid", "", null]
     }
 
-    def "should continue filter chain even when exception occurs"() {
-        given: "a request that causes exception"
-        def request = new MockHttpServletRequest()
-        request.addHeader("Authorization", "Bearer valid.token")
-        def response = new MockHttpServletResponse()
-        def filterChain = new MockFilterChain()
-        
-        and: "jwt service throws exception"
-        jwtTokenService.validateToken(_) >> { throw new RuntimeException("Token processing error") }
+    def "an unreachable key set is a 503 marker, not a plain 401"() {
+        when:
+        filter.doFilterInternal(request, response, chain)
 
-        when: "filter processes request"
-        jwtAuthenticationFilter.doFilterInternal(request, response, filterChain)
+        then:
+        1 * jwtDecoder.decode(_) >> { throw new JwtException("Couldn't retrieve remote JWK set") }
+        SecurityContextHolder.context.authentication == null
+        request.getAttribute(JwtAuthenticationFilter.FAILURE_ATTRIBUTE) == HttpStatus.SERVICE_UNAVAILABLE
+        chain.request != null
+    }
 
-        then: "should not throw exception and continue chain"
-        noExceptionThrown()
-        SecurityContextHolder.getContext().getAuthentication() == null
+    def "a failing user lookup is a 500 marker, not a silent 401 (A14)"() {
+        when:
+        filter.doFilterInternal(request, response, chain)
+
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(UUID.randomUUID().toString())
+        1 * userService.getAccessState(_) >> { throw new IllegalStateException("db down") }
+        SecurityContextHolder.context.authentication == null
+        request.getAttribute(JwtAuthenticationFilter.FAILURE_ATTRIBUTE) == HttpStatus.INTERNAL_SERVER_ERROR
+    }
+
+    def "a request without a bearer token is passed on untouched"() {
+        given:
+        def bare = new MockHttpServletRequest()
+
+        when:
+        filter.doFilterInternal(bare, response, chain)
+
+        then:
+        0 * jwtDecoder._
+        0 * userService._
+        chain.request != null
+    }
+
+    def "an exception thrown further down the chain is not swallowed"() {
+        given:
+        def failing = Mock(jakarta.servlet.FilterChain)
+        failing.doFilter(_, _) >> { throw new IllegalStateException("controller bug") }
+
+        when:
+        filter.doFilterInternal(request, response, failing)
+
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(UUID.randomUUID().toString())
+        1 * userService.getAccessState(_) >> Optional.of(new UserAccessState(true, ["USER"]))
+        thrown(IllegalStateException)
     }
 }

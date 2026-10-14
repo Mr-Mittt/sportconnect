@@ -4,7 +4,11 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * JWT token service interface
+ * JWT token service interface.
+ *
+ * <p>A25: the <em>reading</em> methods verify a Keycloak access token (RS256, JWKS, issuer, audience); {@code sub} is
+ * the user id, there are no role claims (roles come from {@code UserService.getAccessState}) and the email may be
+ * missing. The {@code generate*} methods are the legacy HS256 mint, kept only until A26 and A28 retire the old login.
  */
 public interface JwtTokenService {
 
@@ -44,10 +48,7 @@ public interface JwtTokenService {
     List<String> getAuthoritiesFromToken(String token);
 
     /**
-     * U12: the token's {@code iat} claim, as the instant it was issued — compared against a
-     * user's revocation watermark ({@code TokenRevocationChecker}) to reject an access token
-     * that's cryptographically/temporally valid but was issued before the account was
-     * deactivated (or logged out) elsewhere.
+     * The token's {@code iat} claim, as the instant it was issued.
      */
     Instant getIssuedAtFromToken(String token);
 

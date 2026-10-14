@@ -73,10 +73,6 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isOk()).andReturn();
     }
 
-    private static String accessTokenOf(MvcResult result) throws Exception {
-        return JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
-    }
-
     private ResultActions deactivate(MvcResult session, String body) throws Exception {
         return mockMvc.perform(post("/api/users/me/deactivate")
                 .header("Authorization", "Bearer " + accessTokenOf(session))

@@ -54,6 +54,11 @@ app:
     expiration: 86400000 # 24 hours
     refresh-expiration: 604800000 # 7 days
 
+  # A25: no defaults in production (INFRA-14 provides the real Keycloak)
+  keycloak:
+    issuer-uri: ${KEYCLOAK_ISSUER_URI}
+    jwk-set-uri: ${KEYCLOAK_JWK_SET_URI}
+
   # Gates /internal/** — services/chat's cold-start bootstrap pull. See application.yml's comment.
   internal-service-secret: ${INTERNAL_SERVICE_SECRET}
 

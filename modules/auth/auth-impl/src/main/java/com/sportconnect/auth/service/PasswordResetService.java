@@ -34,7 +34,6 @@ public class PasswordResetService {
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
     private final PlatformTransactionManager transactionManager;
-    private final TokenRevocationChecker tokenRevocationChecker;
 
     @Value("${app.email.reset-password-url}")
     private String resetPasswordUrl;
@@ -125,7 +124,6 @@ public class PasswordResetService {
 
         userService.updateUserPassword(userId, passwordEncoder.encode(newPassword));
         refreshTokenRepository.revokeAllUserTokens(userId, LocalDateTime.now());
-        tokenRevocationChecker.evictAfterCommit(userId);
         log.info("Password reset completed for user: {}", userId);
     }
 

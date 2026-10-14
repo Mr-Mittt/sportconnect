@@ -107,7 +107,17 @@ app:
     secret: ${JWT_SECRET:your-secret-key-change-this-in-production-min-256-bits}
     expiration: 86400000 # 24 hours in milliseconds
     refresh-expiration: 604800000 # 7 days in milliseconds
-    revocation-sentinel-ttl: 5000 # A12: ms the "never revoked" cache marker lives (see JwtProperties)
+
+  # A25: Keycloak is the token issuer. Access tokens are verified against the realm JWKS (fetched lazily, so the
+  # app boots without Keycloak). The defaults are the local dev stack (infra/docker-compose.dev.yml, INFRA-13);
+  # application-prod.yml requires the real values.
+  keycloak:
+    issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/sportconnect}
+    jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/sportconnect/protocol/openid-connect/certs}
+    audience: sportconnect-api # the realm client adds this aud (infra/keycloak/realm/sportconnect-realm.json)
+
+  user:
+    access-state-ttl: 60s # A25: how long the per-request {isActive, roles} lookup is cached (evicted on deactivate/reactivate)
 
   # Gates /internal/** (services/chat's cold-start bootstrap pull, see
   # services/chat/docs/SYNC_DESIGN.md) — no dev default, unlike JWT's fallback above: a missing

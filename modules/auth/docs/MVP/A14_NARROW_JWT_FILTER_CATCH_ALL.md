@@ -6,6 +6,10 @@
 
 **Filed:** 2026-10-10, found while verifying **A11**. The ticket A11 assumed an outage returns a 500; the real symptom was a 401 because of this catch.
 
+## Delta (2026-10-14, A25)
+
+A25 rewrote the filter and **already did the narrowing**: the catch-all is gone; an invalid token or unusable `sub` is anonymous (401), an unreachable Keycloak key set is a 503 `SERVICE_UNAVAILABLE`, and a failing user lookup is a 500 `INTERNAL_ERROR` (both existing codes, so no client work), written by `JwtAuthenticationEntryPoint` from a request attribute. Invalid tokens log at DEBUG. `JwtAuthenticationFilterSpec` covers both failure paths. **Not done:** no IT forces a failing lookup through the real chain, and the lookup failure is 500 where this ticket preferred 503. Decide whether that remainder is worth keeping open or closing this ticket.
+
 ## What
 
 `JwtAuthenticationFilter.doFilterInternal` wraps its whole token check in `try { … } catch (Exception ex)` (the `catch` is around line 63). On any exception it logs `Could not set user authentication in security context` at ERROR, with a stack trace, and carries on with the request **unauthenticated**, so a protected endpoint answers 401.

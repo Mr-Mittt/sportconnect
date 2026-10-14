@@ -83,7 +83,7 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     }
 
     private ResultActions updateProfile(MvcResult session, String json) throws Exception {
-        String token = JsonPath.read(session.getResponse().getContentAsString(), "$.data.accessToken");
+        String token = accessTokenOf(session);
         String userId = JsonPath.read(session.getResponse().getContentAsString(), "$.data.user.id");
         return mockMvc.perform(put("/api/users/{id}/profile", userId)
                 .header("Authorization", "Bearer " + token)

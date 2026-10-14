@@ -85,6 +85,8 @@ dependencies {
     // Testing - Spock Framework
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    // A25: TestKeycloak signs tokens with nimbus-jose-jwt, which auth-impl only exposes at runtime
+    testImplementation 'org.springframework.security:spring-security-oauth2-jose'
     testImplementation 'org.testcontainers:testcontainers:2.0.5'
 
     // Only transitively available at runtime (declared 'implementation', not 'api', by common/

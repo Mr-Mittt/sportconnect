@@ -1,6 +1,7 @@
 package com.sportconnect.user.api.service;
 
 import com.sportconnect.user.api.dto.CredentialCheck;
+import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserRegistrationDetails;
@@ -217,6 +218,16 @@ public interface UserService {
      * @throws com.sportconnect.common.exception.ResourceNotFoundException if no account has this email (or it is blank, U23)
      */
     UserResponse reactivateUserByEmail(String email);
+
+    /**
+     * A25: the per-request authentication gate. Resolves a token subject to whether the account may act and what
+     * roles it holds, from a short-lived cache (evicted when the account is deactivated or reactivated) with the
+     * database as the fallback, so it keeps answering when Redis is down.
+     *
+     * <p>Includes deactivated accounts (that is the point: the caller turns {@code isActive == false} into a 401).
+     * Empty means no such user, e.g. a valid Keycloak identity that has not been provisioned yet.
+     */
+    Optional<UserAccessState> getAccessState(UUID userId);
 
     /**
      * Update user's last login timestamp

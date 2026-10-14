@@ -7,6 +7,7 @@ import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.user.api.dto.CredentialCheck;
+import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.Gender;
 import com.sportconnect.user.api.dto.LocationResponse;
@@ -75,6 +76,8 @@ public class UserServiceImpl implements UserService {
     // U16: cross-domain, interface only (reference-api depends on common alone, so no bean cycle).
     private final ReferenceService referenceService;
     private final UserPreferenceRepository userPreferenceRepository;
+    // A25: the per-request authentication gate reads through this; deactivate/reactivate evict it
+    private final UserAccessStateCache accessStateCache;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     /**
@@ -98,7 +101,9 @@ public class UserServiceImpl implements UserService {
             StringRedisTemplate stringRedisTemplate,
             ObjectMapper objectMapper,
             ReferenceService referenceService,
-            UserPreferenceRepository userPreferenceRepository) {
+            UserPreferenceRepository userPreferenceRepository,
+            UserAccessStateCache accessStateCache) {
+        this.accessStateCache = accessStateCache;
         this.referenceService = referenceService;
         this.userPreferenceRepository = userPreferenceRepository;
         this.userRepository = userRepository;
@@ -368,6 +373,7 @@ public class UserServiceImpl implements UserService {
         user.setIsActive(false);
         userRepository.save(user);
         authService.logout(user.getId());
+        accessStateCache.evictAfterCommit(user.getId());
     }
 
     @Override
@@ -615,9 +621,23 @@ public class UserServiceImpl implements UserService {
         if (!user.getIsActive()) {
             user.setIsActive(true);
             userRepository.save(user);
+            accessStateCache.evictAfterCommit(user.getId());
             log.info("Re-activated user: {}", user.getId());
         }
         return toUserResponse(user);
+    }
+
+    @Override
+    public Optional<UserAccessState> getAccessState(UUID userId) {
+        Optional<UserAccessState> cached = accessStateCache.get(userId);
+        if (cached.isPresent()) {
+            return cached;
+        }
+        Optional<UserAccessState> loaded = userRepository.findById(userId).map(user -> new UserAccessState(
+                Boolean.TRUE.equals(user.getIsActive()),
+                user.getRoles().stream().map(Role::getName).sorted().toList()));
+        loaded.ifPresent(state -> accessStateCache.put(userId, state));
+        return loaded;
     }
 
     @Override
