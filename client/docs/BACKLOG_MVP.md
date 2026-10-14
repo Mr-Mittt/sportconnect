@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-10-13 (AUTH-10, ACCOUNT-3, ACCOUNT-4, ACCOUNT-5, AUTH-13 done)  
+**Last updated:** 2026-10-14 (AUTH-10, ACCOUNT-3, ACCOUNT-4, ACCOUNT-5, AUTH-13 done)  
 
 ---
 
@@ -72,6 +72,9 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
 | 18 | [AUTH-11](MVP/AUTH-11_LOG_OUT_THIS_DEVICE_ONLY.md) | "Log out" signs out this device only once backend per-session logout ships, plus a "Log out everywhere" action (and a device list if A15 includes one), en/vi copy; **blocked on backend A15** | `TODO` |
 | 19 | [AUTH-12](MVP/AUTH-12_ACTIVE_SESSIONS_LIST.md) | Active sessions list with per-session sign-out, against backend A18 (split out of AUTH-11) | `TODO` |
+| 20 | [AUTH-14](MVP/AUTH-14_REDIRECT_LOGIN_CALLBACK_AND_TICKET_REACTIVATE.md) | Redirect login to Keycloak, `/auth/callback`, ticket-based reactivate dialog, delete the disabled social buttons (incl. Apple) and the forgot/reset pages, `email: string \| null` (A22 client follow-up); needs backend A26 and the A24 decision | `TODO` |
+| 21 | [AUTH-15](MVP/AUTH-15_KEYCLOAKIFY_THEME_PROJECT_AND_REDIRECT_E2E.md) | Keycloakify theme project in our look (en/vi, provider buttons, Storybook) and the redirect e2e against a real Keycloak in CI; **gated by auth A24** | `TODO` |
+| 22 | [AUTH-16](MVP/AUTH-16_POST_FIRST_LOGIN_PROFILE_COMPLETION.md) | Post-first-login "complete your profile" (country, region, location) after the Keycloak register page drops them; first verifies Discover copes with no location | `TODO` |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
