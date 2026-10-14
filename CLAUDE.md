@@ -92,6 +92,9 @@ docker compose -f infra/docker-compose.dev.yml down
 ```
 Deps-only — the server and client still run natively (`./gradlew :server:bootRun`, `pnpm dev`) for a fast edit-reload loop. Details: `infra/documentation/MVP/INFRA-2_DEV_DOCKER_COMPOSE.md`.
 
+Keycloak (identity for the social-login work, :8081, admin/admin) and the Mailpit mail sink (UI :8025) are part of the same `up -d`, so the stack now also needs about 800 MB for Keycloak; start or stop just those two with `docker compose -f infra/docker-compose.dev.yml up -d keycloak mailpit` / `stop keycloak mailpit`.
+On an existing Postgres volume run `infra/scripts/create-keycloak-db.sh` once first; realm reset and the rest: `infra/documentation/MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md`.
+
 ### Backend (Gradle)
 ```bash
 # Run the server
