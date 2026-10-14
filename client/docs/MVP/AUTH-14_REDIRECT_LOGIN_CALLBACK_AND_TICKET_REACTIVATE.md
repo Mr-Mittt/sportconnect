@@ -24,3 +24,7 @@ The theme (AUTH-15), profile completion (AUTH-16), phone-only account UX (A22).
 ## Done when
 
 Typecheck, Vitest and the scoped e2e are green; the redirect flow is walked against a real Keycloak; the visual-regression expectation line is in the summary.
+## Delta (2026-10-14, from auth A24 — go)
+
+- **Locale at the redirect:** a bare `kc_locale=vi` on the first `/auth` request rendered English in A24. Send the standard `ui_locales=<i18n language>` and verify the themed page opens in Vietnamese (not verified in A24).
+- **Remove AUTH-13's 21 auth baselines** (`auth-login-*`, `auth-register-*`, `auth-forgot-password-*`, `auth-reset-password-*`, each at 375/768/1280) together with the screens they cover; AUTH-15 baselines the theme pages instead.
