@@ -189,6 +189,8 @@ Full details: [`documentation/md/IDEA.md`](documentation/md/IDEA.md)
   `verifyPassword` replaced by `verifyCredentials`. New `AccountReactivationIntegrationTest` (9); full
   `:server:test` green (544). Client follow-up filed as AUTH-10.
 - **Email backlog:** `modules/email/docs/BACKLOG_MVP.md` (E1 local Mailpit, E2 production delivery; INFRA-11 deployed secrets) — all `TODO`.
+- **Hosting reopened (2026-10-13, `infra/documentation/MVP/INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md`):** the 1 GB AWS free-tier box cannot also hold Keycloak or RabbitMQ, so Oracle Cloud Always Free (Arm A1, 2 OCPU / 12 GB per Oracle's page) is proposed as the host. `INFRA-3_HOSTING_DECISION.md` carries a proposed amendment; INFRA-12 (spike, `TODO`) measures capacity, arm64 images, memory, reclamation, backups and deploy credentials, and gates INFRA-3..6. No decision yet on Keycloak vs custom JWT (auth A15/A18/A19 stay on hold)
+- **Social login scoping (2026-10-14, `modules/auth/docs/MVP/A23_SPIKE_KEYCLOAKIFY_LOGIN_THEME.md`):** `/feature` for Google/Facebook/Zalo paused after Phase 1. Decided: full move to Keycloak, no user migration, auto-link on a verified email only, phone as a second unique identifier, social login auto-reactivates, Apple/GitHub out of scope. Open: hybrid password-grant vs Keycloakify-hosted pages — A23 (spike, `TODO`) decides; A22 (accounts without email) filed
 - **MVP backlog:** auth tickets A2–A17 in `modules/auth/docs/BACKLOG_MVP.md` — A2–A4/A6/A7/A8/A9 `DONE`;
   A10–A13 `DONE`; A14–A17 `TODO`; A5 moved to V1
 
