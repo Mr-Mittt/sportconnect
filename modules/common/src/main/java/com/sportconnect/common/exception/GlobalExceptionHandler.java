@@ -104,6 +104,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(coded(e));
     }
 
+    /** A26: a dependency the request needs (Keycloak, the ticket store) is down; retryable, nothing was changed. */
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleServiceUnavailable(ServiceUnavailableException e) {
+        log.warn("Service unavailable: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(coded(e));
+    }
+
     @ExceptionHandler({NotFoundException.class, ResourceNotFoundException.class})
     public ResponseEntity<ApiResponse<Void>> handleNotFound(RuntimeException e) {
         String code = e instanceof CodedException coded ? coded.getErrorCode() : null;

@@ -7,6 +7,7 @@ import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.user.api.dto.CredentialCheck;
+import com.sportconnect.user.api.dto.ExternalIdentity;
 import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.Gender;
@@ -65,6 +66,9 @@ import java.util.stream.Collectors;
 @Service
 public class UserServiceImpl implements UserService {
 
+    /** {@code users.username} column size. */
+    private static final int USERNAME_MAX = 50;
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
@@ -78,6 +82,8 @@ public class UserServiceImpl implements UserService {
     private final UserPreferenceRepository userPreferenceRepository;
     // A25: the per-request authentication gate reads through this; deactivate/reactivate evict it
     private final UserAccessStateCache accessStateCache;
+    // A26: serialises the first sign-in of one subject (Postgres advisory lock; a no-op elsewhere)
+    private final UserProvisioningLock provisioningLock;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     /**
@@ -102,8 +108,10 @@ public class UserServiceImpl implements UserService {
             ObjectMapper objectMapper,
             ReferenceService referenceService,
             UserPreferenceRepository userPreferenceRepository,
-            UserAccessStateCache accessStateCache) {
+            UserAccessStateCache accessStateCache,
+            UserProvisioningLock provisioningLock) {
         this.accessStateCache = accessStateCache;
+        this.provisioningLock = provisioningLock;
         this.referenceService = referenceService;
         this.userPreferenceRepository = userPreferenceRepository;
         this.userRepository = userRepository;
@@ -501,6 +509,10 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    private static ConflictException emailAlreadyRegistered() {
+        return new ConflictException("EMAIL_ALREADY_REGISTERED", "Email already registered", null);
+    }
+
     private static ConflictException phoneAlreadyUsed() {
         return new ConflictException("PHONE_ALREADY_USED", "This phone number is already used by another account", null);
     }
@@ -520,6 +532,9 @@ public class UserServiceImpl implements UserService {
             String detail = root != null && root.getMessage() != null ? root.getMessage().toLowerCase() : "";
             if (detail.contains("uq_users_phone_number")) {
                 throw phoneAlreadyUsed();
+            }
+            if (detail.contains("email")) {
+                throw emailAlreadyRegistered();
             }
             throw e;
         }
@@ -625,6 +640,114 @@ public class UserServiceImpl implements UserService {
             log.info("Re-activated user: {}", user.getId());
         }
         return toUserResponse(user);
+    }
+
+    /** {@inheritDoc} Same row lock as {@link #reactivateUserByEmail} so it cannot interleave with a deactivation. */
+    @Override
+    @Transactional
+    public UserResponse reactivateUser(UUID userId) {
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        if (!user.getIsActive()) {
+            user.setIsActive(true);
+            userRepository.save(user);
+            accessStateCache.evictAfterCommit(user.getId());
+            log.info("Re-activated user: {}", user.getId());
+        }
+        return toUserResponse(user);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: the per-subject advisory lock is taken first (a concurrent first sign-in of the same subject waits there
+     * and then finds the row); an existing row wins (returned untouched); otherwise the identifier rules of {@link #createUser} apply
+     * (email or phone, phone normalised and free), the email must be free, and the row is saved and flushed inside this
+     * transaction so a lost race surfaces here as a {@code DataIntegrityViolationException} (primary key) or a coded
+     * 409 (email, phone) instead of at commit time.
+     */
+    @Override
+    @Transactional
+    public UserResponse provisionExternalUser(ExternalIdentity identity) {
+        provisioningLock.auire(identity.getId());
+        Optional<User> existing = userRepository.findById(identity.getId());
+        if (existing.isPresent()) {
+            return toUserResponse(existing.get());
+        }
+
+        String phone = PhoneNumbers.normalize(identity.getPhoneNumber());
+        String email = isBlank(identity.getEmail()) ? null : identity.getEmail().trim();
+        if (email == null && phone == null) {
+            throw new BadRequestException("IDENTIFIER_REQUIRED", "An email or a phone number is required", null);
+        }
+        if (email != null && userRepository.existsByEmail(email)) {
+            throw emailAlreadyRegistered();
+        }
+        requirePhoneFree(phone, null);
+
+        String firstName = blankToNull(identity.getFirstName());
+        String lastName = blankToNull(identity.getLastName());
+        if (firstName == null && lastName == null && !isBlank(identity.getFullName())) {
+            String[] parts = identity.getFullName().trim().split("\\s+", 2);
+            firstName = parts[0];
+            lastName = parts.length > 1 ? parts[1] : null;
+        }
+
+        User user = User.builder()
+                .id(identity.getId())
+                .email(email)
+                .firstName(firstName)
+                .lastName(lastName)
+                .username(availableUsername(identity.getUsername(), identity.getId()))
+                .phoneNumber(phone)
+                .isEmailVerified(identity.isEmailVerified())
+                .isActive(true)
+                .build();
+        Role userRole = roleRepository.findByName(Role.USER)
+                .orElseThrow(() -> new RuntimeException("Default USER role not found"));
+        user.addRole(userRole);
+
+        User saved = saveUserFlushed(user);
+        String language = resolveActiveLanguage(identity.getLanguageCode());
+        if (language != null) {
+            userPreferenceRepository.save(UserPreference.builder().userId(saved.getId()).language(language).build());
+        }
+        log.info("Provisioned user {} from the identity provider", saved.getId());
+        return toUserResponse(saved);
+    }
+
+    private static String blankToNull(String value) {
+        return isBlank(value) ? null : value.trim();
+    }
+
+    /** The wanted username cut to the column size, or with the subject's first characters appended when it is taken; null if none was given. */
+    private String availableUsername(String wanted, UUID id) {
+        String base = blankToNull(wanted);
+        if (base == null) {
+            return null;
+        }
+        if (base.length() > USERNAME_MAX) {
+            base = base.substring(0, USERNAME_MAX);
+        }
+        if (!userRepository.existsByUsername(base)) {
+            return base;
+        }
+        String suffix = "-" + id.toString().substring(0, 6);
+        return base.substring(0, Math.min(base.length(), USERNAME_MAX - suffix.length())) + suffix;
+    }
+
+    /** {@code vi} or {@code vi-VN} to an active language code, else null (the preference is optional). */
+    private String resolveActiveLanguage(String locale) {
+        String code = blankToNull(locale);
+        if (code == null) {
+            return null;
+        }
+        if (referenceService.isActiveLanguage(code)) {
+            return code;
+        }
+        int dash = code.indexOf('-');
+        String primary = dash > 0 ? code.substring(0, dash) : null;
+        return primary != null && referenceService.isActiveLanguage(primary) ? primary : null;
     }
 
     @Override

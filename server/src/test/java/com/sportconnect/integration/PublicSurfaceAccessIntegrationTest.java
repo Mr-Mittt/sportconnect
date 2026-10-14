@@ -59,7 +59,8 @@ class PublicSurfaceAccessIntegrationTest extends BaseIT {
     @Test
     void publicAuthEndpoints_areReachableAnonymously() throws Exception {
         for (String path : new String[] {
-                "/api/auth/register", "/api/auth/login", "/api/auth/reactivate", "/api/auth/refresh", "/api/auth/verify-email",
+                "/api/auth/register", "/api/auth/login", "/api/auth/callback", "/api/auth/reactivate",
+                "/api/auth/reactivate/cancel", "/api/auth/refresh", "/api/auth/logout", "/api/auth/verify-email",
                 "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/reset-password/validate"}) {
             assertReachedHandler(mockMvc.perform(post(path).with(anonymous())
                             .contentType(MediaType.APPLICATION_JSON).content("{}"))
@@ -92,8 +93,15 @@ class PublicSurfaceAccessIntegrationTest extends BaseIT {
     }
 
     @Test
-    void logout_stillRequiresAuthentication() throws Exception {
-        assertRejectedByFilterChain(mockMvc.perform(post("/api/auth/logout").with(anonymous())));
+    void logout_isPublic_becauseItIsDrivenByTheRefreshCookie_notABearerToken() throws Exception {
+        // A26: no cookie is a no-op 200 (the access token is often expired by the time someone logs out).
+        mockMvc.perform(post("/api/auth/logout").with(anonymous())).andExpect(status().isOk());
+    }
+
+    @Test
+    void anAuthGetOnACallbackOrReactivationPath_isNotPublic() throws Exception {
+        assertRejectedByFilterChain(mockMvc.perform(get("/api/auth/callback").with(anonymous())));
+        assertRejectedByFilterChain(mockMvc.perform(get("/api/auth/reactivate").with(anonymous())));
     }
 
     @Test

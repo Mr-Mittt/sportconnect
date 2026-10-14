@@ -1,0 +1,36 @@
+package com.sportconnect.user.api.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+/**
+ * A26: who Keycloak says a user is, as read from a verified access token, handed to
+ * {@code UserService.provisionExternalUser} at the first sign-in. Every field except {@link #id} may be absent.
+ *
+ * <p>{@code id} is the token's {@code sub}; it becomes {@code users.id}, so the token subject resolves to the row with
+ * no mapping table.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class ExternalIdentity {
+    private UUID id;
+    private String email;
+    /** The token's {@code email_verified}; becomes {@code users.is_email_verified}. */
+    private boolean emailVerified;
+    /** The token's {@code preferred_username}. */
+    private String username;
+    private String firstName;
+    private String lastName;
+    /** The token's {@code name}; split into first and last name only when both are absent. */
+    private String fullName;
+    /** Any format {@code PhoneNumbers.normalize} accepts; an unparseable value is a 400. */
+    private String phoneNumber;
+    /** The token's {@code locale}; kept as the language preference only when it is an active language. */
+    private String languageCode;
+}

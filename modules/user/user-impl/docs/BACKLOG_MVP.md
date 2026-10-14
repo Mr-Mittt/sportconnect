@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [U19](MVP/U19_REMOVE_CITY_FIELD.md) | Remove `city` field entirely from the backend — superseded by Region (U16), found during CLIENT-REF-3 pickup | `TODO` |
+| 2 | [U24](MVP/U24_SELF_DEACTIVATION_AND_PASSWORD_CHANGE_FOR_KEYCLOAK_USERS.md) | Bug, decision needed (found in auth A26): users provisioned from Keycloak have no local `password_hash`, so U22 self-deactivation and `changePassword` always answer `CURRENT_PASSWORD_INCORRECT` for them; choose step-up through Keycloak (`auth_time`), a typed confirmation, or the old check for legacy users; the client follow-up (ACCOUNT-3/4) is filed with the decision | `TODO` |
 
 ---
 

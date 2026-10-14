@@ -195,7 +195,7 @@ The `server` module is the Spring Boot assembly point — it holds `SportConnect
 
 All REST responses use `ApiResponse<T>` from `modules/common` (`common/src/main/java/com/sportconnect/common/dto/ApiResponse.java`). Use `ApiResponse.success(message, data)` or `ApiResponse.error(message)`.
 
-Base API path is `/api`. Public endpoints (an explicit list in `SecurityConfig`, since A7 — nothing is public by path prefix any more): `POST /api/auth/{register,login,refresh,verify-email,forgot-password,reset-password,oauth-token}`, `GET /api/reference/**`, and the one exact `POST /api/reference/resolve` (REF-2); plus infrastructure paths (`/images/**`, `/ws/**`, Swagger/`api-docs`, `/actuator/health`). A new endpoint under `/api/auth` or anywhere else is authenticated unless it is added to that list on purpose. All others require a Bearer JWT — including `/api/sports/**`, the hashtag reads, and every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
+Base API path is `/api`. Public endpoints (an explicit list in `SecurityConfig`, since A7 — nothing is public by path prefix any more): `POST /api/auth/{register,login,callback,reactivate,reactivate/cancel,refresh,logout,verify-email,forgot-password,reset-password,oauth-token}` (A26 added `callback`, `reactivate/cancel`, and made `logout` cookie-driven), `GET /api/reference/**`, and the one exact `POST /api/reference/resolve` (REF-2); plus infrastructure paths (`/images/**`, `/ws/**`, Swagger/`api-docs`, `/actuator/health`). A new endpoint under `/api/auth` or anywhere else is authenticated unless it is added to that list on purpose. All others require a Bearer JWT — including `/api/sports/**`, the hashtag reads, and every `GET /api/users/**` endpoint (U11 removed the earlier blanket permit-all for this path; lookups by id/email/username now return a PII-free `UserInfoResponse` rather than being closed off).
 
 **User-facing errors are codes, not prose.** A new or changed error the client can show carries a stable `errorCode` (C12 contract, `documentation/md/ERROR_HANDLING_DESIGN.md`); the client owns the en/vi copy (`errors:codes`). Add that en/vi entry in the same change or file a client ticket straight away — never rely on the English `message` being rendered as-is. Same for a new value in a client-mirrored enum (I18N-5). See `client/CLAUDE.md` § i18n.
 
@@ -251,7 +251,7 @@ not a substitute for it. `/workon` Phase 2 folds the census into its exploration
 
 ### Auth flow
 
-Stateless JWT (JJWT 0.12.x). Access token + refresh token pair. The new client keeps the access token in memory only and expects the refresh token in an httpOnly cookie — the cookie contract is backend ticket A2 in `modules/auth/docs/BACKLOG_MVP.md` (until it ships, the API still returns `refreshToken` in the response body). The old client's localStorage token storage was an XSS exposure and must not be reintroduced.
+Keycloak issues the tokens (A25, A26): the client signs in at Keycloak (Authorization Code + PKCE), posts `{code, codeVerifier}` to `POST /api/auth/callback`, and the backend finishes the exchange, provisions the `users` row on first sight (`users.id` = the token `sub`) and sets the cookie; `refresh` and `logout` proxy Keycloak. Access tokens are Keycloak's 5-minute RS256 tokens, verified against its JWKS. (Older text below describes the pre-Keycloak JJWT pair.) Access token + refresh token pair. The new client keeps the access token in memory only and expects the refresh token in an httpOnly cookie — the cookie contract is backend ticket A2 in `modules/auth/docs/BACKLOG_MVP.md` (until it ships, the API still returns `refreshToken` in the response body). The old client's localStorage token storage was an XSS exposure and must not be reintroduced.
 
 ### Account lifecycle
 
@@ -284,6 +284,8 @@ Keycloak token and checks `UserService.getAccessState(sub)` on every request, so
 is refused on every authenticated path from the next request on (cache evicted on deactivate/reactivate, 60 s TTL as
 the bound). Access tokens last 5 minutes and logout no longer invalidates one by itself. The paragraphs above describe
 the state before that change.
+
+**Update (A26, 2026-10-14):** the sign-in side is closed too. A deactivated user who signs in with a **password** gets `ACCOUNT_DEACTIVATED` and a one-time ticket instead of a session (confirmed through `POST /api/auth/reactivate`); one who signs in through a social provider is re-activated automatically; a refresh for a deactivated user is refused and ends the Keycloak session. See `modules/auth/docs/MVP/A26_CALLBACK_PROVISIONING_REFRESH_AND_REACTIVATION_TICKET.md`.
 
 ### Resource access: availability vs. visibility
 

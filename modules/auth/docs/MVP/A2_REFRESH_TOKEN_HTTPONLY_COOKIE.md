@@ -125,3 +125,5 @@ against `AuthController.java` on 2026-07-06. Move the refresh token to an httpOn
 valid cookie succeeds; refresh with no/invalid cookie → 401; logout clears the cookie.
 
 ---
+
+**Delta (A26, 2026-10-14):** the cookie contract is unchanged (name `refreshToken`, `HttpOnly`, `SameSite=Strict`, `Path=/api/auth`, `Secure` by profile, never in the body), but the cookie now holds **Keycloak's refresh token** and `Max-Age` is Keycloak's `refresh_expires_in` (86400 s in dev). It is set by `POST /api/auth/callback`, `/reactivate` and `/refresh`; `POST /api/auth/logout` ends the Keycloak session of the cookie and clears it, and no longer needs a Bearer token.

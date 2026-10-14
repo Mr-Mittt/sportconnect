@@ -1,8 +1,10 @@
 package com.sportconnect.auth.controller;
 
 import com.sportconnect.auth.api.dto.AuthResponse;
+import com.sportconnect.auth.api.dto.CallbackRequest;
 import com.sportconnect.auth.api.dto.ForgotPasswordRequest;
 import com.sportconnect.auth.api.dto.LoginRequest;
+import com.sportconnect.auth.api.dto.ReactivationTicketRequest;
 import com.sportconnect.auth.api.dto.RegisterRequest;
 import com.sportconnect.auth.api.dto.ResetPasswordRequest;
 import com.sportconnect.auth.api.dto.ValidateResetTokenRequest;
@@ -12,7 +14,6 @@ import com.sportconnect.auth.config.CookieProperties;
 import com.sportconnect.auth.config.JwtProperties;
 import com.sportconnect.auth.service.EmailVerificationService;
 import com.sportconnect.auth.service.PasswordResetService;
-import com.sportconnect.common.auth.SecurityUtils;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.exception.UnauthorizedException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,7 +24,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -61,7 +61,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
         AuthResponse response = authService.register(request);
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response.getRefreshToken()).toString())
+                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response).toString())
                 .body(ApiResponse.success("User registered successfully", response));
     }
 
@@ -77,34 +77,72 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthResponse response = authService.login(request);
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response.getRefreshToken()).toString())
+                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response).toString())
                 .body(ApiResponse.success("Login successful", response));
     }
 
     /**
-     * A9: the user's confirmation after login answered {@code ACCOUNT_DEACTIVATED}. Re-verifies the credentials,
-     * re-activates the account, and logs in with the same refresh-token-cookie contract as {@link #login}. Public
-     * for the same reason login is (the caller has no token), and as open to password guessing as login is.
+     * A26: completes the sign-in the client started at Keycloak (Authorization Code + PKCE). Public: the caller has no
+     * token yet. Same cookie contract as before (A2): the refresh token goes only into the httpOnly cookie. A deactivated
+     * password user gets {@code 401 ACCOUNT_DEACTIVATED} with a {@code reactivationTicket} and no cookie.
      */
-    @Operation(summary = "Re-activate a deactivated account and log in", security = {},
-            description = "Takes the same credentials as login. If they are correct, a deactivated account is re-activated and the user is logged in (same cookie contract as login); an already active account is simply logged in.")
+    @Operation(summary = "Complete a Keycloak sign-in", security = {},
+            description = "Exchanges the authorization code and PKCE verifier with Keycloak, creates the user on first sign-in, and returns the access token with the refresh token in an httpOnly cookie. A deactivated account that signed in with a social provider is re-activated; one that signed in with a password gets ACCOUNT_DEACTIVATED and a reactivationTicket (errorParams) instead.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account active and logged in"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Signed in"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or the identity has neither email nor phone (IDENTIFIER_REQUIRED, INVALID_PHONE_NUMBER)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Code or verifier refused (AUTH_CODE_INVALID), or a deactivated password account (ACCOUNT_DEACTIVATED, errorParams.reactivationTicket)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PHONE_ALREADY_USED or EMAIL_ALREADY_REGISTERED at first sign-in"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the ticket store is not answering")
+    })
+    @PostMapping("/callback")
+    public ResponseEntity<ApiResponse<AuthResponse>> callback(@Valid @RequestBody CallbackRequest request) {
+        AuthResponse response = authService.callback(request.getCode(), request.getCodeVerifier());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response).toString())
+                .body(ApiResponse.success("Login successful", response));
+    }
+
+    /**
+     * A26: the user's confirmation after the sign-in answered {@code ACCOUNT_DEACTIVATED}. The ticket stands in for the
+     * credentials (the Keycloak session is already open and parked); same cookie contract as {@link #callback}.
+     */
+    @Operation(summary = "Re-activate a deactivated account with a ticket", security = {},
+            description = "Takes the reactivationTicket from an ACCOUNT_DEACTIVATED answer. Re-activates the account and releases the parked session (same cookie contract as callback). A ticket works once and lives a few minutes.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account active and signed in"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid email or password (errorCode INVALID_CREDENTIALS); the account is left as it was")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unknown, expired or used ticket (REACTIVATION_TICKET_INVALID)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the ticket store is not answering")
     })
     @PostMapping("/reactivate")
-    public ResponseEntity<ApiResponse<AuthResponse>> reactivate(@Valid @RequestBody LoginRequest request) {
-        AuthResponse response = authService.reactivate(request);
+    public ResponseEntity<ApiResponse<AuthResponse>> reactivate(@Valid @RequestBody ReactivationTicketRequest request) {
+        AuthResponse response = authService.reactivate(request.getTicket());
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response.getRefreshToken()).toString())
+                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response).toString())
                 .body(ApiResponse.success("Account re-activated", response));
+    }
+
+    /**
+     * A26: the user declined. Always 200, so a caller cannot tell whether a ticket existed.
+     */
+    @Operation(summary = "Decline re-activation", security = {},
+            description = "Drops the ticket and ends the parked Keycloak session. Always answers 200, whether or not the ticket existed.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Done"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed")
+    })
+    @PostMapping("/reactivate/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelReactivation(@Valid @RequestBody ReactivationTicketRequest request) {
+        authService.cancelReactivation(request.getTicket());
+        return ResponseEntity.ok(ApiResponse.success("Re-activation cancelled", null));
     }
 
     /**
      * Reads the refresh token from the httpOnly cookie (never the request body — see the module's
      * A2 ticket for the clean-break rationale) and rotates it: the response carries a fresh
-     * refresh-token cookie, and the old token is revoked server-side by {@link AuthService}.
+     * refresh-token cookie, and the old token is rotated out by Keycloak (A26: the cookie holds Keycloak's refresh token,
+     * and {@link AuthService} applies the per-request gate to the new access token).
      * Missing cookie → 401, not 400 (reused {@link UnauthorizedException} instead of letting
      * Spring's default {@code MissingRequestCookieException} handling produce a 400).
      */
@@ -122,26 +160,30 @@ public class AuthController {
         }
         AuthResponse response = authService.refreshToken(refreshToken);
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response.getRefreshToken()).toString())
+                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response).toString())
                 .body(ApiResponse.success("Token refreshed successfully", response));
     }
 
     /**
-     * Derives the caller from the authenticated principal (never a client-supplied id — see the
-     * module's A3 ticket, which closed a prior authorization gap where any caller could revoke
-     * any other user's session) and revokes all of their refresh tokens. Requires authentication:
-     * {@code SecurityConfig} authorizes {@code POST /api/auth/logout} ahead of the broader
-     * {@code /api/auth/**} permit.
+     * A26: ends the Keycloak SSO session the refresh-token cookie belongs to, then clears the cookie. Public and driven by
+     * the cookie, not by a Bearer token: the 5-minute access token is often already expired when the user clicks "log
+     * out", and the cookie ({@code SameSite=Strict}, {@code Path=/api/auth}) cannot be sent by another site, so this cannot
+     * be used to log someone out from outside. No cookie, or a session Keycloak already dropped, is still a 200.
+     * When Keycloak is unreachable the answer is 503 and the cookie is kept, so the logout can be retried instead of
+     * leaving a live session the user believes is over.
      */
-    @Operation(summary = "Log out",
-            description = "Derives the caller from the authenticated principal and revokes all of their refresh tokens.")
+    @Operation(summary = "Log out", security = {},
+            description = "Ends the Keycloak session the refresh-token cookie belongs to and clears the cookie. Idempotent: no cookie, or an already ended session, is a 200. 503 when Keycloak cannot be reached (the cookie is kept so the call can be retried).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Logged out"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak is not answering; the session may still be alive")
     })
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(Authentication authentication) {
-        authService.logout(SecurityUtils.extractUserId(authentication));
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @CookieValue(value = REFRESH_COOKIE_NAME, required = false) String refreshToken) {
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            authService.endSession(refreshToken);
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, clearRefreshCookie().toString())
                 .body(ApiResponse.success("Logout successful", null));
@@ -150,15 +192,19 @@ public class AuthController {
     /**
      * Builds the {@code Set-Cookie} header value carrying the refresh token. {@code Secure} is
      * profile-conditional ({@link CookieProperties}) since it's false in local dev (plain HTTP);
-     * {@code Path} scopes it to {@code /api/auth} so it's never sent on unrelated requests.
+     * {@code Path} scopes it to {@code /api/auth} so it's never sent on unrelated requests. {@code Max-Age} is
+     * the refresh token's own lifetime (A26: Keycloak's {@code refresh_expires_in}) when the response carries it.
      */
-    private ResponseCookie buildRefreshCookie(String refreshToken) {
-        return ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
+    private ResponseCookie buildRefreshCookie(AuthResponse response) {
+        long maxAgeSeconds = response.getRefreshTokenMaxAgeSeconds() != null
+                ? response.getRefreshTokenMaxAgeSeconds()
+                : jwtProperties.getRefreshExpiration() / 1000;
+        return ResponseCookie.from(REFRESH_COOKIE_NAME, response.getRefreshToken())
                 .httpOnly(true)
                 .secure(cookieProperties.isSecure())
                 .sameSite("Strict")
                 .path("/api/auth")
-                .maxAge(jwtProperties.getRefreshExpiration() / 1000)
+                .maxAge(maxAgeSeconds)
                 .build();
     }
 

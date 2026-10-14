@@ -27,7 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * U22 end-to-end: {@code POST /api/users/me/deactivate} through the real request pipeline, real
  * {@code UserServiceImpl} / {@code AuthServiceImpl} and real Redis (the JWT filter's revocation check).
  * A wrong password changes nothing; the right one deactivates the account, kills the caller's own sessions (access
- * token and refresh cookie), makes login answer {@code ACCOUNT_DEACTIVATED}, and leaves the A9 re-activation path open.
+ * token and refresh cookie), makes login answer {@code ACCOUNT_DEACTIVATED}, and leaves the re-activation path open (A26:
+ * the ticket flow of {@code /api/auth/callback} and {@code /api/auth/reactivate}).
  */
 class SelfDeactivationIntegrationTest extends RedisBaseIT {
 
@@ -80,6 +81,10 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
                 .content(body));
     }
 
+    private static java.util.UUID userIdOf(MvcResult result) throws Exception {
+        return java.util.UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.data.user.id"));
+    }
+
     private boolean isActive(String email) {
         return userRepository.findByEmail(email).orElseThrow().getIsActive();
     }
@@ -87,7 +92,8 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
     @Test
     void deactivate_withTheRightPassword_deactivatesAndRevokesTheCallersSessions() throws Exception {
         MvcResult session = register("u22-ok@example.com");
-        String refreshToken = session.getResponse().getCookie("refreshToken").getValue();
+        // A26: the live session is a Keycloak one; the cookie it would hold is its refresh token.
+        String refreshToken = TestKeycloak.startSession(TestKeycloak.Identity.of(userIdOf(session)).email("u22-ok@example.com"));
 
         deactivate(session, "{\"currentPassword\": \"" + PASSWORD + "\"}")
                 .andExpect(status().isOk())
@@ -99,6 +105,7 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/auth/refresh").with(anonymous()).cookie(new Cookie("refreshToken", refreshToken)))
                 .andExpect(status().isUnauthorized());
+        assertThat(TestKeycloak.sessionEnded(refreshToken)).isTrue();
         // Login withholds tokens and says why, which is what opens the A9 re-activation offer.
         postJson("/api/auth/login", "{\"email\": \"u22-ok@example.com\", \"password\": \"" + PASSWORD + "\"}")
                 .andExpect(status().isUnauthorized())
@@ -110,7 +117,16 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
         MvcResult session = register("u22-back@example.com");
         deactivate(session, "{\"currentPassword\": \"" + PASSWORD + "\"}").andExpect(status().isOk());
 
-        postJson("/api/auth/reactivate", "{\"email\": \"u22-back@example.com\", \"password\": \"" + PASSWORD + "\"}")
+        // A26: signing in again with the password answers ACCOUNT_DEACTIVATED plus a ticket; confirming it brings the account back.
+        String verifier = "v".repeat(43);
+        String code = TestKeycloak.issueCode(TestKeycloak.Identity.of(userIdOf(session)).email("u22-back@example.com"), verifier);
+        MvcResult denied = postJson("/api/auth/callback", "{\"code\": \"" + code + "\", \"codeVerifier\": \"" + verifier + "\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_DEACTIVATED"))
+                .andReturn();
+        String ticket = JsonPath.read(denied.getResponse().getContentAsString(), "$.errorParams.reactivationTicket");
+
+        postJson("/api/auth/reactivate", "{\"ticket\": \"" + ticket + "\"}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
 

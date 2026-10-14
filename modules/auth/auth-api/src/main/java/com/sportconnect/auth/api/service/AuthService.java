@@ -7,43 +7,82 @@ import com.sportconnect.auth.api.dto.RegisterRequest;
 import java.util.UUID;
 
 /**
- * Authentication service interface
+ * Authentication service interface.
+ *
+ * <p>Since A26 a session is a Keycloak session: {@link #callback}, {@link #reactivate}, {@link #refreshToken} and
+ * {@link #endSession} proxy the realm. {@link #register} and {@link #login} are the legacy password endpoints that mint a
+ * token nothing accepts any more (A25); A28 removes them.
  */
 public interface AuthService {
 
     /**
-     * Register a new user
+     * Register a new user (legacy, retired by A28).
      */
     AuthResponse register(RegisterRequest request);
 
     /**
-     * Authenticate user and generate tokens.
+     * Authenticate user and generate tokens (legacy, retired by A28).
      *
      * @throws com.sportconnect.common.exception.UnauthorizedException {@code INVALID_CREDENTIALS} for an unknown
      *         email or wrong password; {@code ACCOUNT_DEACTIVATED} when the credentials are correct but the account
-     *         is deactivated (A9) -- no tokens are issued, the caller may offer {@link #reactivate}
+     *         is deactivated (A9) -- no tokens are issued
      */
     AuthResponse login(LoginRequest request);
 
     /**
-     * A9: re-activates a deactivated account and logs the user in. Re-verifies the credentials, so it is only as
-     * open as login itself. An already active account is simply logged in.
+     * A26: completes the Authorization Code + PKCE sign-in the client started at Keycloak. Exchanges the code, provisions
+     * the {@code users} row on first sight ({@code users.id} = the token's {@code sub}), and applies the deactivation
+     * rules: an active user gets the session; a deactivated user who signed in through a social provider is re-activated
+     * and gets it; a deactivated user who signed in with a password gets {@code ACCOUNT_DEACTIVATED} and a ticket.
      *
-     * @throws com.sportconnect.common.exception.UnauthorizedException {@code INVALID_CREDENTIALS} for an unknown
-     *         email or wrong password (the account stays as it was)
+     * @return the access token (body) and the refresh token (for the httpOnly cookie), as {@link AuthResponse}
+     * @throws com.sportconnect.common.exception.UnauthorizedException {@code AUTH_CODE_INVALID} for a bad, used or
+     *         expired code or a wrong verifier; {@code ACCOUNT_DEACTIVATED} with {@code errorParams.reactivationTicket}
+     *         for a deactivated password user (no cookie)
+     * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED}, {@code INVALID_PHONE_NUMBER}
+     * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}, {@code EMAIL_ALREADY_REGISTERED}
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException Keycloak (or the ticket store) is not answering
      */
-    AuthResponse reactivate(LoginRequest request);
+    AuthResponse callback(String code, String codeVerifier);
 
     /**
-     * Refresh access token using refresh token
+     * A26: the user confirmed the re-activation offered by {@link #callback}. Consumes the ticket (single use),
+     * re-activates the account and releases the parked Keycloak session. Replaces the credentials version (A9).
+     *
+     * @throws com.sportconnect.common.exception.UnauthorizedException {@code REACTIVATION_TICKET_INVALID} for an unknown,
+     *         expired or already used ticket, or one whose Keycloak session has ended meanwhile
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException Keycloak or the ticket store is not answering
+     */
+    AuthResponse reactivate(String ticket);
+
+    /**
+     * A26: the user declined the re-activation. Drops the ticket and ends the parked Keycloak session (otherwise the next
+     * sign-in would silently land on the same dialog). Never fails because a ticket is unknown, so it cannot be used to
+     * probe tickets.
+     */
+    void cancelReactivation(String ticket);
+
+    /**
+     * Rotates the Keycloak refresh token and applies the per-request gate to the new access token.
+     *
+     * @throws com.sportconnect.common.exception.UnauthorizedException {@code REFRESH_TOKEN_EXPIRED_OR_REVOKED} when
+     *         Keycloak no longer honours the token, or the user is gone or deactivated (the session is then ended)
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException Keycloak is not answering
      */
     AuthResponse refreshToken(String refreshToken);
 
     /**
-     * Logs the user out everywhere: revokes all of their refresh tokens (one shared {@code revoked_at}, which is also
-     * the watermark that rejects their earlier access tokens) and, once the transaction commits, evicts the cached
-     * watermark so the revocation takes effect on the next request (A12). Also the deactivation path
-     * ({@code UserService.deleteUser}). A Redis failure during eviction is logged and never fails the logout.
+     * A26: logs out by ending the Keycloak SSO session the refresh token belongs to. A token Keycloak no longer knows
+     * counts as already logged out.
+     *
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException Keycloak is not answering, so the session may
+     *         still be alive and the caller must not say it is over
+     */
+    void endSession(String refreshToken);
+
+    /**
+     * Revokes every legacy refresh-token row of the user (the pre-Keycloak store; harmless and kept until A28). Called on
+     * deactivation ({@code UserService}); access is cut off by the per-request gate (A25), not by this.
      */
     void logout(UUID userId);
 }

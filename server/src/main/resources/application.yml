@@ -115,6 +115,14 @@ app:
     issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8081/realms/sportconnect}
     jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8081/realms/sportconnect/protocol/openid-connect/certs}
     audience: sportconnect-api # the realm client adds this aud (infra/keycloak/realm/sportconnect-realm.json)
+    # A26: the backend completes the sign-in (code exchange, refresh, end session) as the public client below.
+    client-id: sportconnect-web
+    redirect-uri: ${KEYCLOAK_REDIRECT_URI:http://localhost:5173/auth/callback}
+    token-uri: ${KEYCLOAK_TOKEN_URI:http://localhost:8081/realms/sportconnect/protocol/openid-connect/token}
+    logout-uri: ${KEYCLOAK_LOGOUT_URI:http://localhost:8081/realms/sportconnect/protocol/openid-connect/logout}
+
+  auth:
+    reactivation-ticket-ttl: 5m # A26: how long a deactivated password user has to confirm re-activation
 
   user:
     access-state-ttl: 60s # A25: how long the per-request {isActive, roles} lookup is cached (evicted on deactivate/reactivate)

@@ -1,6 +1,5 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.auth.entity.RefreshToken;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -69,18 +67,16 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
 
     @Test
     void deactivation_revokesRefreshTokens_refreshWithAPreDeactivationTokenFails() throws Exception {
-        UUID userId = createActiveUser().getId();
-        RefreshToken refreshToken = refreshTokenRepository.save(RefreshToken.builder()
-                .userId(userId)
-                .token("u12-refresh-" + UUID.randomUUID())
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build());
+        User user = createActiveUser();
+        // A26: the session is Keycloak's; the cookie holds its refresh token.
+        String refreshToken = TestKeycloak.startSession(TestKeycloak.Identity.of(user.getId()).email(user.getEmail()));
 
-        userServiceImpl.deleteUser(userId);
+        userServiceImpl.deleteUser(user.getId());
 
         mockMvc.perform(post("/api/auth/refresh")
-                        .cookie(new Cookie("refreshToken", refreshToken.getToken())))
+                        .cookie(new Cookie("refreshToken", refreshToken)))
                 .andExpect(status().isUnauthorized());
+        assertThat(TestKeycloak.sessionEnded(refreshToken)).isTrue();
     }
 
     @Test

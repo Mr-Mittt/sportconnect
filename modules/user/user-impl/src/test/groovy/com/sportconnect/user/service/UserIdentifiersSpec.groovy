@@ -37,7 +37,7 @@ class UserIdentifiersSpec extends Specification {
 
     @Subject
     UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService,
-            authService, userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository, Mock(UserAccessStateCache))
+            authService, userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
 
     private static final Role USER_ROLE = new Role(id: 1, name: "USER")
 
@@ -122,8 +122,19 @@ class UserIdentifiersSpec extends Specification {
 
         then:
         1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        1 * userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException('duplicate key value violates unique constraint "users_email_key"')) }
+        1 * userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException('duplicate key value violates unique constraint "users_username_key"')) }
         thrown(DataIntegrityViolationException)
+    }
+
+    def "createUser turns a unique-constraint race on email into EMAIL_ALREADY_REGISTERED (A26)"() {
+        when:
+        userService.createUser("a@example.com", "hash", "A", "B", null)
+
+        then:
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        1 * userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException('duplicate key value violates unique constraint "users_email_key"')) }
+        def e = thrown(ConflictException)
+        e.errorCode == "EMAIL_ALREADY_REGISTERED"
     }
 
     // ---- updateProfile ----

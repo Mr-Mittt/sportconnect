@@ -36,6 +36,8 @@
 4. Every API request: validate the RS256 token against JWKS (issuer, audience), resolve `sub` to `{isActive, roles}` through one cached `UserService` call (Redis, evicted on deactivate and reactivate, DB fallback via `CacheGuard`). An unprovisioned `sub` or an inactive user is a 401.
 5. `POST /api/auth/refresh` and `/logout` proxy Keycloak, applying the same check.
 
+**As built (A26, 2026-10-14):** the cancel step is `POST /api/auth/reactivate/cancel {ticket}` (always 200); the ticket travels in `errorParams.reactivationTicket`; `/logout` is public and driven by the refresh cookie; password versus social is the `identity_provider` claim from a realm session-note mapper (verified against a real brokered login); claims are read from the verified access token; refresh tokens are not rotated (Keycloak default). Known gaps: the ticket needs Redis (A30), Keycloak users have no local password for U22 (U24).
+
 ## 3. Phase 2 consumer census (2026-10-14)
 
 | Contract | Consumers | Disposition |
