@@ -92,6 +92,12 @@ docker compose -f infra/docker-compose.dev.yml down
 ```
 Deps-only — the server and client still run natively (`./gradlew :server:bootRun`, `pnpm dev`) for a fast edit-reload loop. Details: `infra/documentation/MVP/INFRA-2_DEV_DOCKER_COMPOSE.md`.
 
+Keycloak (identity for the social-login work) and the Mailpit mail sink are in the same file but started on request, not part of the usual loop:
+```bash
+docker compose -f infra/docker-compose.dev.yml up -d keycloak mailpit   # Keycloak :8081 (admin/admin), Mailpit UI :8025
+```
+On an existing Postgres volume run `infra/scripts/create-keycloak-db.sh` once first; realm reset and the rest: `infra/documentation/MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md`.
+
 ### Backend (Gradle)
 ```bash
 # Run the server

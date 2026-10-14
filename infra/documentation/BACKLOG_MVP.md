@@ -39,8 +39,7 @@ green run exists" pattern.
 | 8 | [INFRA-9](MVP/INFRA-9_INTERNAL_NETWORK_ISOLATION.md) | `/internal/**` network isolation | `TODO` |
 | 9 | [INFRA-10](MVP/INFRA-10_SWAGGER_AND_OAUTH_TOKEN_EXPOSURE_IN_DEPLOYED_ENVIRONMENTS.md) | Swagger UI, `/api-docs` and `oauth-token` are public in every profile — decide what a deployed environment exposes; found during auth A7 | `TODO` |
 | 10 | [INFRA-11](MVP/INFRA-11_EMAIL_CONFIGURATION_IN_DEPLOYED_ENVIRONMENTS.md) | Email configuration (`MAIL_*`, `EMAIL_FROM`, link URLs) per environment; nothing sets them today | `TODO` |
-| 11 | [INFRA-13](MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md) | Keycloak 26 in the dev Compose stack with the realm as a committed import (5-min access token, audience mapper, optional email/names, en/vi, no secrets); gates auth A25/A26/A27/A29 and chat CHAT-17; part of the Keycloak social-login chain (`documentation/md/KEYCLOAK_SOCIAL_LOGIN_DESIGN.md`) | `TODO` |
-| 12 | [INFRA-14](MVP/INFRA-14_PRODUCTION_KEYCLOAK_ON_ORACLE.md) | Production Keycloak on Oracle Always Free (production mode, theme and extension JARs, backups, real provider secrets); waits for INFRA-12 and INFRA-13 | `TODO` |
+| 11 | [INFRA-14](MVP/INFRA-14_PRODUCTION_KEYCLOAK_ON_ORACLE.md) | Production Keycloak on Oracle Always Free (production mode, theme and extension JARs, backups, real provider secrets); waits for INFRA-12 and INFRA-13 | `TODO` |
 
 ---
 
@@ -48,8 +47,9 @@ green run exists" pattern.
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [INFRA-1](MVP/INFRA-1_BACKEND_CI_WORKFLOW.md) | Backend CI workflow (`server-ci.yml`) | `DONE` |
-| 2 | [INFRA-2](MVP/INFRA-2_DEV_DOCKER_COMPOSE.md) | Dev environment docker-compose | `DONE` |
+| 1 | [INFRA-13](MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md) | Keycloak 26 in the dev Compose stack with the realm as a committed import (5-min access token, audience mapper, optional email/names, en/vi, no secrets), Mailpit mail sink, idempotent `keycloak_dev` bootstrap script | `DONE` |
+| 2 | [INFRA-1](MVP/INFRA-1_BACKEND_CI_WORKFLOW.md) | Backend CI workflow (`server-ci.yml`) | `DONE` |
+| 3 | [INFRA-2](MVP/INFRA-2_DEV_DOCKER_COMPOSE.md) | Dev environment docker-compose | `DONE` |
 
 ---
 

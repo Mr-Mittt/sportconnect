@@ -46,3 +46,6 @@
 .npmrc
 .docker/
 .m2/
+
+# Keycloak theme/extension JARs mounted into the dev Keycloak (INFRA-13); built, never committed
+infra/keycloak/providers/*.jar

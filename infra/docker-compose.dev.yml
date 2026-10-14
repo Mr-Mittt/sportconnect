@@ -14,6 +14,15 @@ services:
       # Seeds services/chat's own dev database (sportconnect_chat_dev) on this same instance —
       # only runs on first volume creation, see infra/scripts/init-chat-db.sql.
       - ./scripts/init-chat-db.sql:/docker-entrypoint-initdb.d/init-chat-db.sql:ro
+      # Creates keycloak_dev for the keycloak service below (INFRA-13). Same first-volume-creation
+      # rule; on an existing volume run it once by hand, see the header of the script.
+      - ./scripts/create-keycloak-db.sh:/docker-entrypoint-initdb.d/10-create-keycloak-db.sh:ro
+    healthcheck:
+      # keycloak waits for this - it fails at boot if the database is not accepting connections.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d sportconnect_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   redis:
     image: redis:7-alpine
@@ -38,6 +47,43 @@ services:
       # Overrides the -management image's baked-in enabled_plugins (which only lists
       # rabbitmq_management) to also enable rabbitmq_stomp, not on by default — see NTF-3.
       - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+
+  # Keycloak (INFRA-13): identity provider for password + Google/Facebook/Zalo sign-in, see
+  # documentation/md/KEYCLOAK_SOCIAL_LOGIN_DESIGN.md. Dev mode (start-dev) on purpose - production
+  # mode is INFRA-14. Host port 8081 because 8080 is the Spring backend. Realm `sportconnect` is
+  # imported from infra/keycloak/realm/ only when it does not exist yet; see
+  # infra/documentation/MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md for resetting it.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    command: ["start-dev", "--import-realm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_dev
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: sa
+      # Pinned so the token issuer is the same wherever it is read; the dynamic back-channel flag
+      # lets a provider call back to the container-internal host (A23 finding).
+      KC_HOSTNAME: http://localhost:8081
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin # dev-only, like rabbitmq's guest/guest
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./keycloak/realm/sportconnect-realm.json:/opt/keycloak/data/import/sportconnect-realm.json:ro
+      # Theme (AUTH-15) and extension (A27) JARs go here; *.jar is git-ignored.
+      - ./keycloak/providers:/opt/keycloak/providers:ro
+
+  # Dev mail sink: Keycloak's SMTP points here, so reset/verify emails (A28) never leave the
+  # machine. Read them at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
 
 volumes:
   sportconnect_dev_postgres:
