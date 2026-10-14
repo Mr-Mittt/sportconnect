@@ -669,7 +669,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse provisionExternalUser(ExternalIdentity identity) {
-        provisioningLock.auire(identity.getId());
+        provisioningLock.acquire(identity.getId());
         Optional<User> existing = userRepository.findById(identity.getId());
         if (existing.isPresent()) {
             return toUserResponse(existing.get());
