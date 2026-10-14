@@ -19,3 +19,11 @@ Providers (A29); the client pages (AUTH-14 / AUTH-15).
 ## Done when
 
 The census is written, everything above is removed or closed, `:server:test` and the client suites are green, and the migration dropping the tables applies on a populated dev database.
+
+## Notes from A26 (2026-10-14)
+
+- `SwaggerOAuth2TokenController` (`/api/auth/oauth-token`) calls the legacy `AuthService.login`, so it has handed out tokens nothing accepts since A25. Remove it with the other legacy endpoints, or point Swagger's Authorize at Keycloak (`OpenApiConfig`).
+- A26 left `AuthService.logout(UUID)` (revokes legacy `refresh_tokens` rows, called from `UserServiceImpl.deactivate`), `register`, `login` and `UserService.reactivateUserByEmail` / `verifyCredentials` in place; they go with this ticket. Deactivation then needs no auth call at all (the gate refuses the user on the next request, and a refresh ends the Keycloak session).
+- `REFRESH_TOKEN_INVALID` is no longer returned; drop the client copy with the rest.
+- Keycloak does **not** revoke a refresh token on use in this realm (`revokeRefreshToken` off, a deliberate choice in A26: rotation with reuse detection would end the whole session when two tabs refresh at once). Revisit it here together with the A15/A18/A19 closure.
+- Provisioned users have no `password_hash`; the password-based U22/`changePassword` checks are U24's.

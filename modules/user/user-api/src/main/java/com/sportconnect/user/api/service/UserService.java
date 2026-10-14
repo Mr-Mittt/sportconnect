@@ -1,6 +1,7 @@
 package com.sportconnect.user.api.service;
 
 import com.sportconnect.user.api.dto.CredentialCheck;
+import com.sportconnect.user.api.dto.ExternalIdentity;
 import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
@@ -218,6 +219,34 @@ public interface UserService {
      * @throws com.sportconnect.common.exception.ResourceNotFoundException if no account has this email (or it is blank, U23)
      */
     UserResponse reactivateUserByEmail(String email);
+
+    /**
+     * A26: re-activates a deactivated account by id (the Keycloak sign-in knows the subject, not an email, and a phone-only
+     * account has none). An already active account is returned unchanged. Evicts the cached access state after commit, so
+     * the next request sees the account as active at once.
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no such user
+     */
+    UserResponse reactivateUser(UUID userId);
+
+    /**
+     * A26: the first-sign-in provisioning. Returns the existing account when {@code identity.id} (the Keycloak
+     * {@code sub}) already has a row, otherwise creates it with {@code users.id = sub} and the default {@code USER} role.
+     * An existing account is returned as it is, active or not, and is <em>not</em> re-synced from the identity: after the
+     * first sign-in our database owns the profile.
+     *
+     * <p>On creation: the username is {@code preferred_username} (cut to 50 characters, with a {@code -<sub prefix>}
+     * suffix when taken); first and last name come from the given and family names, else from splitting the full name;
+     * the phone is normalised like every other phone (U23); the language becomes the preference only when it is an active
+     * language; {@code is_email_verified} follows the token. There is no password hash (Keycloak holds the credential).
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED} (neither email nor phone),
+     *         {@code INVALID_PHONE_NUMBER}
+     * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}, {@code EMAIL_ALREADY_REGISTERED}
+     * @throws org.springframework.dao.DataIntegrityViolationException when two first sign-ins for the same subject race and
+     *         this one loses on the primary key; the caller re-reads the account
+     */
+    UserResponse provisionExternalUser(ExternalIdentity identity);
 
     /**
      * A25: the per-request authentication gate. Resolves a token subject to whether the account may act and what

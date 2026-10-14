@@ -11,21 +11,28 @@ import com.sportconnect.auth.repository.EmailVerificationRepository;
 import com.sportconnect.auth.repository.PasswordResetTokenRepository;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.common.exception.ConflictException;
-import com.sportconnect.common.exception.ResourceNotFoundException;
+import com.sportconnect.common.exception.ServiceUnavailableException;
 import com.sportconnect.common.exception.UnauthorizedException;
 import com.sportconnect.user.api.dto.CredentialCheck;
+import com.sportconnect.user.api.dto.ExternalIdentity;
+import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -44,6 +51,9 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final UserService userService;
     private final JwtProperties jwtProperties;
+    private final KeycloakTokenClient keycloak;
+    private final JwtDecoder jwtDecoder;
+    private final ReactivationTicketStore reactivationTickets;
 
     @Override
     @Transactional
@@ -111,20 +121,6 @@ public class AuthServiceImpl implements AuthService {
         return startSession(userService.getUserByEmail(request.getEmail()));
     }
 
-    @Override
-    @Transactional
-    public AuthResponse reactivate(LoginRequest request) {
-        CredentialCheck check = userService.verifyCredentials(request.getEmail(), request.getPassword());
-        if (check == CredentialCheck.NO_MATCH) {
-            throw new UnauthorizedException("INVALID_CREDENTIALS", "Invalid email or password", null);
-        }
-
-        UserResponse user = check == CredentialCheck.MATCH_INACTIVE
-                ? userService.reactivateUserByEmail(request.getEmail())
-                : userService.getUserByEmail(request.getEmail());
-        return startSession(user);
-    }
-
     /** Stamps the last login, mints the access/refresh pair and stores the refresh token (login and reactivate). */
     private AuthResponse startSession(UserResponse user) {
         // Update last login
@@ -149,59 +145,189 @@ public class AuthServiceImpl implements AuthService {
     }
 
     /**
-     * Rotates a refresh token. Failures are 401s with registered codes (A8): {@code REFRESH_TOKEN_INVALID} (unknown
-     * token) and {@code REFRESH_TOKEN_EXPIRED_OR_REVOKED}. A9: a user who is deactivated (or gone) at the moment of
-     * the refresh -- the race U12 closed, or a token that was never revoked -- also gets
-     * {@code REFRESH_TOKEN_EXPIRED_OR_REVOKED}: the generic "you have been logged out, log in again", never
-     * {@code ACCOUNT_DEACTIVATED} (that is login's, where the user can choose to re-activate) and never a 404 that
-     * leaks the user id.
+     * {@inheritDoc}
+     *
+     * <p>Flow: exchange the code; verify the access token Keycloak returned (the same decoder every request goes
+     * through) and read the subject and claims; provision or load the {@code users} row; then apply the deactivation
+     * rule, telling a social sign-in from a password one by the {@code identity_provider} claim the realm's
+     * session-note mapper puts in the token (absent for a password login).
+     *
+     * <p>Any failure after the exchange except the deliberate {@code ACCOUNT_DEACTIVATED} ends the Keycloak session
+     * again: otherwise the user's next attempt would sign in silently and land on the same failure.
      */
     @Override
-    @Transactional
-    public AuthResponse refreshToken(String refreshTokenString) {
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenString)
-                .orElseThrow(() -> new UnauthorizedException("REFRESH_TOKEN_INVALID", "Invalid refresh token", null));
-
-        if (!refreshToken.isValid()) {
-            throw new UnauthorizedException("REFRESH_TOKEN_EXPIRED_OR_REVOKED", "Refresh token expired or revoked", null);
-        }
-
-        // U12: locks the user row (PESSIMISTIC_READ, held for this whole transaction) BEFORE
-        // touching refresh_tokens below — deliberately the same "users row first, refresh_tokens
-        // second" order UserServiceImpl.deleteUser() uses (PESSIMISTIC_WRITE on the same row), so
-        // the two can never deadlock on each other. This also closes the race where a concurrent
-        // deactivation's stale-read window would otherwise let this method mint a fresh token pair
-        // for an account that's being deactivated at that exact moment: this call now blocks until
-        // any in-flight deleteUser() for this user fully commits, then correctly observes
-        // isActive = false instead of racing ahead on stale data.
-        UUID userId = refreshToken.getUserId();
+    public AuthResponse callback(String code, String codeVerifier) {
+        KeycloakTokens tokens = keycloak.exchangeCode(code, codeVerifier);
         UserResponse user;
         try {
-            user = userService.getActiveUserForUpdate(userId);
-        } catch (ResourceNotFoundException e) {
-            // A9: getActiveUserForUpdate throws this for an inactive user. Answer with the same generic 401 as a
-            // revoked token; the 404 would leak the user id and the code does not belong to a refresh.
-            throw new UnauthorizedException("REFRESH_TOKEN_EXPIRED_OR_REVOKED", "Refresh token expired or revoked", null);
+            Jwt jwt = verify(tokens.accessToken());
+            UUID userId = subjectOf(jwt);
+            boolean social = jwt.getClaimAsString("identity_provider") != null;
+            user = provision(identityOf(jwt, userId));
+            if (!Boolean.TRUE.equals(user.getIsActive()) && social) {
+                // A social sign-in is the user's own confirmation that they are back.
+                user = userService.reactivateUser(userId);
+            }
+            if (Boolean.TRUE.equals(user.getIsActive())) {
+                userService.updateLastLogin(userId);
+            }
+        } catch (RuntimeException e) {
+            endSessionQuietly(tokens.refreshToken());
+            throw e;
         }
 
-        // Mark old token as revoked
-        refreshToken.setRevoked(true);
-        refreshTokenRepository.save(refreshToken);
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            String ticket;
+            try {
+                ticket = reactivationTickets.issue(user.getId(), tokens.refreshToken());
+            } catch (RuntimeException e) {
+                endSessionQuietly(tokens.refreshToken());
+                throw e;
+            }
+            log.info("Deactivated user {} signed in with a password; re-activation ticket issued", user.getId());
+            throw new UnauthorizedException("ACCOUNT_DEACTIVATED", "Account is deactivated",
+                    Map.of("reactivationTicket", ticket));
+        }
+        log.info("User signed in through Keycloak: {}", user.getId());
+        return sessionOf(tokens, user);
+    }
 
-        // Generate new tokens
-        String newAccessToken = jwtTokenService.generateAccessToken(toTokenData(user));
-        String newRefreshToken = jwtTokenService.generateRefreshToken(toTokenData(user));
+    /** {@inheritDoc} The ticket is consumed first (single use); the account is reactivated only once its Keycloak session proved alive. */
+    @Override
+    public AuthResponse reactivate(String ticket) {
+        ReactivationTicketStore.Ticket parked = reactivationTickets.consume(ticket)
+                .orElseThrow(AuthServiceImpl::ticketInvalid);
+        KeycloakTokens tokens;
+        try {
+            tokens = keycloak.refresh(parked.refreshToken());
+        } catch (UnauthorizedException e) {
+            // The parked session ended in the meantime (idle timeout, or another logout).
+            throw ticketInvalid();
+        }
+        try {
+            if (!parked.userId().equals(subjectOf(verify(tokens.accessToken())))) {
+                throw ticketInvalid();
+            }
+            UserResponse user = userService.reactivateUser(parked.userId());
+            userService.updateLastLogin(user.getId());
+            log.info("Re-activated user {} with a ticket", user.getId());
+            return sessionOf(tokens, user);
+        } catch (RuntimeException e) {
+            endSessionQuietly(tokens.refreshToken());
+            throw e;
+        }
+    }
 
-        // Save new refresh token
-        createRefreshToken(user.getId(), newRefreshToken);
+    /** {@inheritDoc} Never reveals whether the ticket existed. */
+    @Override
+    public void cancelReactivation(String ticket) {
+        reactivationTickets.consume(ticket).ifPresent(parked -> endSessionQuietly(parked.refreshToken()));
+    }
 
-        log.info("Refreshed tokens for user: {}", user.getEmail());
+    /**
+     * {@inheritDoc}
+     *
+     * <p>The cookie's token is Keycloak's. After the refresh grant the new access token goes through the same gate as
+     * every request ({@code getAccessState}); a user who is gone or deactivated ends the session and gets the generic
+     * "logged out" 401, never {@code ACCOUNT_DEACTIVATED} (that is the sign-in's, where the user can choose to come
+     * back) and never a 404 that would leak the id.
+     */
+    @Override
+    public AuthResponse refreshToken(String refreshTokenString) {
+        KeycloakTokens tokens = keycloak.refresh(refreshTokenString);
+        UUID userId;
+        try {
+            userId = subjectOf(verify(tokens.accessToken()));
+        } catch (RuntimeException e) {
+            endSessionQuietly(tokens.refreshToken());
+            throw e;
+        }
+        Optional<UserAccessState> state = userService.getAccessState(userId);
+        if (state.isEmpty() || !state.get().isActive()) {
+            endSessionQuietly(tokens.refreshToken());
+            throw new UnauthorizedException("REFRESH_TOKEN_EXPIRED_OR_REVOKED", "Refresh token expired or revoked", null);
+        }
+        UserResponse user = userService.getUserById(userId);
+        log.info("Refreshed tokens for user: {}", userId);
+        return sessionOf(tokens, user);
+    }
 
+    @Override
+    public void endSession(String refreshToken) {
+        keycloak.endSession(refreshToken);
+    }
+
+    private static UnauthorizedException ticketInvalid() {
+        return new UnauthorizedException("REACTIVATION_TICKET_INVALID",
+                "The re-activation request is invalid or has expired", null);
+    }
+
+    /**
+     * A token Keycloak itself just handed us must verify; if it does not (issuer, audience or key mismatch) this app is
+     * misconfigured, which is a 503 for the user, not a 401 they could fix by signing in again.
+     */
+    private Jwt verify(String accessToken) {
+        try {
+            return jwtDecoder.decode(accessToken);
+        } catch (JwtException e) {
+            log.error("A token issued by Keycloak failed verification: {}", e.getMessage());
+            throw new ServiceUnavailableException("The identity provider's token could not be verified", e);
+        }
+    }
+
+    private static UUID subjectOf(Jwt jwt) {
+        try {
+            return UUID.fromString(jwt.getSubject());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new ServiceUnavailableException("The identity provider's token has no usable subject", e);
+        }
+    }
+
+    private static ExternalIdentity identityOf(Jwt jwt, UUID userId) {
+        return ExternalIdentity.builder()
+                .id(userId)
+                .email(jwt.getClaimAsString("email"))
+                .emailVerified(Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified")))
+                .username(jwt.getClaimAsString("preferred_username"))
+                .firstName(jwt.getClaimAsString("given_name"))
+                .lastName(jwt.getClaimAsString("family_name"))
+                .fullName(jwt.getClaimAsString("name"))
+                .phoneNumber(jwt.getClaimAsString("phone_number"))
+                .languageCode(jwt.getClaimAsString("locale"))
+                .build();
+    }
+
+    /**
+     * Provisioning in its own transaction (inside {@code UserService}). Two first sign-ins for one subject can race; the
+     * loser fails on the primary key, or on the winner's email or phone (the same person, so those surface as a 409
+     * here), and a second call then simply finds the winner's row by id. A genuine clash (another account holds the
+     * email or phone) fails the same way again and is rethrown by that second call.
+     */
+    private UserResponse provision(ExternalIdentity identity) {
+        try {
+            return userService.provisionExternalUser(identity);
+        } catch (DataIntegrityViolationException | ConflictException e) {
+            log.info("First sign-in for {} lost a race or clashed ({}); re-reading the account", identity.getId(), e.getClass().getSimpleName());
+            return userService.provisionExternalUser(identity);
+        }
+    }
+
+    private void endSessionQuietly(String refreshToken) {
+        try {
+            keycloak.endSession(refreshToken);
+        } catch (RuntimeException e) {
+            log.warn("Could not end the Keycloak session: {}", e.getMessage());
+        }
+    }
+
+    /** The response of any successful sign-in or refresh: the access token in the body, the refresh token for the cookie. */
+    private AuthResponse sessionOf(KeycloakTokens tokens, UserResponse user) {
         return AuthResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
+                .accessToken(tokens.accessToken())
+                .refreshToken(tokens.refreshToken())
+                .refreshTokenMaxAgeSeconds(tokens.refreshExpiresIn())
                 .tokenType("Bearer")
-                .expiresIn(jwtProperties.getExpiration())
+                .expiresIn(tokens.expiresIn() * 1000)
                 .user(toUserResponse(user))
                 .build();
     }

@@ -10,13 +10,19 @@ import com.sportconnect.auth.repository.PasswordResetTokenRepository
 import com.sportconnect.auth.repository.RefreshTokenRepository
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ConflictException
-import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.common.exception.UnauthorizedException
 import com.sportconnect.user.api.dto.CredentialCheck
 import com.sportconnect.user.api.dto.UserRegistrationDetails
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserService
+import com.sportconnect.common.exception.ServiceUnavailableException
+import com.sportconnect.user.api.dto.ExternalIdentity
+import com.sportconnect.user.api.dto.UserAccessState
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.security.crypto.password.PasswordEncoder
+import org.springframework.security.oauth2.jwt.Jwt
+import org.springframework.security.oauth2.jwt.JwtDecoder
+import org.springframework.security.oauth2.jwt.JwtException
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -32,6 +38,9 @@ class AuthServiceImplSpec extends Specification {
     PasswordResetTokenRepository passwordResetTokenRepository
     UserService userService
     JwtProperties jwtProperties
+    KeycloakTokenClient keycloak
+    JwtDecoder jwtDecoder
+    ReactivationTicketStore tickets
 
     @Subject
     AuthServiceImpl authService
@@ -44,6 +53,9 @@ class AuthServiceImplSpec extends Specification {
         passwordResetTokenRepository = Mock(PasswordResetTokenRepository)
         userService = Mock(UserService)
         jwtProperties = Mock(JwtProperties)
+        keycloak = Mock(KeycloakTokenClient)
+        jwtDecoder = Mock(JwtDecoder)
+        tickets = Mock(ReactivationTicketStore)
 
         authService = new AuthServiceImpl(
             refreshTokenRepository,
@@ -52,7 +64,10 @@ class AuthServiceImplSpec extends Specification {
             emailVerificationRepository,
             passwordResetTokenRepository,
             userService,
-            jwtProperties
+            jwtProperties,
+            keycloak,
+            jwtDecoder,
+            tickets
         )
     }
 
@@ -221,88 +236,6 @@ class AuthServiceImplSpec extends Specification {
         0 * refreshTokenRepository.save(_)
     }
 
-    def "refresh for a user who is no longer active throws the generic REFRESH_TOKEN_EXPIRED_OR_REVOKED, not a 404 or ACCOUNT_DEACTIVATED"() {
-        given:
-        def userId = UUID.randomUUID()
-        def token = RefreshToken.builder().id(1L).userId(userId).token("t")
-                .expiresAt(LocalDateTime.now().plusDays(7)).build()
-        refreshTokenRepository.findByToken("t") >> Optional.of(token)
-        userService.getActiveUserForUpdate(userId) >> { throw new ResourceNotFoundException("User", "id", userId) }
-
-        when:
-        authService.refreshToken("t")
-
-        then:
-        def e = thrown(UnauthorizedException)
-        e.errorCode == "REFRESH_TOKEN_EXPIRED_OR_REVOKED"
-        !e.message.contains(userId.toString())
-        0 * refreshTokenRepository.save(_)
-        0 * jwtTokenService.generateAccessToken(_)
-    }
-
-    private UserResponse reactivationUser(String email) {
-        def userResponse = Mock(UserResponse)
-        userResponse.getId() >> UUID.randomUUID()
-        userResponse.getEmail() >> email
-        userResponse.getFirstName() >> "John"
-        userResponse.getLastName() >> "Doe"
-        userResponse.getUsername() >> null
-        userResponse.getRoles() >> new HashSet<>(["USER"])
-        userResponse.getIsActive() >> true
-        jwtTokenService.generateAccessToken(_) >> "access-token"
-        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
-        jwtTokenService.getRefreshExpiration() >> 604800000L
-        jwtProperties.getExpiration() >> 3600000L
-        return userResponse
-    }
-
-    def "reactivate re-activates a deactivated account and logs the user in"() {
-        given:
-        def request = LoginRequest.builder().email("gone@example.com").password("right").build()
-        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH_INACTIVE
-        def user = reactivationUser(request.email)
-
-        when:
-        def result = authService.reactivate(request)
-
-        then:
-        1 * userService.reactivateUserByEmail(request.email) >> user
-        1 * userService.updateLastLogin(_)
-        1 * refreshTokenRepository.save(_)
-        result.accessToken == "access-token"
-        result.refreshToken == "refresh-token"
-    }
-
-    def "reactivate with a wrong password throws INVALID_CREDENTIALS and reactivates nothing"() {
-        given:
-        def request = LoginRequest.builder().email("gone@example.com").password("wrong").build()
-        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.NO_MATCH
-
-        when:
-        authService.reactivate(request)
-
-        then:
-        def e = thrown(UnauthorizedException)
-        e.errorCode == "INVALID_CREDENTIALS"
-        0 * userService.reactivateUserByEmail(_)
-        0 * refreshTokenRepository.save(_)
-    }
-
-    def "reactivate for an already active account just logs the user in"() {
-        given:
-        def request = LoginRequest.builder().email("live@example.com").password("right").build()
-        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH
-        def user = reactivationUser(request.email)
-
-        when:
-        def result = authService.reactivate(request)
-
-        then:
-        0 * userService.reactivateUserByEmail(_)
-        1 * userService.getUserByEmail(request.email) >> user
-        result.accessToken == "access-token"
-    }
-
     def "should login user successfully"() {
         given: "a login request"
         def request = LoginRequest.builder()
@@ -341,108 +274,6 @@ class AuthServiceImplSpec extends Specification {
         1 * refreshTokenRepository.save(_)
     }
 
-    def "should throw UnauthorizedException when refresh token is invalid"() {
-        given: "an invalid refresh token"
-        def invalidToken = "invalid-token"
-        
-        and: "repository returns empty"
-        refreshTokenRepository.findByToken(invalidToken) >> Optional.empty()
-
-        when: "attempting to refresh token"
-        authService.refreshToken(invalidToken)
-
-        then: "should throw UnauthorizedException"
-        def exception = thrown(UnauthorizedException)
-        exception.message == "Invalid refresh token"
-        exception.errorCode == "REFRESH_TOKEN_INVALID"
-    }
-
-    def "should throw UnauthorizedException when refresh token is expired"() {
-        given: "an expired refresh token"
-        def tokenString = "expired-token"
-        def expiredToken = RefreshToken.builder()
-            .id(1L)
-            .userId(UUID.randomUUID())
-            .token(tokenString)
-            .expiresAt(LocalDateTime.now().minusDays(1))
-            .build()
-
-        and: "repository returns expired token"
-        refreshTokenRepository.findByToken(tokenString) >> Optional.of(expiredToken)
-
-        when: "attempting to refresh token"
-        authService.refreshToken(tokenString)
-
-        then: "should throw UnauthorizedException"
-        def exception = thrown(UnauthorizedException)
-        exception.message == "Refresh token expired or revoked"
-        exception.errorCode == "REFRESH_TOKEN_EXPIRED_OR_REVOKED"
-    }
-
-    def "should throw UnauthorizedException when refresh token is revoked"() {
-        given: "a revoked refresh token"
-        def tokenString = "revoked-token"
-        def revokedToken = RefreshToken.builder()
-            .id(1L)
-            .userId(UUID.randomUUID())
-            .token(tokenString)
-            .expiresAt(LocalDateTime.now().plusDays(7))
-            .revokedAt(LocalDateTime.now().minusHours(1))
-            .build()
-
-        and: "repository returns revoked token"
-        refreshTokenRepository.findByToken(tokenString) >> Optional.of(revokedToken)
-
-        when: "attempting to refresh token"
-        authService.refreshToken(tokenString)
-
-        then: "should throw UnauthorizedException"
-        def exception = thrown(UnauthorizedException)
-        exception.message == "Refresh token expired or revoked"
-        exception.errorCode == "REFRESH_TOKEN_EXPIRED_OR_REVOKED"
-    }
-
-    def "should refresh token successfully"() {
-        given: "a valid refresh token"
-        def tokenString = "valid-token"
-        def userId = UUID.randomUUID()
-        def validToken = RefreshToken.builder()
-            .id(1L)
-            .userId(userId)
-            .token(tokenString)
-            .expiresAt(LocalDateTime.now().plusDays(7))
-            .build()
-
-        and: "repository returns valid token"
-        refreshTokenRepository.findByToken(tokenString) >> Optional.of(validToken)
-
-        and: "user service returns user"
-        def userResponse = Mock(UserResponse)
-        userResponse.getId() >> userId
-        userResponse.getEmail() >> "test@example.com"
-        userResponse.getFirstName() >> "John"
-        userResponse.getLastName() >> "Doe"
-        userResponse.getUsername() >> null
-        userResponse.getRoles() >> new HashSet<>(["USER"])
-        userResponse.getIsActive() >> true
-        userService.getActiveUserForUpdate(userId) >> userResponse
-
-        and: "jwt service generates tokens"
-        jwtTokenService.generateAccessToken(_) >> "new-access-token"
-        jwtTokenService.generateRefreshToken(_) >> "new-refresh-token"
-        jwtTokenService.getRefreshExpiration() >> 604800000L
-        jwtProperties.getExpiration() >> 3600000L
-
-        when: "refreshing token"
-        def result = authService.refreshToken(tokenString)
-
-        then: "should return new auth response"
-        result != null
-        result.accessToken == "new-access-token"
-        result.refreshToken == "new-refresh-token"
-        2 * refreshTokenRepository.save(_) // One to revoke old token, one to save new token
-    }
-
     def "should logout user and revoke all tokens"() {
         given: "a user ID"
         def userId = UUID.randomUUID()
@@ -478,4 +309,340 @@ class AuthServiceImplSpec extends Specification {
         and: "should return token string"
         result == tokenString
     }
+
+    // ---------- A26: Keycloak sign-in ----------
+
+    private static final String ACCESS = "kc-access-token"
+
+    private static KeycloakTokens tokens(String refresh = "kc-refresh-token") {
+        new KeycloakTokens(ACCESS, refresh, 300L, 86400L)
+    }
+
+    private static Jwt jwt(UUID sub, Map<String, Object> extra = [:]) {
+        def builder = Jwt.withTokenValue(ACCESS).header("alg", "RS256").subject(sub.toString())
+        extra.each { k, v -> builder.claim(k, v) }
+        builder.build()
+    }
+
+    private UserResponse userResponse(UUID id, boolean active) {
+        UserResponse.builder().id(id).email("u@example.com").firstName("U").lastName("Ser")
+                .isActive(active).roles(new HashSet<>(["USER"])).build()
+    }
+
+    def "callback provisions the user from the verified token's claims and opens the session"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", email_verified: true, preferred_username: "au",
+                given_name: "A", family_name: "U", name: "A U", phone_number: "0901234567", locale: "vi"])
+
+        when:
+        def result = authService.callback("c", "v")
+
+        then:
+        1 * userService.provisionExternalUser({ ExternalIdentity i ->
+            i.id == sub && i.email == "a@example.com" && i.emailVerified && i.username == "au" &&
+                    i.firstName == "A" && i.lastName == "U" && i.fullName == "A U" &&
+                    i.phoneNumber == "0901234567" && i.languageCode == "vi"
+        }) >> userResponse(sub, true)
+        1 * userService.updateLastLogin(sub)
+        result.accessToken == ACCESS
+        result.refreshToken == "kc-refresh-token"
+        result.refreshTokenMaxAgeSeconds == 86400L
+        result.expiresIn == 300000L
+        0 * keycloak.endSession(_)
+    }
+
+    def "callback treats an absent email_verified claim as unverified"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        1 * userService.provisionExternalUser({ ExternalIdentity i -> !i.emailVerified }) >> userResponse(sub, true)
+    }
+
+    def "callback for a deactivated social user re-activates and opens the session"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", identity_provider: "google"])
+        userService.provisionExternalUser(_) >> userResponse(sub, false)
+
+        when:
+        def result = authService.callback("c", "v")
+
+        then:
+        1 * userService.reactivateUser(sub) >> userResponse(sub, true)
+        1 * userService.updateLastLogin(sub)
+        0 * tickets.issue(_, _)
+        result.accessToken == ACCESS
+    }
+
+    def "callback for a deactivated password user issues a ticket and throws ACCOUNT_DEACTIVATED carrying it, with no session"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens("parked-refresh")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
+        userService.provisionExternalUser(_) >> userResponse(sub, false)
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        1 * tickets.issue(sub, "parked-refresh") >> "the-ticket"
+        def e = thrown(UnauthorizedException)
+        e.errorCode == "ACCOUNT_DEACTIVATED"
+        e.errorParams == [reactivationTicket: "the-ticket"]
+        0 * userService.reactivateUser(_)
+        0 * userService.updateLastLogin(_)
+        0 * keycloak.endSession(_)
+    }
+
+    def "callback ends the Keycloak session when the ticket store is down, and answers 503"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens("parked-refresh")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
+        userService.provisionExternalUser(_) >> userResponse(sub, false)
+        tickets.issue(_, _) >> { throw new ServiceUnavailableException("redis down") }
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        thrown(ServiceUnavailableException)
+        1 * keycloak.endSession("parked-refresh")
+    }
+
+    def "callback ends the Keycloak session when provisioning fails"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens("fresh-refresh")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [:])
+        userService.provisionExternalUser(_) >> {
+            throw new BadRequestException("IDENTIFIER_REQUIRED", "An email or a phone number is required", null)
+        }
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == "IDENTIFIER_REQUIRED"
+        1 * keycloak.endSession("fresh-refresh")
+    }
+
+    def "callback re-reads the account when a concurrent first sign-in won the race"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
+
+        when:
+        def result = authService.callback("c", "v")
+
+        then:
+        1 * userService.provisionExternalUser(_) >> { throw new DataIntegrityViolationException("users_pkey") }
+        1 * userService.provisionExternalUser(_) >> userResponse(sub, true)
+        result.accessToken == ACCESS
+    }
+
+    def "callback retries once on a conflict, and a genuine clash still surfaces"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens("fresh-refresh")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
+        userService.provisionExternalUser(_) >> { throw new ConflictException("PHONE_ALREADY_USED", "taken", null) }
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        def e = thrown(ConflictException)
+        e.errorCode == "PHONE_ALREADY_USED"
+        1 * keycloak.endSession("fresh-refresh")
+    }
+
+    def "callback answers 503, not 401, when the token Keycloak issued fails verification, and ends the session"() {
+        given:
+        keycloak.exchangeCode("c", "v") >> tokens("fresh-refresh")
+        jwtDecoder.decode(ACCESS) >> { throw new JwtException("bad issuer") }
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        thrown(ServiceUnavailableException)
+        1 * keycloak.endSession("fresh-refresh")
+        0 * userService.provisionExternalUser(_)
+    }
+
+    def "callback passes through a refused code untouched"() {
+        given:
+        keycloak.exchangeCode("c", "v") >> { throw new UnauthorizedException("AUTH_CODE_INVALID", "no", null) }
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.errorCode == "AUTH_CODE_INVALID"
+        0 * keycloak.endSession(_)
+    }
+
+    def "reactivate with a valid ticket reactivates the account and releases a fresh session"() {
+        given:
+        def sub = UUID.randomUUID()
+        tickets.consume("t") >> Optional.of(new ReactivationTicketStore.Ticket(sub, "parked-refresh"))
+        keycloak.refresh("parked-refresh") >> tokens("new-refresh")
+        jwtDecoder.decode(ACCESS) >> jwt(sub)
+
+        when:
+        def result = authService.reactivate("t")
+
+        then:
+        1 * userService.reactivateUser(sub) >> userResponse(sub, true)
+        1 * userService.updateLastLogin(sub)
+        result.refreshToken == "new-refresh"
+        result.accessToken == ACCESS
+    }
+
+    def "reactivate with an unknown, expired or used ticket throws REACTIVATION_TICKET_INVALID and changes nothing"() {
+        given:
+        tickets.consume("t") >> Optional.empty()
+
+        when:
+        authService.reactivate("t")
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.errorCode == "REACTIVATION_TICKET_INVALID"
+        0 * userService.reactivateUser(_)
+        0 * keycloak.refresh(_)
+    }
+
+    def "reactivate whose parked session has ended is REACTIVATION_TICKET_INVALID and does not reactivate"() {
+        given:
+        def sub = UUID.randomUUID()
+        tickets.consume("t") >> Optional.of(new ReactivationTicketStore.Ticket(sub, "parked-refresh"))
+        keycloak.refresh("parked-refresh") >> {
+            throw new UnauthorizedException("REFRESH_TOKEN_EXPIRED_OR_REVOKED", "gone", null)
+        }
+
+        when:
+        authService.reactivate("t")
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.errorCode == "REACTIVATION_TICKET_INVALID"
+        0 * userService.reactivateUser(_)
+    }
+
+    def "reactivate refuses a session that belongs to someone else than the ticket's user, and ends it"() {
+        given:
+        def sub = UUID.randomUUID()
+        tickets.consume("t") >> Optional.of(new ReactivationTicketStore.Ticket(sub, "parked-refresh"))
+        keycloak.refresh("parked-refresh") >> tokens("new-refresh")
+        jwtDecoder.decode(ACCESS) >> jwt(UUID.randomUUID())
+
+        when:
+        authService.reactivate("t")
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.errorCode == "REACTIVATION_TICKET_INVALID"
+        1 * keycloak.endSession("new-refresh")
+        0 * userService.reactivateUser(_)
+    }
+
+    def "cancelling a ticket ends the parked session; an unknown ticket is a silent no-op"() {
+        when:
+        authService.cancelReactivation("t")
+        authService.cancelReactivation("unknown")
+
+        then:
+        1 * tickets.consume("t") >> Optional.of(new ReactivationTicketStore.Ticket(UUID.randomUUID(), "parked-refresh"))
+        1 * tickets.consume("unknown") >> Optional.empty()
+        1 * keycloak.endSession("parked-refresh")
+    }
+
+    def "cancelling still succeeds when Keycloak cannot be reached to end the session"() {
+        given:
+        tickets.consume("t") >> Optional.of(new ReactivationTicketStore.Ticket(UUID.randomUUID(), "parked-refresh"))
+        keycloak.endSession("parked-refresh") >> { throw new ServiceUnavailableException("down") }
+
+        when:
+        authService.cancelReactivation("t")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "refresh of an active user returns the new tokens"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.refresh("old") >> tokens("rotated")
+        jwtDecoder.decode(ACCESS) >> jwt(sub)
+        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true, ["USER"]))
+        userService.getUserById(sub) >> userResponse(sub, true)
+
+        when:
+        def result = authService.refreshToken("old")
+
+        then:
+        result.refreshToken == "rotated"
+        result.accessToken == ACCESS
+        0 * keycloak.endSession(_)
+    }
+
+    def "refresh for a deactivated or unprovisioned user ends the session and throws the generic REFRESH_TOKEN_EXPIRED_OR_REVOKED"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.refresh("old") >> tokens("rotated")
+        jwtDecoder.decode(ACCESS) >> jwt(sub)
+        userService.getAccessState(sub) >> state
+
+        when:
+        authService.refreshToken("old")
+
+        then:
+        def e = thrown(UnauthorizedException)
+        e.errorCode == "REFRESH_TOKEN_EXPIRED_OR_REVOKED"
+        !e.message.contains(sub.toString())
+        1 * keycloak.endSession("rotated")
+        0 * userService.getUserById(_)
+
+        where:
+        state << [Optional.of(new UserAccessState(false, ["USER"])), Optional.empty()]
+    }
+
+    def "refresh passes Keycloak's refusal and outage through"() {
+        given:
+        keycloak.refresh("old") >> { throw failure }
+
+        when:
+        authService.refreshToken("old")
+
+        then:
+        thrown(failure.class)
+
+        where:
+        failure << [new UnauthorizedException("REFRESH_TOKEN_EXPIRED_OR_REVOKED", "gone", null),
+                    new ServiceUnavailableException("down")]
+    }
+
+    def "endSession delegates to Keycloak and lets an outage through"() {
+        when:
+        authService.endSession("r")
+
+        then:
+        1 * keycloak.endSession("r") >> { throw new ServiceUnavailableException("down") }
+        thrown(ServiceUnavailableException)
+    }
+
 }

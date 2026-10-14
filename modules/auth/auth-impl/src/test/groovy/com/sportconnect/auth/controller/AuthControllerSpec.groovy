@@ -128,20 +128,78 @@ class AuthControllerSpec extends Specification {
         0 * authService.refreshToken(_)
     }
 
-    def "logout derives the user from the principal, revokes their session, and clears the cookie"() {
-        given:
-        def userId = UUID.randomUUID()
-        Authentication authentication = Stub(Authentication) {
-            isAuthenticated() >> true
-            getPrincipal() >> userId.toString()
-        }
-
+    def "logout ends the Keycloak session of the cookie's refresh token and clears the cookie, with no principal needed"() {
         when:
-        def result = mockMvc.perform(post("/api/auth/logout").principal(authentication))
+        def result = mockMvc.perform(post("/api/auth/logout").cookie(new jakarta.servlet.http.Cookie("refreshToken", "the-refresh-token")))
 
         then:
         result.andExpect(status().isOk())
                 .andExpect(cookie().maxAge("refreshToken", 0))
-        1 * authService.logout(userId)
+        1 * authService.endSession("the-refresh-token")
+    }
+
+    def "logout without a cookie is a 200 that still clears the cookie and calls nothing"() {
+        when:
+        def result = mockMvc.perform(post("/api/auth/logout"))
+
+        then:
+        result.andExpect(status().isOk())
+                .andExpect(cookie().maxAge("refreshToken", 0))
+        0 * authService.endSession(_)
+    }
+
+    def "logout leaves the cookie alone and answers 503 when Keycloak cannot end the session"() {
+        given:
+        authService.endSession("the-refresh-token") >> { throw new com.sportconnect.common.exception.ServiceUnavailableException("down") }
+
+        when:
+        def result = mockMvc.perform(post("/api/auth/logout").cookie(new jakarta.servlet.http.Cookie("refreshToken", "the-refresh-token")))
+
+        then:
+        result.andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath('$.errorCode').value("SERVICE_UNAVAILABLE"))
+                .andExpect(cookie().doesNotExist("refreshToken"))
+    }
+
+    def "callback sets the cookie from the response's refresh token, with Max-Age taken from Keycloak"() {
+        given:
+        authService.callback("the-code", "v" * 43) >> authResponse("kc-refresh").tap { it.refreshTokenMaxAgeSeconds = 86400L }
+
+        expect:
+        mockMvc.perform(post("/api/auth/callback").contentType("application/json")
+                .content('{"code":"the-code","codeVerifier":"' + ("v" * 43) + '"}'))
+                .andExpect(status().isOk())
+                .andExpect(cookie().value("refreshToken", "kc-refresh"))
+                .andExpect(cookie().maxAge("refreshToken", 86400))
+                .andExpect(cookie().httpOnly("refreshToken", true))
+                .andExpect(jsonPath('$.data.refreshToken').doesNotExist())
+    }
+
+    def "callback rejects a body without a verifier before the service is called"() {
+        when:
+        def result = mockMvc.perform(post("/api/auth/callback").contentType("application/json").content('{"code":"abc"}'))
+
+        then:
+        result.andExpect(status().isBadRequest())
+        0 * authService.callback(_, _)
+    }
+
+    def "reactivate takes the ticket, not credentials, and sets the cookie"() {
+        given:
+        authService.reactivate("the-ticket") >> authResponse("kc-refresh")
+
+        expect:
+        mockMvc.perform(post("/api/auth/reactivate").contentType("application/json").content('{"ticket":"the-ticket"}'))
+                .andExpect(status().isOk())
+                .andExpect(cookie().value("refreshToken", "kc-refresh"))
+    }
+
+    def "reactivate/cancel always answers 200 and passes the ticket on"() {
+        when:
+        def result = mockMvc.perform(post("/api/auth/reactivate/cancel").contentType("application/json").content('{"ticket":"the-ticket"}'))
+
+        then:
+        result.andExpect(status().isOk())
+        1 * authService.cancelReactivation("the-ticket")
     }
 }

@@ -75,6 +75,8 @@ Keycloak imports with strategy IGNORE_EXISTING: editing the JSON does nothing to
 
 ## Notes for the next tickets
 
+- **A26 (2026-10-14) added to the realm file:** the `identity_provider` user-session-note mapper (present only for a brokered login), `locale` and `phone_number` attribute mappers on `sportconnect-web`, and an optional `phoneNumber` user-profile attribute (length only; A27 adds the phone rules). Re-import with the procedure above. The realm keeps Keycloak's default of **not** revoking a refresh token on use.
+
 - `aud` also contains `account` (Keycloak's default role audience). A25 must require `sportconnect-api` in `aud`, not just any audience.
 - Keycloak's built-in Vietnamese strings do not exist (A23); `vi` is enabled but the pages render English until the theme (AUTH-15) carries the translations.
 - Unmanaged user attributes (a `phone` attribute) are not enabled yet; A27 adds the phone attribute and its rules.

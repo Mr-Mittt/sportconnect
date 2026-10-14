@@ -48,6 +48,10 @@ public abstract class BaseIT {
     static void keycloakProperties(DynamicPropertyRegistry registry) {
         registry.add("app.keycloak.issuer-uri", () -> TestKeycloak.ISSUER);
         registry.add("app.keycloak.jwk-set-uri", () -> TestKeycloak.JWK_SET_URI);
+        // A26: the backend's code exchange, refresh and end-session calls go to the same stand-in.
+        registry.add("app.keycloak.token-uri", () -> TestKeycloak.TOKEN_URI);
+        registry.add("app.keycloak.logout-uri", () -> TestKeycloak.LOGOUT_URI);
+        registry.add("app.keycloak.redirect-uri", () -> TestKeycloak.REDIRECT_URI);
     }
 
     /** The {@code Authorization} header value for a valid Keycloak-style token of {@code userId} (A25). */

@@ -124,20 +124,21 @@ class AuthErrorCodesIntegrationTest extends BaseIT {
     }
 
     @Test
-    void refresh_unknownToken_is401_withRefreshTokenInvalid() throws Exception {
+    void refresh_unknownToken_is401_withRefreshTokenExpiredOrRevoked() throws Exception {
+        // A26: Keycloak does not distinguish "never issued" from "expired" (both invalid_grant), so neither do we;
+        // REFRESH_TOKEN_INVALID is no longer returned.
         mockMvc.perform(post("/api/auth/refresh").with(anonymous()).cookie(new Cookie("refreshToken", "not-a-real-token")))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Invalid refresh token"))
-                .andExpect(jsonPath("$.errorCode").value("REFRESH_TOKEN_INVALID"));
+                .andExpect(jsonPath("$.message").value("Refresh token expired or revoked"))
+                .andExpect(jsonPath("$.errorCode").value("REFRESH_TOKEN_EXPIRED_OR_REVOKED"));
     }
 
     @Test
-    void refresh_revokedToken_is401_withRefreshTokenExpiredOrRevoked() throws Exception {
-        jdbc.update("INSERT INTO refresh_tokens (user_id, token, expires_at, revoked_at) VALUES (?, ?, ?, ?)",
-                UUID.randomUUID(), "revoked-token", Timestamp.valueOf(LocalDateTime.now().plusDays(1)),
-                Timestamp.valueOf(LocalDateTime.now().minusMinutes(1)));
+    void refresh_endedSession_is401_withRefreshTokenExpiredOrRevoked() throws Exception {
+        String token = TestKeycloak.startSession(TestKeycloak.Identity.of(UUID.randomUUID()).email("ended@example.com"));
+        TestKeycloak.expireSession(token);
 
-        mockMvc.perform(post("/api/auth/refresh").with(anonymous()).cookie(new Cookie("refreshToken", "revoked-token")))
+        mockMvc.perform(post("/api/auth/refresh").with(anonymous()).cookie(new Cookie("refreshToken", token)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("REFRESH_TOKEN_EXPIRED_OR_REVOKED"));
     }

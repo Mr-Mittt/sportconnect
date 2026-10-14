@@ -85,11 +85,6 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authorizeHttpRequests(auth -> auth
-                        // Logout must be authenticated (derives the user from the principal, see
-                        // AuthController). It is not in the explicit permit list below, so it falls
-                        // through to authenticated either way; the rule stays to state the intent.
-                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
-
                         // A7: the public auth surface is an explicit list, not "/api/auth/**" — a new
                         // endpoint added under /api/auth must be a conscious permitAll here, otherwise it
                         // defaults to authenticated. Everything below is reachable without a token because
@@ -99,10 +94,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login",
-                                // A9: confirms a re-activation after login answered ACCOUNT_DEACTIVATED; the caller
-                                // has no token (it was withheld), and the credentials are re-verified in the handler.
+                                // A26: completes the Keycloak sign-in; the caller has no token yet, the code and PKCE
+                                // verifier are the proof and Keycloak checks them.
+                                "/api/auth/callback",
+                                // A26: confirm or decline a re-activation after the sign-in answered ACCOUNT_DEACTIVATED;
+                                // the caller has no token (it was withheld), the one-time ticket is the proof.
                                 "/api/auth/reactivate",
+                                "/api/auth/reactivate/cancel",
                                 "/api/auth/refresh",
+                                // A26: driven by the refresh-token cookie (SameSite=Strict, Path=/api/auth), not a Bearer
+                                // token, which is often expired by the time someone logs out. No cookie is a no-op 200.
+                                "/api/auth/logout",
                                 "/api/auth/verify-email",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",

@@ -9,7 +9,6 @@ import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import com.sportconnect.user.service.UserServiceImpl;
-import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,24 +23,23 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * A9 end-to-end: a deactivated account can come back by the user's own confirmation.
+ * A9's legacy password endpoints for a deactivated account (retired by A28).
  * <ul>
  *   <li>login with the right password answers {@code ACCOUNT_DEACTIVATED} (no tokens, no cookie); with a wrong
  *       password it still answers {@code INVALID_CREDENTIALS};</li>
- *   <li>{@code POST /api/auth/reactivate} re-verifies the credentials, re-activates, and logs in; the access token
- *       it returns works, while one issued before the deactivation stays revoked (U12);</li>
- *   <li>refresh for a deactivated user is the generic {@code REFRESH_TOKEN_EXPIRED_OR_REVOKED}, never a 404 that
- *       leaks the user id and never {@code ACCOUNT_DEACTIVATED};</li>
  *   <li>a deactivated email still counts as registered, and a password reset works for a deactivated user without
  *       re-activating them.</li>
  * </ul>
- * Real {@code UserServiceImpl.deleteUser()} for the deactivation, real Redis (the JWT filter's revocation check).
+ * Real {@code UserServiceImpl.deleteUser()} for the deactivation, real Redis.
+ *
+ * <p>A26 moved the rest of what this class used to cover: re-activation is now the ticket flow (confirm, cancel, expiry,
+ * social auto-reactivate) and refresh of a deactivated user is a Keycloak refresh, both in
+ * {@link KeycloakCallbackIntegrationTest}.
  */
 class AccountReactivationIntegrationTest extends RedisBaseIT {
 
@@ -135,75 +133,6 @@ class AccountReactivationIntegrationTest extends RedisBaseIT {
         postJson("/api/auth/login", credentials("a9-wrong@example.com", "not-the-password"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"));
-    }
-
-    // ---------- reactivate ----------
-
-    @Test
-    void reactivate_withCorrectCredentials_reactivatesAndLogsIn_withAWorkingAccessToken() throws Exception {
-        registerAndDeactivate("a9-react@example.com");
-
-        MvcResult result = postJson("/api/auth/reactivate", credentials("a9-react@example.com", PASSWORD))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
-                .andReturn();
-
-        assertThat(isActive("a9-react@example.com")).isTrue();
-        assertThat(result.getResponse().getCookie("refreshToken")).isNotNull();
-
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessTokenOf(result)))
-                .andExpect(status().isOk());
-        // A25: the gate follows the account state, not the token, so a token issued before the deactivation works
-        // again once the account is active (the deactivated period itself is covered by SelfDeactivationIntegrationTest).
-    }
-
-    @Test
-    void reactivate_withAWrongPassword_isInvalidCredentials_andTheAccountStaysDeactivated() throws Exception {
-        registerAndDeactivate("a9-nope@example.com");
-
-        postJson("/api/auth/reactivate", credentials("a9-nope@example.com", "not-the-password"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"));
-
-        assertThat(isActive("a9-nope@example.com")).isFalse();
-    }
-
-    @Test
-    void reactivate_forAnUnknownEmail_isInvalidCredentials() throws Exception {
-        postJson("/api/auth/reactivate", credentials("nobody@example.com", PASSWORD))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_CREDENTIALS"));
-    }
-
-    @Test
-    void reactivate_forAnAlreadyActiveAccount_justLogsIn() throws Exception {
-        register("a9-live@example.com");
-
-        postJson("/api/auth/reactivate", credentials("a9-live@example.com", PASSWORD))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
-
-        assertThat(isActive("a9-live@example.com")).isTrue();
-    }
-
-    // ---------- refresh ----------
-
-    @Test
-    void refresh_forADeactivatedUserWithAnUnrevokedToken_isTheGeneric401_withNoUserIdLeak() throws Exception {
-        MvcResult registered = register("a9-refresh@example.com");
-        String userId = userIdOf(registered);
-        String refreshToken = registered.getResponse().getCookie("refreshToken").getValue();
-        // Deactivate WITHOUT revoking the refresh token (the race U12 closed, or a token that slipped through).
-        jdbc.update("UPDATE users SET is_active = FALSE WHERE id = ?", UUID.fromString(userId));
-
-        MvcResult result = mockMvc.perform(post("/api/auth/refresh").with(anonymous())
-                        .cookie(new Cookie("refreshToken", refreshToken)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.errorCode").value("REFRESH_TOKEN_EXPIRED_OR_REVOKED"))
-                .andReturn();
-
-        assertThat(result.getResponse().getContentAsString()).doesNotContain(userId);
     }
 
     // ---------- register / forgot-reset interplay ----------

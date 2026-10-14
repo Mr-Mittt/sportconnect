@@ -23,6 +23,13 @@ public class AuthResponse {
     @JsonIgnore
     private String refreshToken;
 
+    /**
+     * A26: how long the refresh token lives (seconds), from Keycloak's {@code refresh_expires_in}; the controller uses it
+     * as the cookie's {@code Max-Age}. Never serialized. {@code null} falls back to {@code app.jwt.refresh-expiration}.
+     */
+    @JsonIgnore
+    private Long refreshTokenMaxAgeSeconds;
+
     private String tokenType;
     private Long expiresIn;
     private Object user; // Generic object to avoid circular dependency with user module

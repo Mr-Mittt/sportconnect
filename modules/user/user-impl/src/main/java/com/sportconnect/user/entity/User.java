@@ -4,13 +4,15 @@ import com.sportconnect.user.api.dto.PhoneMask;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,6 +21,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.locationtech.jts.geom.Point;
+import org.springframework.data.domain.Persistable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -34,11 +37,25 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class User {
+public class User implements Persistable<UUID> {
 
+    /**
+     * Assigned, not generated (A26): a user provisioned from Keycloak takes the token's `sub` as its id, so the
+     * subject resolves to the row with no mapping table. A new user without a supplied id gets a random one here.
+     */
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+    @Builder.Default
+    private UUID id = UUID.randomUUID();
+
+    /**
+     * Spring Data decides between `persist` and `merge` by this flag, because an assigned id is never null (a
+     * `merge` would SELECT first and, worse, treat the row as detached). True until the entity is loaded or saved.
+     */
+    @Transient
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    @Builder.Default
+    private boolean newEntity = true;
 
     /** Nullable since U23: a phone-only account (e.g. Zalo without an email) has none. At least one of email/phoneNumber is set (DB check). */
     @Column(unique = true, length = 255)
@@ -136,6 +153,17 @@ public class User {
 
     public void removeRole(Role role) {
         this.roles.remove(role);
+    }
+
+    @Override
+    public boolean isNew() {
+        return newEntity;
+    }
+
+    @PostLoad
+    @PostPersist
+    void markNotNew() {
+        this.newEntity = false;
     }
 
     public String getFullName() {
