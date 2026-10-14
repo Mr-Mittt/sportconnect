@@ -2,6 +2,7 @@
 
 **Date:** 2026-07-08
 **Status:** Agreed (discussion between repo owner + Claude, unblocking INFRA-3)
+**Amended:** 2026-10-13 — Oracle Always Free proposed as the replacement host, **pending the INFRA-12 spike** (see the amendment below). The AWS decision stands until that spike says go.
 **Supersedes:** the "blocked on a hosting decision" note on INFRA-3 in `BACKLOG_MVP.md`
 
 ---
@@ -66,13 +67,37 @@ re-litigated from scratch later:
 
 | Option | Why not |
 |---|---|
-| **Oracle Cloud "Always Free"** | The closest AWS equivalent — permanently free ARM compute (4 OCPUs/24GB RAM) generous enough to self-host the server, Postgres+PostGIS, and Redis together, no 12-month clock. Real blocker: ARM capacity is frequently unavailable for new signups ("out of host capacity" errors) since the free pool is a limited, oversubscribed physical allocation, not elastic cloud capacity. Worth revisiting if AWS's 12-month clock becomes a real cost concern. |
+| **Oracle Cloud "Always Free"** | The closest AWS equivalent — permanently free ARM compute (2 OCPUs/12GB RAM on Oracle's page as read 2026-10-13; earlier notes said 4/24) generous enough to self-host the server, Postgres+PostGIS, and Redis together, no 12-month clock. Real blocker: ARM capacity is frequently unavailable for new signups ("out of host capacity" errors) since the free pool is a limited, oversubscribed physical allocation, not elastic cloud capacity. Worth revisiting if AWS's 12-month clock becomes a real cost concern. |
 | **Azure** | Same shape as AWS (12-month free VM), plus a free Postgres Flexible Server SKU — but three separate free-tier clocks to track across services instead of one. No clear advantage over AWS. |
 | **Google Cloud** | Cloud Run compute is genuinely always-free, but Cloud SQL (managed Postgres) has **no free tier at all** — billed from day one. The database is the one piece this app can't skip, so GCP doesn't actually solve the problem. |
 | **Render** | Free web service + free Postgres, but the free Postgres is **auto-deleted after 30 days** — fine for a demo, not for anything meant to stay up. |
 | **Supabase (DB) + Vercel (client)** | Supabase ships PostGIS enabled by default on its free tier — best-in-class free Postgres+PostGIS fit — and Vercel's free static hosting is excellent. Neither hosts a long-running JVM process, though, so this only solves 2 of 3 pieces; would still need a separate compute host. |
 | **Fly.io / Railway** | Both commonly recommended, both no longer offer a real free tier: Fly.io ended no-card free allowances for new orgs in 2024 (now requires a payment method); Railway retired its unlimited free plan in 2023 (one-time trial credit only, then usage-based). |
 | **Self-host on a personal laptop** | Genuinely $0 and technically workable (Cloudflare Tunnel solves the CGNAT/no-public-IP problem most home ISPs create), but the risk profile is different in kind, not degree: a compromised laptop has your actual files on it (vs. a disposable cloud VM), uptime depends on the machine never sleeping/rebooting, and there's no failover. Reasonable for a dedicated spare machine hosting a low-stakes demo; not something to point real users' trust at. |
+
+## Amendment 2026-10-13 — Oracle Always Free is the leading candidate (proposed, gated on INFRA-12)
+
+**Status:** Proposed. Not yet a decision. INFRA-3..6 must not be picked up until INFRA-12 resolves this.
+
+**Why reopen:** the 1 GB EC2 box holds only the server and Redis. It cannot also hold RabbitMQ (already in the dev compose), the chat service's needs, or Keycloak (a possible answer to the social-login and session-revocation work: auth A15/A18/A19/A20). The owner has created an Oracle Cloud Always Free account, and the original objection above (ARM capacity) is now testable rather than assumed.
+
+**What Oracle's Always Free page lists (read 2026-10-13):**
+
+| Resource | Limit |
+|---|---|
+| Ampere A1 (Arm) | 2 OCPU and 12 GB total (1,500 OCPU-hours and 9,000 GB-hours a month) |
+| AMD micro VMs | up to 2, 1/8 OCPU and 1 GB each (too small to use) |
+| Block and boot storage | 200 GB, 5 backups |
+| Egress | 10 TB a month |
+| Object Storage | 20 GB (expired-trial / always-free state) |
+| Idle reclamation | instance may be reclaimed after 7 days with CPU, network and (A1) memory all under 20% |
+| Outbound port 25 | blocked by default |
+
+**Estimated fit (estimates, to be measured by INFRA-12):** server ~0.7–0.9 GB, chat ~0.1 GB, Postgres+PostGIS ~0.7–1.2 GB, Redis ~0.1 GB, RabbitMQ ~0.15–0.4 GB, Keycloak ~1–1.5 GB, Caddy and OS ~0.5 GB: about 3.5–5 GB of 12 GB.
+
+**Open risks the spike must answer:** A1 capacity in the home region; `postgis/postgis` and our images on arm64 (multi-arch builds); single VM with no managed database (backups are ours); reclamation rules; no GitHub-OIDC-to-cloud-role equivalent (deploy-credential design); client delivery without CloudFront; blocked port 25.
+
+**If INFRA-12 says go:** this amendment becomes the decision, the table at the top is replaced, and INFRA-3..6 are rewritten against Oracle. **If no-go:** this section is kept as the record of why, and the AWS shape above stands.
 
 ## What this unblocks
 

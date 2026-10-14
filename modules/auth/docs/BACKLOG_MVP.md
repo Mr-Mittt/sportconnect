@@ -25,6 +25,8 @@
 | 4 | [A17](MVP/A17_WIRE_VERIFICATION_AND_WELCOME_EMAILS.md) | Wire the verification email into `register` (after commit) and the welcome email into `verify-email`; neither is sent today, A13 only localises them; needs a decision on gating on verified email | `TODO` |
 | 5 | [A18](MVP/A18_SESSION_LIST_AND_REVOKE_ONE.md) | Active-session list and revoke-one (`GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`) with display-only `User-Agent`/IP; split out of A15; client **AUTH-12** | `TODO` |
 | 6 | [A20](MVP/A20_WEBSOCKET_AND_CHAT_ACCEPT_REVOKED_TOKENS.md) | Security gap, medium: the STOMP `CONNECT` interceptor (notification-impl) and the chat service verify signature and expiry only, so a token that REST rejects as revoked (logout, deactivation, password reset) still opens a socket or chat until it expires; found by the A15 census; do after A15 | `TODO` |
+| 7 | [A22](MVP/A22_USERS_WITHOUT_EMAIL_RECOVERY_AND_NOTIFICATION_PATH.md) | Accounts with no email (phone-only, Zalo) have no recovery or notification path: add/verify email later, what password reset and the verification/welcome emails do when `email` is null; depends on the social-login feature; client follow-up to be filed with the decision | `TODO` |
+| 8 | [A23](MVP/A23_SPIKE_KEYCLOAKIFY_LOGIN_THEME.md) | Spike: Keycloak + a Keycloakify login theme (Authorization Code + PKCE, hosted pages in our look) vs the password-grant hybrid, for Google/Facebook/Zalo sign-in; gates the social-login feature and the closing of A15/A18/A19; production hosting waits for INFRA-12 | `TODO` |
 
 ---
 

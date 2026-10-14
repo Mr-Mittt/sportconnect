@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `infra` (repo-level infrastructure: CI/CD, environments, deployment)
-**Last updated:** 2026-10-11
+**Last updated:** 2026-10-13
 
 ---
 
@@ -29,15 +29,16 @@ green run exists" pattern.
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [INFRA-3](MVP/INFRA-3_HOSTING_DECISION.md) | AWS foundation (EC2 + RDS + S3/CloudFront + OIDC role) | `TODO` |
-| 2 | [INFRA-4](MVP/INFRA-4_SERVER_DOCKERFILE_GHCR_PUBLISH_WORKFLOW.md) | Server Dockerfile + GHCR publish workflow | `TODO` |
-| 3 | [INFRA-5](MVP/INFRA-5_CLIENT_STATIC_BUILD_S3_CLOUDFRONT_DEPLOY.md) | Client static build + S3/CloudFront deploy | `TODO` |
-| 4 | [INFRA-6](MVP/INFRA-6_DEPLOYMENT_PIPELINE.md) | Deployment pipeline (`deploy.yml`) | `TODO` |
-| 5 | [INFRA-7](MVP/INFRA-7_REVERSE_PROXY_PATH_ROUTING_FOR_SERVICES_CHAT.md) | Reverse-proxy path-routing for `services/chat` | `TODO` |
-| 6 | [INFRA-8](MVP/INFRA-8_SERVICES_CHAT_DOCKERFILE_PUBLISH_WORKFLOW.md) | `services/chat` Dockerfile publish workflow | `TODO` |
-| 7 | [INFRA-9](MVP/INFRA-9_INTERNAL_NETWORK_ISOLATION.md) | `/internal/**` network isolation | `TODO` |
-| 8 | [INFRA-10](MVP/INFRA-10_SWAGGER_AND_OAUTH_TOKEN_EXPOSURE_IN_DEPLOYED_ENVIRONMENTS.md) | Swagger UI, `/api-docs` and `oauth-token` are public in every profile — decide what a deployed environment exposes; found during auth A7 | `TODO` |
-| 9 | [INFRA-11](MVP/INFRA-11_EMAIL_CONFIGURATION_IN_DEPLOYED_ENVIRONMENTS.md) | Email configuration (`MAIL_*`, `EMAIL_FROM`, link URLs) per environment; nothing sets them today | `TODO` |
+| 1 | [INFRA-12](MVP/INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md) | Spike: can the whole stack (and Keycloak) run on Oracle Cloud Always Free? Gates INFRA-3..6 — see the amendment in the hosting decision (2026-10-13) | `TODO` |
+| 2 | [INFRA-3](MVP/INFRA-3_HOSTING_DECISION.md) | AWS foundation (EC2 + RDS + S3/CloudFront + OIDC role) | `TODO` |
+| 3 | [INFRA-4](MVP/INFRA-4_SERVER_DOCKERFILE_GHCR_PUBLISH_WORKFLOW.md) | Server Dockerfile + GHCR publish workflow | `TODO` |
+| 4 | [INFRA-5](MVP/INFRA-5_CLIENT_STATIC_BUILD_S3_CLOUDFRONT_DEPLOY.md) | Client static build + S3/CloudFront deploy | `TODO` |
+| 5 | [INFRA-6](MVP/INFRA-6_DEPLOYMENT_PIPELINE.md) | Deployment pipeline (`deploy.yml`) | `TODO` |
+| 6 | [INFRA-7](MVP/INFRA-7_REVERSE_PROXY_PATH_ROUTING_FOR_SERVICES_CHAT.md) | Reverse-proxy path-routing for `services/chat` | `TODO` |
+| 7 | [INFRA-8](MVP/INFRA-8_SERVICES_CHAT_DOCKERFILE_PUBLISH_WORKFLOW.md) | `services/chat` Dockerfile publish workflow | `TODO` |
+| 8 | [INFRA-9](MVP/INFRA-9_INTERNAL_NETWORK_ISOLATION.md) | `/internal/**` network isolation | `TODO` |
+| 9 | [INFRA-10](MVP/INFRA-10_SWAGGER_AND_OAUTH_TOKEN_EXPOSURE_IN_DEPLOYED_ENVIRONMENTS.md) | Swagger UI, `/api-docs` and `oauth-token` are public in every profile — decide what a deployed environment exposes; found during auth A7 | `TODO` |
+| 10 | [INFRA-11](MVP/INFRA-11_EMAIL_CONFIGURATION_IN_DEPLOYED_ENVIRONMENTS.md) | Email configuration (`MAIL_*`, `EMAIL_FROM`, link URLs) per environment; nothing sets them today | `TODO` |
 
 ---
 
@@ -53,6 +54,8 @@ green run exists" pattern.
 **Dependencies:**
 ```
 INFRA-1 ∥ INFRA-2 (independent)
+INFRA-12 → none; gates INFRA-3..6 (hosting amendment 2026-10-13). On a "go", INFRA-3..6 are rewritten for
+           Oracle before they are picked up; on a "no-go" they proceed as written.
 INFRA-3 → hosting decision made (see INFRA-3_HOSTING_DECISION.md); also wants INFRA-1 done
           (deploying untested builds is pointless)
 INFRA-4 → INFRA-3 (needs the GHCR/OIDC pieces the foundation sets up)
