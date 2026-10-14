@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `services/chat` (Go + Postgres — see `services/chat/CLAUDE.md`)
-**Last updated:** 2026-07-28
+**Last updated:** 2026-10-14
 
 ---
 
@@ -47,6 +47,7 @@ CHAT-15, CHAT-16 only from the original four. `BACKLOG_V1.md` is no longer empty
 | 1 | [CHAT-16](MVP/CHAT-16_FILE_IMAGE_ATTACHMENTS.md) | File/image attachments | `TODO` |
 | 2 | [CHAT-11](MVP/CHAT-11_HARDENING_LOADING_ERROR_SENDING_STATES_A11Y_VISUAL_REGRESSIO.md) | Hardening — loading/error/sending states, a11y, visual regression | `TODO` |
 | 3 | [CHAT-12](MVP/CHAT-12_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (chat) | `TODO` |
+| 4 | [CHAT-17](MVP/CHAT-17_JWKS_TOKEN_VERIFIER.md) | Verify Keycloak RS256 tokens by JWKS instead of the shared HMAC secret; reads only `sub`; the accepted answer to A20 for chat | `TODO` |
 
 ---
 

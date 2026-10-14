@@ -1,6 +1,6 @@
 # A23 · Spike: Keycloak + a Keycloakify login theme for Google/Facebook/Zalo sign-in
 
-**Status:** `TODO` · **Type:** Spike / design decision · **Depends on:** none to start (local Docker Compose); production hosting depends on **INFRA-12** · **Gates:** the social-login feature (`/feature`, paused after Phase 1) and the closing of A15/A18/A19
+**Status:** `DONE` (2026-10-14) · **Type:** Spike / design decision · **Depends on:** none to start (local Docker Compose); production hosting depends on **INFRA-12** · **Gates:** the social-login feature (`/feature`, paused after Phase 1) and the closing of A15/A18/A19
 
 **Filed:** 2026-10-14, from the social-login `/feature` scoping.
 
@@ -40,4 +40,33 @@ Findings are written here with a go / no-go for Keycloakify hosted pages, the ch
 
 ## Findings
 
-_Not started._
+**Run 2026-10-14**, Windows host, Docker 29, Keycloak 26.4.7 (`start-dev`), Keycloakify 11.16.1 (the unmodified `keycloakify-starter`). Spike code stayed in the untracked `tmp/a23-spike/` and is not committed. **Everything below is measured unless marked "not verified".**
+
+### Measured
+
+| # | Check | Result |
+|---|---|---|
+| 7 | Build cost | `keycloakify build` needs **Apache Maven on PATH**. It does **not** download one (it stops with "Apache Maven required"). First build **2m11s** including Maven downloading its own dependencies; the theme JAR is **2.2 MB**. It produces two JARs; Keycloak 26 uses `keycloak-theme-for-kc-all-other-versions.jar`. CI needs Node, Java and Maven. |
+| 7 | Runtime | Keycloak 26.4.7 started in 12 s and used **~810 MiB** idle in `start-dev` with H2 (INFRA-12's 1-1.5 GB estimate for Keycloak stands; a production build with Postgres was not measured). Mounting the JAR into `/opt/keycloak/providers` and setting the realm `loginTheme` was enough; the page rendered through the theme. |
+| 3 | How providers reach the theme | Generically: `kcContext.social.providers[]` carries `alias`, `displayName`, `iconClasses`, `loginUrl`. Google and Facebook (built-in provider types) rendered buttons with icons; a **custom Zalo** provider (generic OIDC, here a second realm standing in for Zalo) rendered with **empty `iconClasses` and no icon**, so the theme must map its own Zalo icon by `alias`. |
+| 4 | Zalo without an email | A Zalo-like login with no email lands on the first-broker-login "Update Account Information" page (themed), which demands Email, First name and Last name by default. With `email`, `firstName` and `lastName` made optional in the realm's user profile, the login completes **with no extra page**, and the issued token has `sub` and `preferred_username` but **no `email` claim**. |
+| 6 | Phone and registration fields | A custom `phoneNumber` user-profile attribute accepts an E.164 pattern validator and rejects `0901`. **Keycloak does not enforce uniqueness of a custom attribute** (two users with the same `+84901234567` were both created) and **does not enforce "at least one of email or phone"** (a user with neither was created). Both rules must therefore live in our `users` table (unique index, check) and be checked by the backend, or need a custom Keycloak validator extension (Java, not built). Logging in **by phone** is not a Keycloak default (it takes username or email); it needs a custom authenticator or phone-as-username. Not built. |
+| 5 | en/vi | Keycloakify ships **32 languages and Vietnamese is not one of them** (`login/i18n/messages_defaultSet`). `kc_locale=vi` rendered English. Vietnamese must be authored inline in the theme: the English set is ~470 entries, though only the pages we use need it. |
+| 9 | Token and JWKS | The authorization-code + PKCE exchange works. The access token is RS256 (JWKS serves `RS256/sig`), has `iss`, `sub`, `sid`, `azp`, `preferred_username` and **`aud: account`**, so the backend needs an audience mapper or validator rule. The token has no `isActive` and no app user id; the backend must map `sub` to `users` itself. |
+| 8 | Tests | Headless Playwright (the client's existing install) drove the whole redirect flow against a real Keycloak and read the callback URL, so **a real Keycloak in CI is workable**; it would need the realm import and the theme JAR, and a Maven build. MSW cannot cover it. |
+
+### Not verified (left open on purpose)
+
+- **Our look and feel (item 2).** Only the default Keycloakify theme was rendered; I did **not** build our `/login` design with our Tailwind v4 tokens, so "matches our design" and the shared-package-vs-copy question are unanswered. Keycloakify documents Tailwind and shadcn support, but that is the docs' claim, not mine.
+- Real Google and Facebook apps (the buttons rendered, but no login against the real providers); the real Zalo API's actual claims and whether it returns a phone at all.
+- A real **Spring** resource server: validation was checked at the protocol level only (JWKS, claims). The callback that sets the httpOnly refresh cookie and the deactivation decision were not built.
+- Page templates beyond login and first-broker-login (register, reset, update-password, verify-email, OTP), required-action handling, Storybook, and the upgrade story for Keycloak or Keycloakify.
+- Production (`start`) mode with Postgres, and the arm64 build.
+
+### Assessment and recommendation (the decision is the owner's)
+
+Keycloakify hosted pages are **technically viable** for this stack, and the measured costs are small (2.2 MB JAR, Maven in CI, ~810 MiB). The measured **costs that are real**: we author Vietnamese ourselves, the Zalo icon and any look-and-feel work are ours, and **two of our decided rules (unique phone, email-or-phone) are not enforceable inside Keycloak** and move into our backend or a custom Java extension. The biggest gap is that the look-and-feel check (2) was not done, so "hosted pages in our look" is not yet proven.
+
+**Proposed: conditional go** for hosted pages with Authorization Code + PKCE, conditional on a short follow-up that builds the actual `/login` look with our tokens. If that look cannot be matched cheaply, fall back to the hybrid. **Decision (owner, 2026-10-14): accepted the conditional go.** Hosted pages with Authorization Code + PKCE are the working direction; the condition is filed as **A24** (build our `/login` look, measure the effort), and a no-go there selects the hybrid.
+
+**Scope note (2026-10-14):** the implementation tickets (Keycloak setup/migration, social providers, client) are not filed by this ticket. Their design (phone login, unique phone and email-or-phone enforcement, Zalo no-email flow, audience mapper, `sub`-to-user mapping, vi strings) is the `/feature` Phase 3, and they are filed as real backlog entries when its Phase 4 plan is approved.

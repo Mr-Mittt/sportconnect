@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/user/user-impl`  
-**Last updated:** 2026-10-13 (U22 DONE)
+**Last updated:** 2026-10-14 (U22 DONE)
 
 ---
 
@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [U19](MVP/U19_REMOVE_CITY_FIELD.md) | Remove `city` field entirely from the backend — superseded by Region (U16), found during CLIENT-REF-3 pickup | `TODO` |
+| 2 | [U23](MVP/U23_USERS_SCHEMA_NULLABLE_EMAIL_UNIQUE_PHONE.md) | `users` schema for the Keycloak move: nullable email, unique E.164 phone, email-or-phone check, null-safe email consumers, `PHONE_ALREADY_USED`; gates auth A25/A26 and unblocks A22 | `TODO` |
 
 ---
 
