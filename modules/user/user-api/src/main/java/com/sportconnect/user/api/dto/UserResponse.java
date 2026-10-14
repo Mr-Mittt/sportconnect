@@ -60,6 +60,14 @@ public class UserResponse {
         if (firstName != null && lastName != null) {
             return firstName + " " + lastName;
         }
-        return username != null ? username : email;
+        if (username != null) {
+            return username;
+        }
+        if (email != null) {
+            return email;
+        }
+        // U23: phone-only account with no name or username.
+        String masked = PhoneMask.mask(phoneNumber);
+        return masked != null ? masked : "";
     }
 }

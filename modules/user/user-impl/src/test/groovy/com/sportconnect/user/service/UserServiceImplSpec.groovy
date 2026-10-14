@@ -283,7 +283,7 @@ class UserServiceImplSpec extends Specification {
                 .firstName("New")
                 .lastName("Name")
                 .username("newusername")
-                .phoneNumber("+1234567890")
+                .phoneNumber("+84901234567")
                 .dateOfBirth(LocalDate.of(1990, 1, 1))
                 .gender("MALE")
                 .bio("Updated bio")
@@ -304,7 +304,7 @@ class UserServiceImplSpec extends Specification {
             assert savedUser.firstName == "New"
             assert savedUser.lastName == "Name"
             assert savedUser.username == "newusername"
-            assert savedUser.phoneNumber == "+1234567890"
+            assert savedUser.phoneNumber == "+84901234567"
             assert savedUser.gender == "MALE"
             assert savedUser.bio == "Updated bio"
             assert savedUser.city == "New York"
@@ -359,7 +359,7 @@ class UserServiceImplSpec extends Specification {
                 .username("sameusername").avatarUrl("https://example.com/same.jpg")
                 .isActive(true).roles([] as Set).build()
         def request = UpdateProfileRequest.builder()
-                .bio("A new bio").phoneNumber("+1234567890").city("New York").build()
+                .bio("A new bio").phoneNumber("+84901234567").city("New York").build()
 
         when:
         userService.updateProfile(userId, userId, request)
@@ -958,14 +958,14 @@ class UserServiceImplSpec extends Specification {
                 .passwordHash("hashedPw")
                 .firstName("New")
                 .lastName("User")
-                .phoneNumber("+1234567890")
+                .phoneNumber("+84901234567")
                 .isEmailVerified(false)
                 .isActive(true)
                 .roles([userRole] as Set)
                 .build()
 
         when:
-        def result = userService.createUser("new@example.com", "hashedPw", "New", "User", "+1234567890")
+        def result = userService.createUser("new@example.com", "hashedPw", "New", "User", "+84901234567")
 
         then:
         1 * roleRepository.findByName(Role.USER) >> Optional.of(userRole)
@@ -982,7 +982,7 @@ class UserServiceImplSpec extends Specification {
 
     def "createUser throws RuntimeException when the USER role is missing"() {
         when:
-        userService.createUser("new@example.com", "hashedPw", "New", "User", "+1234567890")
+        userService.createUser("new@example.com", "hashedPw", "New", "User", "+84901234567")
 
         then:
         1 * roleRepository.findByName(Role.USER) >> Optional.empty()

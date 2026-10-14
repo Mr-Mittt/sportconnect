@@ -33,6 +33,9 @@ dependencies {
     // session-impl had to add it for SESSION-15.
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
 
+    // U23: phone numbers are parsed and stored as E.164 (default region VN, so 0901234567 and +84901234567 are one number)
+    implementation 'com.googlecode.libphonenumber:libphonenumber:8.13.40'
+
     // Password encoder (for password verification)
     implementation 'org.springframework.security:spring-security-crypto'
     

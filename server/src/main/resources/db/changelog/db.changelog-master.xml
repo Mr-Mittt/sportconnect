@@ -217,4 +217,7 @@
     <!-- A10: password_reset_tokens.user_id unique (one reset token per user, enforced by the DB). -->
     <include file="db/changelog/changes/V078__password_reset_tokens_unique_user_id.sql" relativeToChangelogFile="false"/>
 
+    <!-- U23: users.email nullable, users.phone_number unique (E.164), at least one of the two. -->
+    <include file="db/changelog/changes/V079__users_nullable_email_unique_phone.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

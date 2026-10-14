@@ -60,7 +60,10 @@ public interface UserService {
     Map<UUID, UserSummaryResponse> getUserSummariesByIds(List<UUID> userIds);
 
     /**
-     * Get user by email
+     * Get an active user by email. U23: {@code email} is optional on an account, so a {@code null} or blank value
+     * never matches (it is not looked up as "users with no email").
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no active account has this email
      */
     UserResponse getUserByEmail(String email);
 
@@ -94,7 +97,14 @@ public interface UserService {
      * {@link com.sportconnect.user.api.dto.Gender}'s names ({@code MALE}, {@code FEMALE}) - anything else, including
      * lower-case, is a {@code BadRequestException}; {@code null} skips the field and the empty string clears it.
      *
-     * @throws com.sportconnect.common.exception.BadRequestException on an invalid gender, geo selection or physical stat
+     * <p>{@code phoneNumber} (U23) is normalised to E.164 (default region VN) and checked against other accounts
+     * before any field is applied: {@code null} skips it, a blank value clears it, and re-sending the caller's own
+     * number is not a conflict. Clearing the phone of an account that has no email is refused ({@code IDENTIFIER_REQUIRED}),
+     * since the account would be left with no identifier.
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException on an invalid gender, geo selection or physical stat,
+     *         an invalid phone ({@code INVALID_PHONE_NUMBER}), or clearing the only identifier ({@code IDENTIFIER_REQUIRED})
+     * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED} when another account holds the number
      * @throws com.sportconnect.common.exception.ForbiddenException if {@code callerId} is not {@code userId}
      */
     UserResponse updateProfile(UUID userId, UUID callerId, UpdateProfileRequest request);
@@ -115,7 +125,7 @@ public interface UserService {
     void deactivateOwnAccount(UUID userId, String currentPassword);
 
     /**
-     * Check if user exists by email
+     * Check if user exists by email. U23: {@code false} for a {@code null} or blank value.
      */
     boolean existsByEmail(String email);
 
@@ -126,7 +136,7 @@ public interface UserService {
      * <p>Unlike {@link #getUserByEmail(String)}, which is active-only and throws on a miss, this never throws and
      * returns no profile data — just the id — so the caller cannot learn more than "an account exists".
      *
-     * @return the user's id, or empty when no user has that exact email
+     * @return the user's id, or empty when no user has that exact email (and for a {@code null}/blank value, U23)
      */
     Optional<UUID> findUserIdByEmail(String email);
 
@@ -165,10 +175,16 @@ public interface UserService {
      * coordinates were given, a location point (X = longitude); a {@code UserPreference} row is created holding
      * the language when one was given (otherwise preferences stay lazily created, as before).
      *
+     * <p>U23: {@code email} may be {@code null}/blank for a phone-only account, but one of {@code email} and
+     * {@code phoneNumber} is required. The phone is normalised to E.164 (default region VN, so {@code 0901234567} and
+     * {@code +84901234567} are the same number) and must be unused.
+     *
      * @param details optional extras; {@code null} or all-null means none
      * @throws com.sportconnect.common.exception.BadRequestException for a region without a country, an unknown or
      *         inactive country/region, a region outside the country, an unknown or inactive language, or only one
-     *         of latitude/longitude
+     *         of latitude/longitude; {@code INVALID_PHONE_NUMBER} for a phone that does not parse or is not valid;
+     *         {@code IDENTIFIER_REQUIRED} when both email and phone are absent
+     * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}
      */
     UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber,
                             UserRegistrationDetails details);
@@ -187,6 +203,8 @@ public interface UserService {
      * Checks an email and password pair (for authentication). The password is checked for deactivated
      * accounts too, so {@link CredentialCheck#MATCH_INACTIVE} is only returned when the password is
      * correct and a wrong password never reveals whether the account exists or is deactivated.
+     * U23: a {@code null} or blank email is {@link CredentialCheck#NO_MATCH}; a phone-only or social account has no
+     * password hash and never matches.
      */
     CredentialCheck verifyCredentials(String email, String rawPassword);
 
@@ -196,7 +214,7 @@ public interface UserService {
      * ({@link #verifyCredentials}); this method does not. Takes the same exclusive row lock as
      * {@code deleteUser}, so it serializes with a concurrent deactivation. Does not issue or revoke any token.
      *
-     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no account has this email
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no account has this email (or it is blank, U23)
      */
     UserResponse reactivateUserByEmail(String email);
 

@@ -1,5 +1,6 @@
 package com.sportconnect.user.entity;
 
+import com.sportconnect.user.api.dto.PhoneMask;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -39,7 +40,8 @@ public class User {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 255)
+    /** Nullable since U23: a phone-only account (e.g. Zalo without an email) has none. At least one of email/phoneNumber is set (DB check). */
+    @Column(unique = true, length = 255)
     private String email;
 
     @Column(name = "password_hash", length = 255)
@@ -54,7 +56,8 @@ public class User {
     @Column(unique = true, length = 50)
     private String username;
 
-    @Column(name = "phone_number", length = 20)
+    /** E.164 (U23), unique when present. Written only through {@code PhoneNumbers.normalize}. */
+    @Column(name = "phone_number", length = 20, unique = true)
     private String phoneNumber;
 
     @Column(name = "date_of_birth")
@@ -139,7 +142,15 @@ public class User {
         if (firstName != null && lastName != null) {
             return firstName + " " + lastName;
         }
-        return username != null ? username : email;
+        if (username != null) {
+            return username;
+        }
+        if (email != null) {
+            return email;
+        }
+        // U23: a phone-only account with no name or username; never null, because callers put this in Map.of(...) events.
+        String masked = PhoneMask.mask(phoneNumber);
+        return masked != null ? masked : "";
     }
 
     @Override

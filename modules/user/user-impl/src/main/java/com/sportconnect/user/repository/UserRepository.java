@@ -23,6 +23,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     boolean existsByEmail(String email);
 
+    /** U23: phone numbers are stored as E.164, so callers pass the normalised form. */
+    boolean existsByPhoneNumber(String phoneNumber);
+
+    /** U23: same as {@link #existsByPhoneNumber} but ignoring one user - a profile update that re-sends the user's own number. */
+    boolean existsByPhoneNumberAndIdNot(String phoneNumber, UUID id);
+
     boolean existsByUsername(String username);
 
     Optional<User> findByIdAndIsActiveTrue(UUID id);
