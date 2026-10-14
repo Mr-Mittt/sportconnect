@@ -236,12 +236,15 @@ public class AuthServiceImpl implements AuthService {
      * Convert UserResponse to token data format for JWT generation
      */
     private Map<String, Object> toTokenData(UserResponse user) {
-        return Map.of(
-                "id", user.getId(),
-                "email", user.getEmail(),
-                "username", user.getUsername() != null ? user.getUsername() : "",
-                "roles", user.getRoles()
-        );
+        // U23: email is absent for a phone-only account, and Map.of rejects null values.
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", user.getId());
+        if (user.getEmail() != null) {
+            data.put("email", user.getEmail());
+        }
+        data.put("username", user.getUsername() != null ? user.getUsername() : "");
+        data.put("roles", user.getRoles());
+        return data;
     }
 
     /**

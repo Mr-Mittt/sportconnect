@@ -9,12 +9,12 @@ CREATE TABLE IF NOT EXISTS roles (
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
-    email VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     username VARCHAR(50) UNIQUE,
-    phone_number VARCHAR(20),
+    phone_number VARCHAR(20) CONSTRAINT uq_users_phone_number UNIQUE,
     date_of_birth DATE,
     gender VARCHAR(20) CONSTRAINT chk_users_gender CHECK (gender IN ('MALE', 'FEMALE')),
     bio TEXT,
@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS users (
     weight_kg NUMERIC(5,2),
     shoe_size_mm INTEGER,
     created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP
+    updated_at TIMESTAMP,
+    -- U23: mirrors V079
+    CONSTRAINT chk_users_email_or_phone CHECK (email IS NOT NULL OR phone_number IS NOT NULL)
 );
 
 -- U16: user_preferences (language is now validated against the reference languages). Mirrors the V001 table.

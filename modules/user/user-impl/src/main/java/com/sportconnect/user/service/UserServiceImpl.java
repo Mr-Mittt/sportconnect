@@ -3,6 +3,7 @@ package com.sportconnect.user.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.auth.api.service.AuthService;
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.user.api.dto.CredentialCheck;
@@ -31,6 +32,7 @@ import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -177,6 +179,9 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserResponse getUserByEmail(String email) {
+        if (isBlank(email)) {
+            throw new ResourceNotFoundException("User", "email", email);
+        }
         User user = userRepository.findByEmailAndIsActiveTrue(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
         return toUserResponse(user);
@@ -223,6 +228,19 @@ public class UserServiceImpl implements UserService {
         applyGeoSelection(user, request);
         // U20: same reasoning - validated before any field is touched, so a bad gender saves nothing.
         String resolvedGender = resolveGender(request.getGender());
+        // U23: same reasoning - the phone is normalised and checked before any field is touched. null skips the field, a
+        // blank value clears it; a user with no email cannot clear their only identifier.
+        boolean phoneProvided = request.getPhoneNumber() != null;
+        String resolvedPhone = null;
+        if (phoneProvided) {
+            resolvedPhone = PhoneNumbers.normalize(request.getPhoneNumber());
+            if (resolvedPhone == null && isBlank(user.getEmail())) {
+                throw new BadRequestException("IDENTIFIER_REQUIRED", "An account needs an email or a phone number", null);
+            }
+            if (resolvedPhone != null && !resolvedPhone.equals(user.getPhoneNumber())) {
+                requirePhoneFree(resolvedPhone, userId);
+            }
+        }
 
         // Captured before mutation so the publish below only fires when a field services/chat
         // actually displays (name/username/avatar) really changed — not on every profile save.
@@ -240,8 +258,8 @@ public class UserServiceImpl implements UserService {
         if (request.getUsername() != null) {
             user.setUsername(request.getUsername());
         }
-        if (request.getPhoneNumber() != null) {
-            user.setPhoneNumber(request.getPhoneNumber());
+        if (phoneProvided) {
+            user.setPhoneNumber(resolvedPhone);
         }
         if (request.getDateOfBirth() != null) {
             user.setDateOfBirth(request.getDateOfBirth());
@@ -287,7 +305,7 @@ public class UserServiceImpl implements UserService {
             user.setShoeSizeMm(request.getShoeSizeMm());
         }
 
-        User savedUser = userRepository.save(user);
+        User savedUser = saveUserFlushed(user);
 
         boolean displayableFieldChanged = !Objects.equals(previousFirstName, savedUser.getFirstName())
                 || !Objects.equals(previousLastName, savedUser.getLastName())
@@ -355,12 +373,15 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public boolean existsByEmail(String email) {
-        return userRepository.existsByEmail(email);
+        return !isBlank(email) && userRepository.existsByEmail(email);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<UUID> findUserIdByEmail(String email) {
+        if (isBlank(email)) {
+            return Optional.empty();
+        }
         return userRepository.findByEmail(email).map(User::getId);
     }
 
@@ -417,12 +438,20 @@ public class UserServiceImpl implements UserService {
 
         Point location = toPoint(extras.getLatitude(), extras.getLongitude());
 
+        // U23: an account is identified by an email, a phone, or both. The phone is stored as E.164 and must be free.
+        String phone = PhoneNumbers.normalize(phoneNumber);
+        String emailValue = isBlank(email) ? null : email;
+        if (emailValue == null && phone == null) {
+            throw new BadRequestException("IDENTIFIER_REQUIRED", "An email or a phone number is required", null);
+        }
+        requirePhoneFree(phone, null);
+
         User user = User.builder()
-                .email(email)
+                .email(emailValue)
                 .passwordHash(passwordHash)
                 .firstName(firstName)
                 .lastName(lastName)
-                .phoneNumber(phoneNumber)
+                .phoneNumber(phone)
                 .countryId(extras.getCountryId())
                 .regionId(extras.getRegionId())
                 .location(location)
@@ -435,7 +464,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new RuntimeException("Default USER role not found"));
         user.addRole(userRole);
 
-        User savedUser = userRepository.save(user);
+        User savedUser = saveUserFlushed(user);
         if (languageCode != null) {
             userPreferenceRepository.save(UserPreference.builder()
                     .userId(savedUser.getId())
@@ -444,6 +473,50 @@ public class UserServiceImpl implements UserService {
         }
         log.info("Created new user: {}", email);
         return toUserResponse(savedUser);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * U23: fails with {@code PHONE_ALREADY_USED} (409) when another account already holds this E.164 number.
+     * A {@code null} phone is always free. {@code excludeUserId} lets a profile update re-send the caller's own number.
+     */
+    private void requirePhoneFree(String phone, UUID excludeUserId) {
+        if (phone == null) {
+            return;
+        }
+        boolean taken = excludeUserId == null
+                ? userRepository.existsByPhoneNumber(phone)
+                : userRepository.existsByPhoneNumberAndIdNot(phone, excludeUserId);
+        if (taken) {
+            throw phoneAlreadyUsed();
+        }
+    }
+
+    private static ConflictException phoneAlreadyUsed() {
+        return new ConflictException("PHONE_ALREADY_USED", "This phone number is already used by another account", null);
+    }
+
+    /**
+     * U23: saves and flushes inside the caller's transaction so a unique-constraint race on {@code phone_number}
+     * (two requests passing {@link #requirePhoneFree} together) surfaces here as {@code PHONE_ALREADY_USED}, not as a
+     * 500 at commit time. Any other integrity violation is rethrown unchanged.
+     */
+    private User saveUserFlushed(User user) {
+        try {
+            User saved = userRepository.save(user);
+            userRepository.flush();
+            return saved;
+        } catch (DataIntegrityViolationException e) {
+            Throwable root = e.getMostSpecificCause();
+            String detail = root != null && root.getMessage() != null ? root.getMessage().toLowerCase() : "";
+            if (detail.contains("uq_users_phone_number")) {
+                throw phoneAlreadyUsed();
+            }
+            throw e;
+        }
     }
 
     /**
@@ -520,6 +593,9 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public CredentialCheck verifyCredentials(String email, String rawPassword) {
+        if (isBlank(email)) {
+            return CredentialCheck.NO_MATCH;
+        }
         User user = userRepository.findByEmail(email)
                 .orElse(null);
         if (user == null || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
@@ -531,6 +607,9 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public UserResponse reactivateUserByEmail(String email) {
+        if (isBlank(email)) {
+            throw new ResourceNotFoundException("User", "email", email);
+        }
         User user = userRepository.findByEmailForUpdate(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
         if (!user.getIsActive()) {

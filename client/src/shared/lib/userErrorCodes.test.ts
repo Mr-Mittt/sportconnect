@@ -47,6 +47,13 @@ describe('user error codes', () => {
     expect(getErrorMessage(coded(status, code, params))).toBe(vi);
   });
 
+  it('has copy for every code U23 delivers', () => {
+    for (const code of ['PHONE_ALREADY_USED', 'INVALID_PHONE_NUMBER', 'IDENTIFIER_REQUIRED']) {
+      expect(errorsEn.codes, code).toHaveProperty(code);
+      expect(errorsVi.codes, code).toHaveProperty(code);
+    }
+  });
+
   it('has copy for every code U21 delivers', () => {
     const delivered = [
       'USER_PROFILE_NOT_OWNED', 'HEIGHT_OUT_OF_RANGE', 'WEIGHT_OUT_OF_RANGE', 'SHOE_SIZE_OUT_OF_RANGE',
