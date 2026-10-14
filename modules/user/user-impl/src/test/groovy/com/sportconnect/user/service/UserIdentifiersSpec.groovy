@@ -37,7 +37,7 @@ class UserIdentifiersSpec extends Specification {
 
     @Subject
     UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService,
-            authService, userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository)
+            authService, userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository, Mock(UserAccessStateCache))
 
     private static final Role USER_ROLE = new Role(id: 1, name: "USER")
 

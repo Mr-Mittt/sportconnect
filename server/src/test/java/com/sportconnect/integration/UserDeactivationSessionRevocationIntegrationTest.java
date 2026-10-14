@@ -1,8 +1,8 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.auth.api.service.JwtTokenService;
 import com.sportconnect.auth.entity.RefreshToken;
 import com.sportconnect.auth.repository.RefreshTokenRepository;
+import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.UserRepository;
 import com.sportconnect.user.service.UserServiceImpl;
@@ -13,8 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,21 +21,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * U12 end-to-end coverage: deactivating a user must revoke both their refresh tokens (Fix 1) and
- * any access token they already hold (Fix 2), even though the access token's own signature and
- * {@code exp} remain perfectly valid — real {@code MockMvc} requests through the real
- * {@code JwtAuthenticationFilter}, real {@code UserServiceImpl.deleteUser()}, and a real Redis
- * (via {@link RedisBaseIT}), not mocked collaborators. {@code UserServiceImplSpec}/
- * {@code AuthServiceImplSpec}/{@code TokenRevocationCheckerSpec} cover the branch logic in
- * isolation; this class exists because only a real request proves the filter actually rejects a
- * live, still-unexpired access token — the exact thing that had no coverage at all before this
- * ticket.
+ * U12, rewritten for A25: deactivating a user must lock out both their refresh tokens and any access token they already
+ * hold, even though the access token's signature and {@code exp} remain perfectly valid. Real {@code MockMvc} requests
+ * through the real {@code JwtAuthenticationFilter} and the real per-request gate ({@code UserService.getAccessState},
+ * cached in a real Redis via {@link RedisBaseIT}), with a real {@code UserServiceImpl.deleteUser()} and
+ * {@code reactivateUserByEmail()}.
  *
- * <p>The concurrent-transaction race this ticket's locking closes (a refresh racing a deactivation
- * for the same user) is covered by design/reasoning in U12's implementation doc, not by a
- * deterministic test here — reliably reproducing that exact interleaving needs an artificial
- * synchronization hook this codebase doesn't have, which isn't proportionate to add for this
- * ticket alone.
+ * <p>What changed from the HS256 era: an access token is no longer revoked by a watermark stamped on
+ * {@code refresh_tokens}; the gate looks at the user's current {@code is_active}, so a deactivation takes effect on the
+ * very next request (the cached state is evicted after commit) and a reactivation takes effect just as fast.
  */
 class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
 
@@ -46,9 +38,6 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
 
     @Autowired
     private RefreshTokenRepository refreshTokenRepository;
-
-    @Autowired
-    private JwtTokenService jwtTokenService;
 
     @Autowired
     private UserServiceImpl userServiceImpl;
@@ -62,50 +51,25 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
         userRepository.deleteAll();
     }
 
-    private UUID createActiveUser() {
-        return userRepository.save(User.builder()
-                .email("u12-" + UUID.randomUUID() + "@example.com")
-                .passwordHash("hash")
-                .firstName("U12")
-                .lastName("Tester")
-                .username("u12tester" + System.nanoTime())
-                .isActive(true)
-                .build()).getId();
+    private User createActiveUser() {
+        return userRepository.findById(createUserWithRoles(true, Role.USER)).orElseThrow();
     }
 
-    private String mintAccessToken(UUID userId) {
-        Map<String, Object> userData = Map.of(
-                "id", userId,
-                "email", "it-test-" + userId + "@example.com",
-                "username", "it-test-" + userId,
-                "roles", List.of("USER"));
-        return jwtTokenService.generateAccessToken(userData);
-    }
-
-    // Every real access token is minted alongside a refresh_tokens row (register/login/refresh
-    // all call createRefreshToken in the same breath) — deleteUser()'s revoke only updates
-    // existing rows, so a test that skips this doesn't actually model a real issued session.
-    private void mintRefreshToken(UUID userId) {
-        refreshTokenRepository.save(RefreshToken.builder()
-                .userId(userId)
-                .token("u12-refresh-" + UUID.randomUUID())
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build());
+    private static String cacheKey(UUID userId) {
+        return "user:access-state:" + userId;
     }
 
     @Test
-    void activeUser_accessTokenStillWorks() throws Exception {
-        UUID userId = createActiveUser();
-        String accessToken = mintAccessToken(userId);
+    void activeUser_accessTokenWorks() throws Exception {
+        UUID userId = createActiveUser().getId();
 
-        mockMvc.perform(get("/api/users/me")
-                        .header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(userId)))
                 .andExpect(status().isOk());
     }
 
     @Test
     void deactivation_revokesRefreshTokens_refreshWithAPreDeactivationTokenFails() throws Exception {
-        UUID userId = createActiveUser();
+        UUID userId = createActiveUser().getId();
         RefreshToken refreshToken = refreshTokenRepository.save(RefreshToken.builder()
                 .userId(userId)
                 .token("u12-refresh-" + UUID.randomUUID())
@@ -120,90 +84,69 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void deactivation_rejectsAnAlreadyIssuedAccessToken_viaTheRedisDenyList() throws Exception {
-        UUID userId = createActiveUser();
-        String accessToken = mintAccessToken(userId);
-        mintRefreshToken(userId);
+    void deactivation_rejectsAnAlreadyIssuedAccessToken() throws Exception {
+        UUID userId = createActiveUser().getId();
+        String authorization = bearer(userId);
 
         userServiceImpl.deleteUser(userId);
 
-        mockMvc.perform(get("/api/users/me")
-                        .header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/users/me").header("Authorization", authorization))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void deactivation_stillRejectsAnAlreadyIssuedAccessToken_whenRedisHasNothingCached() throws Exception {
-        UUID userId = createActiveUser();
-        String accessToken = mintAccessToken(userId);
-        mintRefreshToken(userId);
+    void deactivation_rejectsTheToken_evenAfterARequestCachedTheActiveState() throws Exception {
+        UUID userId = createActiveUser().getId();
+        String authorization = bearer(userId);
+
+        // Populates user:access-state:<id> with "active".
+        mockMvc.perform(get("/api/users/me").header("Authorization", authorization)).andExpect(status().isOk());
+        assertThat(stringRedisTemplate.opsForValue().get(cacheKey(userId))).startsWith("1|");
 
         userServiceImpl.deleteUser(userId);
 
-        // Simulates Redis having lost its data entirely (or never having cached this user yet) —
-        // the filter must fall back to the durable Postgres watermark and still reject, not just
-        // pass through because the cache is empty.
-        stringRedisTemplate.delete("auth:revoked-before:" + userId);
-
-        mockMvc.perform(get("/api/users/me")
-                        .header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isUnauthorized());
-    }
-
-    // ---------- A12: a revocation must evict the cached "never revoked" watermark ----------
-
-    @Test
-    void deactivation_rejectsAnAccessToken_evenAfterARequestCachedNeverRevoked() throws Exception {
-        UUID userId = createActiveUser();
-        String accessToken = mintAccessToken(userId);
-        mintRefreshToken(userId);
-
-        // Populates auth:revoked-before:<id> with the "never revoked" sentinel.
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk());
-
-        // Make sure the token was issued strictly before the revocation instant.
-        Thread.sleep(1100);
-        userServiceImpl.deleteUser(userId);
-
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+        // The deactivation evicted the cached state, so this request reloads "inactive" instead of trusting "active".
+        assertThat(stringRedisTemplate.hasKey(cacheKey(userId))).isFalse();
+        mockMvc.perform(get("/api/users/me").header("Authorization", authorization))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void logout_rejectsTheAccessToken_evenAfterARequestCachedNeverRevoked() throws Exception {
-        UUID userId = createActiveUser();
-        String accessToken = mintAccessToken(userId);
-        mintRefreshToken(userId);
+    void deactivation_thenReactivation_theSameTokenWorksAgainAtOnce() throws Exception {
+        User user = createActiveUser();
+        String authorization = bearer(user.getId());
 
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/users/me").header("Authorization", authorization)).andExpect(status().isOk());
+        userServiceImpl.deleteUser(user.getId());
+        mockMvc.perform(get("/api/users/me").header("Authorization", authorization)).andExpect(status().isUnauthorized());
+        // The 401 above cached "inactive"; reactivating must evict it, not wait for the TTL.
+        assertThat(stringRedisTemplate.opsForValue().get(cacheKey(user.getId()))).startsWith("0|");
 
-        Thread.sleep(1100);
-        mockMvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk());
+        userServiceImpl.reactivateUserByEmail(user.getEmail());
 
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
+        mockMvc.perform(get("/api/users/me").header("Authorization", authorization)).andExpect(status().isOk());
+    }
+
+    @Test
+    void deactivation_stillRejects_whenRedisHasNothingCached() throws Exception {
+        UUID userId = createActiveUser().getId();
+        String authorization = bearer(userId);
+
+        userServiceImpl.deleteUser(userId);
+        // Simulates Redis having lost its data entirely: the gate must fall back to the database, not pass through.
+        stringRedisTemplate.delete(cacheKey(userId));
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", authorization))
                 .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void theNeverRevokedSentinel_isCachedWithAShortTtl_aRealWatermarkWithTheFullOne() throws Exception {
-        UUID userId = createActiveUser();
-        String accessToken = mintAccessToken(userId);
-        mintRefreshToken(userId);
-        String key = "auth:revoked-before:" + userId;
+    void theCachedState_expiresOnItsOwn_withinTheConfiguredTtl() throws Exception {
+        UUID userId = createActiveUser().getId();
 
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isOk());
-        Long sentinelTtl = stringRedisTemplate.getExpire(key);
-        // Short sentinel TTL (default 5 s), nowhere near the access-token lifetime.
-        assertThat(sentinelTtl).isBetween(1L, 5L);
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(userId))).andExpect(status().isOk());
 
-        Thread.sleep(1100);
-        userServiceImpl.deleteUser(userId);
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessToken))
-                .andExpect(status().isUnauthorized());
-        assertThat(stringRedisTemplate.getExpire(key)).isGreaterThan(60L);
+        // app.user.access-state-ttl defaults to 60 s: the bound on a stale entry surviving the evict-vs-reload race.
+        assertThat(stringRedisTemplate.getExpire(cacheKey(userId))).isBetween(1L, 60L);
     }
 }

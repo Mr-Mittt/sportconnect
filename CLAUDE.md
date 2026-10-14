@@ -279,6 +279,12 @@ compound it. Any new security-sensitive feature should check the caller's `isAct
 explicitly (via `UserService`) in its own service method rather than assuming the JWT filter or
 `SecurityConfig` already guarantees it.
 
+**Update (A25, 2026-10-14):** the filter half of those gaps is closed. `JwtAuthenticationFilter` now verifies a
+Keycloak token and checks `UserService.getAccessState(sub)` on every request, so a deactivated (or unprovisioned) user
+is refused on every authenticated path from the next request on (cache evicted on deactivate/reactivate, 60 s TTL as
+the bound). Access tokens last 5 minutes and logout no longer invalidates one by itself. The paragraphs above describe
+the state before that change.
+
 ### Resource access: availability vs. visibility
 
 Any domain with per-item read/write rules on a resource (a `Post`, a `Session`, a `SessionComment`)

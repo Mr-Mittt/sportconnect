@@ -29,11 +29,10 @@ class PasswordResetServiceSpec extends Specification {
     EmailMessages emailMessages = new EmailMessages()
     UserService userService = Mock()
     PasswordEncoder passwordEncoder = Mock()
-    TokenRevocationChecker tokenRevocationChecker = Mock()
 
     @Subject
     PasswordResetService service = new PasswordResetService(repository, refreshTokenRepository, emailSender, emailMessages,
-            userService, passwordEncoder, transactionManager, tokenRevocationChecker)
+            userService, passwordEncoder, transactionManager)
 
     def setup() {
         service.expirationMinutes = 60
@@ -123,7 +122,6 @@ class PasswordResetServiceSpec extends Specification {
         then:
         1 * userService.updateUserPassword(userId, "hashed")
         1 * refreshTokenRepository.revokeAllUserTokens(userId, _ as LocalDateTime)
-        1 * tokenRevocationChecker.evictAfterCommit(userId)  // A12
     }
 
     def "a token that cannot be claimed changes nothing: no password update, no revocation"() {
@@ -138,7 +136,6 @@ class PasswordResetServiceSpec extends Specification {
         thrown(NotFoundException)
         0 * userService.updateUserPassword(*_)
         0 * refreshTokenRepository.revokeAllUserTokens(*_)
-        0 * tokenRevocationChecker.evictAfterCommit(_)
     }
 
     // ---------- A8 (via A21's completeReset): error codes ----------

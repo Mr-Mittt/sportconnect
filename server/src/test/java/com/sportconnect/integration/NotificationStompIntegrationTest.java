@@ -55,9 +55,6 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private JwtTokenService jwtTokenService;
-
-    @Autowired
     private StompBrokerRelayMessageHandler stompBrokerRelayMessageHandler;
 
     private WebSocketStompClient stompClient;
@@ -79,12 +76,7 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
     }
 
     private String mintAccessToken(UUID userId) {
-        Map<String, Object> userData = Map.of(
-                "id", userId,
-                "email", "it-test-" + userId + "@example.com",
-                "username", "it-test-" + userId,
-                "roles", List.of("USER"));
-        return jwtTokenService.generateAccessToken(userData);
+        return TestKeycloak.token(userId);
     }
 
     private CompletableFuture<NotificationLiveUpdateMessage> subscribeAsUser(UUID userId) throws Exception {

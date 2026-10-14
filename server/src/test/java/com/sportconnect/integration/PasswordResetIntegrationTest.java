@@ -106,9 +106,6 @@ class PasswordResetIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isOk()).andReturn();
     }
 
-    private static String accessTokenOf(MvcResult result) throws Exception {
-        return JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
-    }
 
     private static UUID userIdOf(MvcResult result) throws Exception {
         return UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.data.user.id"));
@@ -216,28 +213,21 @@ class PasswordResetIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void resettingThePassword_revokesRefreshTokens_andAnEarlierAccessToken() throws Exception {
+    void resettingThePassword_revokesTheRefreshTokens() throws Exception {
+        // A25: access tokens are Keycloak's and expire in 5 minutes; a reset no longer revokes one (A28 moves the reset
+        // into Keycloak, which ends the user's sessions itself). What stays ours until then is the refresh tokens.
         MvcResult registered = register("a10-revoke@example.com");
         UUID userId = userIdOf(registered);
-        String oldAccessToken = accessTokenOf(registered);
-        // A12: an authenticated request first, so Redis caches "never revoked" for this user. Before A12 the reset
-        // did not evict that entry and the old token stayed valid until it expired.
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + oldAccessToken))
-                .andExpect(status().isOk());
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL", Integer.class, userId))
                 .isPositive();
 
         forgot("a10-revoke@example.com");
-        // Make sure the access token was issued strictly before the revocation instant.
-        Thread.sleep(1100);
         reset(tokenOf(userId), NEW_PASSWORD).andExpect(status().isOk());
 
         assertThat(jdbc.queryForObject(
                 "SELECT COUNT(*) FROM refresh_tokens WHERE user_id = ? AND revoked_at IS NULL", Integer.class, userId))
                 .isZero();
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + oldAccessToken))
-                .andExpect(status().isUnauthorized());
     }
 
 

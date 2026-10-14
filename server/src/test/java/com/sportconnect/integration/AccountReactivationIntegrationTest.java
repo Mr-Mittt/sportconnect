@@ -96,10 +96,6 @@ class AccountReactivationIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isOk()).andReturn();
     }
 
-    private static String accessTokenOf(MvcResult result) throws Exception {
-        return JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
-    }
-
     private static String userIdOf(MvcResult result) throws Exception {
         return JsonPath.read(result.getResponse().getContentAsString(), "$.data.user.id");
     }
@@ -145,10 +141,7 @@ class AccountReactivationIntegrationTest extends RedisBaseIT {
 
     @Test
     void reactivate_withCorrectCredentials_reactivatesAndLogsIn_withAWorkingAccessToken() throws Exception {
-        MvcResult registered = registerAndDeactivate("a9-react@example.com");
-        // The access token's iat has one-second resolution and a token issued at or before the revocation watermark
-        // is rejected, so wait out the second deactivation landed in.
-        Thread.sleep(1100);
+        registerAndDeactivate("a9-react@example.com");
 
         MvcResult result = postJson("/api/auth/reactivate", credentials("a9-react@example.com", PASSWORD))
                 .andExpect(status().isOk())
@@ -161,9 +154,8 @@ class AccountReactivationIntegrationTest extends RedisBaseIT {
 
         mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessTokenOf(result)))
                 .andExpect(status().isOk());
-        // The session from before the deactivation stays revoked: re-activation does not resurrect it.
-        mockMvc.perform(get("/api/users/me").header("Authorization", "Bearer " + accessTokenOf(registered)))
-                .andExpect(status().isUnauthorized());
+        // A25: the gate follows the account state, not the token, so a token issued before the deactivation works
+        // again once the account is active (the deactivated period itself is covered by SelfDeactivationIntegrationTest).
     }
 
     @Test

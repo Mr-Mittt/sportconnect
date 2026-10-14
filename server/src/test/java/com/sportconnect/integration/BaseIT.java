@@ -1,6 +1,7 @@
 package com.sportconnect.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,9 +11,17 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import com.sportconnect.user.entity.Role;
+import com.sportconnect.user.entity.User;
+import com.sportconnect.user.repository.RoleRepository;
+import com.sportconnect.user.repository.UserRepository;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,6 +42,55 @@ import java.util.UUID;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 public abstract class BaseIT {
+
+    /** A25: the real JwtDecoder verifies tokens against {@link TestKeycloak}'s JWKS, fetched over HTTP. */
+    @DynamicPropertySource
+    static void keycloakProperties(DynamicPropertyRegistry registry) {
+        registry.add("app.keycloak.issuer-uri", () -> TestKeycloak.ISSUER);
+        registry.add("app.keycloak.jwk-set-uri", () -> TestKeycloak.JWK_SET_URI);
+    }
+
+    /** The {@code Authorization} header value for a valid Keycloak-style token of {@code userId} (A25). */
+    protected static String bearer(UUID userId) {
+        return "Bearer " + TestKeycloak.token(userId);
+    }
+
+    /**
+     * A25: the register/login endpoints still return the legacy HS256 token, which nothing accepts any more, so a
+     * test that needs to call an authenticated endpoint as the user it just registered mints a Keycloak-style token
+     * for that user's id instead.
+     */
+    protected static String accessTokenOf(MvcResult result) throws Exception {
+        String userId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.user.id");
+        return TestKeycloak.token(UUID.fromString(userId));
+    }
+
+    @Autowired
+    private UserRepository baseUsers;
+
+    @Autowired
+    private RoleRepository baseRoles;
+
+    /**
+     * A25: roles come from the database now (the token carries none), so a user a test authenticates as through a real
+     * token needs its roles as rows. Creates the user (and any missing role) and returns its id.
+     */
+    protected UUID createUserWithRoles(boolean active, String... roleNames) {
+        HashSet<Role> roles = new HashSet<>();
+        for (String name : roleNames) {
+            roles.add(baseRoles.findByName(name)
+                    .orElseGet(() -> baseRoles.save(Role.builder().name(name).description("test").build())));
+        }
+        return baseUsers.save(User.builder()
+                .email("it-" + UUID.randomUUID() + "@example.com")
+                .passwordHash("hash")
+                .firstName("It")
+                .lastName("Tester")
+                .username("ittester" + System.nanoTime())
+                .isActive(active)
+                .roles(roles)
+                .build()).getId();
+    }
 
     @Autowired
     protected MockMvc mockMvc;
