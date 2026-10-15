@@ -78,6 +78,10 @@ Real IT coverage through MockMvc (a locally generated RSA key and a stubbed JWKS
 
 The realm uses Keycloak's "Email as username": no username field on register or login, the sign-in page asks for the email. Keycloak still stores a username internally (it is required), equal to the email. `UserServiceImpl.availableUsername` ignores a `preferred_username` containing `@`, so the email never becomes the public `users.username`. Phone as an identifier waits for A27 (the extension also sets Keycloak's internal username for phone-only users). Existing realms need the flag set through the admin API (`infra/scripts/dev-keycloak-theme.sh` does it).
 
+## 5c. Update 2026-10-15: register-page geo claims (A32)
+
+The Keycloak register page carries optional `countryId`, `regionId`, `latitude`, `longitude` user-profile attributes (language rides on `locale`), mapped to the token claims `country_id`, `region_id`, `latitude`, `longitude` (strings). The first sign-in stores them on the new `users` row; every value is untrusted and a bad one is dropped, never a failure, because the Keycloak account already exists when the claims arrive (the legacy `createUser` rejected the whole registration instead). The client learns of a drop from an empty country (or a country with regions but no region) and opens its profile-completion dialog (AUTH-16). `ReferenceService.isValidSelection` is the non-throwing check the provisioning uses, since the throwing form would mark the transaction rollback-only through the reference service's proxy.
+
 ## 6. Not changing
 
 Posts, groups, sessions, sports and notifications; `users.is_active` as the account state; the `JwtTokenService` interface; INFRA-12's gate on production.

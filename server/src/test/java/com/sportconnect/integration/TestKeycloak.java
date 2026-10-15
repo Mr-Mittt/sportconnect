@@ -131,6 +131,7 @@ public final class TestKeycloak {
         private String locale;
         private String phoneNumber;
         private String identityProvider;
+        private final java.util.Map<String, String> extraClaims = new java.util.LinkedHashMap<>();
 
         private Identity(UUID sub) {
             this.sub = sub;
@@ -184,6 +185,18 @@ public final class TestKeycloak {
             return this;
         }
 
+        /**
+         * A32: the register page's attributes as Keycloak's attribute mapper emits them (always strings):
+         * {@code country_id}, {@code region_id}, {@code latitude}, {@code longitude}. A {@code null} value is omitted.
+         */
+        public Identity geo(String countryId, String regionId, String latitude, String longitude) {
+            extraClaims.put("country_id", countryId);
+            extraClaims.put("region_id", regionId);
+            extraClaims.put("latitude", latitude);
+            extraClaims.put("longitude", longitude);
+            return this;
+        }
+
         public UUID sub() {
             return sub;
         }
@@ -201,6 +214,7 @@ public final class TestKeycloak {
             putIfPresent(b, "locale", locale);
             putIfPresent(b, "phone_number", phoneNumber);
             putIfPresent(b, "identity_provider", identityProvider);
+            extraClaims.forEach((name, value) -> putIfPresent(b, name, value));
             return b;
         }
 

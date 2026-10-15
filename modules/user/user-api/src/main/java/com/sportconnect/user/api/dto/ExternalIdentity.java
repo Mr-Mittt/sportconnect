@@ -33,4 +33,15 @@ public class ExternalIdentity {
     private String phoneNumber;
     /** The token's {@code locale}; kept as the language preference only when it is an active language. */
     private String languageCode;
+    /**
+     * A32: the token's {@code country_id} ({@code countries.id}), set by the register page. Untrusted: an unknown or
+     * inactive country is ignored, never a failure (see {@code UserService.provisionExternalUser}).
+     */
+    private Long countryId;
+    /** A32: the token's {@code region_id}; kept only with a valid {@link #countryId} it belongs to. */
+    private Long regionId;
+    /** A32: the token's {@code latitude}; kept only as an in-range pair with {@link #longitude}. */
+    private Double latitude;
+    /** A32: the token's {@code longitude} (WGS 84). */
+    private Double longitude;
 }

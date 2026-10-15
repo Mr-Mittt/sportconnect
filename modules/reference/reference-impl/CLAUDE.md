@@ -108,6 +108,7 @@ memory. Copy that field pattern, not the annotation.
 - No caching: the tables are tiny and the reads are indexed. Add a cache only with a measured reason.
 - `CountryResponse.defaultLanguageCode` is returned as stored (nullable) and may name a language that is not active — a caller pre-filling a language must check it against `getActiveLanguages()`. Priority: explicit choice > browser language list > country default.
 - `requireValidSelection` treats a region without a country as invalid, a country alone as valid.
+- **`isValidSelection` (A32) is the non-throwing twin, for a caller that must treat a bad selection as ignorable inside its own transaction** (first-sign-in provisioning). Never `try`/`catch` `requireValidSelection` there: the exception passes through this class's `@Transactional(readOnly = true)` proxy and marks the caller's transaction rollback-only even when caught.
 
 ## Adding a market (a country's regions)
 

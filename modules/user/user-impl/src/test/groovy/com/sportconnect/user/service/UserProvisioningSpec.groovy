@@ -218,6 +218,100 @@ class UserProvisioningSpec extends Specification {
         0 * userRepository.existsByUsername(_)
     }
 
+    // ---- A32: the register page's country / region / location, untrusted ----
+
+    private User provisioned
+
+    private void expectNewUser() {
+        1 * userRepository.findById(sub) >> Optional.empty()
+        1 * userRepository.existsByEmail(_) >> false
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        1 * userRepository.save(_) >> { User u -> provisioned = u; u }
+        // the response resolves display names of a stored zone
+        _ * referenceService.getCountriesByIds(_) >> [:]
+        _ * referenceService.getRegionsByIds(_) >> [:]
+    }
+
+    def "a valid country, region and location claim are stored on the new user"() {
+        when:
+        userService.provisionExternalUser(identity().countryId(7L).regionId(70L).latitude(10.78d).longitude(106.69d).build())
+
+        then:
+        interaction { expectNewUser() }
+        1 * referenceService.isValidSelection(7L, null) >> true
+        1 * referenceService.isValidSelection(7L, 70L) >> true
+        provisioned.countryId == 7L
+        provisioned.regionId == 70L
+        provisioned.location.x == 106.69d
+        provisioned.location.y == 10.78d
+        provisioned.location.SRID == 4326
+    }
+
+    def "an unknown or inactive country drops the country and the region, and the sign-in still provisions"() {
+        when:
+        userService.provisionExternalUser(identity().countryId(999L).regionId(70L).build())
+
+        then:
+        interaction { expectNewUser() }
+        1 * referenceService.isValidSelection(999L, null) >> false
+        0 * referenceService.isValidSelection(999L, 70L)
+        provisioned.countryId == null
+        provisioned.regionId == null
+    }
+
+    def "a valid country with a region that is not valid for it keeps the country and drops the region"() {
+        when:
+        userService.provisionExternalUser(identity().countryId(7L).regionId(80L).build())
+
+        then:
+        interaction { expectNewUser() }
+        1 * referenceService.isValidSelection(7L, null) >> true
+        1 * referenceService.isValidSelection(7L, 80L) >> false
+        provisioned.countryId == 7L
+        provisioned.regionId == null
+    }
+
+    def "a region without a country is dropped without asking the reference service"() {
+        when:
+        userService.provisionExternalUser(identity().regionId(70L).build())
+
+        then:
+        interaction { expectNewUser() }
+        0 * referenceService.isValidSelection(*_)
+        provisioned.countryId == null
+        provisioned.regionId == null
+    }
+
+    def "a location is kept only as an in-range pair"() {
+        when:
+        userService.provisionExternalUser(identity().latitude(lat).longitude(lng).build())
+
+        then:
+        interaction { expectNewUser() }
+        provisioned.location == null
+
+        where:
+        lat    | lng
+        10.78d | null
+        null   | 106.69d
+        91d    | 106.69d
+        -91d   | 106.69d
+        10.78d | 181d
+        10.78d | -181d
+    }
+
+    def "no geo claims leave the zone and the location empty and never touch the reference service for it"() {
+        when:
+        userService.provisionExternalUser(identity().build())
+
+        then:
+        interaction { expectNewUser() }
+        0 * referenceService.isValidSelection(*_)
+        provisioned.countryId == null
+        provisioned.regionId == null
+        provisioned.location == null
+    }
+
     def "only a full name splits into first and last name; a given and family name win over it"() {
         when:
         userService.provisionExternalUser(identity().firstName(null).lastName(null).fullName("Tran Van Binh").build())

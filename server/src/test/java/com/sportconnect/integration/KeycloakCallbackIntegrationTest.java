@@ -61,6 +61,10 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
     @Autowired
     private RoleRepository roleRepository;
     @Autowired
+    private com.sportconnect.reference.repository.CountryRepository countryRepository;
+    @Autowired
+    private com.sportconnect.reference.repository.RegionRepository regionRepository;
+    @Autowired
     private StringRedisTemplate redis;
     @Autowired
     private JdbcTemplate jdbc;
@@ -161,6 +165,60 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
     }
 
     // ---------- first sign-in: provisioning ----------
+
+    private Long seededCountryId() {
+        return countryRepository.findAll().stream().filter(c -> "VN".equals(c.getIso2())).findFirst().orElseThrow().getId();
+    }
+
+    private Long seededRegionId() {
+        return regionRepository.findAll().stream().filter(r -> seededCountryId().equals(r.getCountryId())).findFirst().orElseThrow().getId();
+    }
+
+    @Test
+    void firstSignIn_withTheRegisterPageClaims_storesCountryRegionAndLocation() throws Exception {
+        UUID sub = UUID.randomUUID();
+        signIn(TestKeycloak.Identity.of(sub).email("geo@example.com").names("Mai", "Nguyen")
+                .geo(seededCountryId().toString(), seededRegionId().toString(), "10.7769", "106.7009"))
+                .andExpect(status().isOk());
+
+        User user = userRepository.findById(sub).orElseThrow();
+        assertThat(user.getCountryId()).isEqualTo(seededCountryId());
+        assertThat(user.getRegionId()).isEqualTo(seededRegionId());
+        assertThat(user.getLocation().getY()).isEqualTo(10.7769);
+        assertThat(user.getLocation().getX()).isEqualTo(106.7009);
+    }
+
+    @Test
+    void firstSignIn_withBadRegisterPageClaims_stillSignsIn_andDropsOnlyWhatIsInvalid() throws Exception {
+        UUID unknownCountry = UUID.randomUUID();
+        signIn(TestKeycloak.Identity.of(unknownCountry).email("badcountry@example.com")
+                .geo("99999999", seededRegionId().toString(), "10.7769", null))
+                .andExpect(status().isOk());
+        User dropped = userRepository.findById(unknownCountry).orElseThrow();
+        assertThat(dropped.getCountryId()).isNull();
+        assertThat(dropped.getRegionId()).isNull();
+        assertThat(dropped.getLocation()).isNull();
+
+        UUID badRegion = UUID.randomUUID();
+        signIn(TestKeycloak.Identity.of(badRegion).email("badregion@example.com")
+                .geo(seededCountryId().toString(), "99999999", "not-a-number", "106.7"))
+                .andExpect(status().isOk());
+        User kept = userRepository.findById(badRegion).orElseThrow();
+        assertThat(kept.getCountryId()).isEqualTo(seededCountryId());
+        assertThat(kept.getRegionId()).isNull();
+        assertThat(kept.getLocation()).isNull();
+    }
+
+    @Test
+    void firstSignIn_withoutRegisterPageClaims_leavesTheZoneEmpty() throws Exception {
+        UUID sub = UUID.randomUUID();
+        signIn(TestKeycloak.Identity.of(sub).email("nogeo@example.com")).andExpect(status().isOk());
+
+        User user = userRepository.findById(sub).orElseThrow();
+        assertThat(user.getCountryId()).isNull();
+        assertThat(user.getRegionId()).isNull();
+        assertThat(user.getLocation()).isNull();
+    }
 
     @Test
     void firstSignIn_provisionsTheUser_withTheSubjectAsId_andOpensASession() throws Exception {

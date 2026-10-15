@@ -693,6 +693,9 @@ public class UserServiceImpl implements UserService {
             lastName = parts.length > 1 ? parts[1] : null;
         }
 
+        // A32: the register page's country / region / location, untrusted: a bad value is dropped, never a failure.
+        Long[] zone = usableZone(identity);
+
         User user = User.builder()
                 .id(identity.getId())
                 .email(email)
@@ -700,6 +703,9 @@ public class UserServiceImpl implements UserService {
                 .lastName(lastName)
                 .username(availableUsername(identity.getUsername(), identity.getId()))
                 .phoneNumber(phone)
+                .countryId(zone[0])
+                .regionId(zone[1])
+                .location(usableLocation(identity))
                 .isEmailVerified(identity.isEmailVerified())
                 .isActive(true)
                 .build();
@@ -714,6 +720,52 @@ public class UserServiceImpl implements UserService {
         }
         log.info("Provisioned user {} from the identity provider", saved.getId());
         return toUserResponse(saved);
+    }
+
+    /**
+     * A32: the {@code [countryId, regionId]} of {@code identity} that may be stored, {@code null} for a part that may not.
+     *
+     * <p>The claims come from the Keycloak register page, where the account already exists by the time they arrive, so a
+     * bad value cannot be rejected the way {@link #createUser} rejects one (a 400 would strand a signed-up user). The
+     * rule keeps what is valid: an unknown or inactive country drops both; a valid country with an unknown, inactive or
+     * foreign region keeps the country; a region without a country is dropped. Uses
+     * {@link ReferenceService#isValidSelection}, not the throwing form: a caught exception from the reference service's
+     * transactional proxy would still mark this transaction rollback-only. The client opens its profile-completion
+     * dialog for a user left without a country (AUTH-16), which is how the user learns of a drop.
+     */
+    private Long[] usableZone(ExternalIdentity identity) {
+        Long countryId = identity.getCountryId();
+        Long regionId = identity.getRegionId();
+        if (countryId == null) {
+            if (regionId != null) {
+                log.info("Ignored a region claim without a country for subject {}", identity.getId());
+            }
+            return new Long[] {null, null};
+        }
+        if (!referenceService.isValidSelection(countryId, null)) {
+            log.info("Ignored an unknown or inactive country claim for subject {}", identity.getId());
+            return new Long[] {null, null};
+        }
+        if (regionId != null && !referenceService.isValidSelection(countryId, regionId)) {
+            log.info("Ignored a region claim not valid for its country for subject {}", identity.getId());
+            regionId = null;
+        }
+        return new Long[] {countryId, regionId};
+    }
+
+    /** A32: the claimed location as a WGS 84 point (X = longitude), only when both coordinates are present and in range. */
+    private Point usableLocation(ExternalIdentity identity) {
+        Double latitude = identity.getLatitude();
+        Double longitude = identity.getLongitude();
+        if (latitude == null && longitude == null) {
+            return null;
+        }
+        if (latitude == null || longitude == null
+                || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+            log.info("Ignored an incomplete or out-of-range location claim for subject {}", identity.getId());
+            return null;
+        }
+        return geometryFactory.createPoint(new Coordinate(longitude, latitude));
     }
 
     private static String blankToNull(String value) {

@@ -134,6 +134,18 @@ public class ReferenceServiceImpl implements ReferenceService {
         }
     }
 
+    /** {@inheritDoc} Same checks and order as {@link #requireValidSelection}, without the exceptions. */
+    @Override
+    public boolean isValidSelection(Long countryId, Long regionId) {
+        if (countryId == null) {
+            return regionId == null;
+        }
+        if (!countryRepository.existsByIdAndIsActiveTrue(countryId)) {
+            return false;
+        }
+        return regionId == null || regionRepository.existsByIdAndCountryIdAndIsActiveTrue(regionId, countryId);
+    }
+
     /**
      * {@inheritDoc}
      *
