@@ -26,12 +26,19 @@ Vitest + React Testing Library · Storybook · Playwright · pnpm
 | `pnpm storybook` | Storybook on http://localhost:6006 |
 | `pnpm build-storybook` | Static Storybook build to `storybook-static/` |
 | `pnpm e2e` | Playwright functional flows (`e2e/flows/`, starts the dev server itself) |
-| `pnpm test:visual` | Playwright visual-regression project (`e2e/visual/`) |
+| `pnpm test:visual` | Playwright visual-regression project (`e2e/visual/`; also the Keycloak theme pages, so run `pnpm build-theme-storybook` first) |
+| `pnpm build-theme-storybook` | AUTH-15: install + build the Keycloak theme package's Storybook (`keycloak-theme/storybook-static`) |
+| `pnpm test:theme` | AUTH-15: axe / overflow / Tab-order gate for the Keycloak-hosted pages (needs the theme Storybook built) |
+| `pnpm e2e:keycloak` | AUTH-15: the redirect e2e against a real Keycloak; normally run through `infra/scripts/run-keycloak-e2e.sh`, which starts one |
 
 Gradle equivalents (download their own pinned Node + pnpm into `client/.gradle/`, so they work
 without pnpm installed globally): `./gradlew :client:buildClient`, `:client:testClient`,
 `:client:start`. These are standalone tasks, not run by `client-ci.yml` (which calls `pnpm`
 directly) or by the root `./gradlew build` (backend-only — see root `CLAUDE.md`).
+
+## Keycloak login theme (AUTH-15)
+
+`/login` and `/register` are Keycloak's pages, themed in `client/keycloak-theme/` (a separate pnpm package, Keycloakify 11; it compiles the client's own tokens and primitives through an `@` alias, so those six shared files must stay free of app imports — an ESLint rule enforces it). Develop pages in its Storybook (`cd keycloak-theme && pnpm storybook`, port 6007, locale toolbar for vi). Build the JAR and install it into the dev Keycloak with `infra/scripts/build-keycloak-theme.sh` (needs a JDK and Maven on PATH), then restart Keycloak. Details: `client/docs/MVP/AUTH-15_KEYCLOAKIFY_THEME_PROJECT_AND_REDIRECT_E2E.md`.
 
 ## Design tokens
 

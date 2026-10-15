@@ -37,6 +37,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      // AUTH-15: axe / overflow / Tab-order gate for the Keycloak-hosted pages, run against the
+      // static theme Storybook (build it first: `pnpm build-theme-storybook`). Its own project so
+      // the routine `pnpm e2e` never needs that build.
+      name: 'theme',
+      testDir: './e2e/theme',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
       name: 'visual-regression',
       testDir: './e2e/visual',
       use: { ...devices['Desktop Chrome'] },
@@ -48,6 +56,14 @@ export default defineConfig({
     },
   ],
   webServer: [
+    {
+      // AUTH-15: serves keycloak-theme/storybook-static for the `theme` project and the theme's
+      // visual spec. /__health answers 200 even before the Storybook is built, so runs that never
+      // touch the theme (`pnpm e2e`) are unaffected; the theme specs fail loudly instead.
+      command: 'node e2e/mocks/staticServer.ts keycloak-theme/storybook-static 6007',
+      url: 'http://localhost:6007/__health',
+      reuseExistingServer: !process.env.CI,
+    },
     {
       command: 'node e2e/mocks/mockServer.ts',
       url: `${MOCK_SERVER_URL}/__mock/health`,

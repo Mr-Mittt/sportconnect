@@ -58,12 +58,15 @@ first visual-regression coverage — and the `discoverVolume` override + `seedDi
 
 ## 1. Two Playwright projects, one config
 
-`playwright.config.ts` defines two projects sharing one install:
+`playwright.config.ts` defines three projects sharing one install (AUTH-15 added `theme`; a fourth, real-Keycloak run has its own config, see below):
 
 | Project | `testDir` | Purpose | Run with |
 |---|---|---|---|
 | `e2e` | `e2e/flows/` | Functional user journeys | `pnpm e2e` |
-| `visual-regression` | `e2e/visual/` | Screenshot diffing against committed baselines | `pnpm test:visual` |
+| `theme` | `e2e/theme/` | AUTH-15: axe / overflow / Tab-order gate for the Keycloak-hosted pages, against the static theme Storybook | `pnpm test:theme` (after `pnpm build-theme-storybook`) |
+| `visual-regression` | `e2e/visual/` | Screenshot diffing against committed baselines (incl. the theme pages, `auth-theme.spec.ts`, which also needs the theme Storybook built) | `pnpm test:visual` |
+
+**Real-Keycloak run (AUTH-15).** `playwright.keycloak.config.ts` (`pnpm e2e:keycloak`, specs in `e2e/keycloak/`) is deliberately not a project of the main config, because it needs a Keycloak container. `infra/scripts/run-keycloak-e2e.sh` builds the theme JAR, starts a throwaway Keycloak (:8082, committed realm import + JAR), runs it and tears the container down; the `keycloak-e2e` job in `client-ci.yml` runs the same script. The client runs on its own port (:5175) against the standalone mock server, started with `MOCK_AUTH_ACCEPT_ANY_CODE=1` so `/api/auth/callback` accepts the code Keycloak really issued.
 
 Both run headed locally (visible browser) and headless in CI (`headless: !!process.env.CI`), both use
 `fullyParallel: true` (default worker count ≈ half your CPU cores — this project has run with 8
@@ -205,6 +208,11 @@ open files).
 
 ```
 e2e/
+  keycloak/                  # AUTH-15: real-Keycloak run (own config, playwright.keycloak.config.ts)
+    redirect.spec.ts
+    keycloakAdmin.ts         # admin REST helpers: test user, placeholder providers, client redirect origin
+  theme/                     # AUTH-15: `theme` project (static theme Storybook)
+    auth-theme-a11y.spec.ts
   flows/                     # `e2e` project specs
     smoke.spec.ts
     home-feed-journey.spec.ts
@@ -285,7 +293,10 @@ e2e/
 |---|---|
 | `pnpm e2e` | Runs the `e2e` project (all specs in `e2e/flows/`) |
 | `pnpm e2e <substring>` | Filters to spec files matching the substring, e.g. `pnpm e2e auth-journey` |
-| `pnpm test:visual` | Runs the `visual-regression` project |
+| `pnpm test:visual` | Runs the `visual-regression` project (build the theme Storybook first: `pnpm build-theme-storybook`) |
+| `pnpm build-theme-storybook` | AUTH-15: builds `keycloak-theme/storybook-static` (served on :6007 by `e2e/mocks/staticServer.ts`) |
+| `pnpm test:theme` | AUTH-15: runs the `theme` project |
+| `pnpm e2e:keycloak` | AUTH-15: runs `playwright.keycloak.config.ts` against a Keycloak already up at `KEYCLOAK_URL`; normally via `infra/scripts/run-keycloak-e2e.sh` |
 | `pnpm exec playwright test --project=e2e --repeat-each=N` | Repeats every test N times — the standard way to verify something flake-free (used to confirm MSW-1's reload-persistence fix at N=10) |
 | `pnpm exec playwright test --project=e2e --grep "<pattern>"` | Filters by test title regex, combinable with `--repeat-each` |
 | `pnpm exec playwright test --project=visual-regression --update-snapshots` | Regenerates baselines locally (don't commit Windows-rendered ones — see §6) |
@@ -1426,6 +1437,29 @@ byte-identical.
 
 ---
 
+### `e2e/keycloak/redirect.spec.ts` (AUTH-15, 9 `test()`s, own config `playwright.keycloak.config.ts`)
+
+Real Keycloak 26.4 with the committed realm and the SportConnect theme JAR; the client is the real one on :5175, `/api/*` is the mock server. `beforeAll` allows the :5175 origin on the e2e Keycloak's `sportconnect-web` client, creates a user, and adds placeholder Google / Facebook / Zalo providers (all through the admin API, in the throwaway container only).
+
+| Test | What it checks |
+|---|---|
+| deep link to the themed page | `/groups` redirects with an S256 request; the page is the theme (heading, tagline, three provider buttons, the client's `surface-0` background) |
+| no asset 404 | the illustration, CSS and JS are served from the theme resources (the `earthSrc` fix) |
+| sign in | a real sign-in returns through `/auth/callback` to the deep link `/groups` |
+| wrong password | the themed alert "Invalid username or password" in the card |
+| register | `/register` sends `prompt=create`, shows the themed form; registering a new user returns to the app |
+| forgot password | the themed reset page, with the back link |
+| vi: sign-in page | `ui_locales=vi` opens the page in Vietnamese (A24 finding 3, verified) |
+| vi: server message | a wrong password is answered in Vietnamese by Keycloak itself (`messages_vi.properties`) |
+| vi: register | Vietnamese heading and profile-attribute labels |
+
+### `e2e/theme/auth-theme-a11y.spec.ts` (AUTH-15, `theme` project, 70 `test()`s)
+
+Walks every story in the built theme Storybook's `index.json` (17 today, so a new theme story is covered automatically). Per story: at 375 / 768 / 1280 px no horizontal overflow and axe reports zero critical/serious violations, plus the same checks in Vietnamese at 375 px (17 × 4 = 68). Plus: login Tab order (language links, username, forgot-password link, password, show-password, submit, the three providers) and register (every field reachable by Tab). It replaces the `/login`, `/register`, `/forgot-password` and `/reset-password` rows AUTH-14 removed from `a11y.spec.ts`. First run found a real issue: Keycloakify's stock OTP, recovery-code and logout-confirm pages hard-code `tabindex > 0`; `Template` now strips it.
+
+### `e2e/visual/auth-theme.spec.ts` (AUTH-15, `visual-regression` project, 57 test instances)
+
+One baseline per theme story per breakpoint in English (17 × 3 = 51) plus login and register in Vietnamese (2 × 3 = 6), named `auth-theme-<story>-<width>.png` / `auth-theme-<story>-vi-<width>.png`, captured from the static theme Storybook. Generated only by the `update-baselines` dispatch (Linux); the spec fails loudly, never skips, when the theme Storybook is not built.
 ## 7. Adding a new spec — checklist
 
 - Import `{ test, expect }` from `../mocks/test.ts`, not `@playwright/test` directly, if the spec needs
@@ -1441,7 +1475,7 @@ byte-identical.
 - Visual-regression spec touching a new page? Freeze the clock before the first navigation if the page
   renders any relative timestamp.
 
-### `e2e/visual/auth-screens.spec.ts` — removed by AUTH-14
+### `e2e/visual/auth-screens.spec.ts` — removed by AUTH-14, replaced by `auth-theme.spec.ts` (AUTH-15)
 
 The 21 AUTH-13 baselines (`auth-login-*`, `auth-register-*`, `auth-forgot-password-*`, `auth-reset-password-*`, each at 375/768/1280) covered client screens that no longer exist. AUTH-15 baselines the Keycloakify theme pages instead (Storybook captures on the Linux runner).
 

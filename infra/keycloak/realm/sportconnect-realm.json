@@ -18,6 +18,7 @@
     "vi"
   ],
   "defaultLocale": "en",
+  "loginTheme": "sportconnect",
   "smtpServer": {
     "host": "mailpit",
     "port": "1025",

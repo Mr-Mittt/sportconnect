@@ -16,6 +16,7 @@ dist-ssr
 storybook-static
 test-results
 playwright-report
+playwright-report-keycloak
 *.tsbuildinfo
 
 # Gradle-managed node/pnpm (client/build.gradle downloads its own copies)
