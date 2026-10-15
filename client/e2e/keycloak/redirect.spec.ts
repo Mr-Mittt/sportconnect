@@ -98,13 +98,15 @@ test('/register opens the themed create-account form and registering returns to 
   await expect(page.getByRole('heading', { name: 'Create your account' })).toBeVisible();
 
   const stamp = `${Date.now()}`;
+  const email = `e2e-register-${stamp}@example.test`;
+  // The realm uses email as username: the register page has no username field and Keycloak stores the email.
   const registered: TestUser = {
-    username: `e2e-register-${stamp}`,
-    email: `e2e-register-${stamp}@example.test`,
+    username: email,
+    email,
     password: `Pw-${stamp}-aA1!`,
   };
   created.push(registered);
-  await page.locator('#username').fill(registered.username);
+  await expect(page.locator('#username')).toHaveCount(0);
   await page.locator('#email').fill(registered.email);
   await page.locator('#firstName').fill('E2E');
   await page.locator('#lastName').fill('Registered');
@@ -159,7 +161,8 @@ test.describe('Vietnamese', () => {
     await page.waitForURL(KEYCLOAK_PAGE);
 
     await expect(page.getByRole('heading', { name: 'Tạo tài khoản của bạn' })).toBeVisible();
-    await expect(page.getByLabel('Tên đăng nhập')).toBeVisible();
+    await expect(page.getByLabel('Email')).toBeVisible();
+    await expect(page.getByLabel('Tên đăng nhập')).toHaveCount(0);
     await expect(page.getByLabel('Họ', { exact: false }).first()).toBeVisible();
   });
 });

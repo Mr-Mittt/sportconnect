@@ -720,10 +720,14 @@ public class UserServiceImpl implements UserService {
         return isBlank(value) ? null : value.trim();
     }
 
-    /** The wanted username cut to the column size, or with the subject's first characters appended when it is taken; null if none was given. */
+    /**
+     * The wanted username cut to the column size, or with the subject's first characters appended when it is taken;
+     * null if none was given. A value containing '@' is treated as none: with the realm's "email as username" the
+     * token's {@code preferred_username} is the email address, and {@code users.username} is shown to other users.
+     */
     private String availableUsername(String wanted, UUID id) {
         String base = blankToNull(wanted);
-        if (base == null) {
+        if (base == null || base.contains("@")) {
             return null;
         }
         if (base.length() > USERNAME_MAX) {

@@ -6,7 +6,7 @@
   "ssoSessionIdleTimeout": 86400,
   "ssoSessionMaxLifespan": 604800,
   "registrationAllowed": true,
-  "registrationEmailAsUsername": false,
+  "registrationEmailAsUsername": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,

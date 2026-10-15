@@ -7,8 +7,8 @@
 #                                infra/keycloak/providers/ (needs Node, pnpm, a JDK and Maven on PATH)
 # 2. restarts the dev Compose Keycloak so it loads the JAR
 # 3. waits until the realm answers
-# 4. sets the realm's Login theme to `sportconnect` through the admin API (the realm import is
-#    IGNORE_EXISTING, so the "loginTheme" line in the realm file only applies to a NEW realm)
+# 4. sets the realm's Login theme to `sportconnect` and "email as username" on through the admin API
+#    (the realm import is IGNORE_EXISTING, so those lines in the realm file only apply to a NEW realm)
 #
 # Run it from Git Bash on Windows. Compose Keycloak must already exist (docker compose up -d keycloak).
 # Overrides: KEYCLOAK_URL (default http://localhost:8081), KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD
@@ -38,7 +38,7 @@ for _ in $(seq 1 90); do
     break
   fi
   sleep 2
-donew
+done
 if [ "$ready" -ne 1 ]; then
   echo "dev-keycloak-theme: Keycloak did not come back; last log lines:" >&2
   docker compose -f "$repo/infra/docker-compose.dev.yml" logs --tail 40 keycloak >&2 || true
@@ -50,10 +50,10 @@ token="$(curl -fsS -X POST "$url/realms/master/protocol/openid-connect/token" \
   --data-urlencode "username=$admin_user" --data-urlencode "password=$admin_password" |
   node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).access_token))")"
 
-# Read the realm, change only loginTheme, write it back (a PUT replaces the representation).
+# Read the realm, change only loginTheme and registrationEmailAsUsername, write it back (a PUT replaces the representation).
 current="$(curl -fsS -H "Authorization: Bearer $token" "$url/admin/realms/$realm")"
-updated="$(printf '%s' "$current" | THEME="$theme" node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);r.loginTheme=process.env.THEME;console.log(JSON.stringify(r))})")"
+updated="$(printf '%s' "$current" | THEME="$theme" node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);r.loginTheme=process.env.THEME;r.registrationEmailAsUsername=true;console.log(JSON.stringify(r))})")"
 curl -fsS -X PUT -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
   -d "$updated" "$url/admin/realms/$realm" >/dev/null
 
-echo "dev-keycloak-theme: done. Realm '$realm' now uses the '$theme' login theme: $url/realms/$realm/account"
+echo "dev-keycloak-theme: done. Realm '$realm' now uses the '$theme' login theme and email-as-username: $url/realms/$realm/account"
