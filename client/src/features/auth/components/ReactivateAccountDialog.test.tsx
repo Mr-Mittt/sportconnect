@@ -47,8 +47,8 @@ describe('ReactivateAccountDialog', () => {
   });
 
   it('shows the error line and stays open', () => {
-    setup({ errorMessage: 'Invalid email or password.' });
-    expect(screen.getByRole('alert')).toHaveTextContent('Invalid email or password.');
+    setup({ errorMessage: 'This re-activation request expired. Sign in again to continue.' });
+    expect(screen.getByRole('alert')).toHaveTextContent('This re-activation request expired. Sign in again to continue.');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 

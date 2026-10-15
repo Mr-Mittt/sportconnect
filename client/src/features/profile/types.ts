@@ -22,7 +22,7 @@ export const MAX_BIO_LENGTH = 500;
  */
 export interface UserResponse {
   id: string;
-  email: string;
+  email: string | null;
   firstName: string | null;
   lastName: string | null;
   username: string | null;

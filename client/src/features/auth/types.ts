@@ -9,9 +9,11 @@
 //   AuthResponse.user until this ticket added them to toUserResponse() — login/
 //   register/refresh previously returned only {id, email, firstName, lastName,
 //   username, roles}, which would have left TopBar with no avatar source.
+// - AUTH-14 (backend A22): `email` is `string | null` — an account created with a phone
+//   number only has none.
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
   firstName: string;
   lastName: string;
   username: string;
@@ -20,25 +22,10 @@ export interface User {
   roles: string[];
 }
 
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
-
-// CLIENT-REF-2 / backend U16: optional geo/language extras on RegisterRequest. `countryId`/
-// `regionId` mirror `CountryResponse.id`/`RegionResponse.id` (both `number` client-side, `Long`
-// server-side, same convention as the reference types). Coordinates are sent together or not at
-// all — only after a successful "Use my current location" click, never on their own.
-export interface RegisterPayload {
-  email: string;
-  password: string;
-  fullName: string;
-  phoneNumber?: string;
-  languageCode?: string;
-  countryId?: number;
-  regionId?: number;
-  latitude?: number;
-  longitude?: number;
+// AUTH-14 / backend A26: body of `POST /api/auth/callback`. `codeVerifier` is 43 to 128 characters.
+export interface CallbackPayload {
+  code: string;
+  codeVerifier: string;
 }
 
 // Matches AuthResponse (auth-api) as actually serialized: `refreshToken` is
@@ -49,20 +36,4 @@ export interface AuthResult {
   tokenType: 'Bearer';
   expiresIn: number;
   user: User;
-}
-
-// AUTH-9: both bodies match the backend's request DTOs (`ForgotPasswordRequest`,
-// `ResetPasswordRequest`); both endpoints answer `ApiResponse<Void>`.
-export interface ForgotPasswordPayload {
-  email: string;
-}
-
-export interface ResetPasswordPayload {
-  token: string;
-  newPassword: string;
-}
-
-// AUTH-9 / backend A21: body of `POST /api/auth/reset-password/validate`.
-export interface ValidateResetTokenPayload {
-  token: string;
 }

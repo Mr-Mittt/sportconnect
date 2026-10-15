@@ -1,6 +1,7 @@
 import { IconLogout } from '@tabler/icons-react';
 import { useCallback, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { LogoutFailedDialog } from '@/features/auth/components/LogoutFailedDialog';
 import { useLogout } from '@/features/auth/useLogout';
 import { Button } from '@/shared/ui/button';
 import { AdminUnsavedChangesDialog } from './components/AdminUnsavedChangesDialog';
@@ -20,7 +21,12 @@ import type { AdminOutletContext } from './useAdminOutletContext';
  */
 export function AdminLayout() {
   const navigate = useNavigate();
-  const { logout, isPending } = useLogout({ onSettled: () => navigate('/login') });
+  const {
+    logout,
+    isPending,
+    failed: logoutFailed,
+    dismissFailure: dismissLogoutFailure,
+  } = useLogout({ onSignedOut: () => navigate('/login') });
 
   // ADMIN-4: reported upward by whichever admin section is mounted (see
   // useAdminOutletContext). Held here rather than in the section because the
@@ -34,7 +40,7 @@ export function AdminLayout() {
   const outletContext: AdminOutletContext = { setHasUnsavedChanges: reportUnsavedChanges };
 
   // Guard the *action*, not the navigation. `useBlocker` (GRP-2's other mechanism)
-  // is wrong here: logout POSTs first and only navigates in useLogout's onSettled,
+  // is wrong here: logout POSTs first and only navigates in useLogout's onSignedOut,
   // so a blocker would fire after the session had already been cleared server-side,
   // stranding a logged-out user on the page.
   const handleLogoutClick = () => {
@@ -87,6 +93,13 @@ export function AdminLayout() {
       <main className="mt-6">
         <Outlet context={outletContext} />
       </main>
+
+      <LogoutFailedDialog
+        isOpen={logoutFailed}
+        onRetry={logout}
+        onStay={dismissLogoutFailure}
+        isRetrying={isPending}
+      />
 
       <AdminUnsavedChangesDialog
         isOpen={isLeaveDialogOpen}

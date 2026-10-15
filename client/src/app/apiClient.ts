@@ -71,11 +71,16 @@ type RetryableRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
 // Requests that must never trigger a silent-refresh-and-retry:
 // - /auth/refresh itself, or a 401 here would recurse into another refresh attempt.
-// - /auth/login, /auth/register: a 401 there is "bad credentials", not "expired
-//   session" — there's no original session to restore, and silently refreshing
-//   could resurrect a stale one from an unrelated valid cookie the user didn't
-//   ask for (e.g. a login-page retry with different, still-wrong credentials).
-const NO_RETRY_URLS = ['/auth/refresh', '/auth/login', '/auth/register', '/auth/reactivate'];
+// - /auth/callback, /auth/reactivate, /auth/reactivate/cancel (AUTH-14): a 401 there is "this code
+//   or ticket is no good" (or ACCOUNT_DEACTIVATED), not "expired session" — there's no original
+//   session to restore, and silently refreshing could resurrect a stale one from an unrelated
+//   valid cookie the user didn't ask for.
+const NO_RETRY_URLS = [
+  '/auth/refresh',
+  '/auth/callback',
+  '/auth/reactivate',
+  '/auth/reactivate/cancel',
+];
 
 // Shared across concurrent 401s so a page that fires several authenticated
 // requests at once (all with the same stale token) triggers exactly one
@@ -138,8 +143,14 @@ export async function handleResponseError(
     const accessToken = await refreshPromise;
     originalRequest.headers.set('Authorization', `Bearer ${accessToken}`);
     return client.request(originalRequest);
-  } catch {
-    useAuthStore.getState().clearSession();
+  } catch (refreshError) {
+    // AUTH-14: a refresh that failed because Keycloak or the backend could not answer (5xx, e.g. 503
+    // SERVICE_UNAVAILABLE, or no response at all) says nothing about the session — keep it.
+    // Only a definite refusal ends the session.
+    const status = axios.isAxiosError(refreshError) ? refreshError.response?.status : undefined;
+    if (status !== undefined && status < 500) {
+      useAuthStore.getState().clearSession();
+    }
     return Promise.reject(error);
   }
 }

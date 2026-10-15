@@ -1,5 +1,5 @@
 import { expect, test } from '../mocks/test.ts';
-import { mockAccessToken, mockPassword, mockUser } from '../mocks/fixtures.ts';
+import { mockAccessToken, mockUser } from '../mocks/fixtures.ts';
 import { MOCK_SERVER_URL } from '../mocks/mockServerConfig.ts';
 
 // Proves the standalone mock server (MSW-1) actually handles requests,
@@ -18,14 +18,16 @@ import { MOCK_SERVER_URL } from '../mocks/mockServerConfig.ts';
 // the mock server is already listening before the test starts, so there's
 // no per-navigation setup handshake left to wait for.
 
-test('MSW intercepts POST /api/auth/login and returns the fixture', async ({ page, mockSessionId }) => {
+const VERIFIER = 'v'.repeat(64);
+
+test('MSW intercepts POST /api/auth/callback and returns the fixture', async ({ page, mockSessionId }) => {
   await page.goto('/');
 
   const resultJson = (await page.evaluate(`
-    fetch('/api/auth/login', {
+    fetch('/api/auth/callback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: '${mockUser.email}', password: '${mockPassword}' }),
+      body: JSON.stringify({ code: 'user-code', codeVerifier: '${VERIFIER}' }),
     }).then((r) => r.json())
   `)) as {
     success: boolean;
@@ -35,7 +37,7 @@ test('MSW intercepts POST /api/auth/login and returns the fixture', async ({ pag
   const log = (await (
     await fetch(`${MOCK_SERVER_URL}/__mock/sessions/${encodeURIComponent(mockSessionId)}/requests`)
   ).json()) as Array<{ method: string; path: string }>;
-  expect(log).toContainEqual(expect.objectContaining({ method: 'POST', path: '/api/auth/login' }));
+  expect(log).toContainEqual(expect.objectContaining({ method: 'POST', path: '/api/auth/callback' }));
 
   expect(resultJson.success).toBe(true);
   expect(resultJson.data.accessToken).toBe(mockAccessToken);
@@ -44,14 +46,14 @@ test('MSW intercepts POST /api/auth/login and returns the fixture', async ({ pag
   expect(resultJson.data.user.roles).toEqual(mockUser.roles);
 });
 
-test('MSW returns 401 for wrong credentials', async ({ page }) => {
+test('MSW returns 401 for a code it does not know', async ({ page }) => {
   await page.goto('/');
 
   const status = await page.evaluate(`
-    fetch('/api/auth/login', {
+    fetch('/api/auth/callback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: '${mockUser.email}', password: 'wrong-password' }),
+      body: JSON.stringify({ code: 'not-a-code', codeVerifier: '${VERIFIER}' }),
     }).then((r) => r.status)
   `);
 
@@ -68,12 +70,13 @@ test('MSW rejects /api/auth/refresh without a valid refresh cookie', async ({ pa
   expect(status).toBe(401);
 });
 
-test('MSW rejects /api/auth/logout without an Authorization header', async ({ page }) => {
+// AUTH-14 / backend A26: logout is public and cookie-driven, so it answers 200 without a Bearer header.
+test('MSW answers /api/auth/logout without an Authorization header', async ({ page }) => {
   await page.goto('/');
 
   const status = await page.evaluate(`
     fetch('/api/auth/logout', { method: 'POST' }).then((r) => r.status)
   `);
 
-  expect(status).toBe(401);
+  expect(status).toBe(200);
 });

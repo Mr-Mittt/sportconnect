@@ -3,8 +3,6 @@ import { initReactI18next } from 'react-i18next';
 import commonEn from '@/locales/en/common.json';
 import enumsEn from '@/locales/en/enums.json';
 import errorsEn from '@/locales/en/errors.json';
-import forgotPasswordEn from '@/locales/en/forgotPassword.json';
-import resetPasswordEn from '@/locales/en/resetPassword.json';
 import friendsEn from '@/locales/en/friends.json';
 import groupsEn from '@/locales/en/groups.json';
 import homeFeedEn from '@/locales/en/homeFeed.json';
@@ -13,7 +11,6 @@ import notificationsEn from '@/locales/en/notifications.json';
 import accountSettingsEn from '@/locales/en/accountSettings.json';
 import profileEn from '@/locales/en/profile.json';
 import profilePageEn from '@/locales/en/profilePage.json';
-import registerEn from '@/locales/en/register.json';
 import sharedComponentsEn from '@/locales/en/sharedComponents.json';
 import sessionEn from '@/locales/en/session.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
@@ -21,8 +18,6 @@ import shellEn from '@/locales/en/shell.json';
 import commonVi from '@/locales/vi/common.json';
 import enumsVi from '@/locales/vi/enums.json';
 import errorsVi from '@/locales/vi/errors.json';
-import forgotPasswordVi from '@/locales/vi/forgotPassword.json';
-import resetPasswordVi from '@/locales/vi/resetPassword.json';
 import friendsVi from '@/locales/vi/friends.json';
 import groupsVi from '@/locales/vi/groups.json';
 import homeFeedVi from '@/locales/vi/homeFeed.json';
@@ -31,7 +26,6 @@ import notificationsVi from '@/locales/vi/notifications.json';
 import accountSettingsVi from '@/locales/vi/accountSettings.json';
 import profileVi from '@/locales/vi/profile.json';
 import profilePageVi from '@/locales/vi/profilePage.json';
-import registerVi from '@/locales/vi/register.json';
 import sharedComponentsVi from '@/locales/vi/sharedComponents.json';
 import sessionVi from '@/locales/vi/session.json';
 import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
@@ -123,13 +117,10 @@ void i18next.use(initReactI18next).init({
   resources: {
     en: {
       common: commonEn,
-      register: registerEn,
       accountSettings: accountSettingsEn,
       profile: profileEn,
       profilePage: profilePageEn,
       login: loginEn,
-      forgotPassword: forgotPasswordEn,
-      resetPassword: resetPasswordEn,
       shell: shellEn,
       sharedDialogs: sharedDialogsEn,
       homeFeed: homeFeedEn,
@@ -143,13 +134,10 @@ void i18next.use(initReactI18next).init({
     },
     vi: {
       common: commonVi,
-      register: registerVi,
       accountSettings: accountSettingsVi,
       profile: profileVi,
       profilePage: profilePageVi,
       login: loginVi,
-      forgotPassword: forgotPasswordVi,
-      resetPassword: resetPasswordVi,
       shell: shellVi,
       sharedDialogs: sharedDialogsVi,
       homeFeed: homeFeedVi,
@@ -165,7 +153,7 @@ void i18next.use(initReactI18next).init({
   lng: useLocaleStore.getState().locale,
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'forgotPassword', 'resetPassword', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session', 'errors'],
+  ns: ['common', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session', 'errors'],
   interpolation: { escapeValue: false }, // React already escapes — avoid double-escaping.
   returnNull: false, // A missing key renders itself (never `null`) if fallbackLng also misses it.
 });

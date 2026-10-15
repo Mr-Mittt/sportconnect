@@ -53,7 +53,10 @@
   "codes": {
     "EMAIL_ALREADY_REGISTERED": "Đã có tài khoản dùng email này.",
     "INVALID_CREDENTIALS": "Email hoặc mật khẩu không đúng.",
-    "ACCOUNT_DEACTIVATED": "Tài khoản này đã bị vô hiệu hóa.",
+    "ACCOUNT_DEACTIVATED": "Tài khoản này đã bị vô hiệu hóa. Hãy đăng nhập lại để kích hoạt lại.",
+    "AUTH_CODE_INVALID": "Liên kết đăng nhập đã hết hạn hoặc đã được dùng. Vui lòng đăng nhập lại.",
+    "REACTIVATION_TICKET_INVALID": "Yêu cầu kích hoạt lại đã hết hạn. Hãy đăng nhập lại để tiếp tục.",
+    "SERVICE_UNAVAILABLE": "Dịch vụ đăng nhập hiện chưa kết nối được. Vui lòng thử lại sau ít phút.",
     "RESET_TOKEN_INVALID": "Liên kết đặt lại này không hợp lệ, đã được sử dụng hoặc đã hết hạn. Hãy yêu cầu liên kết mới.",
     "RESET_TOKEN_USED": "Liên kết đặt lại này đã được sử dụng. Nếu bạn vẫn cần đặt lại mật khẩu, hãy yêu cầu liên kết mới.",
     "RESET_TOKEN_EXPIRED": "Liên kết đặt lại này đã hết hạn. Hãy yêu cầu liên kết mới.",

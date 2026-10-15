@@ -1,4 +1,4 @@
-import { mockAdminUser, mockPassword } from '../mocks/fixtures.ts';
+import { KEYCLOAK_AUTH_URL, signIn } from '../mocks/keycloakStub.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -15,11 +15,7 @@ import { expect, test } from '../mocks/test.ts';
  */
 
 async function logInAsAdmin(page: import('@playwright/test').Page) {
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockAdminUser.email);
-  await page.getByLabel('Password', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Log in' }).click();
-  await page.waitForURL('/');
+  await signIn(page, 'admin');
 }
 
 test('Admin sports — an admin edits a sport field and saves it', async ({ page }) => {
@@ -117,7 +113,7 @@ test('Admin logout — unsaved sport-field edits are confirmed before discarding
   // Confirming does log out.
   await page.getByRole('button', { name: 'Log out' }).click();
   await page.getByRole('button', { name: 'Discard & log out' }).click();
-  await page.waitForURL('/login');
+  await page.waitForURL(KEYCLOAK_AUTH_URL);
 });
 
 test('Admin logout — a clean form logs out with no confirmation', async ({ page }) => {
@@ -127,5 +123,5 @@ test('Admin logout — a clean form logs out with no confirmation', async ({ pag
 
   await page.getByRole('button', { name: 'Log out' }).click();
 
-  await page.waitForURL('/login');
+  await page.waitForURL(KEYCLOAK_AUTH_URL);
 });

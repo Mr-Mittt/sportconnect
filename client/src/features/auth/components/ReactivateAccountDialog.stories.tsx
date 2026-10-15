@@ -18,4 +18,4 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {};
 export const Submitting: Story = { args: { isSubmitting: true } };
-export const ErrorState: Story = { args: { errorMessage: 'Invalid email or password.' } };
+export const ErrorState: Story = { args: { errorMessage: 'This re-activation request expired. Sign in again to continue.' } };

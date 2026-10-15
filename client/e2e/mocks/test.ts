@@ -1,4 +1,5 @@
 import { test as base } from '@playwright/test';
+import { stubKeycloakSignInPage } from './keycloakStub.ts';
 import { MOCK_SERVER_URL, SESSION_HEADER } from './mockServerConfig.ts';
 
 /**
@@ -45,6 +46,13 @@ export const test = base.extend<{ mockSessionId: string }>({
   context: async ({ context, mockSessionId }, use) => {
     await context.setExtraHTTPHeaders({ [SESSION_HEADER]: mockSessionId });
     await use(context);
+  },
+
+  // AUTH-14: every test gets a static stand-in for Keycloak's sign-in page (see keycloakStub.ts);
+  // `signIn(page, …)` layers a redirect-back handler over it for the duration of one sign-in.
+  page: async ({ page }, use) => {
+    await stubKeycloakSignInPage(page);
+    await use(page);
   },
 });
 

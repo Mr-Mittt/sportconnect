@@ -46,3 +46,7 @@ Changing any auth screen's visuals; the Windows font-rendering noise floor.
 **Visual-regression expectation:** (b) 30 *new* baselines — `auth-{login-default,login-password-updated,register-default,forgot-password-form,forgot-password-sent,reset-password-form,reset-password-link-problem}-{375,768,1280}.png` and `account-settings-{default,change-password,deactivate}-{375,768,1280}.png`; every existing baseline untouched.
 
 **Executed (2026-10-13):** `update-baselines` dispatch run, artifact `visual-baselines` applied in commit `13d61fe`. SHA-256 against the committed set: exactly the predicted 30 files are NEW, 0 CHANGED, 0 MISSING, and the other 150 baselines came back byte-identical. Eyeballed one image per surface (10 surfaces, mixed widths): each shows its intended state — the "Password updated" notice above the login form, the neutral "Check your email" confirmation, the link-problem state with "Request a new link", the Account Settings modal with its Language field filled, and both stacked dialogs empty. Rendered on Linux (DejaVu), so unlike the local Windows shots.
+
+## Update (2026-10-15, AUTH-14)
+
+The 21 `auth-*` baselines and `e2e/visual/auth-screens.spec.ts` were deleted together with the login, register, forgot- and reset-password screens they covered (those pages are Keycloak's now). `account-settings.spec.ts` and its baselines are unchanged. AUTH-15 baselines the theme pages instead.

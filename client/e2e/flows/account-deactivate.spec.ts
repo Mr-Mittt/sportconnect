@@ -1,4 +1,5 @@
 import { mockPassword, seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { KEYCLOAK_AUTH_URL } from '../mocks/keycloakStub.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -15,7 +16,7 @@ async function openDeactivateDialog(page: import('@playwright/test').Page) {
   return page.getByRole('dialog', { name: 'Deactivate your account?' });
 }
 
-test('the right password deactivates, signs out and lands on /login with the re-activate hint', async ({ page }) => {
+test('the right password deactivates, signs out and lands on the sign-in page', async ({ page }) => {
   const dialog = await openDeactivateDialog(page);
 
   const request = page.waitForRequest('**/api/users/me/deactivate');
@@ -24,8 +25,9 @@ test('the right password deactivates, signs out and lands on /login with the re-
   await dialog.getByRole('button', { name: 'Deactivate' }).click();
 
   expect((await request).postDataJSON()).toEqual({ currentPassword: mockPassword });
-  await expect(page).toHaveURL(/\/login/);
-  await expect(page.getByRole('status')).toContainText('re-activate');
+  // AUTH-14: /login is a redirect, so the signed-out user ends up on Keycloak's sign-in page; the
+  // re-activate dialog is shown by /auth/callback after the next sign-in (auth-callback.spec.ts).
+  await expect(page).toHaveURL(KEYCLOAK_AUTH_URL);
 });
 
 test('a wrong password keeps the dialog open with the localized error', async ({ page }) => {
@@ -36,7 +38,7 @@ test('a wrong password keeps the dialog open with the localized error', async ({
   await dialog.getByRole('button', { name: 'Deactivate' }).click();
 
   await expect(dialog.getByRole('alert')).toHaveText('Your current password is incorrect.');
-  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page).not.toHaveURL(KEYCLOAK_AUTH_URL);
 });
 
 test('the confirmation stacks over Account settings, which keeps its edits when Cancel returns to it', async ({ page }) => {
@@ -86,7 +88,6 @@ test('deactivating with unsaved edits in Account settings signs out without the 
   await confirm.getByLabel('Confirm with your password').fill(mockPassword);
   await confirm.getByRole('button', { name: 'Deactivate' }).click();
 
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(KEYCLOAK_AUTH_URL);
   await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeHidden();
-  await expect(page.getByRole('status')).toContainText('re-activate');
 });

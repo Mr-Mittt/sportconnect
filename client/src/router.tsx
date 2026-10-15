@@ -2,10 +2,8 @@ import { createBrowserRouter, createRoutesFromElements, Route } from 'react-rout
 import { AdminIndex } from './features/admin/AdminIndex';
 import { AdminLayout } from './features/admin/AdminLayout';
 import { AdminSportsPage } from './features/admin/AdminSportsPage';
-import { ForgotPasswordPage } from './features/auth/ForgotPasswordPage';
-import { LoginPage } from './features/auth/LoginPage';
-import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
-import { RegisterPage } from './features/auth/RegisterPage';
+import { AuthCallbackPage } from './features/auth/AuthCallbackPage';
+import { RedirectToKeycloakPage } from './features/auth/RedirectToKeycloakPage';
 import { FriendsPage } from './features/friends/FriendsPage';
 import { GroupsPage } from './features/groups/GroupsPage';
 import { HomeFeedPage } from './features/home-feed/HomeFeedPage';
@@ -34,11 +32,14 @@ export const routes = createRoutesFromElements(
     {/* Pre-auth routes render outside AppShell — no TopBar/NavTabs for a
         logged-out visitor. PublicOnlyRoute sends an already-authenticated
         visitor to Home Feed instead of showing the form again. */}
+    {/* AUTH-14: /login and /register redirect to Keycloak's hosted pages; Keycloak returns to
+        /auth/callback, which is deliberately not wrapped in PublicOnlyRoute (it finishes the sign-in
+        itself and then navigates). The forgot/reset-password pages are gone — Keycloak owns them. */}
     <Route
       path="/login"
       element={
         <PublicOnlyRoute>
-          <LoginPage />
+          <RedirectToKeycloakPage mode="login" />
         </PublicOnlyRoute>
       }
     />
@@ -46,26 +47,11 @@ export const routes = createRoutesFromElements(
       path="/register"
       element={
         <PublicOnlyRoute>
-          <RegisterPage />
+          <RedirectToKeycloakPage mode="register" />
         </PublicOnlyRoute>
       }
     />
-    <Route
-      path="/forgot-password"
-      element={
-        <PublicOnlyRoute>
-          <ForgotPasswordPage />
-        </PublicOnlyRoute>
-      }
-    />
-    <Route
-      path="/reset-password"
-      element={
-        <PublicOnlyRoute>
-          <ResetPasswordPage />
-        </PublicOnlyRoute>
-      }
-    />
+    <Route path="/auth/callback" element={<AuthCallbackPage />} />
     <Route
       element={
         <ProtectedRoute>

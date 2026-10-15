@@ -1,9 +1,5 @@
 {
   "tagline": "Your teams, matches, and crew — all in one place.",
-  "notice": {
-    "passwordReset": "Password updated. Sign in with your new password.",
-    "accountDeactivated": "Your account has been deactivated. Log in again any time to re-activate it."
-  },
   "heading": "Welcome back",
   "subheading": "Log in to pick up where you left off.",
   "form": {
@@ -26,13 +22,14 @@
     "submit": "Log in",
     "submitting": "Logging in…",
     "or": "or",
-    "oauth": {
-      "facebook": "Continue with Facebook",
-      "google": "Continue with Google",
-      "apple": "Continue with Apple"
-    },
     "newToSportHub": "New to SportHub?",
     "createAccount": "Create an account"
+  },
+  "redirecting": "Taking you to sign in…",
+  "callback": {
+    "signingIn": "Signing you in…",
+    "errorTitle": "We couldn’t sign you in",
+    "retry": "Try again"
   },
   "reactivate": {
     "title": "Re-activate your account?",
@@ -40,5 +37,12 @@
     "confirm": "Re-activate",
     "confirming": "Re-activating…",
     "cancel": "Cancel"
+  },
+  "logoutFailed": {
+    "title": "Couldn’t sign you out",
+    "body": "We couldn’t reach the sign-in service, so you’re still signed in. Try again, or stay signed in for now.",
+    "retry": "Try again",
+    "retrying": "Trying…",
+    "stay": "Stay signed in"
   }
 }

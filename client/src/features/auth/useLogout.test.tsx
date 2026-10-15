@@ -22,19 +22,21 @@ const fixtureUser = {
   roles: ['USER'],
 };
 
+const ok = {
+  data: { success: true, message: 'Logged out successfully', data: null, timestamp: new Date().toISOString() },
+};
+
 describe('useLogout', () => {
   beforeEach(() => {
     useAuthStore.setState({ user: fixtureUser, accessToken: 'token-abc', isBootstrapping: false });
     vi.restoreAllMocks();
   });
 
-  it('clears the session on a successful logout call', async () => {
-    vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
-      data: { success: true, message: 'Logged out successfully', data: null, timestamp: new Date().toISOString() },
-    });
+  it('clears the session and signals the caller on a successful logout call', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValueOnce(ok);
 
-    const onSettled = vi.fn();
-    const { result } = renderHook(() => useLogout({ onSettled }), { wrapper });
+    const onSignedOut = vi.fn();
+    const { result } = renderHook(() => useLogout({ onSignedOut }), { wrapper });
 
     act(() => {
       result.current.logout();
@@ -43,21 +45,69 @@ describe('useLogout', () => {
     await waitFor(() => expect(useAuthStore.getState().user).toBeNull());
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(apiClient.post).toHaveBeenCalledWith('/auth/logout');
-    expect(onSettled).toHaveBeenCalledTimes(1);
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+    expect(result.current.failed).toBe(false);
   });
 
-  it('clears the session even when the network call fails', async () => {
+  it('clears the session even when the call fails for a reason other than 503 (network, 401)', async () => {
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('network error'));
 
-    const onSettled = vi.fn();
-    const { result } = renderHook(() => useLogout({ onSettled }), { wrapper });
+    const onSignedOut = vi.fn();
+    const { result } = renderHook(() => useLogout({ onSignedOut }), { wrapper });
 
     act(() => {
       result.current.logout();
     });
 
     await waitFor(() => expect(useAuthStore.getState().user).toBeNull());
-    expect(useAuthStore.getState().accessToken).toBeNull();
-    expect(onSettled).toHaveBeenCalledTimes(1);
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+    expect(result.current.failed).toBe(false);
+  });
+
+  it('keeps the session and reports failed on a 503, and retry can still sign out', async () => {
+    vi.spyOn(apiClient, 'post')
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 503, data: { success: false, errorCode: 'SERVICE_UNAVAILABLE' } },
+      })
+      .mockResolvedValueOnce(ok);
+
+    const onSignedOut = vi.fn();
+    const { result } = renderHook(() => useLogout({ onSignedOut }), { wrapper });
+
+    act(() => {
+      result.current.logout();
+    });
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(useAuthStore.getState().user).not.toBeNull();
+    expect(useAuthStore.getState().accessToken).toBe('token-abc');
+    expect(onSignedOut).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.logout();
+    });
+
+    await waitFor(() => expect(useAuthStore.getState().user).toBeNull());
+    expect(onSignedOut).toHaveBeenCalledTimes(1);
+    expect(result.current.failed).toBe(false);
+  });
+
+  it('dismissFailure ("Stay signed in") clears the failed flag and keeps the session', async () => {
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 503, data: { success: false } },
+    });
+    const { result } = renderHook(() => useLogout(), { wrapper });
+
+    act(() => {
+      result.current.logout();
+    });
+    await waitFor(() => expect(result.current.failed).toBe(true));
+
+    act(() => result.current.dismissFailure());
+
+    await waitFor(() => expect(result.current.failed).toBe(false));
+    expect(useAuthStore.getState().user).not.toBeNull();
   });
 });

@@ -10,7 +10,6 @@ import notificationsEn from '@/locales/en/notifications.json';
 import accountSettingsEn from '@/locales/en/accountSettings.json';
 import profileEn from '@/locales/en/profile.json';
 import profilePageEn from '@/locales/en/profilePage.json';
-import registerEn from '@/locales/en/register.json';
 import sharedComponentsEn from '@/locales/en/sharedComponents.json';
 import sessionEn from '@/locales/en/session.json';
 import sharedDialogsEn from '@/locales/en/sharedDialogs.json';
@@ -26,7 +25,6 @@ import notificationsVi from '@/locales/vi/notifications.json';
 import accountSettingsVi from '@/locales/vi/accountSettings.json';
 import profileVi from '@/locales/vi/profile.json';
 import profilePageVi from '@/locales/vi/profilePage.json';
-import registerVi from '@/locales/vi/register.json';
 import sharedComponentsVi from '@/locales/vi/sharedComponents.json';
 import sessionVi from '@/locales/vi/session.json';
 import sharedDialogsVi from '@/locales/vi/sharedDialogs.json';
@@ -54,7 +52,6 @@ function leafKeyPaths(bundle: unknown, prefix = ''): string[] {
  */
 const namespacePairs: Record<string, [en: unknown, vi: unknown]> = {
   common: [commonEn, commonVi],
-  register: [registerEn, registerVi],
   accountSettings: [accountSettingsEn, accountSettingsVi],
   profile: [profileEn, profileVi],
   profilePage: [profilePageEn, profilePageVi],

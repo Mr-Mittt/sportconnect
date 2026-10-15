@@ -14,7 +14,7 @@ import {
 interface TopBarUser {
   initials: string;
   name: string;
-  email: string;
+  email: string | null;
 }
 
 interface TopBarProps {
@@ -74,7 +74,9 @@ export function TopBar({
               </Avatar>
               <div className="min-w-0">
                 <div className="truncate text-2sm font-medium text-text-primary">{user.name}</div>
-                <div className="truncate text-2xs text-text-muted">{user.email}</div>
+                {user.email && (
+                  <div className="truncate text-2xs text-text-muted">{user.email}</div>
+                )}
               </div>
             </div>
             <DropdownMenuSeparator />
