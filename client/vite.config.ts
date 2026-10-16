@@ -24,7 +24,7 @@ export default defineConfig({
       // added, and was masked because prior "live verification" always hit :8081 directly,
       // never through this actual dev proxy path a real browser uses).
       '/api/chat': {
-        target: process.env.VITE_CHAT_PROXY_TARGET ?? 'http://localhost:8081',
+        target: process.env.VITE_CHAT_PROXY_TARGET ?? 'http://localhost:8090',
         changeOrigin: true,
         ws: true,
         rewrite: (path) => path.replace(/^\/api\/chat/, ''),

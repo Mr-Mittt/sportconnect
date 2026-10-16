@@ -27,6 +27,9 @@ func writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, conversation.ErrNotAMember), errors.Is(err, conversation.ErrNotFriends):
 		writeJSON(w, http.StatusForbidden, errorBody{Error: "forbidden", Message: err.Error()})
+	case errors.Is(err, conversation.ErrConversationNotFound):
+		// Same status and wording as a non-member, so the answer does not reveal which ids exist.
+		writeJSON(w, http.StatusForbidden, errorBody{Error: "forbidden", Message: "you cannot access this conversation"})
 	case errors.Is(err, message.ErrNotSender):
 		writeJSON(w, http.StatusForbidden, errorBody{Error: "forbidden", Message: err.Error()})
 	case errors.Is(err, message.ErrEmptyContent), errors.Is(err, message.ErrContentTooLong):

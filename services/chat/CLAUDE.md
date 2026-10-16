@@ -13,7 +13,7 @@ The first service in this repo that is not a Java Gradle module (`modules/`) and
 React client (`client/`) — a standalone Go + Postgres service owning group chat and 1:1 direct
 messages. It talks to the client directly (its own path, reverse-proxy-routed alongside Spring, not
 through Spring as a gateway) and to the Java monolith only via: (1) independently verifying the same
-JWTs Spring issues, and (2) an async, one-directional data sync (Spring → chat) for authorization
+Keycloak JWTs Spring accepts (RS256 via the realm JWKS), and (2) an async, one-directional data sync (Spring → chat) for authorization
 data — never the reverse, and never a live call back into Spring except for the one-time bootstrap
 pull. See `docs/SYNC_DESIGN.md` for the full integration contract.
 
@@ -36,7 +36,7 @@ are scoped in detail yet, each still needs its own Phase 1/2/3 pass at pickup).
 | Postgres driver | `github.com/jackc/pgx/v5` (`pgxpool`) | Actively maintained, native pooling — kept deliberately small (`MaxConns`) since this shares the production box with Spring's own connection pool |
 | Migrations | `github.com/golang-migrate/migrate/v4` | Closest Go analogue to Liquibase — plain numbered SQL, no ORM-driven schema magic |
 | WebSocket | `github.com/coder/websocket` | Modern, `context`-native API; the older `nhooyr.io/websocket` is deprecated in favor of this fork |
-| JWT | `github.com/golang-jwt/jwt/v5` | Verifies the HS256 tokens `JwtTokenServiceImpl` (Java side) mints, via the shared secret |
+| JWT | `github.com/golang-jwt/jwt/v5` | Verifies the RS256 access tokens Keycloak issues, against the realm JWKS (CHAT-17); the JWKS fetch and key cache are stdlib code in `internal/auth`, no JWKS library |
 | Redis client | `github.com/redis/go-redis/v9` | Native Streams API (`XAdd`/`XReadGroup`/`XAck`) for the cross-service sync |
 | Testing | stdlib `testing` + `testify` (`assert`/`require`) | Co-located `_test.go` files — idiomatic Go, not the Java side's separate Spock tree (that split exists because Groovy needs its own source set; Go has no such constraint) |
 | Local env loading | `github.com/joho/godotenv` | Dev-only convenience — loads a gitignored `.env` file into `os.Getenv` so the required vars below don't need re-exporting every shell session. **Not** a config library: no layering, no file format beyond `KEY=value`, never overrides a real env var that's already set. See "Required environment variables" below. |
@@ -115,14 +115,15 @@ a formality.
 | Variable | Shared with | Notes |
 |---|---|---|
 | `CHAT_DATABASE_URL` | — | This service's own Postgres database, never the monolith's |
-| `JWT_SECRET` | Spring's `app.jwt.secret` | Must be byte-identical to the monolith's secret — verification is pure HMAC signature checking, no callback to Spring |
+| `KEYCLOAK_ISSUER_URI` | Spring's `KEYCLOAK_ISSUER_URI` | The `iss` of access tokens. Default `http://localhost:8081/realms/sportconnect` |
+| `KEYCLOAK_JWK_SET_URI` | Spring's `KEYCLOAK_JWK_SET_URI` | The realm's JWKS. Default `<issuer>/protocol/openid-connect/certs`. Fetched lazily on the first token, so the service starts without Keycloak up. No secret is shared any more (CHAT-17) |
 | `INTERNAL_SERVICE_SECRET` | Spring's `INTERNAL_SERVICE_SECRET` | Authenticates this service's calls to `/internal/sync/**` on the monolith |
 | `REDIS_ADDR` | Spring's Redis | Same Redis instance the monolith already runs, reused for the sync stream |
 | `MONOLITH_BASE_URL` | — | Only used for the cold-start bootstrap pull, never per-request |
-| `CHAT_HTTP_ADDR` | — | Defaults to `:8081` |
+| `CHAT_HTTP_ADDR` | — | Defaults to `:8090` (`:8081` is the dev Keycloak, CHAT-19) |
 | `CHAT_CORS_ALLOWED_ORIGIN` | — | Defaults to `http://localhost:5173` (Vite dev) |
 
-No dev defaults for secrets (`JWT_SECRET`, `INTERNAL_SERVICE_SECRET`) — a missing secret fails
+No dev default for the one remaining secret (`INTERNAL_SERVICE_SECRET`) — a missing secret fails
 startup loudly, matching the same posture the monolith already takes for its own JWT secret in prod.
 
 **For local dev,** copy `.env.example` to `.env` (gitignored — never commit real values) and fill it
@@ -136,7 +137,7 @@ today), and `godotenv`'s "file not found" is silently ignored in that case.
 ```bash
 docker compose -f infra/docker-compose.dev.yml up -d   # Postgres (incl. chat's own database) + Redis
 ./gradlew :server:bootRun                                # Spring, :8080 (native)
-go run ./cmd/chat                                        # this service, :8081 (native)
+go run ./cmd/chat                                        # this service, :8090 (native)
 cd client && pnpm dev                                     # Vite, :5173, proxies both
 ```
 

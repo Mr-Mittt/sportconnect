@@ -14,5 +14,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /chat ./cmd/chat
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=build /chat /chat
-EXPOSE 8081
+EXPOSE 8090
 ENTRYPOINT ["/chat"]

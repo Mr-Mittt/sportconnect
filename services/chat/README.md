@@ -103,11 +103,12 @@ file at all) it's silently a no-op.
 | Variable | Required? | Default | What it's for |
 |---|---|---|---|
 | `CHAT_DATABASE_URL` | **Yes** | — | This service's own Postgres connection string |
-| `JWT_SECRET` | **Yes** | — | Must be byte-identical to the monolith's `app.jwt.secret` — this is how a token minted by Spring is verifiable here without ever calling Spring |
+| `KEYCLOAK_ISSUER_URI` | No | `http://localhost:8081/realms/sportconnect` | The `iss` of the Keycloak access tokens this service accepts (same name and value as on the monolith) |
+| `KEYCLOAK_JWK_SET_URI` | No | `<issuer>/protocol/openid-connect/certs` | Where the realm's signing keys are published; fetched on the first token, cached, refetched on an unknown `kid` (at most every 30 s) |
 | `INTERNAL_SERVICE_SECRET` | **Yes** | — | Sent as a header on this service's calls to the monolith's `/internal/sync/**` endpoints (§6.3); must match the monolith's `app.internal-service-secret` |
 | `REDIS_ADDR` | No | `localhost:6379` | Same Redis instance the monolith already uses |
 | `MONOLITH_BASE_URL` | No | `http://localhost:8080` | Only used for the one-time bootstrap pull (§6.3) |
-| `CHAT_HTTP_ADDR` | No | `:8081` | Where this service listens |
+| `CHAT_HTTP_ADDR` | No | `:8090` | Where this service listens (not `:8081`, which is the dev Keycloak) |
 | `CHAT_CORS_ALLOWED_ORIGIN` | No | `http://localhost:5173` | The Vite dev server's origin |
 
 ---
@@ -122,7 +123,7 @@ docker compose -f infra/docker-compose.dev.yml up -d   # Postgres (incl. this se
 
 # 2. Set the required config, once (from services/chat/)
 cp .env.example .env
-# ... edit .env: fill in JWT_SECRET/INTERNAL_SERVICE_SECRET to match the monolith's dev values
+# ... edit .env: fill in INTERNAL_SERVICE_SECRET to match the monolith's dev values
 
 # 3. Run it
 go run ./cmd/chat
@@ -194,7 +195,7 @@ reachable from the internet only at `/api/chat/**` via whatever reverse proxy fr
 │  Client  │ ───────────────────────────────────────────►  │  chat (Go)   │
 └──────────┘                                                └──────┬───────┘
                                                                     │
-       JWT verified independently, same secret as Spring           │
+       JWT verified independently (Keycloak JWKS, RS256)           │
                                                                     │
 ┌──────────┐   /api/**                                     ┌───────▼──────┐
 │  Client  │ ──────────────────────────────────────────►    │ Spring Boot  │
@@ -213,20 +214,19 @@ reachable from the internet only at `/api/chat/**` via whatever reverse proxy fr
 Every request to this service (except `GET /healthz`) must carry `Authorization: Bearer <token>`,
 **except** `GET /conversations/{id}/ws` (§7), which also accepts the token as a `?token=` query
 parameter — a browser's native `WebSocket` API cannot set custom headers during the handshake, so
-that one route needs a fallback the rest don't. The token is the exact same JWT the monolith's
-login/refresh endpoints issue. This service verifies its signature and expiry itself, using the
-shared `JWT_SECRET` — it never calls Spring to check if a token is valid. That's what makes "the
+that one route needs a fallback the rest don't. The token is the Keycloak access token the client
+already sends to Spring. This service verifies it itself (CHAT-17): RS256 signature against the realm's
+JWKS, expiry, issuer and the `sportconnect-api` audience — it never calls Spring to check if a token is valid. That's what makes "the
 client talks to this service directly" workable: there's no single point that both services depend
 on to answer "who is this."
 
-Signature verification accepts HS256, HS384, *and* HS512 — not just HS256. JJWT 0.12.x's
-`Jwts.builder().signWith(key)` (the monolith's own signing call site, `JwtTokenServiceImpl`) picks
-the strongest HMAC-SHA variant the *key's byte length* supports, not a fixed algorithm; a long
-enough `JWT_SECRET` (as the real dev value is) actually produces HS512 tokens. All three variants
-verify against the same secret bytes, so accepting all three is exactly as secure as accepting one
-— CHAT-7 found and fixed this after every real monolith-issued token was being rejected by a
-verifier that only allowed HS256 (`internal/auth`'s own tests never caught it, since they mint
-HS256 tokens themselves).
+Only `RS256` is accepted; HS256 and `none` are refused. The signing keys are fetched from the JWKS
+on the first token and cached by `kid`; a token naming an unknown `kid` (Keycloak rotated its key)
+triggers one refetch, rate-limited to once per 30 s so bogus tokens cannot hammer Keycloak. If
+Keycloak is unreachable the cached keys keep working. Only `sub` is read from the token. A deactivated
+user's token keeps working here for at most its 5-minute life: this service authorizes from its local
+cache and does not recheck `is_active` (the accepted answer to A20 for chat). Tests mint real RS256
+tokens with `internal/auth/authtest` (a stub Keycloak), so `go test` needs no running Keycloak.
 
 ### 6.2 Authorization — reads a local cache, never a live call
 

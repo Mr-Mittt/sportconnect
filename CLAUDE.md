@@ -90,6 +90,8 @@ docker compose -f infra/docker-compose.dev.yml up -d
 # Stop them (data persists in named volumes)
 docker compose -f infra/docker-compose.dev.yml down
 ```
+**Ports:** every port the repo uses (dev, test harnesses, containers) is listed in `infra/documentation/PORTS.md`. Check it before a new service, container or dev server picks a port, and add the new row in the same change.
+
 Deps-only — the server and client still run natively (`./gradlew :server:bootRun`, `pnpm dev`) for a fast edit-reload loop. Details: `infra/documentation/MVP/INFRA-2_DEV_DOCKER_COMPOSE.md`.
 
 Keycloak (identity for the social-login work, :8081, admin/admin) and the Mailpit mail sink (UI :8025) are part of the same `up -d`, so the stack now also needs about 800 MB for Keycloak; start or stop just those two with `docker compose -f infra/docker-compose.dev.yml up -d keycloak mailpit` / `stop keycloak mailpit`.

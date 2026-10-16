@@ -79,10 +79,11 @@ service requires you to have.
    ```bash
    docker compose -f infra/docker-compose.dev.yml up -d
    ```
-3. **Set the required config.** This service refuses to start without `CHAT_DATABASE_URL`,
-   `JWT_SECRET`, and `INTERNAL_SERVICE_SECRET` (see `CLAUDE.md`'s "no dev defaults for secrets"
-   note) — for local dev the last two can be anything, as long as they match whatever values the
-   monolith (Spring Boot app) is running with, since both sides compare them directly.
+3. **Set the required config.** This service refuses to start without `CHAT_DATABASE_URL`
+   and `INTERNAL_SERVICE_SECRET` (see `CLAUDE.md`'s "no dev default for the secret"
+   note) — for local dev the second can be anything, as long as it matches whatever value the
+   monolith (Spring Boot app) is running with, since both sides compare it directly. Tokens are
+   verified against Keycloak's JWKS (CHAT-17), so there is no shared JWT secret any more.
 
    The easiest way, and what this repo actually uses — copy the checked-in example file and edit
    it, once (from `services/chat/`):
@@ -99,13 +100,11 @@ service requires you to have.
    PowerShell (this repo's primary shell on Windows):
    ```powershell
    $env:CHAT_DATABASE_URL = "postgres://postgres:sa@localhost:5432/sportconnect_chat_dev"
-   $env:JWT_SECRET = "dev-secret-key-for-development-only-change-in-production-min-256-bits"
    $env:INTERNAL_SERVICE_SECRET = "some-shared-dev-secret"
    ```
    bash/zsh:
    ```bash
    export CHAT_DATABASE_URL="postgres://postgres:sa@localhost:5432/sportconnect_chat_dev"
-   export JWT_SECRET="dev-secret-key-for-development-only-change-in-production-min-256-bits"
    export INTERNAL_SERVICE_SECRET="some-shared-dev-secret"
    ```
    Exported variables only last for that terminal session — the `.env` file above is what saves you
@@ -134,7 +133,7 @@ service requires you to have.
    ```
    The first run is slower than every run after — `go run` downloads and compiles every dependency
    listed in `go.mod` once, then caches the results locally. You should see a log line confirming
-   it's listening (`CHAT_HTTP_ADDR`, default `:8081`).
+   it's listening (`CHAT_HTTP_ADDR`, default `:8090`).
 
 At that point you have a working local loop: edit a `.go` file, stop the running process
 (`Ctrl+C`), run `go run ./cmd/chat` again. There's no separate "restart the dev server" mechanism —

@@ -41,6 +41,10 @@ type Conversation struct {
 var (
 	ErrNotAMember = errors.New("caller is not a member of this group")
 	ErrNotFriends = errors.New("caller and target are not friends")
+
+	// ErrConversationNotFound means no conversation has that id. The API answers it exactly like
+	// ErrNotAMember (403), so a caller cannot probe which ids exist (CHAT-18).
+	ErrConversationNotFound = errors.New("conversation not found")
 )
 
 const conversationColumns = `id, type, COALESCE(external_group_id, 0), COALESCE(dm_key, ''), created_at`
@@ -116,7 +120,11 @@ func (r *Repository) GetOrCreateDirectConversation(ctx context.Context, userA, u
 
 func (r *Repository) GetByID(ctx context.Context, id int64) (Conversation, error) {
 	row := r.pool.QueryRow(ctx, `SELECT `+conversationColumns+` FROM conversations WHERE id = $1`, id)
-	return scanConversation(row)
+	conv, err := scanConversation(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Conversation{}, ErrConversationNotFound
+	}
+	return conv, err
 }
 
 // IsActiveParticipant checks conversation_participants directly — used for

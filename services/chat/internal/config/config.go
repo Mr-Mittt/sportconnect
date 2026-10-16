@@ -11,7 +11,7 @@ import (
 
 // Config holds every environment-derived setting the chat service needs at startup.
 type Config struct {
-	// HTTPAddr is the address the HTTP+WebSocket server listens on, e.g. ":8081".
+	// HTTPAddr is the address the HTTP+WebSocket server listens on, e.g. ":8090" (8081 is the dev Keycloak, CHAT-19).
 	HTTPAddr string
 
 	// DatabaseURL is the Postgres connection string for the chat service's own
@@ -23,10 +23,14 @@ type Config struct {
 	// Spring monolith (e.g. "localhost:6379" in dev).
 	RedisAddr string
 
-	// JWTSecret is the HMAC secret shared with the Spring monolith's
-	// app.jwt.secret (env JWT_SECRET there) — used to verify access tokens
-	// independently, with no callback to Spring at request time.
-	JWTSecret string
+	// KeycloakIssuerURI is the `iss` Keycloak puts on access tokens (CHAT-17), the same value and env
+	// name as the monolith's KEYCLOAK_ISSUER_URI. Tokens are verified against the realm JWKS below,
+	// independently, with no callback to Spring or Keycloak per request.
+	KeycloakIssuerURI string
+
+	// KeycloakJWKSURI is the realm's certs endpoint (the monolith's KEYCLOAK_JWK_SET_URI). Fetched
+	// lazily on the first token, so the service starts without Keycloak being up.
+	KeycloakJWKSURI string
 
 	// InternalServiceSecret authenticates this service's calls to the
 	// monolith's /internal/sync/** bootstrap endpoints (header
@@ -64,17 +68,16 @@ func Load() (Config, error) {
 	}
 
 	cfg := Config{
-		HTTPAddr:          getEnv("CHAT_HTTP_ADDR", ":8081"),
+		HTTPAddr:          getEnv("CHAT_HTTP_ADDR", ":8090"),
 		RedisAddr:         getEnv("REDIS_ADDR", "localhost:6379"),
 		MonolithBaseURL:   getEnv("MONOLITH_BASE_URL", "http://localhost:8080"),
 		CORSAllowedOrigin: getEnv("CHAT_CORS_ALLOWED_ORIGIN", "http://localhost:5173"),
+		KeycloakIssuerURI: getEnv("KEYCLOAK_ISSUER_URI", "http://localhost:8081/realms/sportconnect"),
 	}
+	cfg.KeycloakJWKSURI = getEnv("KEYCLOAK_JWK_SET_URI", cfg.KeycloakIssuerURI+"/protocol/openid-connect/certs")
 
 	var err error
 	if cfg.DatabaseURL, err = requireEnv("CHAT_DATABASE_URL"); err != nil {
-		return Config{}, err
-	}
-	if cfg.JWTSecret, err = requireEnv("JWT_SECRET"); err != nil {
 		return Config{}, err
 	}
 	if cfg.InternalServiceSecret, err = requireEnv("INTERNAL_SERVICE_SECRET"); err != nil {

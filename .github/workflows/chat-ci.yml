@@ -79,10 +79,6 @@ jobs:
     env:
       CHAT_DATABASE_URL: postgres://postgres:sa@localhost:5432/sportconnect_chat_dev
       REDIS_ADDR: localhost:6379
-      # Only needed to mint/verify tokens inside the WebSocket broadcast test itself (CHAT-6) —
-      # that test never talks to a real monolith, so this never has to match a real secret, just
-      # be consistent between the token this job's own test mints and the Verifier it constructs.
-      JWT_SECRET: chat-ci-test-secret-not-used-outside-this-workflow
 
     steps:
       - uses: actions/checkout@v4
