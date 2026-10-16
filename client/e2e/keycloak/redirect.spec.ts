@@ -174,6 +174,27 @@ test('the zone block is optional: registering without choosing one still works',
   expect(attributes.regionId).toBeUndefined();
 });
 
+test('the realm password policy (length 8, from the realm file) refuses a 7-character password on register', async ({ page }) => {
+  await page.goto('/register');
+  await page.waitForURL(KEYCLOAK_PAGE);
+
+  await page.locator('#email').fill(`e2e-policy-${Date.now()}@example.test`);
+  await page.locator('#firstName').fill('E2E');
+  await page.locator('#lastName').fill('Policy');
+  const submit = page.getByRole('button', { name: 'Create an account' });
+
+  await page.locator('#password').fill('abcdefg');
+  await page.locator('#password-confirm').fill('abcdefg');
+  await page.locator('#password-confirm').blur();
+  await expect(page.getByText('Invalid password: minimum length 8.')).toBeVisible();
+  await expect(submit).toBeDisabled();
+
+  await page.locator('#password').fill('abcdefgh');
+  await page.locator('#password-confirm').fill('abcdefgh');
+  await expect(page.getByText('Invalid password: minimum length 8.')).toBeHidden();
+  await expect(submit).toBeEnabled();
+});
+
 test('"Forgot password?" opens the themed reset page', async ({ page }) => {
   await page.goto('/login');
   await page.waitForURL(KEYCLOAK_PAGE);

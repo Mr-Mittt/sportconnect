@@ -1450,7 +1450,7 @@ The "complete your profile" dialog. The mock profile (`mockMyProfile`) has no co
 | country only | A country saved without a region (Vietnam has regions) is posted without `regionId` and not asked about again in the same session |
 | country without regions | Singapore leaves Region disabled and completes the profile |
 
-### `e2e/keycloak/redirect.spec.ts` (AUTH-15, AUTH-16: 10 `test()`s, own config `playwright.keycloak.config.ts`)
+### `e2e/keycloak/redirect.spec.ts` (AUTH-15, AUTH-16: 11 `test()`s, own config `playwright.keycloak.config.ts`)
 
 Real Keycloak 26.4 with the committed realm and the SportConnect theme JAR; the client is the real one on :5175, `/api/*` is the mock server. `beforeAll` allows the :5175 origin on the e2e Keycloak's `sportconnect-web` client, creates a user, and adds placeholder Google / Facebook / Zalo providers (all through the admin API, in the throwaway container only).
 
@@ -1461,6 +1461,7 @@ Real Keycloak 26.4 with the committed realm and the SportConnect theme JAR; the 
 | sign in | a real sign-in returns through `/auth/callback` to the deep link `/groups` |
 | wrong password | the themed alert "Invalid username or password" in the card |
 | register | `/register` sends `prompt=create`, shows the themed form with **no username field** (email as username); AUTH-16: the zone block replaces the plain Latitude / Longitude boxes, its country and region lists come from the mock reference API across origins (CORS), the chosen Vietnam / Ho Chi Minh City are read back through the admin API as the user attributes `countryId` = 1 and `regionId` = 102, and registering returns to the app |
+| password policy | AUTH-16: the realm file's `length(8)` policy: a 7-character password shows "Invalid password: minimum length 8." and keeps Create an account disabled, 8 characters enables it |
 | register without a zone | AUTH-16: clearing the pre-filled country and registering still works; the user has no `countryId` / `regionId` attributes |
 | forgot password | the themed reset page, with the back link |
 | vi: sign-in page | `ui_locales=vi` opens the page in Vietnamese (A24 finding 3, verified) |
