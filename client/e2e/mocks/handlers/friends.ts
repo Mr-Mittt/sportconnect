@@ -346,9 +346,22 @@ export const friendHandlers: HttpHandler[] = [
         ? (mockRegionsByCountryId[countryId ?? -1]?.find((r) => r.id === regionId)?.name ?? null)
         : null;
 
+    // U25: the server saves a phone it cannot parse as typed with status INVALID instead of refusing it. The mock
+    // stands in for libphonenumber with "9 to 15 digits"; blank clears both.
+    let phoneNumber = current.phoneNumber;
+    let phoneStatus = current.phoneStatus ?? null;
+    if (body.phoneNumber !== undefined && body.phoneNumber !== null) {
+      const typed = body.phoneNumber.trim();
+      const digits = typed.replace(/D/g, '').length;
+      phoneNumber = typed === '' ? null : typed;
+      phoneStatus = typed === '' ? null : digits >= 9 && digits <= 15 ? 'VALID' : 'INVALID';
+    }
+
     const updated: UserResponse = {
       ...current,
       ...body,
+      phoneNumber,
+      phoneStatus,
       gender: body.gender === undefined || body.gender === null ? current.gender : body.gender === '' ? null : body.gender,
       countryId,
       regionId,

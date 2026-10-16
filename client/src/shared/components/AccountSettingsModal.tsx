@@ -113,6 +113,7 @@ export function AccountSettingsModal({
   const { t: tCommon } = useTranslation('common');
   const { t: tEnums } = useTranslation('enums');
   const [draft, setDraft] = useState<ProfileEditDraft>(() => toProfileEditDraft(user));
+  const showInvalidPhoneHint = user.phoneStatus === 'INVALID' && draft.phoneNumber === (user.phoneNumber ?? '');
   const geoLocale = useGeoLocaleFieldsData({
     languageCode,
     countryId: user.countryId,
@@ -260,8 +261,17 @@ export function AccountSettingsModal({
                     maxLength={20}
                     type="tel"
                     {...phoneNumberInputProps}
+                    aria-describedby={showInvalidPhoneHint ? 'account-settings-phone-hint' : undefined}
                     onChange={(event) => set('phoneNumber', event.target.value)}
                   />
+                  {/* U25: the server keeps a number it could not parse (status INVALID) instead of refusing it, so
+                      this hint is the only signal. It describes the saved value, so it goes away as soon as the
+                      user edits the field. */}
+                  {showInvalidPhoneHint && (
+                    <p id="account-settings-phone-hint" className="mt-1 text-2xs text-text-danger">
+                      {t('phoneInvalid')}
+                    </p>
+                  )}
                 </div>
                 {/* CLIENT-REF-3: Language pairs with Phone number, same pairing RegisterForm uses. */}
                 <div className="flex-1">

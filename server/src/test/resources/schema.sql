@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS users (
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     username VARCHAR(50) UNIQUE,
-    phone_number VARCHAR(20) CONSTRAINT uq_users_phone_number UNIQUE,
+    phone_number VARCHAR(20),
+    phone_status VARCHAR(10),
     date_of_birth DATE,
     gender VARCHAR(20) CONSTRAINT chk_users_gender CHECK (gender IN ('MALE', 'FEMALE')),
     bio TEXT,
@@ -33,8 +34,11 @@ CREATE TABLE IF NOT EXISTS users (
     shoe_size_mm INTEGER,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP,
-    -- U23: mirrors V079
-    CONSTRAINT chk_users_email_or_phone CHECK (email IS NOT NULL OR phone_number IS NOT NULL)
+    -- U23/U25: mirrors V079/V080. H2 has no partial unique index, so uq_users_phone_number here is a plain unique on phone_number:
+    -- two INVALID rows with the same text are the one case it cannot mirror.
+    CONSTRAINT uq_users_phone_number UNIQUE (phone_number),
+    CONSTRAINT chk_users_phone_status CHECK ((phone_number IS NULL AND phone_status IS NULL) OR (phone_number IS NOT NULL AND phone_status IS NOT NULL AND phone_status IN ('INVALID', 'VALID', 'VERIFIED'))),
+    CONSTRAINT chk_users_email_or_phone CHECK (email IS NOT NULL OR (phone_number IS NOT NULL AND phone_status <> 'INVALID'))
 );
 
 -- U16: user_preferences (language is now validated against the reference languages). Mirrors the V001 table.

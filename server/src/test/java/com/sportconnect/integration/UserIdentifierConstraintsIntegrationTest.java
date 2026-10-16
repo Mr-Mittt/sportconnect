@@ -95,8 +95,12 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     }
 
     private void insertRaw(String email, String phone) {
-        jdbc.update("INSERT INTO users (id, email, phone_number, is_active, created_at) VALUES (?, ?, ?, TRUE, CURRENT_TIMESTAMP)",
-                UUID.randomUUID(), email, phone);
+        insertRaw(email, phone, phone == null ? null : "VALID");
+    }
+
+    private void insertRaw(String email, String phone, String phoneStatus) {
+        jdbc.update("INSERT INTO users (id, email, phone_number, phone_status, is_active, created_at) VALUES (?, ?, ?, ?, TRUE, CURRENT_TIMESTAMP)",
+                UUID.randomUUID(), email, phone, phoneStatus);
     }
 
     // ---------- through the request pipeline ----------
@@ -159,6 +163,42 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     }
 
     @Test
+    void updateProfile_withAPhoneThatDoesNotParse_isSavedAsTypedWithStatusInvalid() throws Exception {
+        MvcResult me = registerOk("u25-invalid@example.com", "\"+84901234567\"");
+
+        updateProfile(me, "{\"phoneNumber\": \"555-0100\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phoneNumber").value("555-0100"))
+                .andExpect(jsonPath("$.data.phoneStatus").value("INVALID"));
+
+        assertThat(storedPhone("u25-invalid@example.com")).isEqualTo("555-0100");
+
+        updateProfile(me, "{\"phoneNumber\": \"0901234567\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.phoneStatus").value("VALID"));
+    }
+
+    @Test
+    void updateProfile_aPhoneThatDoesNotParse_neverCollidesWithAnotherAccount() throws Exception {
+        MvcResult first = registerOk("u25-bad-a@example.com", null);
+        updateProfile(first, "{\"phoneNumber\": \"not-a-number\"}").andExpect(status().isOk());
+
+        // PHONE_ALREADY_USED is about usable numbers only: a valid number is not blocked by someone's invalid text.
+        MvcResult second = registerOk("u25-bad-b@example.com", null);
+        updateProfile(second, "{\"phoneNumber\": \"0901234567\"}").andExpect(status().isOk());
+    }
+
+    @Test
+    void updateProfile_replacingTheOnlyIdentifierOfAnEmaillessAccountWithAnInvalidPhone_isRejected() throws Exception {
+        MvcResult me = registerOk("u25-phoneonly@example.com", "\"+84901234567\"");
+        jdbc.update("UPDATE users SET email = NULL WHERE phone_number = ?", "+84901234567");
+
+        updateProfile(me, "{\"phoneNumber\": \"555-0100\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("IDENTIFIER_REQUIRED"));
+    }
+
+    @Test
     void updateProfile_withABlankPhone_clearsItWhenTheAccountHasAnEmail() throws Exception {
         MvcResult me = registerOk("u23-clear@example.com", "\"+84901234567\"");
 
@@ -187,6 +227,20 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     @Test
     void database_rejectsARowWithNeitherEmailNorPhone() {
         assertThatThrownBy(() -> insertRaw(null, null)).isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void database_anInvalidPhoneIsNotAnIdentifier() {
+        assertThatThrownBy(() -> insertRaw(null, "555-0100", "INVALID")).isInstanceOf(DataIntegrityViolationException.class);
+        // with an email it is fine
+        insertRaw("u25-db-invalid@example.com", "555-0100", "INVALID");
+    }
+
+    @Test
+    void database_aPhoneNeedsAStatusAndAStatusNeedsAPhone() {
+        assertThatThrownBy(() -> insertRaw("u25-db-a@example.com", "+84901234567", null)).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertRaw("u25-db-b@example.com", null, "VALID")).isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> insertRaw("u25-db-c@example.com", "+84901234567", "MAYBE")).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

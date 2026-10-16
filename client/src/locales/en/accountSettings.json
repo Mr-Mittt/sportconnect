@@ -19,6 +19,7 @@
     "weightKg": "Weight (kg)",
     "shoeSizeMm": "Shoe size (JP, mm)"
   },
+  "phoneInvalid": "This phone number doesn’t look valid. Check it and save again.",
   "legacyCountry": "Currently set to \"{{country}}\" — pick a country below to replace it.",
   "save": "Save changes",
   "saving": "Saving…",

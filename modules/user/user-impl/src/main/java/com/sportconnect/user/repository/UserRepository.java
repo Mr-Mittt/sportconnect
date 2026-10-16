@@ -23,11 +23,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     boolean existsByEmail(String email);
 
-    /** U23: phone numbers are stored as E.164, so callers pass the normalised form. */
-    boolean existsByPhoneNumber(String phoneNumber);
+    /** U23: phone numbers are stored as E.164, so callers pass the normalised form. U25: an INVALID row is never "taken". */
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.phoneNumber = :phoneNumber AND u.phoneStatus <> com.sportconnect.user.api.dto.PhoneStatus.INVALID")
+    boolean existsByPhoneNumber(@Param("phoneNumber") String phoneNumber);
 
     /** U23: same as {@link #existsByPhoneNumber} but ignoring one user - a profile update that re-sends the user's own number. */
-    boolean existsByPhoneNumberAndIdNot(String phoneNumber, UUID id);
+    @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.phoneNumber = :phoneNumber AND u.id <> :id AND u.phoneStatus <> com.sportconnect.user.api.dto.PhoneStatus.INVALID")
+    boolean existsByPhoneNumberAndIdNot(@Param("phoneNumber") String phoneNumber, @Param("id") UUID id);
 
     boolean existsByUsername(String username);
 

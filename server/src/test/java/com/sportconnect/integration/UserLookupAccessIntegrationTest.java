@@ -4,6 +4,7 @@ import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.entity.UserSportProfile;
 import com.sportconnect.sport.repository.SportRepository;
 import com.sportconnect.sport.repository.UserSportProfileRepository;
+import com.sportconnect.user.api.dto.PhoneStatus;
 import com.sportconnect.user.entity.Friendship;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.FriendshipRepository;
@@ -83,6 +84,7 @@ class UserLookupAccessIntegrationTest extends BaseIT {
                 .avatarUrl("https://example.com/avatar.png")
                 .coverUrl("https://example.com/cover.png")
                 .phoneNumber("+15551234567")
+                .phoneStatus(PhoneStatus.VALID)
                 .isActive(true)
                 .build()).getId();
 

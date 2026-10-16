@@ -77,3 +77,25 @@ test('the Save button saves and confirms with a toast, keeps the modal open, and
   await expect(settings).toBeHidden();
   await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeHidden();
 });
+
+test('U25: a saved phone the server could not parse is kept and flagged with a hint on reopening', async ({ page }) => {
+  const settings = await openAccountSettings(page);
+  await expect(settings.getByText(/doesn’t look valid/)).toBeHidden();
+  await settings.getByLabel('Phone number').fill('555-0100');
+
+  const save = page.waitForRequest((request) => request.method() === 'PUT' && request.url().includes('/profile'));
+  await settings.getByRole('button', { name: 'Save changes' }).click();
+  expect((await save).postDataJSON()).toMatchObject({ phoneNumber: '555-0100' });
+  await expect(page.getByText('Your account settings were saved.')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(settings).toBeHidden();
+  await page.getByRole('button', { name: 'Your account' }).click();
+  await page.getByRole('menuitem', { name: 'Account settings' }).click();
+  const reopened = page.getByRole('dialog', { name: 'Account settings' });
+  await expect(reopened.getByLabel('Phone number')).toHaveValue('555-0100');
+  await expect(reopened.getByText('This phone number doesn’t look valid. Check it and save again.')).toBeVisible();
+
+  await reopened.getByLabel('Phone number').fill('0901234567');
+  await expect(reopened.getByText(/doesn’t look valid/)).toBeHidden();
+});

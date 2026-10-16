@@ -8,6 +8,7 @@ import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.ExternalIdentity
+import com.sportconnect.user.api.dto.PhoneStatus
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.entity.Role
 import com.sportconnect.user.entity.User
@@ -132,15 +133,49 @@ class UserProvisioningSpec extends Specification {
         email << [null, "", "   "]
     }
 
-    def "an unparseable phone is INVALID_PHONE_NUMBER"() {
+    def "an unparseable phone is stored as typed with status INVALID and never fails the sign-in (U25)"() {
         when:
-        userService.provisionExternalUser(identity().phoneNumber("12").build())
+        def result = userService.provisionExternalUser(identity().phoneNumber("12").build())
+
+        then:
+        1 * userRepository.findById(sub) >> Optional.empty()
+        0 * userRepository.existsByPhoneNumber(_)
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        1 * userRepository.save({ User u -> u.phoneNumber == "12" && u.phoneStatus == PhoneStatus.INVALID && u.email != null }) >> { User u -> u }
+        result.phoneNumber == "12"
+        result.phoneStatus == PhoneStatus.INVALID
+    }
+
+    def "a parseable phone is stored with status VALID (U25)"() {
+        when:
+        userService.provisionExternalUser(identity().phoneNumber("0901234567").build())
+
+        then:
+        1 * userRepository.findById(sub) >> Optional.empty()
+        1 * userRepository.existsByPhoneNumber("+84901234567") >> false
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        1 * userRepository.save({ User u -> u.phoneStatus == PhoneStatus.VALID }) >> { User u -> u }
+    }
+
+    def "an unparseable phone is no identifier: without an email it is IDENTIFIER_REQUIRED (U25)"() {
+        when:
+        userService.provisionExternalUser(identity().email(null).phoneNumber("12").build())
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         0 * userRepository.save(_)
         def e3 = thrown(BadRequestException)
-        e3.errorCode == "INVALID_PHONE_NUMBER"
+        e3.errorCode == "IDENTIFIER_REQUIRED"
+    }
+
+    def "no phone leaves the status null (U25)"() {
+        when:
+        userService.provisionExternalUser(identity().phoneNumber(null).build())
+
+        then:
+        1 * userRepository.findById(sub) >> Optional.empty()
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        1 * userRepository.save({ User u -> u.phoneNumber == null && u.phoneStatus == null }) >> { User u -> u }
     }
 
     def "an email another account holds is EMAIL_ALREADY_REGISTERED"() {

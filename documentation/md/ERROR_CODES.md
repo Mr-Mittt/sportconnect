@@ -92,7 +92,7 @@ The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) 
 | `GENDER_INVALID` | 400 | `{allowed: ["MALE", "FEMALE"]}` | Profile update, `gender` not exactly one of the allowed values. |
 | `LANGUAGE_UNKNOWN` | 400 | `{language}` | Preferences update, or register, with a language code that is unknown or inactive. |
 | `PHONE_ALREADY_USED` | 409 | none | U23: register or profile update with a phone number another account already holds. Compared after normalisation to E.164, so `0901234567` and `+84901234567` collide; a database unique violation from a race maps to the same code. |
-| `INVALID_PHONE_NUMBER` | 400 | none | U23: register or profile update with a phone that does not parse or is not a valid number (numbers without a `+` are read as Vietnamese). |
+| `INVALID_PHONE_NUMBER` | 400 | none | U23: the legacy password register (`POST /api/auth/register`) with a phone that does not parse or is not a valid number (numbers without a `+` are read as Vietnamese). U25: no longer returned by profile update or first sign-in - those save the text with `phoneStatus` INVALID. |
 | `IDENTIFIER_REQUIRED` | 400 | none | U23: the account would be left with neither an email nor a phone number (clearing the only phone of an email-less account, or creating a user with neither). |
 | `LOCATION_INCOMPLETE` | 400 | none | Register with only one of latitude/longitude. |
 | `LOCATION_OUT_OF_RANGE` | 400 | none | Register with a coordinate outside -90..90 / -180..180. |

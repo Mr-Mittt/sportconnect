@@ -8,6 +8,7 @@ import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.CredentialCheck
+import com.sportconnect.user.api.dto.PhoneStatus
 import com.sportconnect.user.api.dto.UpdateProfileRequest
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
@@ -206,6 +207,91 @@ class UserIdentifiersSpec extends Specification {
 
         when:
         userService.updateProfile(id, id, UpdateProfileRequest.builder().phoneNumber("").build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(id) >> Optional.of(user)
+        0 * userRepository.save(_)
+        def e = thrown(BadRequestException)
+        e.errorCode == "IDENTIFIER_REQUIRED"
+        user.phoneNumber == "+84901234567"
+    }
+
+    def "updateProfile saves a phone that does not parse as typed with status INVALID, no 400 (U25)"() {
+        given:
+        def id = UUID.randomUUID()
+        def user = existing(id, "me@example.com", "+84901234567")
+        user.phoneStatus = PhoneStatus.VALID
+
+        when:
+        def result = userService.updateProfile(id, id, UpdateProfileRequest.builder().phoneNumber("555-0100").build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(id) >> Optional.of(user)
+        0 * userRepository.existsByPhoneNumber(_)
+        0 * userRepository.existsByPhoneNumberAndIdNot(_, _)
+        1 * userRepository.save({ User u -> u.phoneNumber == "555-0100" && u.phoneStatus == PhoneStatus.INVALID }) >> { User u -> u }
+        result.phoneStatus == PhoneStatus.INVALID
+    }
+
+    def "updateProfile gives a corrected number the VALID status and checks it is free (U25)"() {
+        given:
+        def id = UUID.randomUUID()
+        def user = existing(id, "me@example.com", "555-0100")
+        user.phoneStatus = PhoneStatus.INVALID
+
+        when:
+        userService.updateProfile(id, id, UpdateProfileRequest.builder().phoneNumber("0901234567").build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(id) >> Optional.of(user)
+        1 * userRepository.existsByPhoneNumberAndIdNot("+84901234567", id) >> false
+        1 * userRepository.save({ User u -> u.phoneNumber == "+84901234567" && u.phoneStatus == PhoneStatus.VALID }) >> { User u -> u }
+    }
+
+    def "updateProfile keeps VERIFIED when the same number is re-sent, and drops it to VALID for a different one (U25)"() {
+        given:
+        def id = UUID.randomUUID()
+        def user = existing(id, "me@example.com", "+84901234567")
+        user.phoneStatus = PhoneStatus.VERIFIED
+
+        when:
+        userService.updateProfile(id, id, UpdateProfileRequest.builder().phoneNumber("0901 234 567").build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(id) >> Optional.of(user)
+        1 * userRepository.save({ User u -> u.phoneStatus == PhoneStatus.VERIFIED }) >> { User u -> u }
+
+        when:
+        userService.updateProfile(id, id, UpdateProfileRequest.builder().phoneNumber("0912345678").build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(id) >> Optional.of(user)
+        1 * userRepository.existsByPhoneNumberAndIdNot("+84912345678", id) >> false
+        1 * userRepository.save({ User u -> u.phoneNumber == "+84912345678" && u.phoneStatus == PhoneStatus.VALID }) >> { User u -> u }
+    }
+
+    def "updateProfile clearing the phone clears its status too (U25)"() {
+        given:
+        def id = UUID.randomUUID()
+        def user = existing(id, "me@example.com", "+84901234567")
+        user.phoneStatus = PhoneStatus.VALID
+
+        when:
+        userService.updateProfile(id, id, UpdateProfileRequest.builder().phoneNumber("").build())
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(id) >> Optional.of(user)
+        1 * userRepository.save({ User u -> u.phoneNumber == null && u.phoneStatus == null }) >> { User u -> u }
+    }
+
+    def "updateProfile will not replace the only identifier of a phone-only account with an invalid number (U25)"() {
+        given:
+        def id = UUID.randomUUID()
+        def user = existing(id, null, "+84901234567")
+        user.phoneStatus = PhoneStatus.VALID
+
+        when:
+        userService.updateProfile(id, id, UpdateProfileRequest.builder().phoneNumber("555-0100").build())
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(id) >> Optional.of(user)

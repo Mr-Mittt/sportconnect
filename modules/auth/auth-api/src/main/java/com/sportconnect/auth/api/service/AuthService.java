@@ -39,7 +39,7 @@ public interface AuthService {
      * @throws com.sportconnect.common.exception.UnauthorizedException {@code AUTH_CODE_INVALID} for a bad, used or
      *         expired code or a wrong verifier; {@code ACCOUNT_DEACTIVATED} with {@code errorParams.reactivationTicket}
      *         for a deactivated password user (no cookie)
-     * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED}, {@code INVALID_PHONE_NUMBER}
+     * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED} (no email and no usable phone)
      * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}, {@code EMAIL_ALREADY_REGISTERED}
      * @throws com.sportconnect.common.exception.ServiceUnavailableException Keycloak (or the ticket store) is not answering
      */

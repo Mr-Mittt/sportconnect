@@ -135,6 +135,11 @@ export const LegacyUnmatchedCountry: Story = {
   },
 };
 
+/** U25: the saved phone could not be parsed (status INVALID), so the hint shows under the field. */
+export const InvalidPhone: Story = {
+  args: { user: { ...baseUser, phoneNumber: '555-0100', phoneStatus: 'INVALID' } },
+};
+
 export const Saving: Story = {
   args: { isSaving: true },
 };

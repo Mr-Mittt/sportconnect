@@ -220,4 +220,7 @@
     <!-- U23: users.email nullable, users.phone_number unique (E.164), at least one of the two. -->
     <include file="db/changelog/changes/V079__users_nullable_email_unique_phone.sql" relativeToChangelogFile="false"/>
 
+    <!-- U25: users.phone_status (INVALID / VALID / VERIFIED); a partial unique index on usable numbers. -->
+    <include file="db/changelog/changes/V080__users_phone_status.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
