@@ -1,7 +1,6 @@
 package com.sportconnect.user.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
@@ -10,7 +9,6 @@ import com.sportconnect.reference.api.dto.RegionResponse
 import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.UserSportProfileService
-import com.sportconnect.user.api.dto.CredentialCheck
 import com.sportconnect.user.api.dto.FriendRequestResponse
 import com.sportconnect.user.api.dto.LocationRequest
 import com.sportconnect.user.api.dto.UpdateProfileRequest
@@ -18,7 +16,6 @@ import com.sportconnect.user.api.dto.UserFriendshipStatus
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.entity.Role
-import com.sportconnect.user.api.dto.UserRegistrationDetails
 import com.sportconnect.user.entity.User
 import com.sportconnect.user.entity.UserPreference
 import com.sportconnect.user.repository.RoleRepository
@@ -44,7 +41,6 @@ class UserServiceImplSpec extends Specification {
     RoleRepository roleRepository = Mock()
     PasswordEncoder passwordEncoder = Mock()
     UserFriendService userFriendService = Mock()
-    AuthService authService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
     ReferenceService referenceService = Mock()
@@ -55,7 +51,7 @@ class UserServiceImplSpec extends Specification {
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, authService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
 
     def "getUserById should return user when found and active"() {
         given:
@@ -622,8 +618,6 @@ class UserServiceImplSpec extends Specification {
             assert savedUser.isActive == false
             return savedUser
         }
-        // U12: deactivation must also revoke the user's sessions, not just flip isActive.
-        1 * authService.logout(userId)
     }
 
     def "deleteUser should throw exception when user not found"() {
@@ -636,7 +630,6 @@ class UserServiceImplSpec extends Specification {
         then:
         1 * userRepository.findByIdForUpdate(userId) >> Optional.empty()
         thrown(ResourceNotFoundException)
-        0 * authService.logout(_)
     }
 
     def "deactivateOwnAccount deactivates and revokes sessions when the password matches"() {
@@ -660,7 +653,6 @@ class UserServiceImplSpec extends Specification {
             assert saved.isActive == false
             return saved
         }
-        1 * authService.logout(userId)
     }
 
     def "deactivateOwnAccount throws CURRENT_PASSWORD_INCORRECT and changes nothing on a wrong password"() {
@@ -681,7 +673,6 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.findByIdForUpdate(userId) >> Optional.of(user)
         1 * passwordEncoder.matches("wrong", "hash") >> false
         0 * userRepository.save(_)
-        0 * authService.logout(_)
         def e = thrown(BadRequestException)
         e.errorCode == "CURRENT_PASSWORD_INCORRECT"
         user.isActive
@@ -698,7 +689,6 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.findByIdForUpdate(userId) >> found
         0 * passwordEncoder.matches(_, _)
         0 * userRepository.save(_)
-        0 * authService.logout(_)
         thrown(ResourceNotFoundException)
 
         where:
@@ -718,19 +708,6 @@ class UserServiceImplSpec extends Specification {
         then:
         1 * userRepository.existsByEmail(email) >> true
         result == true
-    }
-
-    def "findUserIdByEmail returns the id of a deactivated user too, without any active filter (A10)"() {
-        given:
-        def user = User.builder().id(UUID.randomUUID()).email("gone@example.com").isActive(false).build()
-
-        when:
-        def result = userService.findUserIdByEmail("gone@example.com")
-
-        then:
-        1 * userRepository.findByEmail("gone@example.com") >> Optional.of(user)
-        0 * userRepository.findByEmailAndIsActiveTrue(_)
-        result == Optional.of(user.id)
     }
 
     def "findPreferredLanguageCode: an active stored preference wins over the country default (A10)"() {
@@ -790,15 +767,6 @@ class UserServiceImplSpec extends Specification {
         1 * userPreferenceRepository.findByUserId(id) >> Optional.empty()
         1 * userRepository.findById(id) >> Optional.of(User.builder().id(id).build())
         0 * referenceService.getCountriesByIds(_)
-        result == Optional.empty()
-    }
-
-    def "findUserIdByEmail returns empty, without throwing, for an unknown email (A10)"() {
-        when:
-        def result = userService.findUserIdByEmail("nobody@example.com")
-
-        then:
-        1 * userRepository.findByEmail("nobody@example.com") >> Optional.empty()
         result == Optional.empty()
     }
 
@@ -947,83 +915,6 @@ class UserServiceImplSpec extends Specification {
         1 * userRepository.save(_) >> user
     }
 
-    // ── createUser ────────────────────────────────────────────────────────────
-
-    def "createUser assigns the default USER role and saves the new user"() {
-        given:
-        def userRole = new Role(id: 1, name: "USER")
-        def savedUser = User.builder()
-                .id(UUID.randomUUID())
-                .email("new@example.com")
-                .passwordHash("hashedPw")
-                .firstName("New")
-                .lastName("User")
-                .phoneNumber("+84901234567")
-                .isEmailVerified(false)
-                .isActive(true)
-                .roles([userRole] as Set)
-                .build()
-
-        when:
-        def result = userService.createUser("new@example.com", "hashedPw", "New", "User", "+84901234567")
-
-        then:
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(userRole)
-        1 * userRepository.save({ User u ->
-            u.email == "new@example.com" &&
-            u.passwordHash == "hashedPw" &&
-            u.isActive == true &&
-            u.isEmailVerified == false &&
-            u.roles.contains(userRole)
-        }) >> savedUser
-        result.email == "new@example.com"
-        result.roles.contains("USER")
-    }
-
-    def "createUser throws RuntimeException when the USER role is missing"() {
-        when:
-        userService.createUser("new@example.com", "hashedPw", "New", "User", "+84901234567")
-
-        then:
-        1 * roleRepository.findByName(Role.USER) >> Optional.empty()
-        0 * userRepository.save(_)
-        thrown(RuntimeException)
-    }
-
-    // ── updateUserPassword ───────────────────────────────────────────────────
-
-    def "updateUserPassword persists the given hash as-is without re-hashing"() {
-        given:
-        def userId = UUID.randomUUID()
-        def user = User.builder()
-                .id(userId)
-                .email("test@example.com")
-                .passwordHash("oldHash")
-                .isActive(true)
-                .roles([] as Set)
-                .build()
-
-        when:
-        userService.updateUserPassword(userId, "alreadyHashedValue")
-
-        then:
-        1 * userRepository.findById(userId) >> Optional.of(user)
-        1 * userRepository.save({ User u -> u.passwordHash == "alreadyHashedValue" }) >> user
-        0 * passwordEncoder.encode(_)
-    }
-
-    def "updateUserPassword throws ResourceNotFoundException when user not found"() {
-        given:
-        def userId = UUID.randomUUID()
-
-        when:
-        userService.updateUserPassword(userId, "alreadyHashedValue")
-
-        then:
-        1 * userRepository.findById(userId) >> Optional.empty()
-        thrown(ResourceNotFoundException)
-    }
-
     // ── getUserRoles ─────────────────────────────────────────────────────────
 
     def "getUserRoles returns the correct set of role names"() {
@@ -1053,119 +944,6 @@ class UserServiceImplSpec extends Specification {
 
         then:
         1 * userRepository.findById(userId) >> Optional.empty()
-        thrown(ResourceNotFoundException)
-    }
-
-    // ── verifyCredentials / reactivateUserByEmail (A9) ───────────────────────
-
-    private User credentialUser(String email, boolean active) {
-        return User.builder()
-                .id(UUID.randomUUID())
-                .email(email)
-                .passwordHash("storedHash")
-                .isActive(active)
-                .roles([] as Set)
-                .build()
-    }
-
-    def "verifyCredentials returns MATCH when the password matches an active user"() {
-        given:
-        def email = "test@example.com"
-
-        when:
-        def result = userService.verifyCredentials(email, "rawPassword")
-
-        then:
-        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, true))
-        1 * passwordEncoder.matches("rawPassword", "storedHash") >> true
-        result == CredentialCheck.MATCH
-    }
-
-    def "verifyCredentials returns NO_MATCH when the password does not match"() {
-        given:
-        def email = "test@example.com"
-
-        when:
-        def result = userService.verifyCredentials(email, "wrongPassword")
-
-        then:
-        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, true))
-        1 * passwordEncoder.matches("wrongPassword", "storedHash") >> false
-        result == CredentialCheck.NO_MATCH
-    }
-
-    def "verifyCredentials returns MATCH_INACTIVE for a deactivated user with the correct password"() {
-        given:
-        def email = "deleted@example.com"
-
-        when:
-        def result = userService.verifyCredentials(email, "rawPassword")
-
-        then:
-        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, false))
-        1 * passwordEncoder.matches("rawPassword", "storedHash") >> true
-        result == CredentialCheck.MATCH_INACTIVE
-    }
-
-    def "verifyCredentials returns NO_MATCH, not MATCH_INACTIVE, for a deactivated user with a wrong password"() {
-        given:
-        def email = "deleted@example.com"
-
-        when:
-        def result = userService.verifyCredentials(email, "wrongPassword")
-
-        then:
-        1 * userRepository.findByEmail(email) >> Optional.of(credentialUser(email, false))
-        1 * passwordEncoder.matches("wrongPassword", "storedHash") >> false
-        result == CredentialCheck.NO_MATCH
-    }
-
-    def "verifyCredentials returns NO_MATCH when the user does not exist"() {
-        given:
-        def email = "notfound@example.com"
-
-        when:
-        def result = userService.verifyCredentials(email, "rawPassword")
-
-        then:
-        1 * userRepository.findByEmail(email) >> Optional.empty()
-        0 * passwordEncoder.matches(_, _)
-        result == CredentialCheck.NO_MATCH
-    }
-
-    def "reactivateUserByEmail activates a deactivated user"() {
-        given:
-        def email = "deleted@example.com"
-        def user = credentialUser(email, false)
-
-        when:
-        def result = userService.reactivateUserByEmail(email)
-
-        then:
-        1 * userRepository.findByEmailForUpdate(email) >> Optional.of(user)
-        1 * userRepository.save({ it.isActive }) >> { args -> args[0] }
-        result.isActive == true
-    }
-
-    def "reactivateUserByEmail leaves an already active user alone"() {
-        given:
-        def email = "active@example.com"
-
-        when:
-        def result = userService.reactivateUserByEmail(email)
-
-        then:
-        1 * userRepository.findByEmailForUpdate(email) >> Optional.of(credentialUser(email, true))
-        0 * userRepository.save(_)
-        result.isActive == true
-    }
-
-    def "reactivateUserByEmail throws ResourceNotFoundException for an unknown email"() {
-        when:
-        userService.reactivateUserByEmail("nobody@example.com")
-
-        then:
-        1 * userRepository.findByEmailForUpdate("nobody@example.com") >> Optional.empty()
         thrown(ResourceNotFoundException)
     }
 
@@ -1378,124 +1156,6 @@ class UserServiceImplSpec extends Specification {
 
     private static RegionResponse region(Long id, String name) {
         RegionResponse.builder().id(id).countryId(7L).isoCode("VN-SG").name(name).nativeName(name).build()
-    }
-
-    // ---------- createUser with sign-up details ----------
-
-    def "createUser with details validates first, then saves the ids, the location point and a preference row"() {
-        given:
-        def savedId = UUID.randomUUID()
-        def details = UserRegistrationDetails.builder()
-                .languageCode("vi").countryId(7L).regionId(80L).latitude(10.7769d).longitude(106.7009d).build()
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        referenceService.isActiveLanguage("vi") >> true
-        referenceService.getCountriesByIds({ it as Set == [7L] as Set }) >> [(7L): country(7L, "Vietnam")]
-        referenceService.getRegionsByIds({ it as Set == [80L] as Set }) >> [(80L): region(80L, "Ho Chi Minh")]
-
-        when:
-        def result = userService.createUser("geo@example.com", "hashedPw", "Geo", "User", null, details)
-
-        then: "the selection is validated before anything is saved"
-        1 * referenceService.requireValidSelection(7L, 80L)
-
-        then: "the user carries the ids and a point with X = longitude, Y = latitude"
-        1 * userRepository.save({ User u ->
-            u.countryId == 7L && u.regionId == 80L &&
-                    u.location.x == 106.7009d && u.location.y == 10.7769d && u.location.SRID == 4326
-        }) >> { User u -> u.id = savedId; u }
-
-        then: "a preference row holds the language"
-        1 * userPreferenceRepository.save({ UserPreference p -> p.userId == savedId && p.language == "vi" }) >> { UserPreference p -> p }
-
-        and: "the response resolves the display names"
-        result.countryId == 7L
-        result.regionId == 80L
-        result.country == "Vietnam"
-        result.regionName == "Ho Chi Minh"
-    }
-
-    def "createUser with no details is exactly the old behavior: an empty selection, no language check, no preference row, no point"() {
-        given:
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-
-        when:
-        def result = userService.createUser("plain@example.com", "hashedPw", "Plain", "User", null)
-
-        then:
-        1 * referenceService.requireValidSelection(null, null)
-        0 * referenceService.isActiveLanguage(_)
-        1 * userRepository.save({ User u -> u.countryId == null && u.regionId == null && u.location == null }) >> { User u -> u.id = UUID.randomUUID(); u }
-        0 * userPreferenceRepository.save(_)
-        result.countryId == null
-        result.country == null
-    }
-
-    def "createUser treats a blank language code as none"() {
-        given:
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-
-        when:
-        userService.createUser("blank@example.com", "hashedPw", "B", "L", null, UserRegistrationDetails.builder().languageCode("   ").build())
-
-        then:
-        0 * referenceService.isActiveLanguage(_)
-        1 * userRepository.save(_) >> { User u -> u.id = UUID.randomUUID(); u }
-        0 * userPreferenceRepository.save(_)
-    }
-
-    def "createUser creates nothing when the country/region selection is invalid"() {
-        given:
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        referenceService.requireValidSelection(7L, 999L) >> { throw new BadRequestException("Region 999 is unknown") }
-
-        when:
-        userService.createUser("bad@example.com", "hashedPw", "B", "R", null,
-                UserRegistrationDetails.builder().countryId(7L).regionId(999L).languageCode("vi").build())
-
-        then:
-        thrown(BadRequestException)
-        0 * userRepository.save(_)
-        0 * userPreferenceRepository.save(_)
-    }
-
-    def "createUser creates nothing when the language is unknown or inactive"() {
-        given:
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        referenceService.isActiveLanguage("zz") >> false
-
-        when:
-        userService.createUser("lang@example.com", "hashedPw", "L", "G", null, UserRegistrationDetails.builder().languageCode("zz").build())
-
-        then:
-        def e = thrown(BadRequestException)
-        e.message.contains("zz")
-        e.errorCode == "LANGUAGE_UNKNOWN"
-        e.errorParams == [language: "zz"]
-        0 * userRepository.save(_)
-        0 * userPreferenceRepository.save(_)
-    }
-
-    def "createUser rejects a half-supplied or out-of-range coordinate pair and creates nothing"() {
-        given:
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-
-        when:
-        userService.createUser("coord@example.com", "hashedPw", "C", "O", null,
-                UserRegistrationDetails.builder().latitude(lat).longitude(lon).build())
-
-        then:
-        def e = thrown(BadRequestException)
-        e.errorCode == code
-        0 * userRepository.save(_)
-
-        where:
-        lat    | lon     | code
-        10.7d  | null    | "LOCATION_INCOMPLETE"
-        null   | 106.7d  | "LOCATION_INCOMPLETE"
-        91.0d  | 0.0d    | "LOCATION_OUT_OF_RANGE"
-        -90.5d | 0.0d    | "LOCATION_OUT_OF_RANGE"
-        0.0d   | 181.0d  | "LOCATION_OUT_OF_RANGE"
-        0.0d   | -180.5d | "LOCATION_OUT_OF_RANGE"
     }
 
     // ---------- updateProfile geo rules ----------

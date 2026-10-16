@@ -63,20 +63,20 @@
 
 | Code | Status | Params | When |
 |---|---|---|---|
-| `EMAIL_ALREADY_REGISTERED` | 409 | none | `POST /api/auth/register` with an email that already exists (moved from 400 by A8). A26: also `POST /api/auth/callback` at the first sign-in when another account already holds the identity's email (the Keycloak session is ended). |
-| `INVALID_CREDENTIALS` | 401 | none | `POST /api/auth/login`: wrong password, unknown email, or a deactivated account (indistinguishable by design). |
+| `EMAIL_ALREADY_REGISTERED` | 409 | none | Was `POST /api/auth/register` (removed by A28) with an email that already exists (moved from 400 by A8). A26: also `POST /api/auth/callback` at the first sign-in when another account already holds the identity's email (the Keycloak session is ended). |
+| `INVALID_CREDENTIALS` | 401 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/login`: wrong password, unknown email, or a deactivated account (indistinguishable by design). |
 | `REFRESH_TOKEN_MISSING` | 401 | none | `POST /api/auth/refresh` without the refresh cookie. |
 | `REFRESH_TOKEN_INVALID` | 401 | none | **No longer returned (A26).** It was `POST /api/auth/refresh` with a token not in the legacy store; Keycloak answers `invalid_grant` for a never-issued token and an expired one alike, so both are `REFRESH_TOKEN_EXPIRED_OR_REVOKED` now. Kept registered because the client has copy for it. |
 | `REFRESH_TOKEN_EXPIRED_OR_REVOKED` | 401 | none | `POST /api/auth/refresh` with a refresh token Keycloak no longer honours (unknown, expired, or its session ended; A26). Also what a refresh gets when its user was deactivated or never provisioned (A9, A26: the session is ended): the generic "logged out, log in again", never `ACCOUNT_DEACTIVATED`, never a 404. |
 | `ACCOUNT_DEACTIVATED` | 401 | `reactivationTicket` (A26) | `POST /api/auth/callback` when a deactivated account signed in with a **password** (a social sign-in re-activates it automatically): no tokens, no cookie, and `errorParams.reactivationTicket`, a one-time ticket valid 5 minutes that the client sends to `POST /api/auth/reactivate` (confirm) or `/reactivate/cancel` (decline). The legacy `POST /api/auth/login` (A9, retired by A28) still answers it for the correct credentials, without a ticket. Never returned by refresh. |
 | `AUTH_CODE_INVALID` | 401 | none | A26: `POST /api/auth/callback` with an authorization code or PKCE verifier Keycloak refuses (unknown, already used, expired, wrong verifier). The client restarts the sign-in. |
 | `REACTIVATION_TICKET_INVALID` | 401 | none | A26: `POST /api/auth/reactivate` with a ticket that is unknown, expired, already used, or whose parked Keycloak session has ended. One code for all of them, so tickets cannot be probed. The client restarts the sign-in. `/reactivate/cancel` never returns it (always 200). |
-| `VERIFICATION_TOKEN_INVALID` | 404 | none | `POST /api/auth/verify-email` with an unknown token. |
-| `EMAIL_ALREADY_VERIFIED` | 400 | none | `POST /api/auth/verify-email` with an already-used token. |
-| `VERIFICATION_TOKEN_EXPIRED` | 400 | none | `POST /api/auth/verify-email` with an expired token. |
-| `RESET_TOKEN_INVALID` | 404 | none | `POST /api/auth/reset-password` with an unknown token. Also (A21) the one generic answer of `POST /api/auth/reset-password/validate` for an unknown, used **or** expired token. |
-| `RESET_TOKEN_USED` | 400 | none | `POST /api/auth/reset-password` with an already-used token. |
-| `RESET_TOKEN_EXPIRED` | 400 | none | `POST /api/auth/reset-password` with an expired token. |
+| `VERIFICATION_TOKEN_INVALID` | 404 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/verify-email` with an unknown token. |
+| `EMAIL_ALREADY_VERIFIED` | 400 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/verify-email` with an already-used token. |
+| `VERIFICATION_TOKEN_EXPIRED` | 400 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/verify-email` with an expired token. |
+| `RESET_TOKEN_INVALID` | 404 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/reset-password` with an unknown token. Also (A21) the one generic answer of `POST /api/auth/reset-password/validate` for an unknown, used **or** expired token. |
+| `RESET_TOKEN_USED` | 400 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/reset-password` with an already-used token. |
+| `RESET_TOKEN_EXPIRED` | 400 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/reset-password` with an expired token. |
 
 The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) deliberately has **no code** (C12 decision; A8 left its text unchanged).
 

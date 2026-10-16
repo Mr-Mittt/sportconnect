@@ -1,6 +1,8 @@
 package com.sportconnect.notification.config
 
 import com.sportconnect.auth.api.service.JwtTokenService
+import com.sportconnect.user.api.dto.UserAccessState
+import com.sportconnect.user.api.service.UserService
 import org.springframework.messaging.Message
 import org.springframework.messaging.simp.stomp.StompCommand
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor
@@ -11,9 +13,12 @@ import spock.lang.Subject
 class StompAuthChannelInterceptorSpec extends Specification {
 
     JwtTokenService jwtTokenService = Mock()
+    UserService userService = Mock()
 
     @Subject
-    StompAuthChannelInterceptor interceptor = new StompAuthChannelInterceptor(jwtTokenService)
+    StompAuthChannelInterceptor interceptor = new StompAuthChannelInterceptor(jwtTokenService, userService)
+
+    private static final UUID USER_ID = UUID.fromString("00000000-0000-0000-0000-000000000123")
 
     private static Message<byte[]> connectFrame(String authorizationHeader) {
         StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT)
@@ -33,14 +38,37 @@ class StompAuthChannelInterceptorSpec extends Specification {
         def message = connectFrame("Bearer good-token")
         jwtTokenService.validateToken("good-token") >> true
         jwtTokenService.isTokenExpired("good-token") >> false
-        jwtTokenService.getUserIdFromToken("good-token") >> "user-123"
+        jwtTokenService.getUserIdFromToken("good-token") >> USER_ID.toString()
+        userService.getAccessState(USER_ID) >> Optional.of(new UserAccessState(true, ["USER"]))
 
         when:
         interceptor.preSend(message, null)
 
         then:
         def accessor = StompHeaderAccessor.wrap(message)
-        accessor.getUser().getName() == "user-123"
+        accessor.getUser().getName() == USER_ID.toString()
+    }
+
+    def "preSend rejects a valid token of a deactivated user, an unprovisioned subject, or a subject that is not a UUID (A28)"() {
+        given:
+        def message = connectFrame("Bearer good-token")
+        jwtTokenService.validateToken("good-token") >> true
+        jwtTokenService.isTokenExpired("good-token") >> false
+        jwtTokenService.getUserIdFromToken("good-token") >> subject
+        userService.getAccessState(USER_ID) >> state
+
+        when:
+        interceptor.preSend(message, null)
+
+        then:
+        thrown(StompAuthChannelInterceptor.StompAuthenticationException)
+        StompHeaderAccessor.wrap(message).getUser() == null
+
+        where:
+        subject             | state
+        USER_ID.toString()  | Optional.of(new UserAccessState(false, ["USER"]))
+        USER_ID.toString()  | Optional.empty()
+        "not-a-uuid"        | Optional.empty()
     }
 
     def "preSend rejects a CONNECT frame with no Authorization header"() {

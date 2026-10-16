@@ -223,4 +223,7 @@
     <!-- U25: users.phone_status (INVALID / VALID / VERIFIED); a partial unique index on usable numbers. -->
     <include file="db/changelog/changes/V080__users_phone_status.sql" relativeToChangelogFile="false"/>
 
+    <!-- A28: drop refresh_tokens, password_reset_tokens, email_verifications (Keycloak owns sessions, reset and verification). -->
+    <include file="db/changelog/changes/V081__drop_legacy_auth_token_tables.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

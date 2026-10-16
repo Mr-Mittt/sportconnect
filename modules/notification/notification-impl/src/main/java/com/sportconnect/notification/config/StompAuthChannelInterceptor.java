@@ -1,7 +1,10 @@
 package com.sportconnect.notification.config;
 
 import com.sportconnect.auth.api.service.JwtTokenService;
+import com.sportconnect.user.api.dto.UserAccessState;
+import com.sportconnect.user.api.service.UserService;
 import java.security.Principal;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -23,17 +26,19 @@ import org.springframework.util.StringUtils;
  * {@code JwtAuthenticationFilter} uses internally in {@code auth-impl} — so this stays consistent
  * with the REST JWT validation path without importing anything from {@code auth-impl}.
  *
- * <p><b>Deliberately no {@code isActive} recheck here</b> — this inherits the same known gap as the
- * REST {@code JwtAuthenticationFilter} (CLAUDE.md's account-lifecycle gaps, tracked under
- * {@code user-impl}'s U12: an already-issued access token keeps authenticating a deactivated user
- * until it naturally expires). Confirmed as an accepted, documented risk for this ticket rather than
- * a new gap — not silently missing.
+ * <p><b>The active gate (A28, closing A20's STOMP half):</b> after the token verifies, the user must pass the same
+ * check every REST request does ({@link UserService#getAccessState}, A25): a deactivated or unprovisioned user's
+ * {@code CONNECT} is refused. The check runs at {@code CONNECT} only, so a socket that is already open when the account
+ * is deactivated stays open until the client reconnects (and is then refused); it carries only that user's own
+ * notifications. Disconnecting open sockets on deactivation is a separate, low-priority ticket (see the notification
+ * backlog).
  */
 @Component
 @RequiredArgsConstructor
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtTokenService jwtTokenService;
+    private final UserService userService;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -44,9 +49,21 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 throw new StompAuthenticationException("Missing or invalid token on STOMP CONNECT");
             }
             String userId = jwtTokenService.getUserIdFromToken(token);
+            if (!isActive(userId)) {
+                throw new StompAuthenticationException("Account is not active");
+            }
             accessor.setUser(new StompPrincipal(userId));
         }
         return message;
+    }
+
+    /** The A25 gate: the account exists and is active. A subject that is not a UUID cannot be one of ours. */
+    private boolean isActive(String subject) {
+        try {
+            return userService.getAccessState(UUID.fromString(subject)).map(UserAccessState::isActive).orElse(false);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private static String bearerToken(String header) {

@@ -1,13 +1,8 @@
 package com.sportconnect.auth.controller
 
 import com.sportconnect.auth.api.dto.AuthResponse
-import com.sportconnect.auth.api.dto.LoginRequest
-import com.sportconnect.auth.api.dto.RegisterRequest
 import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.auth.config.CookieProperties
-import com.sportconnect.auth.config.JwtProperties
-import com.sportconnect.auth.service.EmailVerificationService
-import com.sportconnect.auth.service.PasswordResetService
 import com.sportconnect.common.exception.GlobalExceptionHandler
 import org.springframework.http.HttpHeaders
 import org.springframework.security.core.Authentication
@@ -26,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * No Spring context in this library module (same reasoning as GlobalExceptionHandlerSpec) —
  * standalone MockMvc against a hand-built AuthController. Covers A2 (refresh token moves to an
- * httpOnly cookie) and A3 (logout derives the user from the principal). The actual SecurityConfig
+ * httpOnly cookie), A3 (logout) and A26/A28 (the Keycloak endpoints that remain). The actual SecurityConfig
  * authorization rule for POST /api/auth/logout is NOT exercised here — the "test" Spring profile
  * disables Spring Security auto-configuration entirely (see application-test.yml), so no test in
  * this repo currently runs the real filter chain. That rule is verified manually against a running
@@ -35,14 +30,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerSpec extends Specification {
 
     AuthService authService = Mock(AuthService)
-    EmailVerificationService emailVerificationService = Mock(EmailVerificationService)
-    PasswordResetService passwordResetService = Mock(PasswordResetService)
     CookieProperties cookieProperties = new CookieProperties(secure: true)
-    JwtProperties jwtProperties = new JwtProperties(refreshExpiration: 604_800_000L) // 7 days, ms
 
     @Subject
-    AuthController controller = new AuthController(
-            authService, emailVerificationService, passwordResetService, cookieProperties, jwtProperties)
+    AuthController controller = new AuthController(authService, cookieProperties)
 
     MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
             .setControllerAdvice(new GlobalExceptionHandler())
@@ -58,53 +49,52 @@ class AuthControllerSpec extends Specification {
                 .build()
     }
 
-    def "login sets the refresh cookie and omits refreshToken from the response body"() {
+    def "refresh sets the cookie attributes: httpOnly, Secure, SameSite=Strict, scoped to /api/auth, Max-Age from Keycloak"() {
         given:
-        authService.login(_) >> authResponse("raw-refresh-token")
+        authService.refreshToken("old-refresh-token") >> authResponse("raw-refresh-token").tap { it.refreshTokenMaxAgeSeconds = 1800L }
 
         expect:
-        mockMvc.perform(post("/api/auth/login")
-                        .contentType("application/json")
-                        .content('{"email":"test@example.com","password":"password123"}'))
+        mockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken", "old-refresh-token")))
                 .andExpect(status().isOk())
                 .andExpect(cookie().value("refreshToken", "raw-refresh-token"))
                 .andExpect(cookie().httpOnly("refreshToken", true))
                 .andExpect(cookie().secure("refreshToken", true))
                 .andExpect(cookie().path("refreshToken", "/api/auth"))
-                .andExpect(cookie().maxAge("refreshToken", 604_800))
+                .andExpect(cookie().maxAge("refreshToken", 1800))
                 .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=Strict")))
                 .andExpect(jsonPath('$.data.accessToken').value("access-token"))
                 .andExpect(jsonPath('$.data.refreshToken').doesNotExist())
     }
 
-    def "register sets the refresh cookie and omits refreshToken from the response body"() {
+    def "a response without a Keycloak lifetime sets a browser-session cookie (no Max-Age)"() {
         given:
-        authService.register(_) >> authResponse("raw-refresh-token")
+        authService.refreshToken("old-refresh-token") >> authResponse("raw-refresh-token")
 
         expect:
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType("application/json")
-                        .content('{"email":"test@example.com","password":"password123","fullName":"Test User"}'))
+        mockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken", "old-refresh-token")))
                 .andExpect(status().isOk())
-                .andExpect(cookie().value("refreshToken", "raw-refresh-token"))
-                .andExpect(jsonPath('$.data.refreshToken').doesNotExist())
+                .andExpect(header().string(HttpHeaders.SET_COOKIE, org.hamcrest.Matchers.not(containsString("Max-Age"))))
     }
 
     def "cookie Secure attribute follows CookieProperties (off in dev)"() {
         given: "a controller wired with the dev-profile-equivalent property"
-        def devController = new AuthController(
-                authService, emailVerificationService, passwordResetService,
-                new CookieProperties(secure: false), jwtProperties)
-        def devMockMvc = MockMvcBuilders.standaloneSetup(devController)
+        def devMockMvc = MockMvcBuilders.standaloneSetup(new AuthController(authService, new CookieProperties(secure: false)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build()
-        authService.login(_) >> authResponse("raw-refresh-token")
+        authService.refreshToken("old-refresh-token") >> authResponse("raw-refresh-token")
 
         expect:
-        devMockMvc.perform(post("/api/auth/login")
-                        .contentType("application/json")
-                        .content('{"email":"test@example.com","password":"password123"}'))
+        devMockMvc.perform(post("/api/auth/refresh").cookie(new jakarta.servlet.http.Cookie("refreshToken", "old-refresh-token")))
                 .andExpect(cookie().secure("refreshToken", false))
+    }
+
+    def "the removed endpoints are gone"() {
+        expect:
+        mockMvc.perform(post(path).contentType("application/json").content('{}')).andExpect(status().isNotFound())
+
+        where:
+        path << ["/api/auth/register", "/api/auth/login", "/api/auth/forgot-password", "/api/auth/reset-password",
+                 "/api/auth/reset-password/validate", "/api/auth/verify-email", "/api/auth/oauth-token"]
     }
 
     def "refresh reads the token from the cookie, calls the service, and rotates the cookie"() {

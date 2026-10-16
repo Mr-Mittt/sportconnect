@@ -1,10 +1,5 @@
 package com.sportconnect.integration;
 
-import com.jayway.jsonpath.JsonPath;
-import com.sportconnect.auth.repository.EmailVerificationRepository;
-import com.sportconnect.auth.repository.PasswordResetTokenRepository;
-import com.sportconnect.auth.repository.RefreshTokenRepository;
-import com.sportconnect.auth.service.EmailVerificationService;
 import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
@@ -16,11 +11,10 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.web.servlet.MvcResult;
 
 import javax.sql.DataSource;
 import java.time.Duration;
@@ -28,50 +22,45 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * A13: the new email module end to end through real Spring wiring. Auth renders the text (language resolved from real
- * user and reference rows) and hands it to {@code email-api}; {@code SmtpEmailSender} delivers it on the async
- * executor to the {@code JavaMailSender}, which is the one collaborator replaced here so the sent message can be read.
+ * A13, rewritten by A28: the email module end to end through real Spring wiring. The welcome email is sent by the first
+ * sign-in ({@code POST /api/auth/callback} creating the {@code users} row); auth renders the text in the user's language
+ * and hands it to {@code email-api}, {@code SmtpEmailSender} delivers it on the async executor to the
+ * {@code JavaMailSender}, which is the one collaborator replaced here so the sent message can be read.
  * <ul>
- *   <li>context startup with the new {@code email-impl} module and its cross-module wiring from auth;</li>
- *   <li>forgot-password (a real request) sends the reset email, in Vietnamese for a Vietnam-country user, with the
- *       token that was saved;</li>
- *   <li>the verification and welcome emails render in the user's stored language, and in English without one.</li>
+ *   <li>the first sign-in sends the welcome email, in Vietnamese for a user whose Keycloak {@code locale} is {@code vi},
+ *       greeting them by first name; in English for one with no language;</li>
+ *   <li>the second sign-in sends nothing (once per account);</li>
+ *   <li>an account with no email (phone only) gets nothing and signs in fine;</li>
+ *   <li>a failing mail server never fails the sign-in.</li>
  * </ul>
- * The verification and welcome emails have no production trigger yet (A17), so those tests call
- * {@link EmailVerificationService} directly.
+ * Password reset and verification emails are Keycloak's own now (its email theme), so they are not tested here.
  */
 // The actuator mail health indicator needs a real JavaMailSenderImpl; dev disables it too (application-dev.yml).
 @TestPropertySource(properties = "management.health.mail.enabled=false")
 class EmailModuleIntegrationTest extends RedisBaseIT {
 
-    private static final String PASSWORD = "password123";
+    private static final String VERIFIER = "v".repeat(43);
 
     @MockBean
     private JavaMailSender mailSender;
 
     @Autowired
-    private JdbcTemplate jdbc;
-    @Autowired
     private UserRepository userRepository;
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
     @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
-    @Autowired
     private RoleRepository roleRepository;
-    @Autowired
-    private PasswordResetTokenRepository passwordResetTokenRepository;
-    @Autowired
-    private EmailVerificationRepository emailVerificationRepository;
-    @Autowired
-    private EmailVerificationService emailVerificationService;
     @Autowired
     private DataSource dataSource;
 
@@ -91,25 +80,14 @@ class EmailModuleIntegrationTest extends RedisBaseIT {
     }
 
     private void clean() {
-        jdbc.update("DELETE FROM password_reset_tokens");
-        emailVerificationRepository.deleteAll();
-        refreshTokenRepository.deleteAll();
         userPreferenceRepository.deleteAll();
         userRepository.deleteAll();
     }
 
-    private UUID register(String email) throws Exception {
-        MvcResult result = mockMvc.perform(post("/api/auth/register").with(anonymous())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\": \"" + email + "\", \"password\": \"" + PASSWORD
-                                + "\", \"fullName\": \"Mail Tester\"}"))
-                .andExpect(status().isOk())
-                .andReturn();
-        return UUID.fromString(JsonPath.read(result.getResponse().getContentAsString(), "$.data.user.id"));
-    }
-
-    private void setPreferredLanguage(UUID userId, String code) {
-        jdbc.update("INSERT INTO user_preferences (user_id, language, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)", userId, code);
+    private org.springframework.test.web.servlet.ResultActions signIn(TestKeycloak.Identity identity) throws Exception {
+        String code = TestKeycloak.issueCode(identity, VERIFIER);
+        return mockMvc.perform(post("/api/auth/callback").with(anonymous()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\": \"" + code + "\", \"codeVerifier\": \"" + VERIFIER + "\"}"));
     }
 
     /** The one mail {@code SmtpEmailSender} handed to the mail sender, waiting for the async executor. */
@@ -120,56 +98,54 @@ class EmailModuleIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void forgotPassword_sendsTheResetEmailInTheUsersLanguage_withTheSavedToken() throws Exception {
-        UUID userId = register("a13-reset@example.com");
-        setPreferredLanguage(userId, "vi");
-
-        mockMvc.perform(post("/api/auth/forgot-password").with(anonymous()).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\": \"a13-reset@example.com\"}"))
+    void firstSignIn_sendsTheWelcomeEmailInTheUsersLanguage_greetingByFirstName() throws Exception {
+        signIn(TestKeycloak.Identity.of(UUID.randomUUID()).email("a28-vi@example.com").names("Lan", "Nguyen").locale("vi"))
                 .andExpect(status().isOk());
 
-        String token = jdbc.queryForObject("SELECT token FROM password_reset_tokens WHERE user_id = ?", String.class, userId);
         SimpleMailMessage mail = sentMail();
-        assertThat(mail.getTo()).containsExactly("a13-reset@example.com");
+        assertThat(mail.getTo()).containsExactly("a28-vi@example.com");
         assertThat(mail.getFrom()).isNotBlank();
-        assertThat(mail.getSubject()).isEqualTo("Đặt lại mật khẩu - SportConnect");
-        assertThat(mail.getText()).contains("/reset-password?token=" + token);
-    }
-
-    @Test
-    void verificationEmail_isInTheStoredLanguage_andCarriesTheSavedToken() throws Exception {
-        UUID userId = register("a13-verify-vi@example.com");
-        setPreferredLanguage(userId, "vi");
-
-        emailVerificationService.createAndSendVerification(userId, "a13-verify-vi@example.com");
-
-        String token = emailVerificationRepository.findByUserId(userId).orElseThrow().getToken();
-        SimpleMailMessage mail = sentMail();
-        assertThat(mail.getTo()).containsExactly("a13-verify-vi@example.com");
-        assertThat(mail.getSubject()).isEqualTo("Xác minh email của bạn - SportConnect");
-        assertThat(mail.getText()).contains("/verify-email?token=" + token).contains("24 giờ");
-    }
-
-    @Test
-    void verificationEmail_isEnglish_whenTheUserHasNoLanguage() throws Exception {
-        UUID userId = register("a13-verify-en@example.com");
-
-        emailVerificationService.createAndSendVerification(userId, "a13-verify-en@example.com");
-
-        SimpleMailMessage mail = sentMail();
-        assertThat(mail.getSubject()).isEqualTo("Verify Your Email - SportConnect");
-        assertThat(mail.getText()).contains("This link will expire in 24 hours.");
-    }
-
-    @Test
-    void welcomeEmail_isInTheStoredLanguage_andGreetsByFirstName() throws Exception {
-        UUID userId = register("a13-welcome@example.com");
-        setPreferredLanguage(userId, "vi");
-
-        emailVerificationService.sendWelcomeEmail(userId, "a13-welcome@example.com", "Lan");
-
-        SimpleMailMessage mail = sentMail();
         assertThat(mail.getSubject()).isEqualTo("Chào mừng bạn đến với SportConnect!");
         assertThat(mail.getText()).startsWith("Xin chào Lan,");
+    }
+
+    @Test
+    void firstSignIn_isEnglish_whenTheUserHasNoLanguage() throws Exception {
+        signIn(TestKeycloak.Identity.of(UUID.randomUUID()).email("a28-en@example.com").names("Sam", "Lee"))
+                .andExpect(status().isOk());
+
+        SimpleMailMessage mail = sentMail();
+        assertThat(mail.getSubject()).isEqualTo("Welcome to SportConnect!");
+        assertThat(mail.getText()).startsWith("Hi Sam,");
+    }
+
+    @Test
+    void secondSignIn_sendsNothing() throws Exception {
+        UUID sub = UUID.randomUUID();
+        signIn(TestKeycloak.Identity.of(sub).email("a28-twice@example.com").names("Twice", "Over")).andExpect(status().isOk());
+        sentMail();
+
+        signIn(TestKeycloak.Identity.of(sub).email("a28-twice@example.com").names("Twice", "Over")).andExpect(status().isOk());
+
+        // Give the async executor time to deliver a (wrong) second message before asserting there is only the first.
+        verify(mailSender, after(1000).times(1)).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    void firstSignIn_ofAPhoneOnlyAccount_sendsNothingAndSucceeds() throws Exception {
+        signIn(TestKeycloak.Identity.of(UUID.randomUUID()).phone("0901234567").names("Phone", "Only"))
+                .andExpect(status().isOk());
+
+        verify(mailSender, after(1000).times(0)).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    void aFailingMailServer_neverFailsTheSignIn() throws Exception {
+        doThrow(new MailSendException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
+
+        signIn(TestKeycloak.Identity.of(UUID.randomUUID()).email("a28-down@example.com").names("Down", "Stream"))
+                .andExpect(status().isOk());
+
+        verify(mailSender, after(1000).atLeastOnce()).send(any(SimpleMailMessage.class));
     }
 }

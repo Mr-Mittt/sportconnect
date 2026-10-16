@@ -1,6 +1,6 @@
 # A20 · WebSocket (STOMP) and the chat service accept access tokens that REST rejects as revoked
 
-**Status:** `TODO` · **Type:** Security gap (medium) · **Depends on:** none; best done after **A15**, which settles how revocation is stored
+**Status:** `DONE` (2026-10-16, answered by A28; chat half by CHAT-17) · **Type:** Security gap (medium) · **Depends on:** none; best done after **A15**, which settles how revocation is stored
 
 **Filed:** 2026-10-11, found by the consumer census of **A15** (per-session logout).
 
@@ -30,3 +30,11 @@ IT: log out (or deactivate), then a STOMP `CONNECT` with the old token is reject
 Redesigning the chat auth model; refresh-token handling.
 
 **Delta (2026-10-16, CHAT-17):** the chat half is answered: the chat service now verifies Keycloak RS256 tokens by JWKS and deliberately does no `is_active` or revocation check; a deactivated user keeps chat access for at most the 5-minute token life, accepted. Only the STOMP interceptor half remains for A28/A25. Syncing `is_active` into the chat cache is a separate decision, not filed.
+
+---
+
+**Answer (A28, 2026-10-16).** Revocation as this ticket described it no longer exists (no watermark, no per-session revocation); what is left is "a deactivated user holds a still-valid token", and each path is now decided:
+- **REST:** the A25 gate refuses a deactivated or unprovisioned user on the very next request (cached state evicted on deactivate and reactivate, 60 s TTL as the bound).
+- **STOMP (notification):** `StompAuthChannelInterceptor` now runs the same gate on `CONNECT` (`UserService.getAccessState`), so a deactivated or unprovisioned user cannot open a socket. The check is at `CONNECT` only: a socket already open stays until the client reconnects. Closing open sockets on deactivation is filed as **NTF-6** (low priority; notification backlog). Tests: `StompAuthChannelInterceptorSpec` (+1), `NotificationStompIntegrationTest` (+2, real RabbitMQ).
+- **Chat service:** accepted risk, as stated in CHAT-17: no `is_active` check in the Go service; a deactivated user keeps chat access for at most the 5-minute access-token life. Syncing `is_active` into the chat cache stays a separate decision, not filed.
+- **Token life:** Keycloak access tokens last 5 minutes (was 1 hour, then 24 hours in production), which bounds every residual window above.

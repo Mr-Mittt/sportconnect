@@ -1,7 +1,6 @@
 package com.sportconnect.user.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.common.cache.CacheGuard
 import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.service.UserSportProfileService
@@ -29,7 +28,7 @@ class UserAccessStateSpec extends Specification {
 
     @Subject
     UserServiceImpl userService = new UserServiceImpl(userRepository, Mock(RoleRepository), Mock(PasswordEncoder),
-            Mock(UserFriendService), Mock(AuthService), Mock(UserSportProfileService), Mock(StringRedisTemplate),
+            Mock(UserFriendService), Mock(UserSportProfileService), Mock(StringRedisTemplate),
             new ObjectMapper(), Mock(ReferenceService), Mock(UserPreferenceRepository), cache, Mock(UserProvisioningLock))
 
     private static User user(UUID id, boolean active, String... roles) {

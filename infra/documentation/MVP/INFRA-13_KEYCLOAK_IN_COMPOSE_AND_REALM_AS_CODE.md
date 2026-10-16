@@ -82,3 +82,7 @@ Keycloak imports with strategy IGNORE_EXISTING: editing the JSON does nothing to
 - `aud` also contains `account` (Keycloak's default role audience). A25 must require `sportconnect-api` in `aud`, not just any audience.
 - Keycloak's built-in Vietnamese strings do not exist (A23); `vi` is enabled but the pages render English until the theme (AUTH-15) carries the translations.
 - Unmanaged user attributes (a `phone` attribute) are not enabled yet; A27 adds the phone attribute and its rules.
+
+## Delta (A28, 2026-10-16)
+
+The Compose Keycloak also mounts `infra/keycloak/themes` read-only at `/opt/keycloak/themes` (the email theme `sportconnect`, en and vi; a plain theme directory, no build step). After changing a template or message there, recreate the container (`docker compose -f infra/docker-compose.dev.yml up -d keycloak`); the realm picks the theme through `emailTheme` (`infra/scripts/apply-realm-email-theme.sh` on a running realm). A second script adds the Swagger UI client (`apply-realm-swagger-client.sh`). Mailpit now also receives the backend's welcome email (dev profile).

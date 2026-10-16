@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.auth.api.service.JwtTokenService;
 import com.sportconnect.notification.push.NotificationLiveUpdateMessage;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
+import com.sportconnect.user.entity.Role;
+import com.sportconnect.user.repository.UserRepository;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /**
@@ -55,6 +58,9 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
     private ObjectMapper objectMapper;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private StompBrokerRelayMessageHandler stompBrokerRelayMessageHandler;
 
     private WebSocketStompClient stompClient;
@@ -65,6 +71,7 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
         if (stompSession != null && stompSession.isConnected()) {
             stompSession.disconnect();
         }
+        userRepository.deleteAll();
     }
 
     private void publishSessionEvent(String routingKey, String messageId, Object payload) throws Exception {
@@ -133,7 +140,8 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
     @Test
     void sessionJoinRequestCreatedEvent_producesALiveStompFrameOnTheRecipientsSubscribedDestination() throws Exception {
         UUID actorId = UUID.randomUUID();
-        UUID recipientId = UUID.randomUUID();
+        // A28: STOMP CONNECT runs the A25 active gate, so the recipient must be a real, active user.
+        UUID recipientId = createUserWithRoles(true, Role.USER);
 
         CompletableFuture<NotificationLiveUpdateMessage> received = subscribeAsUser(recipientId);
 
@@ -145,5 +153,21 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
 
         assertThat(message.notificationId()).isNotNull();
         assertThat(message.unreadCount()).isEqualTo(1L);
+    }
+
+    /** A28, closing A20's STOMP half: a valid Keycloak token of a deactivated user no longer opens a socket. */
+    @Test
+    void stompConnect_withAValidTokenOfADeactivatedUser_isRefused() throws Exception {
+        UUID deactivatedId = createUserWithRoles(false, Role.USER);
+
+        assertThatThrownBy(() -> subscribeAsUser(deactivatedId)).isNotNull();
+        assertThat(stompSession == null || !stompSession.isConnected()).isTrue();
+    }
+
+    /** A valid token for a subject nobody provisioned is refused the same way. */
+    @Test
+    void stompConnect_withAValidTokenOfAnUnprovisionedSubject_isRefused() throws Exception {
+        assertThatThrownBy(() -> subscribeAsUser(UUID.randomUUID())).isNotNull();
+        assertThat(stompSession == null || !stompSession.isConnected()).isTrue();
     }
 }

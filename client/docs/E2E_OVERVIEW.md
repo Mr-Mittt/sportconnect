@@ -246,7 +246,6 @@ e2e/
     group-errors.spec.ts      # CLIENT-ERR-5
     post-errors.spec.ts       # CLIENT-ERR-6
     session-errors.spec.ts    # CLIENT-ERR-7
-    misc-errors.spec.ts       # CLIENT-ERR-8
     chat-errors.spec.ts       # CLIENT-ERR-9
   visual/                    # `visual-regression` project specs
     app-home-feed.spec.ts
@@ -646,10 +645,10 @@ opened, so `90001` is deterministic in step 6/7's `pushChatEvent` calls, not a h
 
 | Test | What it checks | Notes |
 |---|---|---|
-| `MSW intercepts POST /api/auth/login and returns the fixture` | Raw `fetch` from page context → asserts response body **and** cross-checks `GET /__mock/sessions/:id/requests` shows the call | The request-log check is MSW-1's replacement for the old `response.fromServiceWorker()` assertion |
-| `MSW returns 401 for wrong credentials` | | |
+| `MSW intercepts POST /api/auth/callback and returns the fixture` | Raw `fetch` from page context → asserts response body **and** cross-checks `GET /__mock/sessions/:id/requests` shows the call | The request-log check is MSW-1's replacement for the old `response.fromServiceWorker()` assertion |
+| `MSW returns 401 for a code it does not know` | | |
 | `MSW rejects /api/auth/refresh without a valid refresh cookie` | | |
-| `MSW rejects /api/auth/logout without an Authorization header` | | |
+| `MSW answers /api/auth/logout without an Authorization header` | | A26: logout is public and cookie-driven, so it is a 200 |
 
 This file exists specifically to prove the mocking layer works in isolation, before any real UI
 consumer exercises it — no login form is used, just raw `fetch()` calls.
@@ -1148,16 +1147,6 @@ The session module's coded errors (SESSION-45) localized from the error code. Ea
 | same dialog in Vietnamese | Locale stored as `vi`, forced 404 `SESSION_NOT_FOUND` on join: the dialog reads "Buổi chơi này không còn tồn tại.", "Đã hiểu" closes it. |
 | open a session that no longer exists | Forced 404 `SESSION_NOT_FOUND` on the detail load: the modal body shows the "No longer available" state (not "Couldn't load this session."), no toast; Close closes the modal. |
 | leave from a card, not a participant | Forced 409 `SESSION_NOT_PARTICIPANT` on a card's Leave (no modal open): the dialog reads "You're no longer part of this session.", no toast. |
-
-### `e2e/flows/misc-errors.spec.ts` (CLIENT-ERR-8, 3 `test()`s)
-
-The reference module's coded errors (REF-5) localized from the error code. The register response is forced with `page.route` (the MSW register handler only fails on a taken email). The location favorite and notification codes are covered by Vitest. See `client/docs/MVP/CLIENT-ERR-8_MISC_ERROR_ADAPTATION.md`.
-
-| Test | What it checks |
-|---|---|
-| `REGION_UNKNOWN` (en) | Register submit with a forced 400: the hint line under the geo fields reads "That region is no longer available. Pick another one.", no `role="alert"` banner appears, and the typed email and name are kept. |
-| `REGION_UNKNOWN` (vi) | Same hint in Vietnamese ("Khu vực này không còn khả dụng. Hãy chọn khu vực khác."), no banner; the locale is set through `locale-storage` before load. |
-| `COUNTRY_UNKNOWN` | Pick a country, submit with a forced 400: the hint reads "That country isn't available. Pick another one." and the Country select is empty again. |
 
 ### `e2e/flows/chat-errors.spec.ts` (CLIENT-ERR-9, 3 `test()`s)
 

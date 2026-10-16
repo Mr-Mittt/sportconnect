@@ -1,7 +1,5 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.auth.entity.RefreshToken;
-import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.repository.UserRepository;
 import com.sportconnect.user.service.UserServiceImpl;
@@ -13,7 +11,6 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -46,13 +43,10 @@ class RedisOutageAuthenticationIntegrationTest extends BaseIT {
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
-    @Autowired
     private UserServiceImpl userServiceImpl;
 
     @AfterEach
     void cleanup() {
-        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -71,11 +65,6 @@ class RedisOutageAuthenticationIntegrationTest extends BaseIT {
     @Test
     void aDeactivatedUsersToken_isStillRejected_whileRedisIsDown() throws Exception {
         UUID userId = createActiveUser();
-        refreshTokenRepository.save(RefreshToken.builder()
-                .userId(userId)
-                .token("a11-refresh-" + UUID.randomUUID())
-                .expiresAt(LocalDateTime.now().plusDays(7))
-                .build());
         String authorization = bearer(userId);
 
         // The deactivation also tries to evict the cached state; with Redis down that must be skipped, not thrown.

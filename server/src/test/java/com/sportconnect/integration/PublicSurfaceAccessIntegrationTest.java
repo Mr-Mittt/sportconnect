@@ -59,9 +59,8 @@ class PublicSurfaceAccessIntegrationTest extends BaseIT {
     @Test
     void publicAuthEndpoints_areReachableAnonymously() throws Exception {
         for (String path : new String[] {
-                "/api/auth/register", "/api/auth/login", "/api/auth/callback", "/api/auth/reactivate",
-                "/api/auth/reactivate/cancel", "/api/auth/refresh", "/api/auth/logout", "/api/auth/verify-email",
-                "/api/auth/forgot-password", "/api/auth/reset-password", "/api/auth/reset-password/validate"}) {
+                "/api/auth/callback", "/api/auth/reactivate", "/api/auth/reactivate/cancel", "/api/auth/refresh",
+                "/api/auth/logout"}) {
             assertReachedHandler(mockMvc.perform(post(path).with(anonymous())
                             .contentType(MediaType.APPLICATION_JSON).content("{}"))
                     .andReturn());
@@ -69,11 +68,14 @@ class PublicSurfaceAccessIntegrationTest extends BaseIT {
     }
 
     @Test
-    void oauthTokenHelper_isReachableAnonymously() throws Exception {
-        assertReachedHandler(mockMvc.perform(post("/api/auth/oauth-token").with(anonymous())
-                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                        .param("username", "nobody@example.com").param("password", "wrong"))
-                .andReturn());
+    void theAuthEndpointsKeycloakTookOver_areNoLongerPublic() throws Exception {
+        // A28: registration, password login, reset, verification and Swagger's password bridge are Keycloak's now.
+        for (String path : new String[] {
+                "/api/auth/register", "/api/auth/login", "/api/auth/verify-email", "/api/auth/forgot-password",
+                "/api/auth/reset-password", "/api/auth/reset-password/validate", "/api/auth/oauth-token"}) {
+            assertRejectedByFilterChain(mockMvc.perform(post(path).with(anonymous())
+                    .contentType(MediaType.APPLICATION_JSON).content("{}")));
+        }
     }
 
     @Test

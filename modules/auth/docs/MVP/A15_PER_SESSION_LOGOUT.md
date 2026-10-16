@@ -1,6 +1,6 @@
 # A15 · Per-session logout: signing out on one device must not sign out the others
 
-**Status:** `ON HOLD` (2026-10-12, user decision: consider a Keycloak integration first; see § Paused state)
+**Status:** `SUPERSEDED` (2026-10-16, closed by A28: sessions are Keycloak sessions; see the note at the end)  (was `ON HOLD` since 2026-10-12)
 **Type:** Feature / behaviour change
 **Depends on:** **A12** (same revocation cache; do A12 first so the cache eviction pattern is settled)
 
@@ -80,3 +80,7 @@ Concurrent-session limits; suspicious-login detection; Redis outage handling (A1
 - **Open decisions when resumed:** (1) rename `logout(UUID)` to `logoutAll(UUID)` (recommended) vs add an overload; (2) backfill from `MAX(revoked_at)` (recommended) vs none; (3) keep the `reason` column.
 
 **Still filed and independent:** A18 (session list), A20 (STOMP/chat ignore revocation), A16, client AUTH-11 and AUTH-12.
+
+---
+
+**Closed by A28 (2026-10-16): superseded by Keycloak.** The design here (a server-generated `sessionId` in the access token and the refresh row, a per-user revocation watermark) solved a problem that no longer exists. Since A25/A26 a session is a Keycloak SSO session: logging out ends that one session (`POST /api/auth/logout` ends the Keycloak session of the refresh-token cookie), other devices keep theirs, an access token lives 5 minutes, and a deactivated user is refused by the A25 gate on the next request. The `refresh_tokens` table, the watermark and `revokeAllUserTokens` are gone (A28, migration V081). A "log out everywhere" action, if wanted, is a Keycloak admin/account-API call and would be a new ticket. The client tickets **AUTH-11** and **AUTH-12** that waited on this are superseded too (client backlog).

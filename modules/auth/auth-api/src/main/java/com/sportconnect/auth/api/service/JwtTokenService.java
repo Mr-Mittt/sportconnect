@@ -8,19 +8,9 @@ import java.util.List;
  *
  * <p>A25: the <em>reading</em> methods verify a Keycloak access token (RS256, JWKS, issuer, audience); {@code sub} is
  * the user id, there are no role claims (roles come from {@code UserService.getAccessState}) and the email may be
- * missing. The {@code generate*} methods are the legacy HS256 mint, kept only until A26 and A28 retire the old login.
+ * missing. There is no token minting here any more: Keycloak issues every token (A28 removed the HS256 mint).
  */
 public interface JwtTokenService {
-
-    /**
-     * Generate access token for user
-     */
-    String generateAccessToken(Object user);
-
-    /**
-     * Generate refresh token for user
-     */
-    String generateRefreshToken(Object user);
 
     /**
      * Validate JWT token
@@ -51,9 +41,4 @@ public interface JwtTokenService {
      * The token's {@code iat} claim, as the instant it was issued.
      */
     Instant getIssuedAtFromToken(String token);
-
-    /**
-     * Get refresh token expiration time
-     */
-    Long getRefreshExpiration();
 }

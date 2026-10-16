@@ -1,33 +1,15 @@
 package com.sportconnect.auth.api.service;
 
 import com.sportconnect.auth.api.dto.AuthResponse;
-import com.sportconnect.auth.api.dto.LoginRequest;
-import com.sportconnect.auth.api.dto.RegisterRequest;
-
-import java.util.UUID;
 
 /**
  * Authentication service interface.
  *
- * <p>Since A26 a session is a Keycloak session: {@link #callback}, {@link #reactivate}, {@link #refreshToken} and
- * {@link #endSession} proxy the realm. {@link #register} and {@link #login} are the legacy password endpoints that mint a
- * token nothing accepts any more (A25); A28 removes them.
+ * <p>Every session is a Keycloak session (A26): {@link #callback}, {@link #reactivate}, {@link #refreshToken} and
+ * {@link #endSession} proxy the realm. Registration, password login, password reset and email verification are
+ * Keycloak's own pages and messages (A28); this service no longer mints or stores tokens.
  */
 public interface AuthService {
-
-    /**
-     * Register a new user (legacy, retired by A28).
-     */
-    AuthResponse register(RegisterRequest request);
-
-    /**
-     * Authenticate user and generate tokens (legacy, retired by A28).
-     *
-     * @throws com.sportconnect.common.exception.UnauthorizedException {@code INVALID_CREDENTIALS} for an unknown
-     *         email or wrong password; {@code ACCOUNT_DEACTIVATED} when the credentials are correct but the account
-     *         is deactivated (A9) -- no tokens are issued
-     */
-    AuthResponse login(LoginRequest request);
 
     /**
      * A26: completes the Authorization Code + PKCE sign-in the client started at Keycloak. Exchanges the code, provisions
@@ -79,10 +61,4 @@ public interface AuthService {
      *         still be alive and the caller must not say it is over
      */
     void endSession(String refreshToken);
-
-    /**
-     * Revokes every legacy refresh-token row of the user (the pre-Keycloak store; harmless and kept until A28). Called on
-     * deactivation ({@code UserService}); access is cut off by the per-request gate (A25), not by this.
-     */
-    void logout(UUID userId);
 }

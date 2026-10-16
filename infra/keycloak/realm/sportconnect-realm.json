@@ -171,6 +171,43 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "sportconnect-swagger",
+      "name": "SportConnect Swagger UI (dev)",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "rootUrl": "http://localhost:8080",
+      "baseUrl": "/swagger-ui.html",
+      "redirectUris": [
+        "http://localhost:8080/swagger-ui/oauth2-redirect.html"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "sportconnect-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "sportconnect-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true",
+            "lightweight.claim": "false"
+          }
+        }
+      ]
     }
   ],
   "components": {
@@ -187,5 +224,9 @@
       }
     ]
   },
-  "passwordPolicy": "length(8)"
+  "passwordPolicy": "length(8)",
+  "emailTheme": "sportconnect",
+  "attributes": {
+    "actionTokenGeneratedByUserLifespan.reset-credentials": "3600"
+  }
 }

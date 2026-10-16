@@ -88,12 +88,9 @@ public class SecurityConfig {
                         // A7: the public auth surface is an explicit list, not "/api/auth/**" — a new
                         // endpoint added under /api/auth must be a conscious permitAll here, otherwise it
                         // defaults to authenticated. Everything below is reachable without a token because
-                        // the caller has none yet (or, for oauth-token, is Swagger UI's Authorize button
-                        // logging in — same exposure as /login; its deployed-environment question is
-                        // INFRA-10).
+                        // the caller has none yet. A28 removed register, login, the password-reset and
+                        // verify-email endpoints and Swagger's oauth-token bridge: Keycloak owns them now.
                         .requestMatchers(HttpMethod.POST,
-                                "/api/auth/register",
-                                "/api/auth/login",
                                 // A26: completes the Keycloak sign-in; the caller has no token yet, the code and PKCE
                                 // verifier are the proof and Keycloak checks them.
                                 "/api/auth/callback",
@@ -104,12 +101,7 @@ public class SecurityConfig {
                                 "/api/auth/refresh",
                                 // A26: driven by the refresh-token cookie (SameSite=Strict, Path=/api/auth), not a Bearer
                                 // token, which is often expired by the time someone logs out. No cookie is a no-op 200.
-                                "/api/auth/logout",
-                                "/api/auth/verify-email",
-                                "/api/auth/forgot-password",
-                                "/api/auth/reset-password",
-                                "/api/auth/reset-password/validate",
-                                "/api/auth/oauth-token").permitAll()
+                                "/api/auth/logout").permitAll()
                         // A7: nothing under /api/sports is public any more (it was a blanket permitAll
                         // since the initial commit, with the real gating left to @PreAuthorize — which
                         // answered an anonymous caller 403 instead of 401). The catalogue reads

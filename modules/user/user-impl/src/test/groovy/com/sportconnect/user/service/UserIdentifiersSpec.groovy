@@ -1,13 +1,11 @@
 package com.sportconnect.user.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.service.UserSportProfileService
-import com.sportconnect.user.api.dto.CredentialCheck
 import com.sportconnect.user.api.dto.PhoneStatus
 import com.sportconnect.user.api.dto.UpdateProfileRequest
 import com.sportconnect.user.api.dto.UserResponse
@@ -30,7 +28,6 @@ class UserIdentifiersSpec extends Specification {
     RoleRepository roleRepository = Mock()
     PasswordEncoder passwordEncoder = Mock()
     UserFriendService userFriendService = Mock()
-    AuthService authService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
     ReferenceService referenceService = Mock()
@@ -38,104 +35,12 @@ class UserIdentifiersSpec extends Specification {
 
     @Subject
     UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService,
-            authService, userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
+            userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
 
     private static final Role USER_ROLE = new Role(id: 1, name: "USER")
 
     private User existing(UUID id, String email, String phone) {
         User.builder().id(id).email(email).phoneNumber(phone).isActive(true).roles([USER_ROLE] as Set).build()
-    }
-
-    // ---- createUser ----
-
-    def "createUser stores a national-format phone as E.164 after checking it is free"() {
-        when:
-        def result = userService.createUser("a@example.com", "hash", "A", "B", "0901234567")
-
-        then:
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        1 * userRepository.existsByPhoneNumber("+84901234567") >> false
-        1 * userRepository.save({ User u -> u.phoneNumber == "+84901234567" && u.email == "a@example.com" }) >> { User u -> u }
-        1 * userRepository.flush()
-        result.phoneNumber == "+84901234567"
-    }
-
-    def "createUser rejects a phone another account already holds, whichever format it is typed in"() {
-        when:
-        userService.createUser("a@example.com", "hash", "A", "B", "0901234567")
-
-        then:
-        1 * userRepository.existsByPhoneNumber("+84901234567") >> true
-        0 * userRepository.save(_)
-        def e = thrown(ConflictException)
-        e.errorCode == "PHONE_ALREADY_USED"
-    }
-
-    def "createUser rejects an unparseable phone with INVALID_PHONE_NUMBER and saves nothing"() {
-        when:
-        userService.createUser("a@example.com", "hash", "A", "B", "555-0100")
-
-        then:
-        0 * userRepository.save(_)
-        def e = thrown(BadRequestException)
-        e.errorCode == "INVALID_PHONE_NUMBER"
-    }
-
-    def "createUser creates a phone-only account (no email) and stores a null email, not an empty string"() {
-        when:
-        def result = userService.createUser(email, null, "Z", "Alo", "+84901234567")
-
-        then:
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        1 * userRepository.existsByPhoneNumber("+84901234567") >> false
-        1 * userRepository.save({ User u -> u.email == null && u.phoneNumber == "+84901234567" }) >> { User u -> u }
-        result.email == null
-
-        where:
-        email << [null, "", "  "]
-    }
-
-    def "createUser requires an email or a phone"() {
-        when:
-        userService.createUser(null, "hash", "A", "B", null)
-
-        then:
-        0 * userRepository.save(_)
-        def e = thrown(BadRequestException)
-        e.errorCode == "IDENTIFIER_REQUIRED"
-    }
-
-    def "createUser turns a unique-constraint race on phone_number into PHONE_ALREADY_USED"() {
-        when:
-        userService.createUser("a@example.com", "hash", "A", "B", "+84901234567")
-
-        then:
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        1 * userRepository.existsByPhoneNumber("+84901234567") >> false
-        1 * userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException('duplicate key value violates unique constraint "uq_users_phone_number"')) }
-        def e = thrown(ConflictException)
-        e.errorCode == "PHONE_ALREADY_USED"
-    }
-
-    def "createUser rethrows any other integrity violation unchanged"() {
-        when:
-        userService.createUser("a@example.com", "hash", "A", "B", null)
-
-        then:
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        1 * userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException('duplicate key value violates unique constraint "users_username_key"')) }
-        thrown(DataIntegrityViolationException)
-    }
-
-    def "createUser turns a unique-constraint race on email into EMAIL_ALREADY_REGISTERED (A26)"() {
-        when:
-        userService.createUser("a@example.com", "hash", "A", "B", null)
-
-        then:
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
-        1 * userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException('duplicate key value violates unique constraint "users_email_key"')) }
-        def e = thrown(ConflictException)
-        e.errorCode == "EMAIL_ALREADY_REGISTERED"
     }
 
     // ---- updateProfile ----
@@ -320,21 +225,17 @@ class UserIdentifiersSpec extends Specification {
 
     def "a null or blank email never reaches the repository (a derived findByEmail(null) would match email IS NULL)"() {
         when:
-        def check = userService.verifyCredentials(email, "pw")
         def exists = userService.existsByEmail(email)
-        def id = userService.findUserIdByEmail(email)
 
         then:
         0 * userRepository._
-        check == CredentialCheck.NO_MATCH
         !exists
-        id.isEmpty()
 
         where:
         email << [null, "", "  "]
     }
 
-    def "getUserByEmail and reactivateUserByEmail throw not-found for a null or blank email without a lookup"() {
+    def "getUserByEmail throws not-found for a null or blank email without a lookup"() {
         when:
         userService."$method"(email)
 
@@ -343,7 +244,7 @@ class UserIdentifiersSpec extends Specification {
         thrown(ResourceNotFoundException)
 
         where:
-        [method, email] << [["getUserByEmail", "reactivateUserByEmail"], [null, ""]].combinations()
+        [method, email] << [["getUserByEmail"], [null, ""]].combinations()
     }
 
     // ---- display name ----

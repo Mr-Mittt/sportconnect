@@ -24,7 +24,7 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| — | _none open_ | | |
+| 1 | [NTF-6](MVP/NTF-6_DISCONNECT_OPEN_SOCKETS_ON_DEACTIVATION.md) | Low priority: close a user's already-open STOMP sockets when their account is deactivated (A28 added the CONNECT-time active check; an open socket stays until the client reconnects) | `TODO` |
 
 ---
 

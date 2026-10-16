@@ -1,6 +1,6 @@
 # AUTH-11 · "Log out" signs out this device only; "Log out everywhere" for the rest
 
-**Status:** `TODO` · **Type:** Feature · **Depends on:** backend **A15** (auth backlog) — per-session logout. Do not start before A15 ships.
+**Status:** `SUPERSEDED` (2026-10-16, backend A15 closed by A28: sessions are Keycloak sessions, so plain logout already ends only this device; see the client backlog) · **Type:** Feature · **Depends on:** backend **A15** (auth backlog) — per-session logout. Do not start before A15 ships.
 **Filed:** 2026-10-10, client half of A15.
 
 ## What

@@ -6,10 +6,6 @@ dependencies {
     // Module dependencies
     implementation project(':modules:user:user-api')
     implementation project(':modules:common')
-    // U12: deleteUser() revokes the user's sessions via AuthService.logout() — auth-api only
-    // (interface + DTOs), no dependency the other way (auth-api depends on neither user-api nor
-    // user-impl), so no cycle.
-    implementation project(':modules:auth:auth-api')
     // U15: toPublicUserInfo() reads the target user's active sport ids via UserSportProfileService
     // — sport-api only (interface + DTOs); sport-api depends solely on :modules:common, so no cycle.
     implementation project(':modules:sport:sport-api')
