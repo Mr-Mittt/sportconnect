@@ -4,6 +4,7 @@ import { classes } from './classes';
 import { useI18n } from './i18n';
 import type { KcContext } from './KcContext';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Template from './Template';
 import '../theme.css';
 
@@ -26,6 +27,14 @@ export default function KcPage(props: { kcContext: KcContext }) {
         switch (kcContext.pageId) {
           case 'login.ftl':
             return <Login {...{ kcContext, i18n, Template, classes, doUseDefaultCss: false }} />;
+          case 'register.ftl':
+            return (
+              <Register
+                {...{ kcContext, i18n, Template, classes, doUseDefaultCss: false }}
+                UserProfileFormFields={UserProfileFormFields}
+                doMakeUserConfirmPassword={true}
+              />
+            );
           default:
             return (
               <DefaultPage

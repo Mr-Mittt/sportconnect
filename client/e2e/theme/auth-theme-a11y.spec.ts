@@ -95,3 +95,30 @@ test('register: every field and the submit button are reachable by Tab', async (
     expect(reached, `Tab should reach #${field}`).toContain(field);
   }
 });
+
+test('register: the show-password buttons draw an eye and reveal the password', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, 'login-pages--register', 'en');
+  const buttons = page.locator('button').filter({ has: page.locator('.kc-eye') });
+  await expect(buttons).toHaveCount(2);
+  // The stock glyph font is not shipped: the icon is a CSS mask, so it needs a size and a mask image.
+  const eye = page.locator('.kc-eye').first();
+  expect((await eye.boundingBox())?.width).toBeGreaterThan(8);
+  expect(await eye.evaluate((el) => getComputedStyle(el).maskImage || getComputedStyle(el).webkitMaskImage)).not.toBe('none');
+  await page.locator('#password').fill('secret-123');
+  await buttons.first().click();
+  await expect(page.locator('#password')).toHaveAttribute('type', 'text');
+  await expect(page.locator('.kc-eye-off')).toHaveCount(1);
+});
+
+test('register: Back to log in sits under the create button on the left, Forgot password on the right', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, 'login-pages--register', 'en');
+  const submit = await page.locator('#kc-form-buttons input[type=submit]').boundingBox();
+  const back = await page.getByRole('link', { name: /Back to log in/ }).boundingBox();
+  const forgot = await page.getByRole('link', { name: 'Forgot password?' }).boundingBox();
+  expect(back!.y).toBeGreaterThan(submit!.y + submit!.height - 1);
+  expect(Math.abs(back!.y - forgot!.y)).toBeLessThan(4);
+  expect(back!.x).toBeLessThan(forgot!.x);
+  expect(Math.abs(back!.x - submit!.x)).toBeLessThan(2);
+});

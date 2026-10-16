@@ -23,7 +23,8 @@ interface RegisterGeoFieldsProps {
   initial: RegisterGeoValues;
 }
 
-type GeoHint = 'denied' | 'unavailable' | 'timeout';
+// 'noMatch': the browser gave a position but it did not resolve to a country we know (or the lookup failed).
+type GeoHint = 'denied' | 'unavailable' | 'timeout' | 'noMatch';
 
 /**
  * AUTH-16: the register page's optional "zone" block — country, region, and the "use my current
@@ -120,9 +121,12 @@ export function RegisterGeoFields({ i18n, apiBaseUrl, initial }: RegisterGeoFiel
       if (resolved.country !== null) {
         setCountryId(resolved.country.id);
         setRegionId(resolved.region?.id ?? null);
+      } else {
+        setHint('noMatch');
       }
     } catch {
       // The coordinates are kept; the user can still pick the zone by hand.
+      setHint('noMatch');
     }
     setIsLocating(false);
   }
@@ -190,8 +194,16 @@ export function RegisterGeoFields({ i18n, apiBaseUrl, initial }: RegisterGeoFiel
         </div>
       </div>
       {hint !== null && (
-        <p className="mt-2 text-2xs text-text-muted" aria-live="polite">
-          {msgStr(hint === 'denied' ? 'geoHintDenied' : hint === 'unavailable' ? 'geoHintUnavailable' : 'geoHintTimeout')}
+        <p role="alert" className="mt-2 text-2xs text-text-danger">
+          {msgStr(
+            hint === 'denied'
+              ? 'geoHintDenied'
+              : hint === 'unavailable'
+                ? 'geoHintUnavailable'
+                : hint === 'timeout'
+                  ? 'geoHintTimeout'
+                  : 'geoHintNoMatch',
+          )}
         </p>
       )}
       {isReferenceError && (

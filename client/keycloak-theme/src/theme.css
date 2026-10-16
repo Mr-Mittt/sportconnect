@@ -19,6 +19,24 @@
   color: var(--color-text-danger);
 }
 
+/* The stock password-visibility button draws its eye with a glyph font the theme does not ship, so the button
+   was an empty (but clickable) box. Tabler's eye / eye-off as a mask in the current text colour instead. */
+.kc-eye,
+.kc-eye-off {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  background-color: currentColor;
+  -webkit-mask: var(--kc-eye-image) center / contain no-repeat;
+  mask: var(--kc-eye-image) center / contain no-repeat;
+}
+.kc-eye {
+  --kc-eye-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0'/%3E%3Cpath d='M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6'/%3E%3C/svg%3E");
+}
+.kc-eye-off {
+  --kc-eye-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.585 10.587a2 2 0 0 0 2.829 2.828'/%3E%3Cpath d='M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87'/%3E%3Cpath d='M3 3l18 18'/%3E%3C/svg%3E");
+}
+
 /* Radios and checkboxes: the control and its label on one row, label never wrapping under the circle. */
 .kc-choice {
   display: flex;

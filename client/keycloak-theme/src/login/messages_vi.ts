@@ -196,6 +196,7 @@ const themeKeys: Record<ThemeMessageKey, string> = {
   geoLocating: 'Đang định vị…',
   geoHintDenied: 'Quyền truy cập vị trí đã bị từ chối. Bạn vẫn có thể chọn thủ công.',
   geoHintUnavailable: 'Vị trí hiện không khả dụng. Bạn vẫn có thể chọn thủ công.',
+  geoHintNoMatch: 'Chúng tôi chưa xác định được bạn ở đâu từ vị trí này. Vui lòng chọn quốc gia và khu vực bên dưới.',
   geoHintTimeout: 'Việc định vị mất quá nhiều thời gian. Bạn vẫn có thể chọn thủ công.',
   geoOptionalNote:
     'Khu vực của bạn là tùy chọn. Hãy chọn để khám phá cộng đồng thể thao trong khu vực; bạn có thể thay đổi bất cứ lúc nào trong Cài đặt tài khoản.',

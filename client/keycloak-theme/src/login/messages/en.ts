@@ -43,6 +43,7 @@ const en = {
   geoLocating: 'Locating…',
   geoHintDenied: 'Location access was denied. You can still pick these manually.',
   geoHintUnavailable: 'Location is not available right now. You can still pick these manually.',
+  geoHintNoMatch: 'We could not tell where you are from that location. Please pick your country and region below.',
   geoHintTimeout: 'Location took too long to respond. You can still pick these manually.',
   geoOptionalNote:
     'Your zone is optional. Set it to discover the sport community in your area; you can change it any time in Account Settings.',
