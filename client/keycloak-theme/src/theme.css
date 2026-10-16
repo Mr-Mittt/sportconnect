@@ -4,7 +4,7 @@
  * directory, would pull in classes from the whole client and double the CSS (A24).
  */
 @import '../../src/index.css';
-@source '../../src/shared/ui/{button,input,label}.tsx';
+@source '../../src/shared/ui/{button,input,label,select}.tsx';
 @source '../../src/features/auth/components/{AuthShell,CommunityIllustration}.tsx';
 @source './login';
 
@@ -125,4 +125,23 @@ label:has(> input[type='radio']) {
 }
 .pf-c-button.pf-m-link:hover {
   text-decoration: underline;
+}
+
+/*
+ * AUTH-16: the register page, like the old register form: first and last name side by side from the
+ * small breakpoint up (below it everything stays one column). Every other direct child spans the row.
+ */
+@media (min-width: 40rem) {
+  #kc-register-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 0.75rem;
+  }
+  #kc-register-form > * {
+    grid-column: 1 / -1;
+  }
+  #kc-register-form > div:has(#firstName),
+  #kc-register-form > div:has(#lastName) {
+    grid-column: auto;
+  }
 }

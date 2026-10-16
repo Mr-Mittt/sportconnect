@@ -58,5 +58,13 @@
       "title": "Buổi chơi không khả dụng",
       "gotIt": "Đã hiểu"
     }
+  },
+  "completeProfile": {
+    "title": "Hoàn tất hồ sơ của bạn",
+    "intro": "Cho chúng tôi biết nơi bạn chơi thể thao để gợi ý những gì xung quanh bạn.",
+    "notice": "Chọn khu vực của bạn (quốc gia và tỉnh/thành) để khám phá cộng đồng thể thao trong khu vực. Bạn có thể thay đổi bất cứ lúc nào trong Cài đặt tài khoản.",
+    "save": "Lưu",
+    "saving": "Đang lưu…",
+    "skip": "Để sau"
   }
 }

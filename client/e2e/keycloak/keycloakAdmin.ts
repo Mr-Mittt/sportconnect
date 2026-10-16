@@ -64,6 +64,13 @@ export async function createTestUser(label: string): Promise<TestUser & { id: st
   return { ...user, id };
 }
 
+/** A user's profile attributes as Keycloak stores them (each value is a list), looked up by username. */
+export async function getUserAttributes(username: string): Promise<Record<string, string[]>> {
+  const found = await admin(`/users?username=${encodeURIComponent(username)}&exact=true`);
+  const users = (await found.json()) as Array<{ attributes?: Record<string, string[]> }>;
+  return users[0]?.attributes ?? {};
+}
+
 export async function deleteUserByUsername(username: string): Promise<void> {
   const found = await admin(`/users?username=${encodeURIComponent(username)}&exact=true`);
   const users = (await found.json()) as Array<{ id: string }>;

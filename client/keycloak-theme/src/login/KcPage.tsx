@@ -7,7 +7,8 @@ import Login from './pages/Login';
 import Template from './Template';
 import '../theme.css';
 
-const UserProfileFormFields = lazy(() => import('keycloakify/login/UserProfileFormFields'));
+// AUTH-16: the stock profile-field renderer, plus the register page's country / region block.
+const UserProfileFormFields = lazy(() => import('./components/UserProfileFormFieldsWithGeo'));
 
 /**
  * Page switch. `login.ftl` is our own page; every other page (register, reset, update-password,

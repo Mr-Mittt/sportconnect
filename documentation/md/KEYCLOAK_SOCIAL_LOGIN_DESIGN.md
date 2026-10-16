@@ -13,6 +13,7 @@
 | Providers | Google and Facebook (built-in), Zalo (generic OIDC/OAuth). **Apple and GitHub are out of scope**; the disabled Apple buttons are deleted. |
 | Linking | Auto-link on a provider-verified email. **Never by phone** (carriers recycle numbers, a takeover risk). |
 | Identifiers | `users.email` nullable, `users.phone_number` unique and nullable (E.164), at least one required. Login by email or phone plus password. |
+| Phone status | `users.phone_status` (U25): a phone that does not parse is saved as typed with `INVALID` (first sign-in and Account Settings; hint in the client), not an identifier, not unique; `VERIFIED` is reserved for Zalo or a code check. |
 | Phone-only accounts | Recovery and notification path is **A22**, out of this feature. |
 | Deactivation | Stays in `users.is_active` (not Keycloak's `enabled`, which would block a social login before our callback and kill auto-reactivate). Gate: a cached per-request `is_active` check by `sub`. |
 | Deactivated login | Social: reactivate automatically. Password: `ACCOUNT_DEACTIVATED` plus a server-held `reactivationTicket`, an explicit confirm, no password re-entry. An admin-deactivated account can self-reactivate the same way (today's behaviour). |
@@ -81,6 +82,10 @@ The realm uses Keycloak's "Email as username": no username field on register or 
 ## 5c. Update 2026-10-15: register-page geo claims (A32)
 
 The Keycloak register page carries optional `countryId`, `regionId`, `latitude`, `longitude` user-profile attributes (language rides on `locale`), mapped to the token claims `country_id`, `region_id`, `latitude`, `longitude` (strings). The first sign-in stores them on the new `users` row; every value is untrusted and a bad one is dropped, never a failure, because the Keycloak account already exists when the claims arrive (the legacy `createUser` rejected the whole registration instead). The client learns of a drop from an empty country (or a country with regions but no region) and opens its profile-completion dialog (AUTH-16). `ReferenceService.isValidSelection` is the non-throwing check the provisioning uses, since the throwing form would mark the transaction rollback-only through the reference service's proxy.
+
+## 5d. Update 2026-10-16: register-page zone and the profile dialog (AUTH-16)
+
+The Keycloak register page renders the zone itself (country, region, "use my current location", language through the page's language links) instead of the four A32 attributes as text boxes. Its country and region lists are the app's public `/api/reference` endpoints, fetched cross-origin from the browser (the API base URL is the Keycloak environment variable `SPORTCONNECT_API_BASE_URL`; the API's CORS list allows the Keycloak origin); the values are posted as the user attributes A32 reads. A user who never saw that page (Google, Facebook, Zalo) or whose zone the backend dropped is asked by the app's skippable "complete your profile" dialog, which opens while the profile has no country, or a country that has regions but no region, and stays away for the rest of the session once skipped or saved.
 
 ## 6. Not changing
 

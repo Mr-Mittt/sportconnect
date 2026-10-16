@@ -31,6 +31,21 @@ const en = {
   registerSubmit: 'Create account',
   haveAccount: 'Already have an account?',
   requiredMark: 'required',
+  // AUTH-16: the register page's optional zone block (country, region, detected location).
+  geoCountry: 'Country',
+  geoRegion: 'Region',
+  geoSelectCountry: 'Select a country',
+  geoSelectRegion: 'Select a region',
+  geoNoRegions: 'No regions available for this country',
+  geoRegionsLoadError: 'Regions could not be loaded right now',
+  geoReferenceLoadError: 'Countries could not be loaded right now',
+  geoUseMyLocation: 'Use my current location',
+  geoLocating: 'Locating…',
+  geoHintDenied: 'Location access was denied. You can still pick these manually.',
+  geoHintUnavailable: 'Location is not available right now. You can still pick these manually.',
+  geoHintTimeout: 'Location took too long to respond. You can still pick these manually.',
+  geoOptionalNote:
+    'Your zone is optional. Set it to discover the sport community in your area; you can change it any time in Account Settings.',
 } as const;
 
 export type ThemeMessageKey = keyof typeof en;

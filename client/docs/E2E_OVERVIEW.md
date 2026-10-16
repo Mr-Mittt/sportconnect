@@ -240,6 +240,7 @@ e2e/
     account-change-password.spec.ts # ACCOUNT-3
     account-deactivate.spec.ts # ACCOUNT-4
     account-settings-unsaved.spec.ts # ACCOUNT-5
+    complete-profile.spec.ts  # AUTH-16
     user-errors.spec.ts       # CLIENT-ERR-3
     sport-errors.spec.ts      # CLIENT-ERR-4
     group-errors.spec.ts      # CLIENT-ERR-5
@@ -1437,7 +1438,19 @@ byte-identical.
 
 ---
 
-### `e2e/keycloak/redirect.spec.ts` (AUTH-15, 9 `test()`s, own config `playwright.keycloak.config.ts`)
+### `e2e/flows/complete-profile.spec.ts` (AUTH-16, 5 `test()`s)
+
+The "complete your profile" dialog. The mock profile (`mockMyProfile`) has no country, like a first-time social user, so these specs sign in with `signIn(page, 'user', { completeProfileDialog: 'show' })`; every other spec gets the dialog skipped for the session by `signIn` itself (it seeds `complete-profile-storage` for the mock user), otherwise it would cover every page. Reference data (Vietnam with two regions, Singapore with none) and the profile save are the stateful MSW handlers. After a save the app may switch to the saved language (Vietnam pre-fills Vietnamese), so the checks that follow use the nameless `dialog` role.
+
+| Test | What it checks |
+|---|---|
+| asked, with the notice | A user with no country sees the dialog, the zone notice ("discover the sport community in your area", "change it any time in Account Settings") and Skip for now |
+| save | Save is disabled until a country is chosen; Vietnam + Ho Chi Minh City post `countryId` 1 and `regionId` 102, the dialog closes, and with the skip flag cleared (a new session) a reload does not ask again |
+| skip | Skip for now hides it across a page change and a reload in the same session |
+| country only | A country saved without a region (Vietnam has regions) is posted without `regionId` and not asked about again in the same session |
+| country without regions | Singapore leaves Region disabled and completes the profile |
+
+### `e2e/keycloak/redirect.spec.ts` (AUTH-15, AUTH-16: 10 `test()`s, own config `playwright.keycloak.config.ts`)
 
 Real Keycloak 26.4 with the committed realm and the SportConnect theme JAR; the client is the real one on :5175, `/api/*` is the mock server. `beforeAll` allows the :5175 origin on the e2e Keycloak's `sportconnect-web` client, creates a user, and adds placeholder Google / Facebook / Zalo providers (all through the admin API, in the throwaway container only).
 
@@ -1447,11 +1460,12 @@ Real Keycloak 26.4 with the committed realm and the SportConnect theme JAR; the 
 | no asset 404 | the illustration, CSS and JS are served from the theme resources (the `earthSrc` fix) |
 | sign in | a real sign-in returns through `/auth/callback` to the deep link `/groups` |
 | wrong password | the themed alert "Invalid username or password" in the card |
-| register | `/register` sends `prompt=create`, shows the themed form; registering a new user returns to the app |
+| register | `/register` sends `prompt=create`, shows the themed form with **no username field** (email as username); AUTH-16: the zone block replaces the plain Latitude / Longitude boxes, its country and region lists come from the mock reference API across origins (CORS), the chosen Vietnam / Ho Chi Minh City are read back through the admin API as the user attributes `countryId` = 1 and `regionId` = 102, and registering returns to the app |
+| register without a zone | AUTH-16: clearing the pre-filled country and registering still works; the user has no `countryId` / `regionId` attributes |
 | forgot password | the themed reset page, with the back link |
 | vi: sign-in page | `ui_locales=vi` opens the page in Vietnamese (A24 finding 3, verified) |
 | vi: server message | a wrong password is answered in Vietnamese by Keycloak itself (`messages_vi.properties`) |
-| vi: register | Vietnamese heading and profile-attribute labels |
+| vi: register | Vietnamese heading and profile-attribute labels, and the zone block ("Quốc gia", "Khu vực") |
 
 ### `e2e/theme/auth-theme-a11y.spec.ts` (AUTH-15, `theme` project, 70 `test()`s)
 

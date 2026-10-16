@@ -4,6 +4,7 @@ import {
   createTestUser,
   deleteUserByUsername,
   ensureIdentityProvider,
+  getUserAttributes,
   type TestUser,
 } from './keycloakAdmin.ts';
 
@@ -27,6 +28,22 @@ test.beforeAll(async () => {
   await ensureIdentityProvider('google', 'Google');
   await ensureIdentityProvider('facebook', 'Facebook');
   await ensureIdentityProvider('zalo', 'Zalo');
+});
+
+// AUTH-16: the mock backend's profile has no country, so the app would open its "complete your profile"
+// dialog right after every sign-in and cover the page these specs look at (it has its own flow spec in
+// e2e/flows/complete-profile.spec.ts). Skip it for the session, as signIn() does for the other specs.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem(
+        'complete-profile-storage',
+        JSON.stringify({ state: { skippedFor: '11111111-1111-4111-8111-111111111111' }, version: 0 }),
+      );
+    } catch {
+      // sessionStorage unavailable on this origin: nothing to skip with
+    }
+  });
 });
 
 test.afterAll(async () => {
@@ -112,10 +129,49 @@ test('/register opens the themed create-account form and registering returns to 
   await page.locator('#lastName').fill('Registered');
   await page.locator('#password').fill(registered.password);
   await page.locator('#password-confirm').fill(registered.password);
+
+  // AUTH-16: the zone block replaces the four plain text boxes of the A32 attributes. Its lists come
+  // from the (mock) reference API across origins, and the choice is posted as the user attributes.
+  await expect(page.getByLabel('Latitude')).toHaveCount(0);
+  await expect(page.getByLabel('Longitude')).toHaveCount(0);
+  await page.locator('#kc-geo-country').selectOption({ label: 'Vietnam' });
+  await page.locator('#kc-geo-region').selectOption({ label: 'Hồ Chí Minh' });
+
   await page.getByRole('button', { name: 'Create an account' }).click();
 
   await page.waitForURL('**/');
   await expect(page.getByRole('button', { name: 'Your account' })).toBeVisible();
+
+  // The country and region ids Keycloak now holds for the new user are the mock reference rows (VN = 1,
+  // Ho Chi Minh City = 102); A32 turns them into token claims.
+  const attributes = await getUserAttributes(registered.username);
+  expect(attributes.countryId).toEqual(['1']);
+  expect(attributes.regionId).toEqual(['102']);
+  expect(attributes.latitude).toBeUndefined();
+});
+
+test('the zone block is optional: registering without choosing one still works', async ({ page }) => {
+  await page.goto('/register');
+  await page.waitForURL(KEYCLOAK_PAGE);
+
+  const stamp = `${Date.now()}`;
+  const email = `e2e-nozone-${stamp}@example.test`;
+  const registered: TestUser = { username: email, email, password: `Pw-${stamp}-aA1!` };
+  created.push(registered);
+  await page.locator('#email').fill(registered.email);
+  await page.locator('#firstName').fill('E2E');
+  await page.locator('#lastName').fill('NoZone');
+  await page.locator('#password').fill(registered.password);
+  await page.locator('#password-confirm').fill(registered.password);
+  // The silent pre-fill may have chosen a country from the browser's language and time zone; clear it.
+  await page.locator('#kc-geo-country').selectOption('');
+  await page.getByRole('button', { name: 'Create an account' }).click();
+
+  await page.waitForURL('**/');
+  await expect(page.getByRole('button', { name: 'Your account' })).toBeVisible();
+  const attributes = await getUserAttributes(registered.username);
+  expect(attributes.countryId).toBeUndefined();
+  expect(attributes.regionId).toBeUndefined();
 });
 
 test('"Forgot password?" opens the themed reset page', async ({ page }) => {
@@ -164,5 +220,8 @@ test.describe('Vietnamese', () => {
     await expect(page.getByLabel('Email')).toBeVisible();
     await expect(page.getByLabel('Tên đăng nhập')).toHaveCount(0);
     await expect(page.getByLabel('Họ', { exact: false }).first()).toBeVisible();
+    // AUTH-16: the zone block, in Vietnamese.
+    await expect(page.getByLabel('Quốc gia')).toBeVisible();
+    await expect(page.getByLabel('Khu vực')).toBeVisible();
   });
 });

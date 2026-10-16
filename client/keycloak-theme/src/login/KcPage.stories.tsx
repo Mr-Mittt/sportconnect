@@ -21,6 +21,46 @@ const providers = [
   { loginUrl: '#', alias: 'zalo', providerId: 'oidc', displayName: 'Zalo', iconClasses: '' },
 ];
 
+/*
+ * AUTH-16: the register page's zone block reads the app's public reference API. Storybook has none,
+ * so `fetch` answers those calls here (same idea as the client stories mocking `apiClient`); the
+ * broken host below stands for an API that cannot be reached.
+ */
+const BROKEN_API = 'http://broken.invalid/api';
+const referenceJson = (data: unknown, status = 200) =>
+  new Response(JSON.stringify({ success: true, message: '', data }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+const realFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const url = String(input);
+  if (!url.includes('/reference/')) return realFetch(input, init);
+  if (url.startsWith(BROKEN_API)) return Promise.resolve(referenceJson(null, 503));
+  if (url.endsWith('/reference/resolve')) {
+    return Promise.resolve(referenceJson({ language: null, country: null, region: null, source: null }));
+  }
+  if (/\/reference\/countries\/\d+\/regions$/.test(url)) {
+    return Promise.resolve(
+      referenceJson([
+        { id: 101, countryId: 1, isoCode: 'VN-HN', name: 'Hanoi', nativeName: 'Hà Nội' },
+        { id: 102, countryId: 1, isoCode: 'VN-SG', name: 'Ho Chi Minh City', nativeName: 'Hồ Chí Minh' },
+      ]),
+    );
+  }
+  return Promise.resolve(
+    referenceJson([{ id: 1, iso2: 'VN', iso3: 'VNM', name: 'Vietnam', defaultLanguageCode: 'vi' }]),
+  );
+}) as typeof fetch;
+
+/** The realm's zone attributes (A32); the register page renders them through its own block. */
+const zoneAttributes = {
+  countryId: { name: 'countryId', value: '' },
+  regionId: { name: 'regionId', value: '' },
+  latitude: { name: 'latitude', value: '' },
+  longitude: { name: 'longitude', value: '' },
+};
+
 function story(pageId: KcContext['pageId'], kcContext?: object): Story {
   return {
     render: (_args, context) => (
@@ -49,10 +89,16 @@ export const LoginWrongPassword = story('login.ftl', {
   social: { providers },
   ...fieldErrors({ username: 'Invalid username or password.', password: 'Invalid username or password.' }),
 });
-export const Register = story('register.ftl');
+export const Register = story('register.ftl', { profile: { attributesByName: zoneAttributes } });
+/** The reference API cannot be reached: the zone block says so and the form stays usable. */
+export const RegisterZoneUnavailable = story('register.ftl', {
+  profile: { attributesByName: zoneAttributes },
+  properties: { SPORTCONNECT_API_BASE_URL: BROKEN_API },
+});
 export const RegisterWithErrors = story('register.ftl', {
   profile: {
     attributesByName: {
+      ...zoneAttributes,
       email: { value: 'not-an-email', validationErrors: [{ message: 'Invalid email address.' }] },
     },
   },

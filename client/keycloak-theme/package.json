@@ -10,7 +10,7 @@
     "build": "tsc && vite build",
     "build-keycloak-theme": "pnpm run build && keycloakify build",
     "storybook": "storybook dev -p 6007 --disable-telemetry",
-    "build-storybook": "node -e \"require('node:fs').rmSync('storybook-static',{recursive:true,force:true})\" && storybook build --disable-telemetry",
+    "build-storybook": "node scripts/build-storybook.mjs",
     "lint": "eslint .",
     "test": "vitest run"
   },

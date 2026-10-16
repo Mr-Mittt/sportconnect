@@ -15,6 +15,9 @@ export const KEYCLOAK_AUTH_URL = /\/realms\/sportconnect\/protocol\/openid-conne
 
 export type SignInAs = 'user' | 'admin' | 'deactivated';
 
+/** The mock profile every signed-in test user gets (fixtures.ts `mockMyProfile.id`). */
+const MOCK_PROFILE_ID = '11111111-1111-4111-8111-111111111111';
+
 /** The one-time codes `POST /api/auth/callback` (the MSW auth handler) understands. */
 export const keycloakCode: Record<SignInAs, string> = {
   user: 'user-code',
@@ -56,7 +59,7 @@ export function keycloakRedirectBack(code: string) {
 export async function signIn(
   page: Page,
   as: SignInAs | { code: string } = 'user',
-  options: { path?: string; stayOnCallback?: boolean } = {},
+  options: { path?: string; stayOnCallback?: boolean; completeProfileDialog?: 'show' } = {},
 ): Promise<void> {
   const code = typeof as === 'string' ? keycloakCode[as] : as.code;
   const redirectBack = keycloakRedirectBack(code);
@@ -68,6 +71,17 @@ export async function signIn(
     sentToKeycloak();
     return redirectBack(route);
   };
+  // AUTH-16: the mock profile has no country, so the "complete your profile" dialog would open over every
+  // page of every spec. It is skipped for the session unless a spec asks to see it.
+  if (options.completeProfileDialog !== 'show') {
+    await page.addInitScript((id) => {
+      try {
+        sessionStorage.setItem('complete-profile-storage', JSON.stringify({ state: { skippedFor: id }, version: 0 }));
+      } catch {
+        // sessionStorage unavailable: the spec will see the dialog, which is the safe failure
+      }
+    }, MOCK_PROFILE_ID);
+  }
   await page.route(KEYCLOAK_AUTH_URL, handler);
   try {
     await page.goto(options.path ?? '/login');
