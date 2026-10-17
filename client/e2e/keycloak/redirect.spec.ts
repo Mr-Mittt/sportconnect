@@ -116,7 +116,7 @@ test('/register opens the themed create-account form and registering returns to 
 
   const stamp = `${Date.now()}`;
   const email = `e2e-register-${stamp}@example.test`;
-  // The realm uses email as username: the register page has no username field and Keycloak stores the email.
+  // The register page has no username field; the A27 registration step sets the username to the email.
   const registered: TestUser = {
     username: email,
     email,

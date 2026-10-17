@@ -86,3 +86,7 @@ Keycloak imports with strategy IGNORE_EXISTING: editing the JSON does nothing to
 ## Delta (A28, 2026-10-16)
 
 The Compose Keycloak also mounts `infra/keycloak/themes` read-only at `/opt/keycloak/themes` (the email theme `sportconnect`, en and vi; a plain theme directory, no build step). After changing a template or message there, recreate the container (`docker compose -f infra/docker-compose.dev.yml up -d keycloak`); the realm picks the theme through `emailTheme` (`infra/scripts/apply-realm-email-theme.sh` on a running realm). A second script adds the Swagger UI client (`apply-realm-swagger-client.sh`). Mailpit now also receives the backend's welcome email (dev profile).
+
+## Delta 2026-10-16 (A27)
+
+The committed realm now carries the phone rules: the flows `sportconnect browser` and `sportconnect registration`, three user-profile validators, the `sc-phone-normalizer` event listener and `registrationEmailAsUsername: false`. They name providers from the extension JAR, so a Keycloak that imports the realm (a fresh dev volume, a realm reset, the throwaway e2e Keycloak) needs `infra/keycloak/providers/sportconnect-keycloak-extensions.jar` loaded first: `infra/scripts/build-keycloak-extensions.sh`, then start Keycloak. On an existing dev realm run `infra/scripts/apply-realm-phone-rules.sh` once after the JAR is loaded.

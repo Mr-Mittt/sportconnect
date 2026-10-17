@@ -20,3 +20,7 @@ The social-login feature itself, SMS delivery, and phone verification as a login
 ## Done when
 
 The behaviour for a user with no email is decided in this ticket, built, and covered by an integration test through the real request pipeline; the client follow-up exists as a real entry in `client/docs/BACKLOG_MVP.md`.
+
+## Delta 2026-10-16 (from A27)
+
+A27 made a phone-only account creatable by **self-registration**, not only through Zalo: the realm accepts a registration with a phone and no email (the username is the E.164 number), and the phone can be used to sign in. Such an account has no email, so Keycloak's password reset cannot reach it. Client AUTH-18 (the register page's phone field) is what exposes this to people, so decide A22's minimum path (at least: what a phone-only user sees on "Forgot password?", and a way to add an email later) before AUTH-18 ships, or accept the gap explicitly.

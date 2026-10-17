@@ -5,7 +5,7 @@
 #
 #   infra/scripts/run-keycloak-e2e.sh [--keep]
 #
-# Steps: build the theme JAR (unless THEME_JAR points at one) -> start quay.io/keycloak/keycloak:26.4
+# Steps: build the theme JAR (unless THEME_JAR points at one) and the A27 extension JAR (unless EXTENSION_JAR does) -> start quay.io/keycloak/keycloak:26.4
 # with the committed realm import and the JAR -> wait until the realm answers -> `pnpm e2e:keycloak`
 # (it creates its own user and placeholder Google/Facebook/Zalo providers through the admin API) ->
 # remove the container, also on failure. `--keep` leaves it running for debugging.
@@ -43,6 +43,15 @@ if [ -n "${THEME_JAR:-}" ]; then
   cp "$THEME_JAR" "$work/providers/sportconnect-keycloak-theme.jar"
 else
   bash "$here/build-keycloak-theme.sh" "$work/providers"
+fi
+
+# A27: the committed realm names providers from the phone-rules extension (its browser and registration flows,
+# validators and event listener), so the realm import fails without that JAR. EXTENSION_JAR points at a built one.
+if [ -n "${EXTENSION_JAR:-}" ]; then
+  cp "$EXTENSION_JAR" "$work/providers/sportconnect-keycloak-extensions.jar"
+else
+  (cd "$repo" && ./gradlew --no-daemon -q :infra:keycloak-extensions:jar)
+  cp "$repo/infra/keycloak-extensions/build/libs/sportconnect-keycloak-extensions.jar" "$work/providers/"
 fi
 
 # mktemp -d is mode 700 and Keycloak's container user is not ours: without this a Linux runner

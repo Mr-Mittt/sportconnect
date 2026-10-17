@@ -1,0 +1,36 @@
+// A27: one Keycloak provider JAR with the phone rules for the sportconnect realm.
+// Keycloak's own jars are compileOnly (the server provides them); libphonenumber is bundled into the JAR.
+// The version of the Keycloak jars must match the image in infra/docker-compose.dev.yml (quay.io/keycloak/keycloak:26.4).
+def keycloakVersion = '26.4.7'
+
+dependencies {
+    compileOnly "org.keycloak:keycloak-server-spi:${keycloakVersion}"
+    compileOnly "org.keycloak:keycloak-server-spi-private:${keycloakVersion}"
+    compileOnly "org.keycloak:keycloak-services:${keycloakVersion}"
+    compileOnly "org.keycloak:keycloak-core:${keycloakVersion}"
+    implementation 'com.googlecode.libphonenumber:libphonenumber:8.13.40'
+}
+
+// Specs (Spock, like the rest of the repo). The Keycloak jars are compileOnly above, so the tests need them too.
+apply plugin: 'groovy'
+
+dependencies {
+    testImplementation "org.keycloak:keycloak-server-spi:${keycloakVersion}"
+    testImplementation "org.keycloak:keycloak-server-spi-private:${keycloakVersion}"
+    testImplementation "org.keycloak:keycloak-services:${keycloakVersion}"
+    testImplementation "org.keycloak:keycloak-core:${keycloakVersion}"
+    testImplementation platform('org.spockframework:spock-bom:2.3-groovy-4.0')
+    testImplementation 'org.spockframework:spock-core'
+    testImplementation 'org.apache.groovy:groovy:4.0.15'
+    testImplementation 'org.mockito:mockito-core:5.7.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+jar {
+    archiveFileName = 'sportconnect-keycloak-extensions.jar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+}

@@ -39,7 +39,7 @@ export interface TestUser {
 /** A fresh, enabled user with a password and a verified email. Returns its credentials. */
 export async function createTestUser(label: string): Promise<TestUser & { id: string }> {
   const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-  // The realm uses email as username: Keycloak stores the email as the username whatever is sent.
+  // The username is the email (the realm no longer forces that: A27 sets it to the email when the form sends none).
   const email = `e2e-${label}-${stamp}@example.test`;
   const user = {
     username: email,

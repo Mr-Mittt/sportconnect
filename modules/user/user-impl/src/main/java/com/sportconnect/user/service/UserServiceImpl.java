@@ -644,12 +644,13 @@ public class UserServiceImpl implements UserService {
 
     /**
      * The wanted username cut to the column size, or with the subject's first characters appended when it is taken;
-     * null if none was given. A value containing '@' is treated as none: with the realm's "email as username" the
-     * token's {@code preferred_username} is the email address, and {@code users.username} is shown to other users.
+     * null if none was given. A value containing '@' or that is a phone number is treated as none: the realm's username is the
+     * identifier the user registered with (A27: the email, or the E.164 phone of a phone-only account), so the
+     * token's {@code preferred_username} can be either, and {@code users.username} is shown to other users.
      */
     private String availableUsername(String wanted, UUID id) {
         String base = blankToNull(wanted);
-        if (base == null || base.contains("@")) {
+        if (base == null || base.contains("@") || PhoneNumbers.classify(base).status() == PhoneStatus.VALID) {
             return null;
         }
         if (base.length() > USERNAME_MAX) {

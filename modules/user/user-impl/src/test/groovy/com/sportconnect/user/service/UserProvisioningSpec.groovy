@@ -255,6 +255,21 @@ class UserProvisioningSpec extends Specification {
         0 * userRepository.existsByUsername(_)
     }
 
+    def "a username that is a phone number (A27: the username of a phone-only account) is not copied: it is shown to other users"() {
+        when:
+        userService.provisionExternalUser(identity().username(typed).build()).user()
+
+        then:
+        1 * userRepository.findById(sub) >> Optional.empty()
+        1 * userRepository.existsByEmail(_) >> false
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        1 * userRepository.save({ User u -> u.username == null }) >> { User u -> u }
+        0 * userRepository.existsByUsername(_)
+
+        where:
+        typed << ["+84901234567", "0901234567"]
+    }
+
     // ---- A32: the register page's country / region / location, untrusted ----
 
     private User provisioned

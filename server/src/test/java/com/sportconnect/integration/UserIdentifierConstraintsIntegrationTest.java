@@ -115,6 +115,24 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     // ---------- through the request pipeline ----------
 
+    /** A27: a phone-only Keycloak account has the E.164 number as its username; it must not become the public username. */
+    @Test
+    void firstSignIn_ofAPhoneOnlyAccount_neverCopiesThePhoneUsernameToThePublicUsername() throws Exception {
+        String phone = "+84901234567";
+        UUID sub = UUID.randomUUID();
+        TestKeycloak.Identity identity = TestKeycloak.Identity.of(sub).names("Phone", "Only").phone(phone).username(phone);
+        String code = TestKeycloak.issueCode(identity, VERIFIER);
+
+        mockMvc.perform(post("/api/auth/callback").with(anonymous()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\": \"" + code + "\", \"codeVerifier\": \"" + VERIFIER + "\"}"))
+                .andExpect(status().isOk());
+
+        User saved = userRepository.findById(sub).orElseThrow();
+        assertThat(saved.getEmail()).isNull();
+        assertThat(saved.getPhoneStatus()).isEqualTo(PhoneStatus.VALID);
+        assertThat(saved.getUsername()).isNull();
+    }
+
     @Test
     void firstSignIn_withANationalFormatPhone_storesE164() throws Exception {
         firstSignIn("u23-national@example.com", "0901234567").andExpect(status().isOk());

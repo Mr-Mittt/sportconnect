@@ -33,3 +33,7 @@ The production realm runs from the committed import, Keycloak survives a restart
 - **`JWT_SECRET` is gone** from the backend (`application-prod.yml` no longer reads it); remove it from any deployment config. Chat dropped it in CHAT-17.
 - **The realm file carries a dev-only client, `sportconnect-swagger`** (redirect `http://localhost:8080/swagger-ui/oauth2-redirect.html`). Decide whether Swagger is served in production at all (INFRA-10); if not, drop the client from the production realm, if so add its origin to the client's redirect URIs and web origins.
 - **Reset link life** is 1 hour (realm attribute `actionTokenGeneratedByUserLifespan.reset-credentials` = 3600, set by `infra/scripts/realm-email-theme.mjs`).
+
+## Production notes added 2026-10-16 (A27)
+
+Ship `sportconnect-keycloak-extensions.jar` in the Keycloak image next to the theme JAR: the realm file will not import without it (flows, validators and the listener name its providers). The extension uses Keycloak-internal SPIs and is pinned to the 26.4 line (`keycloakVersion` in `infra/keycloak-extensions/build.gradle` moves with the image tag). Run `node infra/scripts/verify-phone-rules.mjs` against a production-like stack once (it creates and deletes its own `a27-*` users).
