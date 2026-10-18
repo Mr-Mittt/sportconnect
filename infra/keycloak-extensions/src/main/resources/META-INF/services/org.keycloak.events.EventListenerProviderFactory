@@ -1,1 +1,2 @@
 com.sportconnect.keycloak.PhoneNormalizingEventListenerFactory
+com.sportconnect.keycloak.EmailNormalizingEventListenerFactory
