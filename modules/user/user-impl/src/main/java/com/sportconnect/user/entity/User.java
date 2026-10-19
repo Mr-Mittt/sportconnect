@@ -141,6 +141,10 @@ public class User implements Persistable<UUID> {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
+    /** A36: set by the first Google sign-in, whatever it did to {@link #avatarUrl}; null until then. */
+    @Column(name = "google_avatar_checked_at")
+    private LocalDateTime googleAvatarCheckedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

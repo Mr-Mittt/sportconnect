@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_email_verified BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     last_login_at TIMESTAMP,
+    google_avatar_checked_at TIMESTAMP,
     height_cm INTEGER,
     weight_kg NUMERIC(5,2),
     shoe_size_mm INTEGER,

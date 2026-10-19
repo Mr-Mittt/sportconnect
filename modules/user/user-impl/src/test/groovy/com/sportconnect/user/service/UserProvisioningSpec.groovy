@@ -436,4 +436,100 @@ class UserProvisioningSpec extends Specification {
         1 * userRepository.findByIdForUpdate(sub) >> Optional.empty()
         thrown(ResourceNotFoundException)
     }
+
+    // ---- A36: applyGoogleAvatarOnce ----
+
+    private static final String GOOGLE_PICTURE = "https://lh3.googleusercontent.com/a/photo=s96-c"
+
+    private User userWith(String avatar, java.time.LocalDateTime checked = null) {
+        User.builder().id(sub).email("a@example.com").firstName("A").lastName("User").username("auser")
+                .avatarUrl(avatar).googleAvatarCheckedAt(checked).build()
+    }
+
+    def "the first Google sign-in of an account without an avatar uses the picture, records the check and tells the chat service"() {
+        given:
+        def user = userWith(null)
+        def streamOps = Mock(org.springframework.data.redis.core.StreamOperations)
+
+        when:
+        def result = userService.applyGoogleAvatarOnce(sub, GOOGLE_PICTURE)
+
+        then:
+        1 * userRepository.findByIdForUpdate(sub) >> Optional.of(user)
+        1 * userRepository.save({ User u -> u.avatarUrl == GOOGLE_PICTURE && u.googleAvatarCheckedAt != null }) >> { User u -> u }
+        1 * stringRedisTemplate.opsForStream() >> streamOps
+        1 * streamOps.add({ it.value.event_type == "user.profile_updated" && it.value.payload.contains(GOOGLE_PICTURE) })
+        result.avatarUrl == GOOGLE_PICTURE
+    }
+
+    def "an account that already has an avatar keeps it, and the check is still recorded"() {
+        given:
+        def user = userWith("https://cdn.example.com/mine.png")
+
+        when:
+        def result = userService.applyGoogleAvatarOnce(sub, GOOGLE_PICTURE)
+
+        then:
+        1 * userRepository.findByIdForUpdate(sub) >> Optional.of(user)
+        1 * userRepository.save({ User u -> u.avatarUrl == "https://cdn.example.com/mine.png" && u.googleAvatarCheckedAt != null }) >> { User u -> u }
+        0 * stringRedisTemplate.opsForStream()
+        result.avatarUrl == "https://cdn.example.com/mine.png"
+    }
+
+    def "a later Google sign-in changes nothing: an avatar removed on purpose stays removed"() {
+        given:
+        def user = userWith(null, java.time.LocalDateTime.now().minusDays(3))
+
+        when:
+        def result = userService.applyGoogleAvatarOnce(sub, GOOGLE_PICTURE)
+
+        then:
+        1 * userRepository.findByIdForUpdate(sub) >> Optional.of(user)
+        0 * userRepository.save(_)
+        0 * stringRedisTemplate.opsForStream()
+        result.avatarUrl == null
+    }
+
+    def "an unusable picture is ignored (the check is still recorded, never an error)"() {
+        given:
+        def user = userWith(null)
+
+        when:
+        def result = userService.applyGoogleAvatarOnce(sub, url)
+
+        then:
+        1 * userRepository.findByIdForUpdate(sub) >> Optional.of(user)
+        1 * userRepository.save({ User u -> u.avatarUrl == null && u.googleAvatarCheckedAt != null }) >> { User u -> u }
+        0 * stringRedisTemplate.opsForStream()
+        result.avatarUrl == null
+
+        where:
+        url << [null, "", "  ", "http://lh3.googleusercontent.com/a/p", "https://evil.example.com/a.png",
+                "https://googleusercontent.com.evil.example.com/a.png", "https://evilgoogleusercontent.com/a.png",
+                "https://user@lh3.googleusercontent.com/a.png", "https://lh3.googleusercontent.com:8443/a.png",
+                "javascript:alert(1)", "not a url", "https://lh3.googleusercontent.com/" + "a" * 500]
+    }
+
+    def "the Google image host rule accepts googleusercontent.com and its subdomains over https only"() {
+        expect:
+        UserServiceImpl.isGoogleImageUrl(url) == ok
+
+        where:
+        url                                              || ok
+        "https://lh3.googleusercontent.com/a/p=s96-c"    || true
+        "https://googleusercontent.com/a.png"            || true
+        "https://lh3.googleusercontent.com/" + "a" * 400 || true
+        "https://lh3.googleusercontent.com/" + "a" * 500 || false
+        "http://lh3.googleusercontent.com/a.png"         || false
+        "https://google.com/a.png"                       || false
+    }
+
+    def "an unknown user is a not found"() {
+        when:
+        userService.applyGoogleAvatarOnce(sub, GOOGLE_PICTURE)
+
+        then:
+        1 * userRepository.findByIdForUpdate(sub) >> Optional.empty()
+        thrown(ResourceNotFoundException)
+    }
 }

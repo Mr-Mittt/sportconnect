@@ -197,6 +197,12 @@ public final class TestKeycloak {
             return this;
         }
 
+        /** A36: the Google profile picture as Keycloak's token mapper emits it (the {@code picture} claim). */
+        public Identity picture(String url) {
+            extraClaims.put("picture", url);
+            return this;
+        }
+
         public UUID sub() {
             return sub;
         }

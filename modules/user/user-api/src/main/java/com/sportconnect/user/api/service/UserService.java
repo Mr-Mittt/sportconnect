@@ -167,6 +167,18 @@ public interface UserService {
     UserResponse reactivateUser(UUID userId);
 
     /**
+     * A36: the first Google sign-in of an account may give it the Google picture as its avatar. Runs once per user: the
+     * first call records that the check happened (whatever it decided), every later call returns the user unchanged.
+     * The picture is used only when the account has no avatar yet and the URL is https on a Google image host
+     * ({@code googleusercontent.com}) and fits the column; anything else is ignored, never an error.
+     *
+     * @param pictureUrl the token's {@code picture} claim, untrusted; may be null
+     * @return the user as it is after the call (with the new avatar when one was set)
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no such user
+     */
+    UserResponse applyGoogleAvatarOnce(UUID userId, String pictureUrl);
+
+    /**
      * A26: the first-sign-in provisioning. Returns the existing account when {@code identity.id} (the Keycloak
      * {@code sub}) already has a row, otherwise creates it with {@code users.id = sub} and the default {@code USER} role.
      * An existing account is returned as it is, active or not, and is <em>not</em> re-synced from the identity: after the
