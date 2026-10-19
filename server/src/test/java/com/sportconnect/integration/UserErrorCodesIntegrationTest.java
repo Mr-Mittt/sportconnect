@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.UUID;
@@ -37,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>One identity per test method: {@link #authenticateAs} does not switch identity after the first request.
  */
-class UserErrorCodesIntegrationTest extends BaseIT {
+class UserErrorCodesIntegrationTest extends RedisBaseIT {
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -49,8 +48,6 @@ class UserErrorCodesIntegrationTest extends BaseIT {
     private FriendRequestRepository friendRequestRepository;
     @Autowired
     private FriendshipRepository friendshipRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
 
     private UUID me;
     private UUID other;
@@ -75,10 +72,13 @@ class UserErrorCodesIntegrationTest extends BaseIT {
     }
 
     private UUID saveUser(String label, boolean active) {
-        return userRepository.save(User.builder()
-                .email(label + "@example.com").passwordHash(passwordEncoder.encode("correct-password"))
+        UUID id = userRepository.save(User.builder()
+                .email(label + "@example.com")
                 .firstName("U21").lastName(label).username(label)
                 .isActive(active).build()).getId();
+        // U24: the password lives in Keycloak, not in the users row.
+        TestKeycloak.registerUser(id, label, "correct-password");
+        return id;
     }
 
     private ResultActions updateProfile(UUID target, String json) throws Exception {

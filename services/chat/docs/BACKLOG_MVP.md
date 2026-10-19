@@ -48,6 +48,7 @@ CHAT-15, CHAT-16 only from the original four. `BACKLOG_V1.md` is no longer empty
 | 2 | [CHAT-11](MVP/CHAT-11_HARDENING_LOADING_ERROR_SENDING_STATES_A11Y_VISUAL_REGRESSIO.md) | Hardening — loading/error/sending states, a11y, visual regression | `TODO` |
 | 3 | [CHAT-12](MVP/CHAT-12_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (chat) | `TODO` |
 | 4 | [CHAT-20](MVP/CHAT-20_RESILIENT_CONVERSATION_CREATION.md) | Resilient conversation creation: no spurious 500 on a first-open race, failures logged in detail, and a chat box that never shows "could not create" (retry on first send / revisit) | `TODO` |
+| 5 | [CHAT-21](MVP/CHAT-21_TRIM_THE_DOMAIN_EVENTS_STREAM.md) | Trim the `sportconnect:domain-events` Redis stream: it is never trimmed, so it grows without bound; cap it without losing events chat has not applied yet | `TODO` |
 
 ---
 

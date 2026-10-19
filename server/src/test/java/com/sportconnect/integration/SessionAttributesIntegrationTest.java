@@ -91,7 +91,6 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
         User creator = new User();
         creator.setUsername("s23_" + UUID.randomUUID());
         creator.setEmail("session23_" + System.nanoTime() + "@example.com");
-        creator.setPasswordHash("password");
         creator.setFirstName("Creator");
         creator.setLastName("User");
         creator.setIsEmailVerified(false);

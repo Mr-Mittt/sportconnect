@@ -55,7 +55,7 @@ class SportProfileAttributeWriteIntegrationTest extends BaseIT {
     void setUp() {
         clearAll();
         userId = userRepository.save(User.builder()
-                .email("a10@example.com").passwordHash("hash").firstName("A10").lastName("Tester")
+                .email("a10@example.com").firstName("A10").lastName("Tester")
                 .username("a10tester").isActive(true).build()).getId();
         sportId = sportRepository.save(Sport.builder()
                 .name("A10 Badminton").isActive(true)

@@ -76,7 +76,6 @@ class UserLookupAccessIntegrationTest extends BaseIT {
 
         targetUserId = userRepository.save(User.builder()
                 .email("u11-target@example.com")
-                .passwordHash("hash")
                 .firstName("Target")
                 .lastName("User")
                 .username("u11target")
@@ -90,7 +89,6 @@ class UserLookupAccessIntegrationTest extends BaseIT {
 
         callerId = userRepository.save(User.builder()
                 .email("u11-caller@example.com")
-                .passwordHash("hash")
                 .firstName("Caller")
                 .lastName("User")
                 .username("u11caller")

@@ -98,7 +98,6 @@ class GroupSessionGenerationIntegrationTest extends BaseIT {
 
         ownerId = userRepository.save(User.builder()
                 .email("session38-owner_" + System.nanoTime() + "@example.com")
-                .passwordHash("hash")
                 .firstName("Owner")
                 .lastName("User")
                 .username("s38owner_" + System.nanoTime())

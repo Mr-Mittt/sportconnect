@@ -55,6 +55,8 @@ app:
     redirect-uri: ${KEYCLOAK_REDIRECT_URI}
     token-uri: ${KEYCLOAK_TOKEN_URI}
     logout-uri: ${KEYCLOAK_LOGOUT_URI}
+    admin-uri: ${KEYCLOAK_ADMIN_URI}
+    credentials-client-secret: ${KEYCLOAK_CREDENTIALS_CLIENT_SECRET}
 
   # Gates /internal/** — services/chat's cold-start bootstrap pull. See application.yml's comment.
   internal-service-secret: ${INTERNAL_SERVICE_SECRET}

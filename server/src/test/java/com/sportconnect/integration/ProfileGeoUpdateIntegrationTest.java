@@ -74,7 +74,7 @@ class ProfileGeoUpdateIntegrationTest extends BaseIT {
 
     private UUID saveUser(String label, boolean active, Long countryId, Long regionId, String legacyCountry) {
         return userRepository.save(User.builder()
-                .email(label + "@example.com").passwordHash("hash")
+                .email(label + "@example.com")
                 .firstName("Geo").lastName(label).username(label)
                 .countryId(countryId).regionId(regionId).country(legacyCountry)
                 .isActive(active).build()).getId();

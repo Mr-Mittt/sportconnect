@@ -223,6 +223,22 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "sportconnect-credentials",
+      "name": "SportConnect backend credentials (password check and set)",
+      "description": "U24. Backend only: password grant to confirm a current password, service account to set a new one.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-credentials-client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "redirectUris": [],
+      "webOrigins": []
     }
   ],
   "components": {
@@ -1326,6 +1342,19 @@
         "syncMode": "FORCE",
         "claim": "picture",
         "user.attribute": "picture"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-sportconnect-credentials",
+      "enabled": true,
+      "serviceAccountClientId": "sportconnect-credentials",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "view-users"
+        ]
       }
     }
   ]

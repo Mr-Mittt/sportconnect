@@ -64,9 +64,6 @@ public class User implements Persistable<UUID> {
     @Column(unique = true, length = 255)
     private String email;
 
-    @Column(name = "password_hash", length = 255)
-    private String passwordHash;
-
     @Column(name = "first_name", length = 100)
     private String firstName;
 

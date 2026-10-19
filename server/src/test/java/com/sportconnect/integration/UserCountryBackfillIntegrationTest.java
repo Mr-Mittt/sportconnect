@@ -70,7 +70,7 @@ class UserCountryBackfillIntegrationTest extends BaseIT {
 
     private UUID saveUserWithLegacyCountry(String label, String legacyCountry, Long alreadyLinkedTo) {
         return userRepository.save(User.builder()
-                .email(label + "@example.com").passwordHash("hash").firstName("B").lastName(label)
+                .email(label + "@example.com").firstName("B").lastName(label)
                 .country(legacyCountry).countryId(alreadyLinkedTo).isActive(true).build()).getId();
     }
 

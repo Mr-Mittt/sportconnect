@@ -1,5 +1,7 @@
 # Redis Research — Session Notes
 
+> **Superseded for the list of keys (2026-10-19, U24):** the current inventory is `documentation/md/REDIS_KEYS.md`. This note is the 2026-07-01 research; its refresh-token sections no longer apply (Keycloak owns refresh tokens since A25/A26/A28).
+
 **Date:** 2026-07-01  
 **Context:** Evaluated how Redis is currently used in SportConnect and how it should evolve into the auth module and eventual microservice architecture.
 
