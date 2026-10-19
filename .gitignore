@@ -49,3 +49,6 @@
 
 # Keycloak theme/extension JARs mounted into the dev Keycloak (INFRA-13); built, never committed
 infra/keycloak/providers/*.jar
+
+# Google OAuth client file (A29): secret, never committed
+infra/keycloak/providers/client_secret_*.json

@@ -8,7 +8,12 @@ const kcContextExtension: KcContextExtension = {
   themeName: themeNames[0],
   properties: { ...kcEnvDefaults },
 };
-const kcContextExtensionPerPage: KcContextExtensionPerPage = {};
+const kcContextExtensionPerPage: KcContextExtensionPerPage = {
+  'login-idp-link-confirm.ftl': {
+    scLink: { email: 'bao.nguyen.dangit@gmail.com', hasPassword: true, emailAvailable: true },
+  },
+  'login-idp-link-email.ftl': { scLink: { email: 'bao.nguyen.dangit@gmail.com', resendIn: 60 } },
+};
 
 export const { getKcContextMock } = createGetKcContextMock({
   kcContextExtension,

@@ -6,7 +6,14 @@ export type KcContextExtension = {
   properties: Record<KcEnvName, string>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export type KcContextExtensionPerPage = {};
+/** A29: set by the sc-link-existing-account step (infra/keycloak-extensions, LinkExistingAccountAuthenticator). */
+export type KcContextExtensionPerPage = {
+  'login-idp-link-confirm.ftl': {
+    scLink: { email: string; hasPassword: boolean; emailAvailable: boolean };
+  };
+  'login-idp-link-email.ftl': {
+    scLink: { email: string; resendIn: number };
+  };
+};
 
 export type KcContext = ExtendKcContext<KcContextExtension, KcContextExtensionPerPage>;

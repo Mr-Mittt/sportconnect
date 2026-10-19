@@ -3,6 +3,8 @@ import { lazy, Suspense } from 'react';
 import { classes } from './classes';
 import { useI18n } from './i18n';
 import type { KcContext } from './KcContext';
+import LinkConfirm from './pages/LinkConfirm';
+import LinkEmailSent from './pages/LinkEmailSent';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Template from './Template';
@@ -27,6 +29,10 @@ export default function KcPage(props: { kcContext: KcContext }) {
         switch (kcContext.pageId) {
           case 'login.ftl':
             return <Login {...{ kcContext, i18n, Template, classes, doUseDefaultCss: false }} />;
+          case 'login-idp-link-confirm.ftl':
+            return <LinkConfirm {...{ kcContext, i18n, Template, classes, doUseDefaultCss: false }} />;
+          case 'login-idp-link-email.ftl':
+            return <LinkEmailSent {...{ kcContext, i18n, Template, classes, doUseDefaultCss: false }} />;
           case 'register.ftl':
             return (
               <Register
