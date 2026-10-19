@@ -38,6 +38,7 @@ describe('getApiError', () => {
     [409, 'CONFLICT'],
     [500, 'INTERNAL'],
     [503, 'INTERNAL'],
+    [429, 'RATE_LIMITED'],
     [405, 'UNKNOWN'],
     [415, 'UNKNOWN'],
   ])('maps status %i to %s', (status, category) => {

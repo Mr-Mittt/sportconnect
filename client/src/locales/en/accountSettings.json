@@ -36,6 +36,24 @@
     "submitting": "Deactivating…",
     "cancel": "Cancel"
   },
+  "confirm": {
+    "methodLabel": "How do you want to confirm?",
+    "method": {
+      "password": "My password",
+      "email": "A code sent by email"
+    },
+    "noEmail": "Your account has no email address, so a code can’t be sent.",
+    "sendCode": "Send code",
+    "sending": "Sending…",
+    "resend": "Resend code",
+    "resendIn": "Resend in {{time}}",
+    "codeLabel": "Verification code",
+    "codeSent": "We sent a 6-digit code to your email. It is valid for {{minutes}} minutes.",
+    "passwordHint": "Signed in with Google, or not sure of a password?",
+    "useCodeInstead": "Use an emailed code instead",
+    "passwordLocked": "Too many wrong passwords. Try again in {{time}}, or use an emailed code.",
+    "passwordLockedNoEmail": "Too many wrong passwords. Try again in {{time}}."
+  },
   "unsaved": {
     "title": "Unsaved changes",
     "message": "You have unsaved changes to your account settings. Discard them, or save before closing?",
@@ -49,7 +67,7 @@
   },
   "changePasswordDialog": {
     "title": "Change your password",
-    "body": "Enter your current password, then choose a new one of at least 8 characters.",
+    "body": "Confirm it’s you, then choose a new password of at least 8 characters.",
     "currentLabel": "Current password",
     "newLabel": "New password",
     "confirmLabel": "Confirm new password",

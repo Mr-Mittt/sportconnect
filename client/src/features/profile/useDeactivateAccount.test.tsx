@@ -4,6 +4,7 @@ import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
+import { usePasswordLockStore } from '@/app/passwordLockStore';
 import { useDeactivateAccount } from './useDeactivateAccount';
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -28,14 +29,14 @@ describe('useDeactivateAccount', () => {
     vi.restoreAllMocks();
   });
 
-  it('posts the password, clears the session and calls onSuccess', async () => {
+  it('posts only the password proof, clears the session and calls onSuccess', async () => {
     const post = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: { success: true, message: 'ok', data: null, timestamp: '' },
     });
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useDeactivateAccount({ onSuccess }), { wrapper });
 
-    act(() => result.current.deactivate('password123'));
+    act(() => result.current.deactivate({ method: 'password', currentPassword: 'password123' }));
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
     expect(post).toHaveBeenCalledWith('/users/me/deactivate', { currentPassword: 'password123' });
@@ -59,13 +60,47 @@ describe('useDeactivateAccount', () => {
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useDeactivateAccount({ onSuccess }), { wrapper });
 
-    act(() => result.current.deactivate('wrong'));
+    act(() => result.current.deactivate({ method: 'password', currentPassword: 'wrong' }));
 
     await waitFor(() => expect(result.current.errorMessage).toBe('Your current password is incorrect.'));
+    expect(result.current.errorCode).toBe('CURRENT_PASSWORD_INCORRECT');
     expect(onSuccess).not.toHaveBeenCalled();
     expect(useAuthStore.getState().accessToken).toBe('token-abc');
 
     act(() => result.current.reset());
     await waitFor(() => expect(result.current.errorMessage).toBeNull());
+  });
+
+  it('posts only the emailed code when that is the proof', async () => {
+    const post = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
+      data: { success: true, message: 'ok', data: null, timestamp: '' },
+    });
+    const { result } = renderHook(() => useDeactivateAccount(), { wrapper });
+
+    act(() => result.current.deactivate({ method: 'email', verificationCode: '123456' }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith('/users/me/deactivate', { verificationCode: '123456' });
+  });
+
+  it('turns PASSWORD_ATTEMPTS_EXCEEDED into the shared lock countdown from errorParams.seconds; closing the dialog keeps it', async () => {
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
+      isAxiosError: true,
+      response: {
+        status: 429,
+        data: { success: false, message: 'x', errorCode: 'PASSWORD_ATTEMPTS_EXCEEDED', errorParams: { seconds: 600 } },
+      },
+    });
+    const { result } = renderHook(() => useDeactivateAccount(), { wrapper });
+
+    act(() => result.current.deactivate({ method: 'password', currentPassword: 'wrong' }));
+
+    await waitFor(() => expect(result.current.passwordLockSeconds).toBe(600));
+    expect(result.current.errorCode).toBe('PASSWORD_ATTEMPTS_EXCEEDED');
+
+    act(() => result.current.reset());
+    expect(result.current.passwordLockSeconds).toBe(600);
+    expect(usePasswordLockStore.getState().secondsLeft).toBe(600);
+    act(() => usePasswordLockStore.getState().clear());
   });
 });

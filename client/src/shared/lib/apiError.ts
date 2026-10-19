@@ -16,6 +16,7 @@ export type ErrorCategory =
   | 'NOT_FOUND'
   | 'VALIDATION'
   | 'CONFLICT'
+  | 'RATE_LIMITED'
   | 'NETWORK'
   | 'INTERNAL'
   | 'UNKNOWN';
@@ -40,6 +41,7 @@ function categoryForStatus(status: number): ErrorCategory {
   if (status === 404) return 'NOT_FOUND';
   if (status === 400) return 'VALIDATION';
   if (status === 409) return 'CONFLICT';
+  if (status === 429) return 'RATE_LIMITED';
   if (status >= 500) return 'INTERNAL';
   return 'UNKNOWN';
 }

@@ -42,7 +42,7 @@ describe('useChangePassword', () => {
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useChangePassword({ onSuccess }), { wrapper });
 
-    act(() => result.current.changePassword({ currentPassword: 'old-password', newPassword: 'new-password-1' }));
+    act(() => result.current.changePassword({ proof: { method: 'password', currentPassword: 'old-password' }, newPassword: 'new-password-1' }));
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
     expect(put).toHaveBeenCalledWith('/users/me/password', {
@@ -57,24 +57,38 @@ describe('useChangePassword', () => {
     const onSuccess = vi.fn();
     const { result } = renderHook(() => useChangePassword({ onSuccess }), { wrapper });
 
-    act(() => result.current.changePassword({ currentPassword: 'wrong', newPassword: 'new-password-1' }));
+    act(() => result.current.changePassword({ proof: { method: 'password', currentPassword: 'wrong' }, newPassword: 'new-password-1' }));
 
     await waitFor(() => expect(result.current.errorMessage).toBe('Your current password is incorrect.'));
-    expect(result.current.isCurrentPasswordError).toBe(true);
+    expect(result.current.errorCode).toBe('CURRENT_PASSWORD_INCORRECT');
     expect(onSuccess).not.toHaveBeenCalled();
 
     act(() => result.current.reset());
     await waitFor(() => expect(result.current.errorMessage).toBeNull());
-    expect(result.current.isCurrentPasswordError).toBe(false);
+    expect(result.current.errorCode).toBeNull();
   });
 
-  it('does not flag other failures as a current-password error', async () => {
+  it('does not report other failures as a current-password error', async () => {
     vi.spyOn(apiClient, 'put').mockRejectedValueOnce(rejection(400, 'VALIDATION_FAILED'));
     const { result } = renderHook(() => useChangePassword(), { wrapper });
 
-    act(() => result.current.changePassword({ currentPassword: 'old-password', newPassword: 'new-password-1' }));
+    act(() => result.current.changePassword({ proof: { method: 'password', currentPassword: 'old-password' }, newPassword: 'new-password-1' }));
 
     await waitFor(() => expect(result.current.errorMessage).not.toBeNull());
-    expect(result.current.isCurrentPasswordError).toBe(false);
+    expect(result.current.errorCode).toBe('VALIDATION_FAILED');
+  });
+
+  it('sends only the emailed code, with the new password', async () => {
+    const put = vi
+      .spyOn(apiClient, 'put')
+      .mockResolvedValueOnce({ data: { success: true, message: 'ok', data: null, timestamp: '' } });
+    const { result } = renderHook(() => useChangePassword(), { wrapper });
+
+    act(() =>
+      result.current.changePassword({ proof: { method: 'email', verificationCode: '123456' }, newPassword: 'new-password-1' }),
+    );
+
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(put).toHaveBeenCalledWith('/users/me/password', { verificationCode: '123456', newPassword: 'new-password-1' });
   });
 });

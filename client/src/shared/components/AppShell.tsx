@@ -9,6 +9,7 @@ import { LogoutFailedDialog } from '@/features/auth/components/LogoutFailedDialo
 import { useLogout } from '@/features/auth/useLogout';
 import { useChangePassword } from '@/features/profile/useChangePassword';
 import { useCompleteProfilePrompt } from '@/features/profile/useCompleteProfilePrompt';
+import { useConfirmationCode } from '@/features/profile/useConfirmationCode';
 import { useDeactivateAccount } from '@/features/profile/useDeactivateAccount';
 import { useEditProfileSave } from '@/features/profile/useEditProfileSave';
 import { useMyProfile } from '@/features/profile/useMyProfile';
@@ -131,6 +132,8 @@ export function AppShell() {
   // modal (which keeps its unsaved edits, and is where Cancel/Esc returns to) and is mounted only
   // while open, so the typed password never outlives it.
   const [isDeactivateOpen, setIsDeactivateOpen] = useState(false);
+  // ACCOUNT-6: each dialog's "verify by email" method sends a code bound to its own purpose.
+  const deactivateCode = useConfirmationCode('DEACTIVATE');
   const deactivateAccount = useDeactivateAccount({
     // No explicit navigate(): clearing the session makes ProtectedRoute redirect to /login once this
     // render commits, by which time the settings modal (and its unsaved-changes route blocker) is gone.
@@ -144,6 +147,7 @@ export function AppShell() {
   // ACCOUNT-3: changing the password. Same stacking and mount-while-open rule as the deactivate dialog.
   // The session continues on success (the server revokes nothing), so it only closes and confirms.
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const changePasswordCode = useConfirmationCode('CHANGE_PASSWORD');
   const changePassword = useChangePassword({
     onSuccess: () => {
       setIsChangePasswordOpen(false);
@@ -248,12 +252,16 @@ export function AppShell() {
           isOpen={isChangePasswordOpen}
           onClose={() => {
             changePassword.reset();
+            changePasswordCode.reset();
             setIsChangePasswordOpen(false);
           }}
           onSubmit={changePassword.changePassword}
           isSubmitting={changePassword.isPending}
           errorMessage={changePassword.errorMessage}
-          isCurrentPasswordError={changePassword.isCurrentPasswordError}
+          errorCode={changePassword.errorCode}
+          passwordLockSeconds={changePassword.passwordLockSeconds}
+          hasEmail={user.email !== null}
+          codeSender={changePasswordCode}
         />
       )}
 
@@ -262,11 +270,16 @@ export function AppShell() {
           isOpen={isDeactivateOpen}
           onClose={() => {
             deactivateAccount.reset();
+            deactivateCode.reset();
             setIsDeactivateOpen(false);
           }}
           onConfirm={deactivateAccount.deactivate}
           isSubmitting={deactivateAccount.isPending}
           errorMessage={deactivateAccount.errorMessage}
+          errorCode={deactivateAccount.errorCode}
+          passwordLockSeconds={deactivateAccount.passwordLockSeconds}
+          hasEmail={user.email !== null}
+          codeSender={deactivateCode}
         />
       )}
 
