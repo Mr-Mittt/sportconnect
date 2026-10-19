@@ -88,6 +88,7 @@ class CommentServiceImplSpec extends Specification {
         def user = UserSummaryResponse.builder()
                 .id(userId)
                 .fullName("Test User")
+                .avatarUrl("https://lh3.googleusercontent.com/a/photo=s96-c")
                 .build()
 
         when: "creating a comment"
@@ -105,7 +106,10 @@ class CommentServiceImplSpec extends Specification {
         // site); buildPreviewResponse (addToPreviewCache) still uses the single-item getUserById (different
         // method, real UserResponse — untouched by U18), so it needs its own fixture, not `user`.
         1 * userService.getUserSummariesByIds([userId]) >> [(userId): user]
-        1 * userService.getUserById(userId) >> UserResponse.builder().id(userId).firstName("Test").lastName("User").build()
+        1 * userService.getUserById(userId) >> UserResponse.builder().id(userId).firstName("Test").lastName("User")
+                .avatarUrl("https://lh3.googleusercontent.com/a/photo=s96-c").build()
+        // A36: the cached preview carries the author's avatar too
+        1 * zSetOps.add("post:" + postId + ":comments:preview", { String json -> json.contains("a/photo=s96-c") }, _)
         // a freshly created comment can never have replies yet — createComment passes an empty
         // replies map directly instead of querying
         0 * commentRepository.findByParentCommentIdAndIsActiveTrueOrderByCreatedAtAsc(_)
@@ -116,6 +120,7 @@ class CommentServiceImplSpec extends Specification {
         result.content == request.content
         result.postId == postId
         result.userId == userId
+        result.userAvatarUrl == "https://lh3.googleusercontent.com/a/photo=s96-c"
     }
 
     def "createComment should throw NotFoundException when post does not exist"() {
@@ -498,6 +503,7 @@ class CommentServiceImplSpec extends Specification {
         def user = UserSummaryResponse.builder()
                 .id(userId)
                 .fullName("Test User")
+                .avatarUrl("https://lh3.googleusercontent.com/a/photo=s96-c")
                 .build()
 
         when: "getting post comments"
@@ -519,6 +525,10 @@ class CommentServiceImplSpec extends Specification {
         result.content.size() == 1
         result.content[0].replies.size() == 1
         result.content[0].replies[0].content == "Reply comment"
+
+        and: "the author's avatar is on the comment and on its reply"
+        result.content[0].userAvatarUrl == "https://lh3.googleusercontent.com/a/photo=s96-c"
+        result.content[0].replies[0].userAvatarUrl == "https://lh3.googleusercontent.com/a/photo=s96-c"
     }
 
     def "mapToResponse reads replyCount from Redis when cached"() {

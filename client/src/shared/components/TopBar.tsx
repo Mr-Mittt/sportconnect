@@ -1,7 +1,7 @@
 import { IconChevronDown, IconLogout, IconSearch, IconSettings } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Avatar, AvatarFallback } from '@/shared/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import {
   DropdownMenu,
@@ -15,6 +15,11 @@ interface TopBarUser {
   initials: string;
   name: string;
   email: string | null;
+  /**
+   * A36: the account's avatar (`users.avatar_url`; for a Google sign-in it is the hotlinked Google picture). Null keeps
+   * the initials. The initials also show while the image loads or if it fails to load.
+   */
+  avatarUrl: string | null;
 }
 
 interface TopBarProps {
@@ -62,6 +67,7 @@ export function TopBar({
               className="flex cursor-pointer items-center gap-0.5 rounded-full py-1 pr-1 pl-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-0"
             >
               <Avatar>
+                {user.avatarUrl !== null && <AvatarImage src={user.avatarUrl} alt="" />}
                 <AvatarFallback>{user.initials}</AvatarFallback>
               </Avatar>
               <IconChevronDown className="size-3.5 text-text-muted" aria-hidden="true" />
@@ -70,6 +76,7 @@ export function TopBar({
           <DropdownMenuContent>
             <div className="flex items-center gap-2.5 px-1.5 py-1.5">
               <Avatar className="size-8">
+                {user.avatarUrl !== null && <AvatarImage src={user.avatarUrl} alt="" />}
                 <AvatarFallback>{user.initials}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
