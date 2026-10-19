@@ -2,6 +2,8 @@
 
 **Status:** `TODO` · **Type:** Feature / gap · **Depends on:** the social-login feature (Google/Facebook/Zalo via Keycloak), which is what first allows an account without an email
 
+**Moved from:** `BACKLOG_MVP.md` (2026-10-20), owner decision, phone accounts are a later topic: phone-only sign-up and recovery wait for the phone-OTP delivery decision (see `documentation/md/NEXT_TOPICS.md`, "Phone account"), and nothing in the MVP login depends on them.
+
 **Filed:** 2026-10-14, from the social-login `/feature` scoping. Zalo often returns no email. The user decided accounts may be identified by a unique phone number as well as by email, and that what a phone-only user can do about email-dependent features is **out of scope of that feature**. This ticket keeps the problem on the backlog.
 
 ## What
