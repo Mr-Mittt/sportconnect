@@ -1,31 +1,39 @@
-import { useState } from 'react';
+import { isProofFieldError, type ConfirmationProof } from '@/features/profile/confirmationProof';
+import type { CodeSender } from '@/features/profile/useConfirmationCode';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
-import { Input } from '@/shared/ui/input';
-import { Label } from '@/shared/ui/label';
+import { ConfirmationProofFields } from './ConfirmationProofFields';
+import { useConfirmationProofState } from './useConfirmationProofState';
 
 interface DeactivateAccountDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Receives the password the user typed; the parent fires `POST /users/me/deactivate`. */
-  onConfirm: (currentPassword: string) => void;
+  /** Receives the one proof the user chose (password or emailed code); the parent fires `POST /users/me/deactivate`. */
+  onConfirm: (proof: ConfirmationProof) => void;
   isSubmitting: boolean;
-  /** Localized line for a failed deactivation (wrong password…); the dialog stays open. */
+  /** Localized line for a failed deactivation (wrong password or code…); the dialog stays open. */
   errorMessage: string | null;
+  /** The failed request's server code, used to place `errorMessage` (on the password, on the code, or general). */
+  errorCode?: string | null;
+  /** False for an account with no email (phone-only): the emailed-code method is disabled. */
+  hasEmail?: boolean;
+  /** The "verify by email" method (from `useConfirmationCode('DEACTIVATE')`). */
+  codeSender: CodeSender;
+  /** Seconds left of a `PASSWORD_ATTEMPTS_EXCEEDED` lock (counted down by the hook); `0` when none. */
+  passwordLockSeconds?: number;
   /** `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
 
 /**
- * ACCOUNT-4: confirms deactivating the caller's own account. The password field is the
- * confirmation (it is verified server-side); Deactivate stays disabled until something is typed.
- * `AppShell` mounts this only while open, so the typed password is dropped on every close.
+ * ACCOUNT-4, ACCOUNT-6: confirms deactivating the caller's own account. The user proves who they
+ * are with the current password (Keycloak checks it) or a code emailed to the account, chosen by a
+ * radio (`ConfirmationProofFields`); Deactivate stays disabled until the chosen method is filled in.
+ * `AppShell` mounts this only while open, so the typed password and code are dropped on every close.
  *
- * The field must start empty: this is a re-confirmation, so a browser filling in the saved password
- * would let the user confirm without typing anything. Chrome ignores `autocomplete="off"`/`new-password`
- * on a lone password field when the site has a saved login, so the input is also `readOnly` until it is
- * first focused (Chrome does not autofill read-only inputs).
+ * The password field must start empty: this is a re-confirmation, so a browser filling in the saved
+ * password would let the user confirm without typing anything (the field handles that itself).
  */
 export function DeactivateAccountDialog({
   isOpen,
@@ -33,11 +41,14 @@ export function DeactivateAccountDialog({
   onConfirm,
   isSubmitting,
   errorMessage,
+  errorCode = null,
+  hasEmail = true,
+  codeSender,
+  passwordLockSeconds = 0,
   i18nOverridePrefix,
 }: DeactivateAccountDialogProps) {
   const t = useOverridableText('accountSettings', i18nOverridePrefix);
-  const [password, setPassword] = useState('');
-  const [isFieldUnlocked, setIsFieldUnlocked] = useState(false);
+  const state = useConfirmationProofState({ hasEmail, errorCode, passwordLockSeconds });
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -46,21 +57,27 @@ export function DeactivateAccountDialog({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (password !== '') onConfirm(password);
+            if (state.isComplete) onConfirm(state.proof());
           }}
         >
           <p className="mt-1 mb-3 text-2sm text-text-secondary">{t('deactivateDialog.body')}</p>
-          <Label htmlFor="deactivate-account-password">{t('deactivateDialog.passwordLabel')}</Label>
-          <Input
-            id="deactivate-account-password"
-            type="password"
-            autoComplete="new-password"
-            readOnly={!isFieldUnlocked}
-            onFocus={() => setIsFieldUnlocked(true)}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
+          <ConfirmationProofFields
+            idPrefix="deactivate-account"
+            method={state.method}
+            onMethodChange={state.setMethod}
+            password={state.password}
+            onPasswordChange={state.setPassword}
+            code={state.code}
+            onCodeChange={state.setCode}
+            passwordLabel={t('deactivateDialog.passwordLabel')}
+            hasEmail={hasEmail}
+            codeSender={codeSender}
+            passwordLockSeconds={state.lockSeconds}
+            errorCode={errorCode}
+            errorMessage={errorMessage}
+            i18nOverridePrefix={i18nOverridePrefix}
           />
-          {errorMessage !== null && (
+          {errorMessage !== null && !isProofFieldError(errorCode) && (
             <p role="alert" className="mt-2 text-2sm text-text-danger">
               {errorMessage}
             </p>
@@ -70,7 +87,7 @@ export function DeactivateAccountDialog({
               type="submit"
               variant="outline"
               size="sm"
-              disabled={password === '' || isSubmitting}
+              disabled={!state.isComplete || isSubmitting}
               className="border-text-danger text-text-danger hover:bg-bg-accent"
             >
               {isSubmitting ? t('deactivateDialog.submitting') : t('deactivateDialog.submit')}

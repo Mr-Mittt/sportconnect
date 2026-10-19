@@ -68,6 +68,27 @@ describe('user error codes', () => {
     }
   });
 
+  it('has copy for every code U24 delivers, and the 429 category', () => {
+    const delivered = [
+      'CONFIRMATION_REQUIRED', 'VERIFICATION_CODE_INVALID', 'VERIFICATION_CODE_EXPIRED',
+      'VERIFICATION_CODE_ATTEMPTS_EXCEEDED', 'VERIFICATION_EMAIL_UNAVAILABLE', 'VERIFICATION_RESEND_TOO_SOON',
+      'PASSWORD_ATTEMPTS_EXCEEDED', 'NEW_PASSWORD_REJECTED',
+    ];
+    for (const code of delivered) {
+      expect(errorsEn.codes, code).toHaveProperty(code);
+      expect(errorsVi.codes, code).toHaveProperty(code);
+    }
+    expect(errorsEn.category).toHaveProperty('RATE_LIMITED');
+    expect(errorsVi.category).toHaveProperty('RATE_LIMITED');
+  });
+
+  it('interpolates the seconds of a 429 into the copy, and an uncoded 429 uses the category copy', async () => {
+    expect(getErrorMessage(coded(429, 'PASSWORD_ATTEMPTS_EXCEEDED', { seconds: 42 }))).toContain('42 seconds');
+    await i18next.changeLanguage('vi');
+    expect(getErrorMessage(coded(429, 'VERIFICATION_RESEND_TOO_SOON', { seconds: 7 }))).toContain('7 giây');
+    expect(getErrorMessage(new AxiosError('x', 'ERR_BAD_REQUEST', undefined, undefined, { status: 429, data: {} } as AxiosResponse))).toBe(errorsVi.category.RATE_LIMITED);
+  });
+
   it('an unknown code falls back to the server prose for a validation error', () => {
     expect(getErrorMessage(coded(400, 'SOMETHING_NEW'))).toBe('English server prose');
   });

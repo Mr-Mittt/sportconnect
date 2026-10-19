@@ -3,6 +3,8 @@ import { cn } from '@/shared/lib/utils';
 export interface RadioOption {
   value: string;
   label: string;
+  /** ACCOUNT-6: shown but not choosable (e.g. an email method for an account with no email). */
+  disabled?: boolean;
 }
 
 interface RadioGroupProps {
@@ -51,7 +53,10 @@ export function RadioGroup({
           <label
             key={option.value}
             htmlFor={id}
-            className="flex cursor-pointer items-center gap-2 text-sm text-text-primary"
+            className={cn(
+              'flex items-center gap-2 text-sm text-text-primary',
+              option.disabled ? 'cursor-not-allowed text-text-muted' : 'cursor-pointer',
+            )}
           >
             <input
               type="radio"
@@ -59,6 +64,7 @@ export function RadioGroup({
               name={name}
               value={option.value}
               checked={value === option.value}
+              disabled={option.disabled}
               onChange={(event) => onValueChange(event.target.value)}
               onClick={
                 allowDeselect

@@ -51,6 +51,12 @@ export const mockAdminUser: User = {
 };
 
 export const mockPassword = 'password123';
+// ACCOUNT-6 / backend U24: the emailed code the confirmation handlers accept. Any other 6 digits is
+// VERIFICATION_CODE_INVALID, `mockExpiredCode` is VERIFICATION_CODE_EXPIRED, and `mockLockedPassword`
+// is the 429 PASSWORD_ATTEMPTS_EXCEEDED (the backend's per-user wrong-password allowance).
+export const mockVerificationCode = '123456';
+export const mockExpiredCode = '999999';
+export const mockLockedPassword = 'locked-out-password';
 // AUTH-14: the one-time ticket the auth handler returns for a deactivated password user
 // (`deactivated-code` on /auth/callback) and accepts on /auth/reactivate.
 export const mockReactivationTicket = 'mock-reactivation-ticket';
