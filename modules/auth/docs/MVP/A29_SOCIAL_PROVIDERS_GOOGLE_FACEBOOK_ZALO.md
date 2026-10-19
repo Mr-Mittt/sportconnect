@@ -1,6 +1,6 @@
 # A29 · Social provider: Google (Facebook and Zalo moved to A34)
 
-**Status:** `IN PROGRESS` (started 2026-10-18; A35 done) · **Type:** Feature · **Depends on:** A35, A26, INFRA-13 (real provider credentials from the owner) · **Gates:** client AUTH-15 shows the buttons
+**Status:** `DONE` (2026-10-19; started 2026-10-18; A35 done) · **Type:** Feature · **Depends on:** A35, A26, INFRA-13 (real provider credentials from the owner) · **Gates:** client AUTH-15 shows the buttons
 
 **Filed:** 2026-10-14, from the social-login `/feature`.
 
