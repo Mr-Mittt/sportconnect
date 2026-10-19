@@ -57,9 +57,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final UserService userService;
 
     /**
-     * {@code userService} is {@code @Lazy} because of a real startup cycle: {@code SecurityConfig} needs this filter,
-     * {@code UserServiceImpl} needs the {@code PasswordEncoder} that {@code SecurityConfig} defines. The proxy defers
-     * resolving the service to the first authenticated request. Spelled out by hand, not Lombok, so the annotation
+     * {@code userService} is {@code @Lazy} because it was once a real startup cycle ({@code SecurityConfig} needs this
+     * filter, {@code UserServiceImpl} needed the {@code PasswordEncoder} that {@code SecurityConfig} defined; U24 removed
+     * that bean). Kept: the proxy still defers resolving the service to the first authenticated request, which keeps
+     * the security chain independent of the user module's wiring. Spelled out by hand, not Lombok, so the annotation
      * is certain to land on the parameter.
      */
     public JwtAuthenticationFilter(JwtDecoder jwtDecoder, @Lazy UserService userService) {

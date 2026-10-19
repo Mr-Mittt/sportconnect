@@ -111,6 +111,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(coded(e));
     }
 
+    /** U24: an allowance is used up (wrong-password attempts, a code resent too soon); retry after the wait in the params. */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTooManyRequests(TooManyRequestsException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(coded(e));
+    }
+
     @ExceptionHandler({NotFoundException.class, ResourceNotFoundException.class})
     public ResponseEntity<ApiResponse<Void>> handleNotFound(RuntimeException e) {
         String code = e instanceof CodedException coded ? coded.getErrorCode() : null;

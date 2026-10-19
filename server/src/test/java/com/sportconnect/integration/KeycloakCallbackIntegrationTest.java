@@ -252,7 +252,6 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
         assertThat(user.getPhoneNumber()).isEqualTo("+84901234567");
         assertThat(user.getIsEmailVerified()).isTrue();
         assertThat(user.getIsActive()).isTrue();
-        assertThat(user.getPasswordHash()).isNull();
         assertThat(user.getLastLoginAt()).isNotNull();
         assertThat(user.getRoles()).extracting(Role::getName).containsExactly(Role.USER);
         assertThat(userPreferenceRepository.findByUserId(sub)).get().extracting("language").isEqualTo("vi");

@@ -76,10 +76,10 @@ class SportProfileResumeAndVisibilityIntegrationTest extends BaseIT {
     void setUp() {
         clearAll();
         ownerId = userRepository.save(User.builder()
-                .email("a20-owner@example.com").passwordHash("hash").firstName("A20").lastName("Owner")
+                .email("a20-owner@example.com").firstName("A20").lastName("Owner")
                 .username("a20owner").isActive(true).build()).getId();
         otherUserId = userRepository.save(User.builder()
-                .email("a20-other@example.com").passwordHash("hash").firstName("A20").lastName("Other")
+                .email("a20-other@example.com").firstName("A20").lastName("Other")
                 .username("a20other").isActive(true).build()).getId();
         sportId = sportRepository.save(Sport.builder()
                 .name("A20 Badminton").isActive(true)

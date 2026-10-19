@@ -17,7 +17,7 @@ import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.redis.core.StringRedisTemplate
-import org.springframework.security.crypto.password.PasswordEncoder
+import com.sportconnect.auth.api.service.KeycloakCredentialService
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -26,7 +26,8 @@ class UserIdentifiersSpec extends Specification {
 
     UserRepository userRepository = Mock()
     RoleRepository roleRepository = Mock()
-    PasswordEncoder passwordEncoder = Mock()
+    AccountConfirmationService accountConfirmation = Mock()
+    KeycloakCredentialService keycloakCredentials = Mock()
     UserFriendService userFriendService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
@@ -34,7 +35,7 @@ class UserIdentifiersSpec extends Specification {
     UserPreferenceRepository userPreferenceRepository = Mock()
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService,
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, accountConfirmation, keycloakCredentials, userFriendService,
             userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
 
     private static final Role USER_ROLE = new Role(id: 1, name: "USER")

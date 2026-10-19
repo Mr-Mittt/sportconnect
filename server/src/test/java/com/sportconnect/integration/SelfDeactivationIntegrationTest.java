@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.util.Set;
@@ -28,7 +27,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * U22 end-to-end: {@code POST /api/users/me/deactivate} through the real request pipeline, real
  * {@code UserServiceImpl} / {@code AuthServiceImpl} and real Redis (the per-request gate). The users are created
- * directly with a known password hash (A28 removed the register endpoint that used to create them).
+ * directly (A28 removed the register endpoint that used to create them) and given a password in {@link TestKeycloak},
+ * the only place a password lives since U24. The emailed-code path is in {@code AccountConfirmationIntegrationTest}.
  * A wrong password changes nothing; the right one deactivates the account, kills the caller's own sessions (access
  * token and refresh cookie), and leaves the re-activation path open (A26: the ticket flow of {@code /api/auth/callback}
  * and {@code /api/auth/reactivate}).
@@ -41,8 +41,6 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
     private UserRepository userRepository;
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
-    @Autowired
-    private PasswordEncoder passwordEncoder;
     @Autowired
     private RoleRepository roleRepository;
 
@@ -68,17 +66,18 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
         return mockMvc.perform(post(path).with(anonymous()).contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
-    /** An active user with a known password (what a password user has once the first sign-in provisioned them). */
+    /** An active user with a known Keycloak password (what a password user has once the first sign-in provisioned them). */
     private User register(String email) {
         Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
-        return userRepository.save(User.builder()
+        User saved = userRepository.save(User.builder()
                 .email(email)
-                .passwordHash(passwordEncoder.encode(PASSWORD))
                 .firstName("Auth")
                 .lastName("Tester")
                 .isActive(true)
                 .roles(Set.of(userRole))
                 .build());
+        TestKeycloak.registerUser(saved.getId(), email, PASSWORD);
+        return saved;
     }
 
     private ResultActions deactivate(User user, String body) throws Exception {
@@ -146,12 +145,12 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void deactivate_withABlankPassword_is400_validationFailed() throws Exception {
+    void deactivate_withABlankPassword_is400_confirmationRequired() throws Exception {
         User session = register("u22-blank@example.com");
 
         deactivate(session, "{\"currentPassword\": \"\"}")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
+                .andExpect(jsonPath("$.errorCode").value("CONFIRMATION_REQUIRED"));
 
         assertThat(isActive("u22-blank@example.com")).isTrue();
     }

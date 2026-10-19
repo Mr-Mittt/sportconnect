@@ -92,7 +92,6 @@ class GroupSessionGenerationFailureIsolationIntegrationTest extends BaseIT {
 
         ownerId = userRepository.save(User.builder()
                 .email("session38-fail-owner_" + System.nanoTime() + "@example.com")
-                .passwordHash("hash")
                 .firstName("Owner")
                 .lastName("User")
                 .username("s38fail_" + System.nanoTime())

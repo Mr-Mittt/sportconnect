@@ -124,7 +124,6 @@ class UserSpec extends Specification {
         def user = User.builder()
                 .id(id)
                 .email("test@example.com")
-                .passwordHash("hashedPassword")
                 .firstName("John")
                 .lastName("Doe")
                 .username("johndoe")
@@ -145,7 +144,6 @@ class UserSpec extends Specification {
         then:
         user.id == id
         user.email == "test@example.com"
-        user.passwordHash == "hashedPassword"
         user.firstName == "John"
         user.lastName == "Doe"
         user.username == "johndoe"

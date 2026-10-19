@@ -65,7 +65,7 @@ class LocationErrorCodesIntegrationTest extends BaseIT {
     void setUp() {
         clearAll();
         userId = userRepository.save(User.builder()
-                .email("loc6-user@example.com").passwordHash("hash").firstName("Loc6").lastName("User")
+                .email("loc6-user@example.com").firstName("Loc6").lastName("User")
                 .username("loc6user").isActive(true).build()).getId();
         sportId = sportRepository.save(Sport.builder().name("LOC6 Badminton").isActive(true).build()).getId();
         inactiveSportId = sportRepository.save(Sport.builder().name("LOC6 Curling").isActive(false).build()).getId();

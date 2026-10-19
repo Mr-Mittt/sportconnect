@@ -29,4 +29,14 @@ public class KeycloakProperties {
     private String tokenUri;
     /** A26: the realm's end-session endpoint; a POST with the refresh token ends the SSO session. */
     private String logoutUri;
+
+    /** U24: the realm's admin REST base ({@code .../admin/realms/<realm>}); reads a user's name and sets a password. */
+    private String adminUri;
+    /**
+     * U24: the confidential realm client {@code sportconnect-credentials}. Its password grant confirms a current password
+     * (tokens discarded) and its service account (manage-users only) sets a new one. Backend only: no browser flow.
+     */
+    private String credentialsClientId = "sportconnect-credentials";
+    /** U24: that client's secret; no production default (INFRA-14 provides it). */
+    private String credentialsClientSecret;
 }

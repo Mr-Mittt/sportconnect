@@ -1,5 +1,7 @@
 package com.sportconnect.user.api.service;
 
+import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
+import com.sportconnect.user.api.dto.ConfirmationPurpose;
 import com.sportconnect.user.api.dto.ExternalIdentity;
 import com.sportconnect.user.api.dto.ProvisionedUser;
 import com.sportconnect.user.api.dto.UserAccessState;
@@ -118,14 +120,32 @@ public interface UserService {
     void deleteUser(UUID userId);
 
     /**
-     * Self-service deactivation (U22). Takes the same exclusive row lock as {@link #deleteUser}, requires the account
-     * to still be active, verifies {@code currentPassword}, then deactivates and revokes every session exactly like
-     * {@code deleteUser}. The account stays recoverable through the A9 re-activation flow.
+     * Self-service deactivation (U22, U24). Takes the same exclusive row lock as {@link #deleteUser}, requires the account
+     * to still be active, confirms the caller with exactly one proof (their current password, asked of Keycloak, or the
+     * code emailed for {@link ConfirmationPurpose#DEACTIVATE}), then deactivates exactly like {@code deleteUser}. The
+     * account stays recoverable through the A26 re-activation flow.
      *
      * @throws com.sportconnect.common.exception.ResourceNotFoundException if the account does not exist or is already deactivated
-     * @throws com.sportconnect.common.exception.BadRequestException with {@code CURRENT_PASSWORD_INCORRECT} on a wrong password (nothing changes)
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code CONFIRMATION_REQUIRED} (neither or both
+     *         proofs), {@code CURRENT_PASSWORD_INCORRECT}, or a {@code VERIFICATION_CODE_*} code (nothing changes)
+     * @throws com.sportconnect.common.exception.TooManyRequestsException with {@code PASSWORD_ATTEMPTS_EXCEEDED}
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak or the code store is down
      */
-    void deactivateOwnAccount(UUID userId, String currentPassword);
+    void deactivateOwnAccount(UUID userId, String currentPassword, String verificationCode);
+
+    /**
+     * U24: emails the caller a one-time code (6 digits, valid 15 minutes) that confirms {@code purpose} in place of the
+     * current password. A new code replaces the previous one for that purpose; another request within 60 seconds is
+     * refused. The text is in the caller's language (stored preference, else their country's, else English).
+     *
+     * @return the resend wait and the code's lifetime, in seconds
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if the account does not exist or is deactivated
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code VERIFICATION_EMAIL_UNAVAILABLE} when the account has no email
+     * @throws com.sportconnect.common.exception.TooManyRequestsException with {@code VERIFICATION_RESEND_TOO_SOON} ({@code seconds})
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when the code store is down
+     */
+    ConfirmationCodeResponse sendConfirmationCode(UUID userId, ConfirmationPurpose purpose);
+
 
     /**
      * Check if user exists by email. U23: {@code false} for a {@code null} or blank value.
@@ -220,9 +240,18 @@ public interface UserService {
     void updateLastLogin(UUID userId);
 
     /**
-     * Self-service password change. Verifies currentPassword before hashing and persisting newPassword.
+     * Self-service password change (U24). Confirms the caller with exactly one proof (their current password, asked of
+     * Keycloak, or the code emailed for {@link ConfirmationPurpose#CHANGE_PASSWORD}), then sets {@code newPassword} in
+     * Keycloak, the only place a password lives. Other sessions are left as they are.
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if the account does not exist or is deactivated
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code CONFIRMATION_REQUIRED},
+     *         {@code CURRENT_PASSWORD_INCORRECT}, a {@code VERIFICATION_CODE_*} code, or {@code NEW_PASSWORD_REJECTED}
+     *         (the realm's password rules refuse the value); nothing changes
+     * @throws com.sportconnect.common.exception.TooManyRequestsException with {@code PASSWORD_ATTEMPTS_EXCEEDED}
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak or the code store is down
      */
-    void changePassword(UUID userId, String currentPassword, String newPassword);
+    void changePassword(UUID userId, String currentPassword, String verificationCode, String newPassword);
 
     /**
      * Search other active users by name/username, enriched with the caller's friendship status

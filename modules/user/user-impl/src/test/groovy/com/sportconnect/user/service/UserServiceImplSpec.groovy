@@ -9,6 +9,8 @@ import com.sportconnect.reference.api.dto.RegionResponse
 import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.UserSportProfileService
+import com.sportconnect.user.api.dto.ConfirmationCodeResponse
+import com.sportconnect.user.api.dto.ConfirmationPurpose
 import com.sportconnect.user.api.dto.FriendRequestResponse
 import com.sportconnect.user.api.dto.LocationRequest
 import com.sportconnect.user.api.dto.UpdateProfileRequest
@@ -29,7 +31,7 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.data.redis.connection.stream.MapRecord
 import org.springframework.data.redis.core.StreamOperations
 import org.springframework.data.redis.core.StringRedisTemplate
-import org.springframework.security.crypto.password.PasswordEncoder
+import com.sportconnect.auth.api.service.KeycloakCredentialService
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -39,7 +41,8 @@ class UserServiceImplSpec extends Specification {
 
     UserRepository userRepository = Mock()
     RoleRepository roleRepository = Mock()
-    PasswordEncoder passwordEncoder = Mock()
+    AccountConfirmationService accountConfirmation = Mock()
+    KeycloakCredentialService keycloakCredentials = Mock()
     UserFriendService userFriendService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
@@ -51,7 +54,7 @@ class UserServiceImplSpec extends Specification {
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, accountConfirmation, keycloakCredentials, userFriendService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
 
     def "getUserById should return user when found and active"() {
         given:
@@ -632,46 +635,40 @@ class UserServiceImplSpec extends Specification {
         thrown(ResourceNotFoundException)
     }
 
-    def "deactivateOwnAccount deactivates and revokes sessions when the password matches"() {
+    def "deactivateOwnAccount deactivates once the caller is confirmed (password or emailed code)"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder()
-                .id(userId)
-                .email("test@example.com")
-                .passwordHash("hash")
-                .isActive(true)
-                .roles([] as Set)
-                .build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
 
         when:
-        userService.deactivateOwnAccount(userId, "raw")
+        userService.deactivateOwnAccount(userId, password, code)
 
         then:
         1 * userRepository.findByIdForUpdate(userId) >> Optional.of(user)
-        1 * passwordEncoder.matches("raw", "hash") >> true
+        1 * accountConfirmation.confirm(userId, ConfirmationPurpose.DEACTIVATE, password, code)
         1 * userRepository.save(_) >> { User saved ->
             assert saved.isActive == false
             return saved
         }
+
+        where:
+        password | code
+        "raw"    | null
+        null     | "123456"
     }
 
-    def "deactivateOwnAccount throws CURRENT_PASSWORD_INCORRECT and changes nothing on a wrong password"() {
+    def "deactivateOwnAccount changes nothing when the confirmation fails"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder()
-                .id(userId)
-                .email("test@example.com")
-                .passwordHash("hash")
-                .isActive(true)
-                .roles([] as Set)
-                .build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
 
         when:
-        userService.deactivateOwnAccount(userId, "wrong")
+        userService.deactivateOwnAccount(userId, "wrong", null)
 
         then:
         1 * userRepository.findByIdForUpdate(userId) >> Optional.of(user)
-        1 * passwordEncoder.matches("wrong", "hash") >> false
+        1 * accountConfirmation.confirm(userId, ConfirmationPurpose.DEACTIVATE, "wrong", null) >>
+                { throw new BadRequestException("CURRENT_PASSWORD_INCORRECT", "Current password is incorrect", null) }
         0 * userRepository.save(_)
         def e = thrown(BadRequestException)
         e.errorCode == "CURRENT_PASSWORD_INCORRECT"
@@ -683,11 +680,11 @@ class UserServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        userService.deactivateOwnAccount(userId, "raw")
+        userService.deactivateOwnAccount(userId, "raw", null)
 
         then:
         1 * userRepository.findByIdForUpdate(userId) >> found
-        0 * passwordEncoder.matches(_, _)
+        0 * accountConfirmation.confirm(*_)
         0 * userRepository.save(_)
         thrown(ResourceNotFoundException)
 
@@ -838,45 +835,39 @@ class UserServiceImplSpec extends Specification {
         result.roles.contains("USER")
     }
 
-    def "changePassword updates the hash when currentPassword matches"() {
+    def "changePassword confirms the caller and then sets the new password in Keycloak"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder()
-                .id(userId)
-                .email("test@example.com")
-                .passwordHash("oldHash")
-                .isActive(true)
-                .roles([] as Set)
-                .build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
 
         when:
-        userService.changePassword(userId, "oldRaw", "newRaw12345")
+        userService.changePassword(userId, password, code, "newRaw12345")
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
-        1 * passwordEncoder.matches("oldRaw", "oldHash") >> true
-        1 * passwordEncoder.encode("newRaw12345") >> "newHash"
-        1 * userRepository.save({ User u -> u.passwordHash == "newHash" }) >> user
+        1 * accountConfirmation.confirm(userId, ConfirmationPurpose.CHANGE_PASSWORD, password, code)
+        1 * keycloakCredentials.setPassword(userId, "newRaw12345")
+        0 * userRepository.save(_)
+
+        where:
+        password | code
+        "oldRaw" | null
+        null     | "123456"
     }
 
-    def "changePassword throws BadRequestException when currentPassword does not match"() {
+    def "changePassword sets nothing in Keycloak when the confirmation fails"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder()
-                .id(userId)
-                .email("test@example.com")
-                .passwordHash("oldHash")
-                .isActive(true)
-                .roles([] as Set)
-                .build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
 
         when:
-        userService.changePassword(userId, "wrongRaw", "newRaw12345")
+        userService.changePassword(userId, "wrongRaw", null, "newRaw12345")
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
-        1 * passwordEncoder.matches("wrongRaw", "oldHash") >> false
-        0 * userRepository.save(_)
+        1 * accountConfirmation.confirm(userId, ConfirmationPurpose.CHANGE_PASSWORD, "wrongRaw", null) >>
+                { throw new BadRequestException("CURRENT_PASSWORD_INCORRECT", "Current password is incorrect", null) }
+        0 * keycloakCredentials.setPassword(*_)
         def e = thrown(BadRequestException)
         e.errorCode == "CURRENT_PASSWORD_INCORRECT"
     }
@@ -886,33 +877,43 @@ class UserServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
 
         when:
-        userService.changePassword(userId, "oldRaw", "newRaw12345")
+        userService.changePassword(userId, "oldRaw", null, "newRaw12345")
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
-        0 * userRepository.save(_)
+        0 * accountConfirmation.confirm(*_)
+        0 * keycloakCredentials.setPassword(*_)
         thrown(ResourceNotFoundException)
     }
 
-    def "changePassword allows newPassword identical to currentPassword"() {
+    def "sendConfirmationCode emails the account in its preferred language"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder()
-                .id(userId)
-                .email("test@example.com")
-                .passwordHash("oldHash")
-                .isActive(true)
-                .roles([] as Set)
-                .build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def expected = ConfirmationCodeResponse.builder().resendAfterSeconds(60).expiresInSeconds(900).build()
 
         when:
-        userService.changePassword(userId, "samePassword", "samePassword")
+        def result = userService.sendConfirmationCode(userId, ConfirmationPurpose.DEACTIVATE)
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
-        1 * passwordEncoder.matches("samePassword", "oldHash") >> true
-        1 * passwordEncoder.encode("samePassword") >> "sameHash"
-        1 * userRepository.save(_) >> user
+        1 * userPreferenceRepository.findByUserId(userId) >> Optional.empty()
+        1 * userRepository.findById(userId) >> Optional.of(user)
+        1 * accountConfirmation.sendCode(userId, "test@example.com", ConfirmationPurpose.DEACTIVATE, Optional.empty()) >> expected
+        result.is(expected)
+    }
+
+    def "sendConfirmationCode is not-found for an unknown or deactivated account"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.sendConfirmationCode(userId, ConfirmationPurpose.CHANGE_PASSWORD)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
+        0 * accountConfirmation.sendCode(*_)
+        thrown(ResourceNotFoundException)
     }
 
     // ── getUserRoles ─────────────────────────────────────────────────────────

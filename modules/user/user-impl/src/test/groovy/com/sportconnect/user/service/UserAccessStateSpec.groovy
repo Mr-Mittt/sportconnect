@@ -14,7 +14,7 @@ import com.sportconnect.user.repository.UserRepository
 import org.springframework.dao.QueryTimeoutException
 import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.data.redis.core.ValueOperations
-import org.springframework.security.crypto.password.PasswordEncoder
+import com.sportconnect.auth.api.service.KeycloakCredentialService
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -27,7 +27,7 @@ class UserAccessStateSpec extends Specification {
     UserAccessStateCache cache = Mock()
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, Mock(RoleRepository), Mock(PasswordEncoder),
+    UserServiceImpl userService = new UserServiceImpl(userRepository, Mock(RoleRepository), Mock(AccountConfirmationService), Mock(KeycloakCredentialService),
             Mock(UserFriendService), Mock(UserSportProfileService), Mock(StringRedisTemplate),
             new ObjectMapper(), Mock(ReferenceService), Mock(UserPreferenceRepository), cache, Mock(UserProvisioningLock))
 

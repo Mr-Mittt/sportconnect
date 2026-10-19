@@ -137,3 +137,14 @@ When the new auto-cancel job (SESSION-24) cancels a `PREPARING` session because 
 `scheduledStart` passed without location/fee being completed, should the creator (and, separately,
 anyone who already joined a `PREPARING` session while it was joinable) be notified? Not resolved
 here — SESSION-24 explicitly leaves this out of scope.
+
+### NOTIF-8 · Security notice after a password change or a self-deactivation
+**Date added:** 2026-10-19
+**Status:** `CANDIDATE`
+**Source:** U24 scoping (`/workon user U24`) — surfaced, not resolved on the spot.
+
+U24 emails a one-time code to confirm a deactivation or a password change, but sends nothing once the change
+is done. Should the account's email also get a plain notice ("your password was changed" / "your account was
+deactivated"), so the owner of a hijacked session or mailbox learns of it? Open: email only (Keycloak itself can
+send a "password updated" mail through its own email theme) or also an in-app notification, and whether the
+deactivation notice belongs in the A26 re-activation flow's wording. U24 leaves it out of scope.

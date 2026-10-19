@@ -24,6 +24,7 @@
 | 404 | `NOT_FOUND` / `UNAVAILABLE` | Availability failed (soft-deleted, parent gone). See CLAUDE.md § Resource access. |
 | 400 | `VALIDATION` | Malformed or invalid input. |
 | 409 | `CONFLICT` | Well-formed request that clashes with current state. Thrown as `ConflictException`. |
+| 429 | `RATE_LIMITED` | An allowance is used up (wrong passwords, a code asked for again too soon); `errorParams.seconds` is the wait. Thrown as `TooManyRequestsException` (U24). The client has no category copy for it yet: client ACCOUNT-6 adds it with the per-code copy. |
 | 5xx | `INTERNAL` | Unexpected failure. |
 | no response | `NETWORK` | Client-side only. |
 
@@ -96,7 +97,15 @@ The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) 
 | `IDENTIFIER_REQUIRED` | 400 | none | U23: the account would be left with neither an email nor a phone number (clearing the only phone of an email-less account, or creating a user with neither). |
 | `LOCATION_INCOMPLETE` | 400 | none | Register with only one of latitude/longitude. |
 | `LOCATION_OUT_OF_RANGE` | 400 | none | Register with a coordinate outside -90..90 / -180..180. |
-| `CURRENT_PASSWORD_INCORRECT` | 400 | none | `PUT /api/users/me/password` with a wrong current password. |
+| `CURRENT_PASSWORD_INCORRECT` | 400 | none | `PUT /api/users/me/password` or `POST /api/users/me/deactivate` with a current password Keycloak does not accept (U24: also the answer for an account that has no password, e.g. Google-only; it then confirms with the emailed code). |
+| `CONFIRMATION_REQUIRED` | 400 | none | U24: `POST /api/users/me/deactivate` or `PUT /api/users/me/password` with neither proof (`currentPassword`, `verificationCode`) or with both. |
+| `VERIFICATION_CODE_INVALID` | 400 | none | U24: the emailed code is wrong (fewer than 5 wrong tries so far). |
+| `VERIFICATION_CODE_EXPIRED` | 400 | none | U24: no code is pending for that purpose (never asked for, older than 15 minutes, already used, or asked for a different purpose). |
+| `VERIFICATION_CODE_ATTEMPTS_EXCEEDED` | 400 | none | U24: the 5th wrong try; the code is burned and a new one must be requested. |
+| `VERIFICATION_EMAIL_UNAVAILABLE` | 400 | none | U24: `POST /api/users/me/confirmation-code` for an account with no email to send to (phone-only). |
+| `NEW_PASSWORD_REJECTED` | 400 | none | U24: `PUT /api/users/me/password`, the realm password policy refused the new value (nothing changed). |
+| `VERIFICATION_RESEND_TOO_SOON` | 429 | `{seconds}` | U24: `POST /api/users/me/confirmation-code` less than 60 seconds after the previous one for that purpose. |
+| `PASSWORD_ATTEMPTS_EXCEEDED` | 429 | `{seconds}` | U24: 5 wrong current passwords within 15 minutes; Keycloak is not asked again until the window frees (the emailed code still works). |
 | `SEARCH_KEYWORD_TOO_SHORT` | 400 | `{min: 2}` | `GET /api/users/search` with fewer than 2 characters after trimming. |
 | `FRIEND_REQUEST_SELF` | 400 | none | Friend request addressed to the caller. |
 | `USER_NOT_FOUND` | 404 | none | Friend request whose receiver does not exist or is deactivated. Other user lookups stay un-coded (category copy). |
