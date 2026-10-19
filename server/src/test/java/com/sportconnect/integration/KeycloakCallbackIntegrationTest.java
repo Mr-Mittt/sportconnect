@@ -491,6 +491,105 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
         mockMvc.perform(get("/api/users/me").header("Authorization", bearer(sub))).andExpect(status().isOk());
     }
 
+    // ---------- A36: the Google picture as the avatar, on the first Google sign-in only ----------
+
+    private static final String GOOGLE_PICTURE = "https://lh3.googleusercontent.com/a/photo=s96-c";
+
+    private String avatarOf(UUID id) {
+        return userRepository.findById(id).orElseThrow().getAvatarUrl();
+    }
+
+    private boolean checked(UUID id) {
+        return userRepository.findById(id).orElseThrow().getGoogleAvatarCheckedAt() != null;
+    }
+
+    private long avatarEventsFor(UUID id) {
+        var records = redis.opsForStream().range("sportconnect:domain-events", org.springframework.data.domain.Range.unbounded());
+        return records == null ? 0 : records.stream()
+                .filter(r -> "user.profile_updated".equals(r.getValue().get("event_type")))
+                .filter(r -> String.valueOf(r.getValue().get("payload")).contains(id.toString())
+                        && String.valueOf(r.getValue().get("payload")).contains("googleusercontent.com"))
+                .count();
+    }
+
+    @Test
+    void firstGoogleSignIn_createsTheAccountWithTheGooglePictureAsAvatar_andTellsTheChatService() throws Exception {
+        UUID sub = UUID.randomUUID();
+
+        signIn(TestKeycloak.Identity.of(sub).email("new.google@example.com").viaProvider("google").picture(GOOGLE_PICTURE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.avatarUrl").value(GOOGLE_PICTURE));
+
+        assertThat(avatarOf(sub)).isEqualTo(GOOGLE_PICTURE);
+        assertThat(checked(sub)).isTrue();
+        assertThat(avatarEventsFor(sub)).isEqualTo(1);
+    }
+
+    @Test
+    void firstGoogleSignIn_ofAnExistingAccountWithoutAnAvatar_fillsIt() throws Exception {
+        UUID sub = existingUserWithId(UUID.randomUUID(), true, "linked@example.com");
+
+        signIn(TestKeycloak.Identity.of(sub).email("linked@example.com").viaProvider("google").picture(GOOGLE_PICTURE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.avatarUrl").value(GOOGLE_PICTURE));
+
+        assertThat(avatarOf(sub)).isEqualTo(GOOGLE_PICTURE);
+    }
+
+    @Test
+    void anExistingAvatar_isKept_andLaterGoogleSignInsNeverFill() throws Exception {
+        UUID withAvatar = existingUserWithId(UUID.randomUUID(), true, "has@example.com");
+        jdbc.update("UPDATE users SET avatar_url = ? WHERE id = ?", "https://cdn.example.com/mine.png", withAvatar);
+
+        signIn(TestKeycloak.Identity.of(withAvatar).email("has@example.com").viaProvider("google").picture(GOOGLE_PICTURE))
+                .andExpect(status().isOk());
+        assertThat(avatarOf(withAvatar)).isEqualTo("https://cdn.example.com/mine.png");
+        assertThat(checked(withAvatar)).isTrue();
+
+        // The user removes the avatar on purpose; the next Google sign-in must not bring the picture back.
+        jdbc.update("UPDATE users SET avatar_url = NULL WHERE id = ?", withAvatar);
+        signIn(TestKeycloak.Identity.of(withAvatar).email("has@example.com").viaProvider("google").picture(GOOGLE_PICTURE))
+                .andExpect(status().isOk());
+        assertThat(avatarOf(withAvatar)).isNull();
+    }
+
+    @Test
+    void aPasswordSignIn_neverFillsTheAvatar_andDoesNotUseUpTheFirstGoogleSignIn() throws Exception {
+        UUID sub = existingUserWithId(UUID.randomUUID(), true, "pw@example.com");
+
+        signIn(TestKeycloak.Identity.of(sub).email("pw@example.com").picture(GOOGLE_PICTURE)).andExpect(status().isOk());
+        assertThat(avatarOf(sub)).isNull();
+        assertThat(checked(sub)).isFalse();
+
+        signIn(TestKeycloak.Identity.of(sub).email("pw@example.com").viaProvider("google").picture(GOOGLE_PICTURE)).andExpect(status().isOk());
+        assertThat(avatarOf(sub)).isEqualTo(GOOGLE_PICTURE);
+    }
+
+    @Test
+    void anUnusablePicture_isIgnored_theSignInStillWorks_andTheFirstSignInIsUsedUp() throws Exception {
+        UUID sub = UUID.randomUUID();
+
+        signIn(TestKeycloak.Identity.of(sub).email("odd@example.com").viaProvider("google").picture("https://evil.example.com/a.png"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty());
+        assertThat(avatarOf(sub)).isNull();
+        assertThat(checked(sub)).isTrue();
+
+        signIn(TestKeycloak.Identity.of(sub).email("odd@example.com").viaProvider("google").picture(GOOGLE_PICTURE)).andExpect(status().isOk());
+        assertThat(avatarOf(sub)).isNull();
+    }
+
+    @Test
+    void deactivatedGoogleUser_isReactivatedFirst_thenFilled() throws Exception {
+        UUID sub = existingUserWithId(UUID.randomUUID(), false, "back@example.com");
+
+        signIn(TestKeycloak.Identity.of(sub).email("back@example.com").viaProvider("google").picture(GOOGLE_PICTURE))
+                .andExpect(status().isOk());
+
+        assertThat(isActive(sub)).isTrue();
+        assertThat(avatarOf(sub)).isEqualTo(GOOGLE_PICTURE);
+    }
+
     // ---------- failures ----------
 
     @Test

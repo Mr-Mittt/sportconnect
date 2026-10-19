@@ -47,6 +47,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -519,6 +521,53 @@ public class UserServiceImpl implements UserService {
             log.info("Re-activated user: {}", user.getId());
         }
         return toUserResponse(user);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: the row lock serialises two first sign-ins of one user, so only one of them sees an unset flag. The flag is
+     * set in every case, then the avatar is filled when it is empty and the picture is acceptable. A change reaches the
+     * chat service as the usual {@code user.profile_updated} event.
+     */
+    @Override
+    @Transactional
+    public UserResponse applyGoogleAvatarOnce(UUID userId, String pictureUrl) {
+        User user = userRepository.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        if (user.getGoogleAvatarCheckedAt() != null) {
+            return toUserResponse(user);
+        }
+        user.setGoogleAvatarCheckedAt(LocalDateTime.now());
+        boolean fill = isBlank(user.getAvatarUrl()) && isGoogleImageUrl(pictureUrl);
+        if (fill) {
+            user.setAvatarUrl(pictureUrl.trim());
+        }
+        User saved = userRepository.save(user);
+        if (fill) {
+            publishDomainEvent("user.profile_updated", Map.of(
+                    "user_id", userId.toString(),
+                    "full_name", saved.getFullName(),
+                    "username", saved.getUsername() != null ? saved.getUsername() : "",
+                    "avatar_url", saved.getAvatarUrl()));
+            log.info("Used the Google picture as the avatar of user {}", userId);
+        }
+        return toUserResponse(saved);
+    }
+
+    /** A36: https, a Google image host (googleusercontent.com or a subdomain, no port or credentials), within the column. */
+    static boolean isGoogleImageUrl(String url) {
+        if (url == null || url.isBlank() || url.length() > 500) {
+            return false;
+        }
+        try {
+            URI uri = new URI(url.trim());
+            String host = uri.getHost();
+            return "https".equals(uri.getScheme()) && uri.getUserInfo() == null && uri.getPort() == -1 && host != null
+                    && (host.equals("googleusercontent.com") || host.endsWith(".googleusercontent.com"));
+        } catch (URISyntaxException e) {
+            return false;
+        }
     }
 
     /**
