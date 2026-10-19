@@ -2,7 +2,7 @@
 
 **Version:** V1
 **Module:** `client`
-**Last updated:** 2026-08-21
+**Last updated:** 2026-10-20
 **Prerequisite:** MVP backlog (`client/docs/BACKLOG_MVP.md`) should be closed, or at least the ticket
 that filed an entry here, before picking anything up.
 
@@ -24,6 +24,7 @@ that filed an entry here, before picking anything up.
 | 1 | ANON-1 | Decide and scope anonymous/logged-out post viewing | `TODO` |
 | 2 | I18N-1 | Introduce i18n / multi-language UI text support — **superseded 2026-09-25 by MVP ticket [CLIENT-I18N-1](MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md)**, which answers this ticket's six open questions | `SUPERSEDED` |
 | 3 | ADMIN-3 | Replace the attribute-schema textarea with a real JSON editor — **deferred out of MVP 2026-08-21** mid-pickup; the tree-vs-text product question outranks the dependency choice | `TODO` |
+| 4 | AUTH-18 | Register and login pages for a phone number — moved from MVP 2026-10-20 (phone accounts topic; waits for the phone-OTP delivery decision, auth A22) | `TODO` |
 
 **Chat (CHAT-2, CHAT-4) archived 2026-07-26** (user decision) — moved to
 `documentation/md/archive/chat/CHAT-2_CHAT-4_CLIENT_TICKETS.md` pending a fresh chat re-plan.
@@ -306,3 +307,30 @@ number — otherwise the lazy-loading silently regresses.
 CodeMirror and for vanilla-jsoneditor (text mode keeps the invalid state reachable). It does **not**
 hold for any object-based tree-only editor, where those tests must be deleted instead. If a future
 pickup chooses one, that is a scope change and should be re-filed as such.
+
+---
+
+### AUTH-18 · Register and login pages for a phone number (Keycloak theme)
+
+**Status:** `TODO` · **Type:** Enhancement (theme) · **Depends on:** auth A27 (done: the Keycloak extension and realm rules); auth A22 for what a phone-only user can do about recovery (decide before this ships) · **Gates:** phone-only sign-up and phone sign-in being usable by a person
+
+**Moved from:** `client/docs/BACKLOG_MVP.md` (2026-10-20), owner decision, phone accounts are a later topic: phone-only sign-up and recovery wait for the phone-OTP delivery decision (see `documentation/md/NEXT_TOPICS.md`, "Phone account"), and nothing in the MVP login depends on them.
+
+**Filed:** 2026-10-16, from auth A27. The realm now enforces a unique phone, normalises it, accepts it as a sign-in identifier and accepts a phone-only registration; the pages still only know the email.
+
+#### What
+
+The Keycloakify theme (`client/keycloak-theme`) shows what the realm now allows. Everything below is en and vi, with a Storybook story per state and the theme's a11y and visual checks.
+
+- **Register.** Add an "Email or phone number" way in: the existing email field stays, a phone field is added (optional when an email is given), and the page does not require an email in the browser any more (the submit button is disabled until every required field is filled, which today includes the email). At least one of the two must be filled. The page still sends **no `username`**: the server fills it (the email, else the canonical phone), and `Register.tsx` hides the `username` attribute the realm now lists (A27 did that hide so the page did not regress). The hint under the phone field says a number without a country code is read as Vietnamese.
+- **Errors.** The realm returns two new message keys, `phoneNumberAlreadyUsed` and `emailOrPhoneRequired`; the extension JAR ships en and vi text for them, but the theme should own the wording and place them under the right field (`messagesPerField` for `phoneNumber` and `email`).
+- **Login.** The username field's label is "Email" (auth A35, 2026-10-18; it was "Username or email" after A27). Change it to "Email or phone number" (and its placeholder and `autocomplete`), because the browser flow now accepts a phone number.
+- **Unparseable phone.** The realm never refuses a phone for its format: a number that does not parse is saved as typed and the backend marks it `INVALID` (U25). Account Settings already shows a hint for that; the register page should not promise otherwise.
+
+#### Out of scope
+
+Phone verification (auth A33), recovery for accounts with no email (auth A22), the account page, providers (A29).
+
+#### Tests
+
+Storybook stories for the register page with phone-only, email-only and both, and the two error states; the `keycloak-e2e` job (`client/e2e/keycloak/redirect.spec.ts`) gains a phone-only registration and a sign-in by phone. Visual baselines for the changed register and login stories come from the `update-baselines` dispatch.
