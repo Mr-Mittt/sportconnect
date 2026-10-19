@@ -20,6 +20,8 @@ function AvatarImage({ className, ...props }: React.ComponentProps<typeof Avatar
   return (
     <AvatarPrimitive.Image
       className={cn('aspect-square size-full object-cover', className)}
+      // A36: avatars are often hotlinked (a Google picture); Google can refuse an image that arrives with a Referer.
+      referrerPolicy="no-referrer"
       {...props}
     />
   );

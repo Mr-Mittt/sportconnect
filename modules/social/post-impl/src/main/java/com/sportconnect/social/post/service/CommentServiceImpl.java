@@ -20,6 +20,7 @@ import com.sportconnect.social.post.entity.Post;
 import com.sportconnect.social.post.repository.CommentLikeRepository;
 import com.sportconnect.social.post.repository.CommentRepository;
 import com.sportconnect.social.post.repository.PostRepository;
+import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -395,16 +396,19 @@ public class CommentServiceImpl implements CommentService {
         }
     }
 
-    private String resolveUserFullName(UUID userId) {
+    /** The comment author for the cached preview, or null when the user is gone (shown as "Unknown User", no avatar). */
+    private UserResponse resolveAuthor(UUID userId) {
         try {
-            return userService.getUserById(userId).getFullName();
+            return userService.getUserById(userId);
         } catch (ResourceNotFoundException e) {
-            return "Unknown User";
+            return null;
         }
     }
 
     private CommentResponse buildPreviewResponse(Comment comment, UUID authorId) {
-        String userFullName = resolveUserFullName(comment.getUserId());
+        UserResponse author = resolveAuthor(comment.getUserId());
+        String userFullName = author != null ? author.getFullName() : "Unknown User";
+        String userAvatarUrl = author != null ? author.getAvatarUrl() : null;
         long likeCount = getCount("comment:" + comment.getId() + ":likes",
                 () -> commentLikeRepository.countByCommentId(comment.getId()));
         return CommentResponse.builder()
@@ -412,6 +416,7 @@ public class CommentServiceImpl implements CommentService {
                 .postId(comment.getPostId())
                 .userId(comment.getUserId())
                 .userFullName(userFullName)
+                .userAvatarUrl(userAvatarUrl)
                 .content(comment.getContent())
                 .commentType(comment.getCommentType())
                 .parentCommentId(null)
@@ -444,6 +449,7 @@ public class CommentServiceImpl implements CommentService {
 
         UserSummaryResponse user = usersById.get(comment.getUserId());
         String userFullName = user != null ? user.getFullName() : "Unknown User";
+        String userAvatarUrl = user != null ? user.getAvatarUrl() : null;
 
         List<CommentResponse> replies = repliesByParentId.getOrDefault(comment.getId(), List.of())
                 .stream()
@@ -455,6 +461,7 @@ public class CommentServiceImpl implements CommentService {
                 .postId(comment.getPostId())
                 .userId(comment.getUserId())
                 .userFullName(userFullName)
+                .userAvatarUrl(userAvatarUrl)
                 .content(comment.getContent())
                 .commentType(comment.getCommentType())
                 .parentCommentId(comment.getParentCommentId())

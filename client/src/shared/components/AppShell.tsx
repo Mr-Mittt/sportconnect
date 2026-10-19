@@ -178,6 +178,7 @@ export function AppShell() {
           initials: initialsOf(user.firstName, user.lastName),
           name: `${user.firstName} ${user.lastName}`,
           email: user.email,
+          avatarUrl: user.avatarUrl ?? null,
         }}
         onLogout={logout}
         onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
