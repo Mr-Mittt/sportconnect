@@ -4,6 +4,7 @@ import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.authenticators.broker.IdpEmailVerificationAuthenticator;
@@ -15,6 +16,7 @@ import org.keycloak.forms.login.LoginFormsProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.credential.CredentialModel;
 import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -29,11 +31,21 @@ import org.keycloak.sessions.AuthenticationSessionModel;
  * so the link, its expiry and the "link clicked in another browser" handling are the stock ones). The email-sent page
  * has a resend that waits {@value #RESEND_SECONDS} seconds and a way back to the login with the email pre-filled.
  * Either proof ends the step with the existing user set; Keycloak then links the identity, never before.
+ *
+ * <p>A33: an account nobody has proved the mailbox of may have been registered by someone else with this address and their
+ * own password (registration does not verify the email). The emailed link proves the mailbox to the person it was sent
+ * to, who is then given the account, so a link-by-email proof on an account that was <em>not</em> verified when the email
+ * was sent also removes that account's password credential and ends its sessions; the user sets a new password through
+ * "forgot password". The password proof leaves the account untouched, and so does a link on an already verified account.
+ * The link click itself marks the email verified (Keycloak's own handler), which is why whether it was unverified is
+ * recorded when the email is sent.
  */
 public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthenticator {
 
     static final int RESEND_SECONDS = 60;
     static final String SENT_AT_NOTE = "SC_LINK_EMAIL_SENT_AT";
+    /** "true" when the existing account's email was already verified at the moment the link was emailed. */
+    static final String VERIFIED_AT_SEND_NOTE = "SC_LINK_VERIFIED_AT_SEND";
     static final String ATTRIBUTE = "scLink";
 
     static final String METHOD = "linkMethod";
@@ -52,6 +64,9 @@ public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthen
         boolean emailSent = existing.getEmail() != null
                 && Objects.equals(authSession.getAuthNote(Constants.VERIFY_EMAIL_KEY), existing.getEmail());
         if (linkClicked || emailSent) {
+            if (linkClicked && wasUnverifiedAtSend(authSession)) {
+                takeOverUnverifiedAccount(context, existing);
+            }
             // the stock step succeeds on a clicked link, and shows the "email sent" page again on a page refresh
             super.authenticateImpl(context, serializedCtx, brokerContext);
             return;
@@ -89,6 +104,7 @@ public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthen
     private void sendEmail(AuthenticationFlowContext context, SerializedBrokeredIdentityContext serializedCtx,
             BrokeredIdentityContext brokerContext, AuthenticationSessionModel authSession) {
         authSession.removeAuthNote(Constants.VERIFY_EMAIL_KEY); // lets the stock step send again
+        authSession.setAuthNote(VERIFIED_AT_SEND_NOTE, String.valueOf(existingUser(context).isEmailVerified()));
         authSession.setAuthNote(SENT_AT_NOTE, String.valueOf(System.currentTimeMillis()));
         // "Back to login" restarts the flow; the login page pre-fills its field from login_hint
         authSession.setClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM, existingUser(context).getEmail());
@@ -101,6 +117,7 @@ public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthen
         Map<String, Object> link = new LinkedHashMap<>();
         link.put("email", existing.getEmail());
         link.put("resendIn", resendIn(context.getAuthenticationSession()));
+        link.put("unverified", wasUnverifiedAtSend(context.getAuthenticationSession()));
         Response challenge = context.form()
                 .setStatus(Response.Status.OK)
                 .setAttribute(LoginFormsProvider.IDENTITY_PROVIDER_BROKER_CONTEXT, brokerContext)
@@ -111,6 +128,26 @@ public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthen
         context.forceChallenge(challenge);
     }
 
+    /** A missing note (the link was opened in another browser) counts as unverified: the safe side. */
+    static boolean wasUnverifiedAtSend(AuthenticationSessionModel authSession) {
+        return !"true".equals(authSession.getAuthNote(VERIFIED_AT_SEND_NOTE));
+    }
+
+    /**
+     * Removes every password credential of {@code existing}, ends its sessions, and marks its email verified (the stock
+     * link handler already did; this keeps the rule true when the link was opened somewhere the handler did not mark).
+     * Idempotent: a page refresh after the success runs it again with nothing left to remove.
+     */
+    static void takeOverUnverifiedAccount(AuthenticationFlowContext context, UserModel existing) {
+        List<CredentialModel> passwords = existing.credentialManager()
+                .getStoredCredentialsByTypeStream(PasswordCredentialModel.TYPE).toList();
+        for (CredentialModel password : passwords) {
+            existing.credentialManager().removeStoredCredentialById(password.getId());
+        }
+        context.getSession().sessions().removeUserSessions(context.getRealm(), existing);
+        existing.setEmailVerified(true);
+    }
+
     /** The choice page: login-idp-link-confirm.ftl with the options the account actually has. */
     Response choicePage(AuthenticationFlowContext context, BrokeredIdentityContext brokerContext, String errorMessage) {
         UserModel existing = existingUser(context);
@@ -118,6 +155,7 @@ public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthen
         link.put("email", existing.getEmail());
         link.put("hasPassword", hasPassword(existing));
         link.put("emailAvailable", emailAvailable(context, existing));
+        link.put("unverified", !existing.isEmailVerified());
         LoginFormsProvider form = context.form()
                 .setStatus(Response.Status.OK)
                 .setAttribute(LoginFormsProvider.IDENTITY_PROVIDER_BROKER_CONTEXT, brokerContext)

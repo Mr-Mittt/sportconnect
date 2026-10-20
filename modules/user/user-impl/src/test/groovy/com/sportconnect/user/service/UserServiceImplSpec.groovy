@@ -916,6 +916,99 @@ class UserServiceImplSpec extends Specification {
         thrown(ResourceNotFoundException)
     }
 
+    // ── A33: email verification ──────────────────────────────────
+
+    def "sendEmailVerification requests the mail when Keycloak does not hold the email as verified"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+
+        when:
+        def result = userService.sendEmailVerification(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * accountConfirmation.isEmailVerifiedInKeycloak(userId) >> false
+        1 * accountConfirmation.sendVerificationEmail(userId, "test@example.com") >> 60L
+        !result.alreadyVerified
+        result.resendAfterSeconds == 60
+        0 * userRepository.save(_)
+    }
+
+    def "sendEmailVerification sends nothing and updates the copy when Keycloak already has the email verified"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).isEmailVerified(false).roles([] as Set).build()
+
+        when:
+        def result = userService.sendEmailVerification(userId)
+
+        then:
+        2 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        1 * accountConfirmation.isEmailVerifiedInKeycloak(userId) >> true
+        0 * accountConfirmation.sendVerificationEmail(*_)
+        1 * userRepository.save({ User u -> u.isEmailVerified })
+        result.alreadyVerified
+        result.resendAfterSeconds == 0
+    }
+
+    def "sendEmailVerification refuses an account with no email before asking Keycloak"() {
+        given:
+        def userId = UUID.randomUUID()
+        def user = User.builder().id(userId).email(email).isActive(true).roles([] as Set).build()
+
+        when:
+        userService.sendEmailVerification(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(user)
+        0 * accountConfirmation._
+        def e = thrown(BadRequestException)
+        e.errorCode == "VERIFICATION_EMAIL_UNAVAILABLE"
+
+        where:
+        email << [null, "  "]
+    }
+
+    def "sendEmailVerification is not-found for an unknown or deactivated account"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        userService.sendEmailVerification(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
+        0 * accountConfirmation._
+        thrown(ResourceNotFoundException)
+    }
+
+    def "markEmailVerified sets the flag once, and does nothing when it is already set or the user is gone"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when: "unverified"
+        userService.markEmailVerified(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(User.builder().id(userId).isActive(true).isEmailVerified(false).roles([] as Set).build())
+        1 * userRepository.save({ User u -> u.isEmailVerified })
+
+        when: "already verified"
+        userService.markEmailVerified(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(User.builder().id(userId).isActive(true).isEmailVerified(true).roles([] as Set).build())
+        0 * userRepository.save(_)
+
+        when: "unknown or deactivated"
+        userService.markEmailVerified(userId)
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
+        0 * userRepository.save(_)
+    }
+
     // ── getUserRoles ─────────────────────────────────────────────────────────
 
     def "getUserRoles returns the correct set of role names"() {

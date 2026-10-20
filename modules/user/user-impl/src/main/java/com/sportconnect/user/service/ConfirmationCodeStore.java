@@ -94,6 +94,36 @@ class ConfirmationCodeStore {
     }
 
     /**
+     * A33: takes the user's slot for one verification email; another within the resend interval is refused. Not tied to a
+     * code: the mail and its link are Keycloak's.
+     *
+     * @throws TooManyRequestsException {@code VERIFICATION_RESEND_TOO_SOON} when one was requested less than the resend interval ago
+     * @throws ServiceUnavailableException if Redis cannot be used
+     */
+    void claimEmailVerificationSlot(UUID userId) {
+        try {
+            String key = key("email-verify-resend", userId, null);
+            if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, "1", resendInterval))) {
+                Long left = redis.getExpire(key, TimeUnit.SECONDS);
+                throw new TooManyRequestsException("VERIFICATION_RESEND_TOO_SOON",
+                        "A verification email was sent a moment ago; wait before asking for another",
+                        Map.of("seconds", Math.max(1L, left == null ? 1L : left)));
+            }
+        } catch (DataAccessException e) {
+            throw new ServiceUnavailableException("The verification email could not be rate limited", e);
+        }
+    }
+
+    /** A33: gives the slot back when the mail could not be requested, so a failed send does not cost the user a wait. */
+    void releaseEmailVerificationSlot(UUID userId) {
+        try {
+            redis.delete(key("email-verify-resend", userId, null));
+        } catch (DataAccessException e) {
+            // best effort: the slot expires by itself
+        }
+    }
+
+    /**
      * Checks {@code code} and, when it is right, consumes it (a code works once, even if two requests race).
      *
      * @throws BadRequestException {@code VERIFICATION_CODE_EXPIRED} (none pending, expired or already used),

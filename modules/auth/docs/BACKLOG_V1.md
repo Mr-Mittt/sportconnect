@@ -25,6 +25,7 @@
 | 3 | [A31](V1/A31_REBUILD_KEYCLOAK_USERS_FROM_APP_DB.md) | Rebuild a Keycloak realm's users from the app DB (same ids, no passwords, "set password" email), after saving federated identity links in an app table; owner request 2026-10-15 | `TODO` |
 | 4 | [A22](V1/A22_USERS_WITHOUT_EMAIL_RECOVERY_AND_NOTIFICATION_PATH.md) | Accounts with no email (phone-only, Zalo) have no recovery or notification path: add/verify email later, what password reset and the verification/welcome emails do when `email` is null; depends on the social-login feature; client follow-up to be filed with the decision — moved from MVP 2026-10-20 (phone accounts topic; waits for the phone-OTP delivery decision) | `TODO` |
 | 5 | [A34](V1/A34_SOCIAL_PROVIDERS_FACEBOOK_AND_ZALO.md) | Postponed (owner decision 2026-10-18): Facebook (built-in) and Zalo (generic OIDC or extension) providers, split from A29 because the app permissions are hard to get; needs the owner's Facebook and Zalo apps — moved from MVP 2026-10-20 (phone accounts topic; postponed) | `TODO` |
+| 6 | [A37](V1/A37_PHONE_VERIFICATION.md) | Phone verification (OTP or Zalo) and `phone_status` `VERIFIED`: the phone half split out of A33 (2026-10-20); waits for the phone-OTP delivery decision | `TODO` |
 
 ---
 

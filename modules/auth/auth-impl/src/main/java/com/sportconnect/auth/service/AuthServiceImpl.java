@@ -65,6 +65,7 @@ public class AuthServiceImpl implements AuthService {
             ProvisionedUser provisioned = provision(identityOf(jwt, userId));
             user = provisioned.user();
             created = provisioned.created();
+            user = followEmailVerified(user, jwt);
             if (!Boolean.TRUE.equals(user.getIsActive()) && social) {
                 // A social sign-in is the user's own confirmation that they are back.
                 user = userService.reactivateUser(userId);
@@ -145,8 +146,10 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse refreshToken(String refreshTokenString) {
         KeycloakTokens tokens = keycloak.refresh(refreshTokenString);
         UUID userId;
+        Jwt refreshed;
         try {
-            userId = subjectOf(verify(tokens.accessToken()));
+            refreshed = verify(tokens.accessToken());
+            userId = subjectOf(refreshed);
         } catch (RuntimeException e) {
             endSessionQuietly(tokens.refreshToken());
             throw e;
@@ -156,7 +159,7 @@ public class AuthServiceImpl implements AuthService {
             endSessionQuietly(tokens.refreshToken());
             throw new UnauthorizedException("REFRESH_TOKEN_EXPIRED_OR_REVOKED", "Refresh token expired or revoked", null);
         }
-        UserResponse user = userService.getUserById(userId);
+        UserResponse user = followEmailVerified(userService.getUserById(userId), refreshed);
         log.info("Refreshed tokens for user: {}", userId);
         return sessionOf(tokens, user);
     }
@@ -169,6 +172,25 @@ public class AuthServiceImpl implements AuthService {
     private static UnauthorizedException ticketInvalid() {
         return new UnauthorizedException("REACTIVATION_TICKET_INVALID",
                 "The re-activation request is invalid or has expired", null);
+    }
+
+    /**
+     * A33: {@code users.is_email_verified} is a copy of Keycloak's flag, brought up to date whenever a fresh token shows it
+     * as verified (every sign-in and every refresh, so a link opened in the mail reaches the app within one token
+     * lifetime). Only ever turns it on; a failed write is logged and never fails the sign-in.
+     */
+    private UserResponse followEmailVerified(UserResponse user, Jwt jwt) {
+        if (!Boolean.TRUE.equals(jwt.getClaimAsBoolean("email_verified")) || Boolean.TRUE.equals(user.getIsEmailVerified())
+                || !Boolean.TRUE.equals(user.getIsActive())) {
+            return user;
+        }
+        try {
+            userService.markEmailVerified(user.getId());
+            user.setIsEmailVerified(true);
+        } catch (RuntimeException e) {
+            log.warn("Could not record the verified email of user {}: {}", user.getId(), e.getMessage());
+        }
+        return user;
     }
 
     /**

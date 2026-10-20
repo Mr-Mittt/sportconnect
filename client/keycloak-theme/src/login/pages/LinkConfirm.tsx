@@ -95,6 +95,11 @@ export default function LinkConfirm(props: PageProps<Extract<KcContext, { pageId
                 <span>{msg('linkVerifyByEmail')}</span>
               </label>
               <p className="mt-1 mb-0 pl-6 text-2xs text-text-muted">{msg('linkVerifyByEmailHint', scLink.email)}</p>
+              {scLink.unverified && (
+                <p role="note" className="mt-1 mb-0 pl-6 text-2xs text-text-danger">
+                  {msg('linkUnverifiedWarning')}
+                </p>
+              )}
             </div>
           )}
         </fieldset>

@@ -7,6 +7,7 @@ import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
+import com.sportconnect.user.api.dto.EmailVerificationResponse;
 import com.sportconnect.user.api.dto.ConfirmationPurpose;
 import com.sportconnect.user.api.dto.ExternalIdentity;
 import com.sportconnect.user.api.dto.ProvisionedUser;
@@ -373,6 +374,40 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByIdAndIsActiveTrue(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
         return accountConfirmation.sendCode(userId, user.getEmail(), purpose, findPreferredLanguageCode(userId));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Keycloak is asked first whether the email is already verified (a link opened in another tab, or the user's
+     * first Google sign-in), because the app's copy only follows at sign-in and refresh: if it is, the copy is updated and
+     * nothing is sent. Otherwise one mail per resend interval. Not transactional: Keycloak and Redis are the only
+     * resources besides the single write in {@link #markEmailVerified}.
+     */
+    @Override
+    public EmailVerificationResponse sendEmailVerification(UUID userId) {
+        User user = userRepository.findByIdAndIsActiveTrue(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        if (isBlank(user.getEmail())) {
+            throw new BadRequestException("VERIFICATION_EMAIL_UNAVAILABLE", "This account has no email to verify", null);
+        }
+        if (accountConfirmation.isEmailVerifiedInKeycloak(userId)) {
+            markEmailVerified(userId);
+            return EmailVerificationResponse.builder().alreadyVerified(true).resendAfterSeconds(0).build();
+        }
+        long wait = accountConfirmation.sendVerificationEmail(userId, user.getEmail());
+        return EmailVerificationResponse.builder().alreadyVerified(false).resendAfterSeconds(wait).build();
+    }
+
+    @Override
+    @Transactional
+    public void markEmailVerified(UUID userId) {
+        userRepository.findByIdAndIsActiveTrue(userId)
+                .filter(user -> !Boolean.TRUE.equals(user.getIsEmailVerified()))
+                .ifPresent(user -> {
+                    user.setIsEmailVerified(true);
+                    userRepository.save(user);
+                });
     }
 
     /**

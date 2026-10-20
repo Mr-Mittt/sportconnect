@@ -19,6 +19,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.io.IOException;
+import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Map;
@@ -34,6 +35,9 @@ import java.util.function.Supplier;
  *   <li>{@link #setPassword}: the admin {@code reset-password} call, authorised by the client's service account, which the
  *       realm limits to {@code manage-users} and {@code view-users}.</li>
  * </ul>
+ *
+ * <p>A33 adds two reads and one send on the same service account ({@code manage-users} covers all three): whether the
+ * user's email is verified, and the realm's verification email.
  *
  * <p>Failure mapping: a refusal of the user's credentials ({@code invalid_grant}) is the answer {@code false}; anything
  * that is not the user's doing (Keycloak down, a 5xx, {@code unauthorized_client} (Keycloak 26) or {@code invalid_client} meaning the secret is wrong, a service
@@ -101,6 +105,45 @@ class KeycloakCredentialServiceImpl implements KeycloakCredentialService {
             throw new BadRequestException("NEW_PASSWORD_REJECTED", "The new password does not meet the password rules", null);
         }
         throw new ServiceUnavailableException("Keycloak answered " + reply.status().value() + " to a password reset");
+    }
+
+    @Override
+    public boolean isEmailVerified(UUID userId) {
+        String adminToken = serviceAccountToken();
+        Reply reply = call(() -> restClient.get()
+                .uri(properties.getAdminUri() + "/users/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .exchange((request, response) -> new Reply(response.getStatusCode(), readJson(response))));
+        if (reply.status().value() == 404) {
+            throw new ResourceNotFoundException("Keycloak user", "id", userId);
+        }
+        if (!reply.status().is2xxSuccessful()) {
+            throw new ServiceUnavailableException("Keycloak answered " + reply.status().value() + " to a user lookup");
+        }
+        return Boolean.TRUE.equals(reply.body().get("emailVerified"));
+    }
+
+    @Override
+    public void sendVerificationEmail(UUID userId) {
+        String adminToken = serviceAccountToken();
+        String lifespan = String.valueOf(properties.getVerificationLinkLifespan().toSeconds());
+        // The link's "back to the application" goes to the web app's root: the origin of the sign-in redirect URI.
+        String webApp = URI.create(properties.getRedirectUri()).resolve("/").toString();
+        Reply reply = call(() -> restClient.put()
+                .uri(properties.getAdminUri() + "/users/" + userId + "/send-verify-email?client_id={client}&redirect_uri={redirect}&lifespan={lifespan}",
+                        properties.getClientId(), webApp, lifespan)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .exchange((request, response) -> new Reply(response.getStatusCode(), readJson(response))));
+        if (reply.status().is2xxSuccessful()) {
+            return;
+        }
+        if (reply.status().value() == 404) {
+            throw new ResourceNotFoundException("Keycloak user", "id", userId);
+        }
+        if (reply.status().value() == 400) {
+            throw new BadRequestException("VERIFICATION_EMAIL_UNAVAILABLE", "This account has no email to send to", null);
+        }
+        throw new ServiceUnavailableException("Keycloak answered " + reply.status().value() + " to a verification email request");
     }
 
     /** The user's Keycloak username (the password grant needs it), or {@code null} when Keycloak has no such user. */

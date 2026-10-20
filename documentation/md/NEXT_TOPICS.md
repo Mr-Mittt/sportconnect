@@ -98,6 +98,7 @@ social-login chain no longer lists them as pending).
 |---|---|---|
 | [`A22`](../../modules/auth/docs/V1/A22_USERS_WITHOUT_EMAIL_RECOVERY_AND_NOTIFICATION_PATH.md) | auth V1 | Accounts with no email (phone-only, Zalo) have no recovery or notification path. |
 | [`A34`](../../modules/auth/docs/V1/A34_SOCIAL_PROVIDERS_FACEBOOK_AND_ZALO.md) | auth V1 | Facebook and Zalo providers. Postponed; Zalo often returns no email, so it creates phone-only accounts. |
+| [`A37`](../../modules/auth/docs/V1/A37_PHONE_VERIFICATION.md) | auth V1 | Phone verification (OTP or Zalo) and `phone_status` `VERIFIED`, split from A33 on 2026-10-20 | `TODO` |
 | `AUTH-18` | client V1 (inline) | Register and login pages for a phone number (Keycloak theme). Depends on A22's recovery answer. |
 
 **Already done** (the foundation): `U23` (nullable email, unique E.164 phone), `A27` (Keycloak extension: unique

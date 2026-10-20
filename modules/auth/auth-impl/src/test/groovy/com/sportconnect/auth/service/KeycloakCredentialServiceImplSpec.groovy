@@ -34,6 +34,7 @@ class KeycloakCredentialServiceImplSpec extends Specification {
     @Shared volatile String lastResetAuth
     @Shared volatile String lastResetBody
     @Shared volatile String lastResetPath
+    @Shared volatile String lastResetQuery
 
     KeycloakCredentialServiceImpl service
 
@@ -54,6 +55,7 @@ class KeycloakCredentialServiceImplSpec extends Specification {
             if (ex.requestMethod == "PUT") {
                 lastResetAuth = ex.requestHeaders.getFirst("Authorization")
                 lastResetPath = path
+                lastResetQuery = ex.requestURI.rawQuery
                 lastResetBody = new String(ex.requestBody.readAllBytes(), StandardCharsets.UTF_8)
                 reply(ex, resetStatus, "")
             } else {
@@ -94,6 +96,8 @@ class KeycloakCredentialServiceImplSpec extends Specification {
         def props = new KeycloakProperties()
         props.tokenUri = "http://127.0.0.1:${p}/token"
         props.adminUri = "http://127.0.0.1:${p}/admin"
+        props.clientId = "sportconnect-web"
+        props.redirectUri = "http://localhost:5173/auth/callback"
         props.credentialsClientId = "sportconnect-credentials"
         props.credentialsClientSecret = "s3cret"
         new KeycloakCredentialServiceImpl(props)
@@ -234,6 +238,75 @@ class KeycloakCredentialServiceImplSpec extends Specification {
         when:
         resetStatus = 403
         service.setPassword(USER_ID, "newSecret1")
+
+        then:
+        thrown(ServiceUnavailableException)
+    }
+
+    // ── A33: email verification ──────────────────────────────────────
+
+    def "isEmailVerified reads Keycloak's emailVerified flag with the service token"() {
+        given:
+        lookupBody = body
+
+        expect:
+        service.isEmailVerified(USER_ID) == expected
+        lastLookupAuth == "Bearer svc"
+
+        where:
+        body                                            || expected
+        '{"username":"jordan","emailVerified":true}'    || true
+        '{"username":"jordan","emailVerified":false}'   || false
+        '{"username":"jordan"}'                         || false
+    }
+
+    def "isEmailVerified maps an unknown user to not-found and any other failure to a 503"() {
+        when:
+        lookupStatus = 404
+        service.isEmailVerified(USER_ID)
+
+        then:
+        thrown(ResourceNotFoundException)
+
+        when:
+        lookupStatus = 500
+        service.isEmailVerified(USER_ID)
+
+        then:
+        thrown(ServiceUnavailableException)
+    }
+
+    def "sendVerificationEmail asks the verify-email endpoint to link back to the web app with a long lifespan"() {
+        when:
+        service.sendVerificationEmail(USER_ID)
+
+        then:
+        lastResetAuth == "Bearer svc"
+        lastResetPath == "/admin/users/${USER_ID}/send-verify-email"
+        lastResetQuery.contains("client_id=sportconnect-web")
+        lastResetQuery.contains("redirect_uri=http%3A%2F%2Flocalhost%3A5173%2F")
+        lastResetQuery.contains("lifespan=43200")
+    }
+
+    def "sendVerificationEmail maps the failures: no email to 400, unknown user to not-found, the rest to a 503"() {
+        when:
+        resetStatus = 400
+        service.sendVerificationEmail(USER_ID)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == "VERIFICATION_EMAIL_UNAVAILABLE"
+
+        when:
+        resetStatus = 404
+        service.sendVerificationEmail(USER_ID)
+
+        then:
+        thrown(ResourceNotFoundException)
+
+        when:
+        resetStatus = 500
+        service.sendVerificationEmail(USER_ID)
 
         then:
         thrown(ServiceUnavailableException)

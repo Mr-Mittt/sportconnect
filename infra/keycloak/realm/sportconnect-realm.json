@@ -1343,6 +1343,14 @@
         "claim": "picture",
         "user.attribute": "picture"
       }
+    },
+    {
+      "name": "google-email-verified",
+      "identityProviderAlias": "google",
+      "identityProviderMapper": "sc-email-verified-importer",
+      "config": {
+        "syncMode": "IMPORT"
+      }
     }
   ],
   "users": [
