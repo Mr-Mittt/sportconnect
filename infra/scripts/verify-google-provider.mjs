@@ -451,7 +451,8 @@ try {
 } finally {
   stub.close();
   await admin(`/identity-provider/instances/${IDP}`, { method: 'DELETE' });
-  const mine = (await usersWhere('search=a29')).filter((u) => (u.email ?? '').replaceAll('.', '').toLowerCase().includes(`a29${RUN}`));
+  // every account this run made carries the run id in its email (a29... and a33... names), so search by the id, not by one prefix
+  const mine = (await usersWhere(`search=${encodeURIComponent(`*${RUN}*`)}`)).filter((u) => /^a(29|33)/.test(u.email ?? '') && (u.email ?? '').toLowerCase().replaceAll('.', '').includes(RUN));
   for (const user of mine) await admin(`/users/${user.id}`, { method: 'DELETE' });
   console.log(`cleaned up ${mine.length} users`);
 }
