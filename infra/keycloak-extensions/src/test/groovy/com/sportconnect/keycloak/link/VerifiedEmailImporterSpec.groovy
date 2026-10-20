@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak
+package com.sportconnect.keycloak.link
 
 import org.keycloak.broker.provider.BrokeredIdentityContext
 import org.keycloak.models.IdentityProviderMapperModel

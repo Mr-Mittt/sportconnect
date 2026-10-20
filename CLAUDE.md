@@ -184,7 +184,7 @@ modules/
   email/
     email-api/       # EmailSender interface + EmailMessage (plain text; the caller writes subject and body)
     email-impl/      # Async SMTP sender; knows nothing about languages or templates (depends on its own api only)
-infra/keycloak-extensions/  # Keycloak provider JAR (A27): unique phone, email-or-phone, phone sign-in; Gradle project, not part of the Spring app
+infra/keycloak-extensions/  # Keycloak provider JAR (A27, A35, A29, A33), packaged by feature (email, phone, link) with one shared ValidatorInput; Gradle project, not part of the Spring app
 server/            # Main application entry point; depends on all *-impl modules
 client/            # New SportHub client — Vite + React 18 + TS + Tailwind v4 + pnpm (scaffolded by HF-00; old CRA app removed 2026-07-06)
 services/

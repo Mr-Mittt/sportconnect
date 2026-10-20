@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.phone;
 
 import org.keycloak.userprofile.AttributeContext;
 import org.keycloak.userprofile.UserProfileAttributeValidationContext;

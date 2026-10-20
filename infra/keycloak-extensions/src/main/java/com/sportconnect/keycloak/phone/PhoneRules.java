@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.phone;
 
 import com.google.i18n.phonenumbers.NumberParseException;
 import com.google.i18n.phonenumbers.PhoneNumberUtil;

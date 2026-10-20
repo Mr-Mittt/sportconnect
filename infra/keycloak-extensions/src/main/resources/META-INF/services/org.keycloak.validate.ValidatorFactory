@@ -1,3 +1,3 @@
-com.sportconnect.keycloak.UniquePhoneValidator
-com.sportconnect.keycloak.EmailOrPhoneValidator
-com.sportconnect.keycloak.UniqueNormalizedEmailValidator
+com.sportconnect.keycloak.phone.UniquePhoneValidator
+com.sportconnect.keycloak.phone.EmailOrPhoneValidator
+com.sportconnect.keycloak.email.UniqueNormalizedEmailValidator

@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.link;
 
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;

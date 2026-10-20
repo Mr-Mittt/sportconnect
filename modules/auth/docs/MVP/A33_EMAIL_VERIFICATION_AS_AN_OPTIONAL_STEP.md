@@ -60,6 +60,17 @@ As designed, plus what the live checks showed:
 - No new error code: `VERIFICATION_EMAIL_UNAVAILABLE` and `VERIFICATION_RESEND_TOO_SOON` already have their en and vi strings (U24, ACCOUNT-6).
 - Files: `infra/keycloak-extensions` (authenticator and `LinkExistingAccountTakeOverSpec`), `client/keycloak-theme` (messages en/vi, `LinkConfirm`, `LinkEmailSent`, two stories `LinkAccountUnverified` and `LinkAccountEmailSentUnverified`), the email theme messages en/vi, auth-api/auth-impl/user-api/user-impl as above, `TestKeycloak` (verify state and the send endpoint), `documentation/md/REDIS_KEYS.md`.
 
+## Package refactor of the extensions JAR (folded in, owner request 2026-10-20)
+
+`infra/keycloak-extensions` had grown to 20 classes in one package. They now live by feature, in their own commit (a pure move, no behaviour change):
+
+- `com.sportconnect.keycloak.email` (A35): `EmailRules`, `EmailNormalizingEventListener`, `NormalizedCreateUserIfUniqueAuthenticator`, `UniqueNormalizedEmailValidator` and their factories.
+- `com.sportconnect.keycloak.phone` (A27): `PhoneRules`, `PhoneLoginForm`, `PhoneNormalizingEventListener`, `RegistrationUsernameFormAction`, `UniquePhoneValidator`, `EmailOrPhoneValidator` and their factories.
+- `com.sportconnect.keycloak.link` (A29, A33): `LinkExistingAccountAuthenticator`, `VerifiedEmailImporter` and the factory.
+- `com.sportconnect.keycloak` (shared): `ValidatorInput` only (the validator-input reader that both validators used; it was a package-private helper on the phone validator).
+
+Provider ids are strings returned by the factories, so the realm, the realm file and the apply scripts are untouched; the four `META-INF/services` files carry the new class names. Specs moved with their classes; `ValidatorInputSpec` is new. Checked with the module's Spock suite and, after a JAR rebuild and Keycloak restart, `verify-phone-rules.mjs`, `verify-email-normalized.mjs`, `verify-google-provider.mjs` and `verify-email-verification.mjs` (all pass).
+
 ## Verification
 
 - New Google account (added later): Spock `VerifiedEmailImporterSpec` (claim values, same-address rule, nothing written during the import, written at commit) and the live check below, which now also asserts a new account from a vouching provider is verified, one from a provider that does not vouch is not, and a password-proved link to an existing unverified account leaves it unverified.
