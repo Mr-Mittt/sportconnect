@@ -112,7 +112,7 @@ export const LinkAccountConfirm = story('login-idp-link-confirm.ftl', { idpAlias
 /** A29: the account has no password (it was created another way), so the email is the only way. */
 export const LinkAccountEmailOnly = story('login-idp-link-confirm.ftl', {
   idpAlias: 'google',
-  scLink: { email: 'jordan@example.com', hasPassword: false, emailAvailable: true },
+  scLink: { email: 'jordan@example.com', hasPassword: false, emailAvailable: true, unverified: false },
 });
 /** A29: the typed password was wrong. */
 export const LinkAccountWrongPassword = story('login-idp-link-confirm.ftl', {
@@ -124,7 +124,7 @@ export const LinkAccountEmailSent = story('login-idp-link-email.ftl', { idpAlias
 /** A29: the minute has passed, so resend is available. */
 export const LinkAccountEmailSentCanResend = story('login-idp-link-email.ftl', {
   idpAlias: 'google',
-  scLink: { email: 'jordan@example.com', resendIn: 0 },
+  scLink: { email: 'jordan@example.com', resendIn: 0, unverified: false },
 });
 export const IdpReviewProfile = story('idp-review-user-profile.ftl');
 export const Otp = story('login-otp.ftl');
@@ -137,3 +137,14 @@ export const ErrorPage = story('error.ftl', {
 export const LogoutConfirm = story('logout-confirm.ftl');
 export const PageExpired = story('login-page-expired.ftl');
 export const SelectAuthenticator = story('select-authenticator.ftl');
+
+// A33: the account was never verified, so the emailed link also removes its current password (the warning shows).
+export const LinkAccountUnverified = story('login-idp-link-confirm.ftl', {
+  idpAlias: 'google',
+  scLink: { email: 'jordan@example.com', hasPassword: true, emailAvailable: true, unverified: true },
+});
+
+export const LinkAccountEmailSentUnverified = story('login-idp-link-email.ftl', {
+  idpAlias: 'google',
+  scLink: { email: 'jordan@example.com', resendIn: 60, unverified: true },
+});

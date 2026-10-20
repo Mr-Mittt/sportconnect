@@ -9,10 +9,10 @@ export type KcContextExtension = {
 /** A29: set by the sc-link-existing-account step (infra/keycloak-extensions, LinkExistingAccountAuthenticator). */
 export type KcContextExtensionPerPage = {
   'login-idp-link-confirm.ftl': {
-    scLink: { email: string; hasPassword: boolean; emailAvailable: boolean };
+    scLink: { email: string; hasPassword: boolean; emailAvailable: boolean; unverified: boolean };
   };
   'login-idp-link-email.ftl': {
-    scLink: { email: string; resendIn: number };
+    scLink: { email: string; resendIn: number; unverified: boolean };
   };
 };
 

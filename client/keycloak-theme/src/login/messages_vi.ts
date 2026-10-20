@@ -214,6 +214,8 @@ const themeKeys: Record<ThemeMessageKey, string> = {
   linkVerifyByEmailHint: 'Chúng tôi sẽ gửi liên kết xác minh tới {0}.',
   linkEmailSentTitle: 'Hãy kiểm tra email của bạn',
   linkEmailSentBody: 'Chúng tôi đã gửi email xác minh tới {0}. Hãy mở email và nhấp vào liên kết để tiếp tục.',
+  linkUnverifiedWarning:
+    'Email của tài khoản này chưa từng được xác minh. Xác minh qua email sẽ trao tài khoản cho bạn: mật khẩu hiện tại bị xóa và các phiên đăng nhập khác kết thúc. Sau đó hãy đặt mật khẩu mới bằng "Quên mật khẩu".',
   linkResend: 'Gửi lại email',
   linkResendIn: 'Gửi lại email sau {0} giây',
   linkBackToLogin: 'Quay lại đăng nhập',

@@ -31,4 +31,26 @@ public interface KeycloakCredentialService {
      *         app's credentials client is misconfigured
      */
     void setPassword(UUID userId, String newPassword);
+
+    /**
+     * A33: whether Keycloak holds the user's email as verified (the built-in {@code emailVerified}). Keycloak is the
+     * source of truth; {@code users.is_email_verified} is a copy that follows it.
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException when Keycloak has no such user
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak cannot be reached or this
+     *         app's credentials client is misconfigured
+     */
+    boolean isEmailVerified(UUID userId);
+
+    /**
+     * A33: asks Keycloak to email the user its verification link (the realm's themed mail, in the user's locale); opening
+     * it sets {@code emailVerified}. The link comes back to the web app and lives {@code app.keycloak.verification-link-lifespan}.
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code VERIFICATION_EMAIL_UNAVAILABLE} when
+     *         Keycloak has no email for the user
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException when Keycloak has no such user
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak cannot be reached or this
+     *         app's credentials client is misconfigured
+     */
+    void sendVerificationEmail(UUID userId);
 }

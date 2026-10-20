@@ -72,6 +72,9 @@ public final class TestKeycloak {
     private static final Map<UUID, String> USERNAMES = new ConcurrentHashMap<>();
     private static final Map<UUID, String> PASSWORDS = new ConcurrentHashMap<>();
     private static final AtomicBoolean ADMIN_UP = new AtomicBoolean(true);
+    /** A33: Keycloak's built-in emailVerified per user (absent: false) and the verification mails it was asked to send. */
+    private static final Set<UUID> EMAIL_VERIFIED = ConcurrentHashMap.newKeySet();
+    private static final Map<UUID, List<String>> VERIFICATION_REQUESTS = new ConcurrentHashMap<>();
 
     public static final String ISSUER;
     public static final String JWK_SET_URI;
@@ -149,6 +152,28 @@ public final class TestKeycloak {
     /** The user's current Keycloak password, or null. */
     public static String passwordOf(UUID userId) {
         return PASSWORDS.get(userId);
+    }
+
+    // ---------- A33: email verification ----------
+
+    /** Sets what Keycloak holds as the user's emailVerified (a user starts unverified). */
+    public static void setEmailVerified(UUID userId, boolean verified) {
+        if (verified) {
+            EMAIL_VERIFIED.add(userId);
+        } else {
+            EMAIL_VERIFIED.remove(userId);
+        }
+    }
+
+    /** The query strings of the verify-email requests Keycloak received for the user, oldest first. */
+    public static List<String> verificationRequests(UUID userId) {
+        return List.copyOf(VERIFICATION_REQUESTS.getOrDefault(userId, List.of()));
+    }
+
+    /** Forgets every verification state and request (between tests). */
+    public static void resetVerification() {
+        EMAIL_VERIFIED.clear();
+        VERIFICATION_REQUESTS.clear();
     }
 
     /** While {@code false}, the admin endpoints answer 503 (the password grant keeps working). */
@@ -426,7 +451,14 @@ public final class TestKeycloak {
             return;
         }
         if (parts.length == 1 && "GET".equals(exchange.getRequestMethod())) {
-            respond(exchange, 200, "{\"id\":\"" + userId + "\",\"username\":\"" + USERNAMES.get(userId) + "\"}");
+            respond(exchange, 200, "{\"id\":\"" + userId + "\",\"username\":\"" + USERNAMES.get(userId) + "\",\"emailVerified\":" + EMAIL_VERIFIED.contains(userId) + "}");
+            return;
+        }
+        if (parts.length == 2 && "send-verify-email".equals(parts[1]) && "PUT".equals(exchange.getRequestMethod())) {
+            VERIFICATION_REQUESTS.computeIfAbsent(userId, id -> new java.util.concurrent.CopyOnWriteArrayList<>())
+                    .add(URLDecoder.decode(String.valueOf(exchange.getRequestURI().getRawQuery()), StandardCharsets.UTF_8));
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
             return;
         }
         if (parts.length == 2 && "reset-password".equals(parts[1]) && "PUT".equals(exchange.getRequestMethod())) {

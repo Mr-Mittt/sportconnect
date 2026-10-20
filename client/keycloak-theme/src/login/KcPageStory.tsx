@@ -10,9 +10,9 @@ const kcContextExtension: KcContextExtension = {
 };
 const kcContextExtensionPerPage: KcContextExtensionPerPage = {
   'login-idp-link-confirm.ftl': {
-    scLink: { email: 'jordan@example.com', hasPassword: true, emailAvailable: true },
+    scLink: { email: 'jordan@example.com', hasPassword: true, emailAvailable: true, unverified: false },
   },
-  'login-idp-link-email.ftl': { scLink: { email: 'jordan@example.com', resendIn: 60 } },
+  'login-idp-link-email.ftl': { scLink: { email: 'jordan@example.com', resendIn: 60, unverified: false } },
 };
 
 export const { getKcContextMock } = createGetKcContextMock({

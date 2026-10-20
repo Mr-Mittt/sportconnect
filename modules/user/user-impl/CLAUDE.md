@@ -47,6 +47,7 @@ PUT    /api/users/{userId}/profile       ROLE_USER
 POST   /api/users/me/deactivate          ROLE_USER  (U22, U24: body { currentPassword | verificationCode }, exactly one; soft-deletes the caller; the A25 gate refuses them from the next request)
 PUT    /api/users/me/password            ROLE_USER  (U24: { currentPassword | verificationCode, newPassword }; the new password is set in Keycloak)
 POST   /api/users/me/confirmation-code   ROLE_USER  (U24: { purpose: DEACTIVATE | CHANGE_PASSWORD } -> emails a 6-digit code, { resendAfterSeconds: 60, expiresInSeconds: 900 })
+POST   /api/users/me/email-verification    ROLE_USER  (A33: asks Keycloak to email its verification link -> { alreadyVerified, resendAfterSeconds: 60 }; nothing is sent and the copy is synced when Keycloak already has the email verified; 429 VERIFICATION_RESEND_TOO_SOON)
 DELETE /api/users/{userId}               ROLE_ADMIN
 ```
 

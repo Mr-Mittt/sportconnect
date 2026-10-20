@@ -178,4 +178,60 @@ class AccountConfirmationServiceSpec extends Specification {
         0 * store.recordPasswordFailure(_)
         thrown(ServiceUnavailableException)
     }
+
+    // ── A33: verification email ──────────────────────────────────
+
+    def "sendVerificationEmail takes the cooldown slot, asks Keycloak and reports the wait"() {
+        when:
+        def wait = service.sendVerificationEmail(userId, "a@example.com")
+
+        then:
+        1 * store.claimEmailVerificationSlot(userId)
+        1 * credentials.sendVerificationEmail(userId)
+        1 * store.resendInterval() >> Duration.ofSeconds(60)
+        wait == 60
+    }
+
+    def "sendVerificationEmail without an email asks nobody"() {
+        when:
+        service.sendVerificationEmail(userId, email)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == "VERIFICATION_EMAIL_UNAVAILABLE"
+        0 * store._
+        0 * credentials._
+
+        where:
+        email << [null, "", "  "]
+    }
+
+    def "sendVerificationEmail inside the wait is refused before Keycloak is asked"() {
+        when:
+        service.sendVerificationEmail(userId, "a@example.com")
+
+        then:
+        1 * store.claimEmailVerificationSlot(userId) >> { throw new TooManyRequestsException("VERIFICATION_RESEND_TOO_SOON", "wait", [seconds: 30L]) }
+        0 * credentials.sendVerificationEmail(_)
+        thrown(TooManyRequestsException)
+    }
+
+    def "a failed send gives the slot back so the user can try again at once"() {
+        when:
+        service.sendVerificationEmail(userId, "a@example.com")
+
+        then:
+        1 * credentials.sendVerificationEmail(userId) >> { throw new ServiceUnavailableException("down") }
+        1 * store.releaseEmailVerificationSlot(userId)
+        thrown(ServiceUnavailableException)
+    }
+
+    def "isEmailVerifiedInKeycloak asks Keycloak"() {
+        when:
+        def verified = service.isEmailVerifiedInKeycloak(userId)
+
+        then:
+        1 * credentials.isEmailVerified(userId) >> true
+        verified
+    }
 }

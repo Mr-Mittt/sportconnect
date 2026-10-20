@@ -56,6 +56,8 @@ const en = {
   linkVerifyByEmailHint: 'We will send a verification link to {0}.',
   linkEmailSentTitle: 'Check your email',
   linkEmailSentBody: 'We sent a verification email to {0}. Open it and click the link to continue.',
+  linkUnverifiedWarning:
+    'This account\'s email was never verified. Verifying by email gives the account to you: its current password is removed and its other sessions end. Set a new password afterwards with "Forgot password".',
   linkResend: 'Resend email',
   linkResendIn: 'Resend email in {0}s',
   linkBackToLogin: 'Back to log in',

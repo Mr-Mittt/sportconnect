@@ -5,6 +5,8 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 /**
  * A25: where the access tokens come from. {@code issuerUri} must equal the token's {@code iss} exactly (Keycloak
  * stamps its public hostname there), while {@code jwkSetUri} is only where the keys are fetched from, so it can be an
@@ -39,4 +41,7 @@ public class KeycloakProperties {
     private String credentialsClientId = "sportconnect-credentials";
     /** U24: that client's secret; no production default (INFRA-14 provides it). */
     private String credentialsClientSecret;
+
+    /** A33: how long the emailed verification link works (the realm default for a user-triggered link is only minutes). */
+    private Duration verificationLinkLifespan = Duration.ofHours(12);
 }

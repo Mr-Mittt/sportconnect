@@ -4,6 +4,7 @@ import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.user.api.dto.ChangePasswordRequest;
 import com.sportconnect.user.api.dto.ConfirmationCodeRequest;
 import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
+import com.sportconnect.user.api.dto.EmailVerificationResponse;
 import com.sportconnect.user.api.dto.DeactivateAccountRequest;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
@@ -178,6 +179,23 @@ public class UserController {
             @Valid @RequestBody ConfirmationCodeRequest request) {
         ConfirmationCodeResponse response = userService.sendConfirmationCode(UUID.fromString(callerIdStr), request.getPurpose());
         return ResponseEntity.ok(ApiResponse.success("Confirmation code sent", response));
+    }
+
+    @Operation(summary = "Email the caller a verification link", description = "A33. Verifying the email is optional (an unverified account works as normal). Asks Keycloak to email its verification link; if the email is already verified nothing is sent and alreadyVerified is true. At most one mail per 60 seconds.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Mail requested, or already verified"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "The account has no email (VERIFICATION_EMAIL_UNAVAILABLE)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or deactivated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "A mail was requested less than 60 seconds ago (VERIFICATION_RESEND_TOO_SOON)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the cooldown store is unavailable")
+    })
+    @PostMapping("/me/email-verification")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<EmailVerificationResponse>> sendEmailVerification(
+            @AuthenticationPrincipal String callerIdStr) {
+        EmailVerificationResponse response = userService.sendEmailVerification(UUID.fromString(callerIdStr));
+        return ResponseEntity.ok(ApiResponse.success(response.isAlreadyVerified() ? "Email already verified" : "Verification email requested", response));
     }
 
     @Operation(summary = "Delete a user", description = "Admin-only. Soft delete (isActive=false).")

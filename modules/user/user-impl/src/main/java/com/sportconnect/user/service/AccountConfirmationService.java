@@ -86,4 +86,31 @@ class AccountConfirmationService {
         }
         store.clearPasswordFailures(userId);
     }
+
+    /**
+     * A33: whether Keycloak holds the user's email as verified.
+     */
+    boolean isEmailVerifiedInKeycloak(UUID userId) {
+        return credentials.isEmailVerified(userId);
+    }
+
+    /**
+     * A33: asks Keycloak to email the verification link, at most once per resend interval.
+     *
+     * @return the wait before another request, in seconds
+     * @throws BadRequestException {@code VERIFICATION_EMAIL_UNAVAILABLE} when the account has no email
+     */
+    long sendVerificationEmail(UUID userId, String email) {
+        if (email == null || email.isBlank()) {
+            throw new BadRequestException("VERIFICATION_EMAIL_UNAVAILABLE", "This account has no email to verify", null);
+        }
+        store.claimEmailVerificationSlot(userId);
+        try {
+            credentials.sendVerificationEmail(userId);
+        } catch (RuntimeException e) {
+            store.releaseEmailVerificationSlot(userId);
+            throw e;
+        }
+        return store.resendInterval().toSeconds();
+    }
 }
