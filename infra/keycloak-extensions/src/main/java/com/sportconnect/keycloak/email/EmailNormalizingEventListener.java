@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.email;
 
 import org.keycloak.events.Event;
 import org.keycloak.events.EventListenerProvider;

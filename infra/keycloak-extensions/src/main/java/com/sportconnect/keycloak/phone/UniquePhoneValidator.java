@@ -1,4 +1,6 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.phone;
+
+import com.sportconnect.keycloak.ValidatorInput;
 
 import java.util.List;
 
@@ -28,7 +30,7 @@ public class UniquePhoneValidator implements SimpleValidator {
 
     @Override
     public ValidationContext validate(Object input, String inputHint, ValidationContext context, ValidatorConfig config) {
-        String phone = PhoneRules.canonical(first(input));
+        String phone = PhoneRules.canonical(ValidatorInput.first(input));
         if (phone == null) {
             return context;
         }
@@ -50,12 +52,5 @@ public class UniquePhoneValidator implements SimpleValidator {
             return user == null ? null : user.getId();
         }
         return null;
-    }
-
-    static String first(Object input) {
-        if (input instanceof List<?> list) {
-            return list.isEmpty() || list.get(0) == null ? null : list.get(0).toString();
-        }
-        return input == null ? null : input.toString();
     }
 }

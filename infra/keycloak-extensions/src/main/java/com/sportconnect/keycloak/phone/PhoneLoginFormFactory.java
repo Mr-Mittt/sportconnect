@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.phone;
 
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.authentication.authenticators.browser.UsernamePasswordFormFactory;

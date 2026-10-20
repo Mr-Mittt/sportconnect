@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak
+package com.sportconnect.keycloak.link
 
 import org.keycloak.authentication.AuthenticationFlowContext
 import org.keycloak.credential.CredentialModel

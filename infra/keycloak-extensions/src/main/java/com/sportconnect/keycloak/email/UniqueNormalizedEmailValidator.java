@@ -1,4 +1,6 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.email;
+
+import com.sportconnect.keycloak.ValidatorInput;
 
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
@@ -30,7 +32,7 @@ public class UniqueNormalizedEmailValidator implements SimpleValidator {
 
     @Override
     public ValidationContext validate(Object input, String inputHint, ValidationContext context, ValidatorConfig config) {
-        String key = EmailRules.normalized(UniquePhoneValidator.first(input));
+        String key = EmailRules.normalized(ValidatorInput.first(input));
         if (key == null) {
             return context;
         }

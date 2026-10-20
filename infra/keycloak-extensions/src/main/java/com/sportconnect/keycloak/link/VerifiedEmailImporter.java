@@ -1,4 +1,4 @@
-package com.sportconnect.keycloak;
+package com.sportconnect.keycloak.link;
 
 import java.util.List;
 import org.keycloak.broker.oidc.mappers.AbstractClaimMapper;
