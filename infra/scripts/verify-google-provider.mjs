@@ -14,7 +14,8 @@
 //
 // A33: a brand-new account from the provider starts email-verified when the provider says so (the `google-email-verified`
 // mapper, applied to the stub the same way the script applies it to google), one the provider does not vouch for starts
-// unverified, and an existing account the provider is linked to keeps whatever it had (the mapper only imports).
+// unverified, and an existing account the provider is linked to by its PASSWORD becomes verified only when the provider vouches
+// for the mailbox (the mapper itself only imports; the link step does this).
 //
 // Creates a user a29-<run>... and an identity provider a29stub-<run>, deleted at the end (also on failure). Exit code 1
 // if any check fails. Same overrides as verify-email-normalized.mjs (the helpers below are copied from it) plus
@@ -406,7 +407,7 @@ async function main() {
   const unprovenUser = await userByEmail(`a33.${RUN}.unproven@outlook.com`);
   check('A33: a new account from a provider that does not vouch starts unverified', unproven.code !== undefined && unproven.code !== null && unprovenUser?.emailVerified === false, `${unprovenUser?.emailVerified} ${unproven.text?.slice(0, 120)}`);
 
-  // 4b. A33: linking to an EXISTING unverified account by its password does not verify it
+  // 4b. A33: linking to an EXISTING unverified account by its password verifies it when the provider vouches for the mailbox
   const pwlinkMail = `a33.${RUN}.pwlink@example.com`;
   check('a third password account is registered', (await register({ email: pwlinkMail })).ok);
   const pwlinkAccount = await userByEmail(pwlinkMail);
@@ -416,8 +417,19 @@ async function main() {
   if (pw2.headers.get('location')) await follow(new URL(pw2.headers.get('location'), URL_BASE).href, pw1.jar);
   const pwLinked = await (await admin(`/users/${pwlinkAccount.id}/federated-identity`)).json();
   check('the password proof linked the provider', pwLinked.length === 1, JSON.stringify(pwLinked));
-  check('A33: and left the existing account unverified (the provider is not asked about an account that already existed)', (await userByEmail(pwlinkMail))?.emailVerified === false, String((await userByEmail(pwlinkMail))?.emailVerified));
+  check('A33: and marked the account verified (the user proved the account, the provider vouches for the mailbox)', (await userByEmail(pwlinkMail))?.emailVerified === true, String((await userByEmail(pwlinkMail))?.emailVerified));
   check('A33: and kept its password', await hasPassword(pwlinkAccount.id));
+
+  // 4c. the same proof when the provider does NOT say the email is verified: the account stays unverified
+  const doubtMail = `a33.${RUN}.doubt@example.com`;
+  check('a fourth password account is registered', (await register({ email: doubtMail })).ok);
+  const doubtAccount = await userByEmail(doubtMail);
+  const d1 = await brokerSession({ sub: `g8-${RUN}`, email: doubtMail, email_verified: false });
+  const d2 = await formPost(loginActionOf(d1.html), d1.jar, { linkMethod: 'password', password: PASSWORD });
+  absorb(d1.jar, d2);
+  if (d2.headers.get('location')) await follow(new URL(d2.headers.get('location'), URL_BASE).href, d1.jar);
+  check('the password proof linked the provider again', (await (await admin(`/users/${doubtAccount.id}/federated-identity`)).json()).length === 1);
+  check('A33: and left the account unverified (the provider did not vouch for the mailbox)', (await userByEmail(doubtMail))?.emailVerified === false, String((await userByEmail(doubtMail))?.emailVerified));
 
   // 5. A33: an account that WAS verified keeps its password when the emailed link proves a Google sign-in
   const verifiedMail = `a33.${RUN}.verified@example.com`;

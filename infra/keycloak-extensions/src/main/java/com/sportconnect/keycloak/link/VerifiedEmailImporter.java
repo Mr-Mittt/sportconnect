@@ -1,6 +1,7 @@
 package com.sportconnect.keycloak.link;
 
 import java.util.List;
+import com.sportconnect.keycloak.email.EmailRules;
 import org.keycloak.broker.oidc.mappers.AbstractClaimMapper;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.models.IdentityProviderMapperModel;
@@ -70,7 +71,7 @@ public class VerifiedEmailImporter extends AbstractClaimMapper {
     @Override
     public void importNewUser(KeycloakSession session, RealmModel realm, UserModel user, IdentityProviderMapperModel mapperModel,
             BrokeredIdentityContext context) {
-        if (isTrue(getClaimValue(context, CLAIM)) && sameEmail(user.getEmail(), context.getEmail())) {
+        if (providerVouches(context, user.getEmail())) {
             String userId = user.getId();
             session.getTransactionManager().enlistPrepare(new AbstractKeycloakTransaction() {
                 @Override
@@ -88,6 +89,15 @@ public class VerifiedEmailImporter extends AbstractClaimMapper {
         }
     }
 
+    /**
+     * True when the provider's token says its email is verified and that email is the same mailbox as {@code accountEmail}
+     * (the A35 key, so {@code j.doe+x@gmail.com} and {@code jdoe@googlemail.com} are one mailbox). Shared with the
+     * password proof in {@link LinkExistingAccountAuthenticator}: Google vouches for the mailbox, the user proved the account.
+     */
+    static boolean providerVouches(BrokeredIdentityContext context, String accountEmail) {
+        return isTrue(getClaimValue(context, CLAIM)) && sameEmail(accountEmail, context.getEmail());
+    }
+
     /** The claim is a JSON boolean from Google, and a string from some providers. */
     static boolean isTrue(Object claimValue) {
         if (claimValue instanceof Boolean flag) {
@@ -98,6 +108,7 @@ public class VerifiedEmailImporter extends AbstractClaimMapper {
 
     /** The provider's claim is about the email it sent; only a user created with that same address gets the flag. */
     static boolean sameEmail(String userEmail, String providerEmail) {
-        return userEmail != null && providerEmail != null && userEmail.equalsIgnoreCase(providerEmail);
+        String account = EmailRules.normalized(userEmail);
+        return account != null && account.equals(EmailRules.normalized(providerEmail));
     }
 }
