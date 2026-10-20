@@ -36,7 +36,9 @@ import org.keycloak.sessions.AuthenticationSessionModel;
  * own password (registration does not verify the email). The emailed link proves the mailbox to the person it was sent
  * to, who is then given the account, so a link-by-email proof on an account that was <em>not</em> verified when the email
  * was sent also removes that account's password credential and ends its sessions; the user sets a new password through
- * "forgot password". The password proof leaves the account untouched, and so does a link on an already verified account.
+ * "forgot password". The password proof never removes anything: it proves the account is the user's, and when the provider
+ * also says the mailbox is verified the email is marked verified ({@link #markVerifiedWhenProviderVouches}); a link on an
+ * already verified account leaves it as it is.
  * The link click itself marks the email verified (Keycloak's own handler), which is why whether it was unverified is
  * recorded when the email is sent.
  */
@@ -92,6 +94,7 @@ public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthen
             }
         } else if (METHOD_PASSWORD.equals(method) && hasPassword(existing)) {
             if (passwordChecker.validatePassword(context, existing, form, false)) {
+                markVerifiedWhenProviderVouches(brokerContext, existing);
                 context.setUser(existing);
                 context.success();
             }
@@ -126,6 +129,17 @@ public class LinkExistingAccountAuthenticator extends IdpEmailVerificationAuthen
                 .setExecution(context.getExecution().getId())
                 .createIdpLinkEmailPage();
         context.forceChallenge(challenge);
+    }
+
+    /**
+     * The password proof shows the user holds the account, and the provider's token says the same mailbox is verified, so
+     * the email is now proven from both ends: mark it verified. Nothing changes when the provider does not vouch for it
+     * ({@code email_verified} absent or false) or the account is already verified.
+     */
+    static void markVerifiedWhenProviderVouches(BrokeredIdentityContext brokerContext, UserModel existing) {
+        if (!existing.isEmailVerified() && VerifiedEmailImporter.providerVouches(brokerContext, existing.getEmail())) {
+            existing.setEmailVerified(true);
+        }
     }
 
     /** A missing note (the link was opened in another browser) counts as unverified: the safe side. */

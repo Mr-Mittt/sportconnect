@@ -36,7 +36,7 @@ Why: blocking sign-in until the link is clicked is not wanted. Verification beco
 - **Email only.** Phone verification (OTP or Zalo, `phone_status` `VERIFIED`) leaves this ticket and is filed separately in V1 (it waits for the phone-OTP delivery decision). The ticket is narrowed to email.
 - **Settled 2026-10-20 (Phase 1):**
   - The flag is Keycloak's built-in `emailVerified` (the `email_verified` claim, `users.is_email_verified` in the app DB); no new attribute. Nothing in the app is added to the user model.
-  - Register with a password: false. First Google sign-in that creates a new account: true (the provider vouches for it). A Google sign-in that links to an existing password account: unchanged when the user proves it with the password, true when the user proves it with the emailed link.
+  - Register with a password: false. First Google sign-in that creates a new account: true (the provider vouches for it). A Google sign-in that links to an existing password account: true when the user proves it with the password and Google says the mailbox is verified (changed 2026-10-20, owner: the user proved the account, Google vouches for the mailbox, so both ends agree), true when the user proves it with the emailed link.
   - Existing dev users stay unverified (useful to test the flow).
   - Manual verification: a backend endpoint asks Keycloak to send the verification email; the account-settings button and the profile refresh are a client ticket (ACCOUNT-7), filed with the contract.
   - Phone verification is filed as A37 (V1).
@@ -59,6 +59,10 @@ As designed, plus what the live checks showed:
 - The sign-in response body carries a small user map without the flag; the profile (`GET /api/users/me`) carries `isEmailVerified`.
 - No new error code: `VERIFICATION_EMAIL_UNAVAILABLE` and `VERIFICATION_RESEND_TOO_SOON` already have their en and vi strings (U24, ACCOUNT-6).
 - Files: `infra/keycloak-extensions` (authenticator and `LinkExistingAccountTakeOverSpec`), `client/keycloak-theme` (messages en/vi, `LinkConfirm`, `LinkEmailSent`, two stories `LinkAccountUnverified` and `LinkAccountEmailSentUnverified`), the email theme messages en/vi, auth-api/auth-impl/user-api/user-impl as above, `TestKeycloak` (verify state and the send endpoint), `documentation/md/REDIS_KEYS.md`.
+
+## Scope change 2026-10-20 (owner, after the first build): a password proof verifies too
+
+The first build left an account unverified when a Google sign-in was proven with the account's **password** (only the emailed link verified it). Owner decision: that proof verifies as well, because the user proved the account is theirs and Google vouches for the same mailbox. Built as `LinkExistingAccountAuthenticator.markVerifiedWhenProviderVouches` (called when the password is right): it sets `emailVerified` only if the provider's token says `email_verified` is true and its email is the same mailbox as the account's (the A35 key, so `j.doe+x@gmail.com` and `jdoe@googlemail.com` match), and the account is not verified yet. A provider that does not vouch leaves the account unverified. The password is never removed on this path. The same-mailbox comparison now uses the A35 key in `VerifiedEmailImporter` too (it compared plain addresses before; for a new user the two are identical, so nothing changes there). Tests: `LinkExistingAccountPasswordProofSpec` and two cases added to `verify-google-provider.mjs` (vouching: verified and password kept; not vouching: unverified).
 
 ## Package refactor of the extensions JAR (folded in, owner request 2026-10-20)
 
