@@ -58,9 +58,67 @@ describe('ChangeEmailDialog', () => {
     expect(updateButton()).toBeDisabled();
   });
 
-  it('warns that the change unlinks Google and that the address becomes the sign-in name', () => {
+  it('shows no warning text of its own beyond the form', () => {
     setup();
-    expect(screen.getByText(/unlinks your Google sign-in/)).toBeInTheDocument();
+    expect(screen.queryByText(/Google/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sign-in name/)).not.toBeInTheDocument();
+  });
+
+  describe('the new address must look like an email', () => {
+    it.each(['plain', 'name@', 'name@example', 'na me@example.com', '@example.com'])(
+      'keeps Verify off for %j and says so once the field is left',
+      async (typed) => {
+        const newEmailSender = makeNewEmailSender();
+        setup({ newEmailSender });
+        const input = screen.getByLabelText('New email address');
+        await userEvent.type(input, typed);
+        expect(screen.getByRole('button', { name: 'Verify' })).toBeDisabled();
+        expect(input).not.toHaveAccessibleDescription(/valid email/);
+
+        await userEvent.tab();
+
+        expect(input).toHaveAccessibleDescription('Enter a valid email address, like name@example.com.');
+        expect(input).toBeInvalid();
+        expect(screen.getByRole('button', { name: 'Verify' })).toBeDisabled();
+        expect(newEmailSender.send).not.toHaveBeenCalled();
+      },
+    );
+
+    it('a valid address enables Verify and drops the hint', async () => {
+      const newEmailSender = makeNewEmailSender();
+      setup({ newEmailSender });
+      const input = screen.getByLabelText('New email address');
+      await userEvent.type(input, 'name@example');
+      await userEvent.tab();
+      expect(input).toBeInvalid();
+
+      await userEvent.type(input, '.com');
+
+      expect(input).not.toBeInvalid();
+      expect(screen.getByRole('button', { name: 'Verify' })).toBeEnabled();
+      await userEvent.click(screen.getByRole('button', { name: 'Verify' }));
+      expect(newEmailSender.send).toHaveBeenCalledWith('name@example.com');
+    });
+
+    it('an empty field shows no format hint', async () => {
+      setup();
+      const input = screen.getByLabelText('New email address');
+      await userEvent.click(input);
+      await userEvent.tab();
+      expect(input).not.toBeInvalid();
+    });
+
+    it('a server refusal of the address takes the place of the format hint', async () => {
+      const newEmailSender = makeNewEmailSender({
+        errorCode: 'EMAIL_ALREADY_REGISTERED',
+        errorMessage: 'An account with this email already exists. Use another address.',
+      });
+      setup({ newEmailSender });
+      const input = screen.getByLabelText('New email address');
+      await userEvent.type(input, 'plain');
+      await userEvent.tab();
+      expect(input).toHaveAccessibleDescription('An account with this email already exists. Use another address.');
+    });
   });
 
   it('Verify asks for a code for the typed address (trimmed by the hook), and is enabled only with an address', async () => {
@@ -174,7 +232,30 @@ describe('ChangeEmailDialog', () => {
     });
   });
 
-  describe('Verify and Re-send start the proof from empty', () => {
+  it('the first Verify keeps the typed password (only a Re-send starts the proof from empty)', async () => {
+    const newEmailSender = makeNewEmailSender();
+    setup({ newEmailSender });
+    await userEvent.type(screen.getByLabelText('Confirm with your password'), 'password123');
+    await userEvent.type(screen.getByLabelText('New email address'), 'new@example.com');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    expect(newEmailSender.send).toHaveBeenCalledWith('new@example.com');
+    expect(screen.getByLabelText('Confirm with your password')).toHaveValue('password123');
+  });
+
+  it('the first Verify keeps a typed code of the current address too', async () => {
+    setup({ codeSender: makeCodeSender({ hasSent: true }) });
+    await userEvent.click(screen.getByRole('radio', { name: 'A code sent by email' }));
+    await userEvent.type(screen.getByLabelText('Verification code'), '111222');
+    await userEvent.type(screen.getByLabelText('New email address'), 'new@example.com');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    expect(screen.getByLabelText('Verification code')).toHaveValue('111222');
+  });
+
+  describe('Re-send starts the proof from empty', () => {
     it('clears a typed password and the typed new-address code, so Update goes disabled again', async () => {
       const newEmailSender = makeNewEmailSender({ hasSent: true });
       setup({ newEmailSender });

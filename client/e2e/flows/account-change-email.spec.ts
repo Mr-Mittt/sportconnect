@@ -70,11 +70,12 @@ test('the right password and the new-address code change the email, close the di
 }) => {
   const dialog = await openChangeEmailDialog(page);
 
+  // the first Verify keeps the proof typed before it
+  await confirmWithPassword(dialog);
   const codeRequest = page.waitForRequest('**/api/users/me/email-change-code');
   await verifyAddress(dialog, NEW_ADDRESS);
   expect((await codeRequest).postDataJSON()).toEqual({ newEmail: NEW_ADDRESS });
-  // Verify starts the proof from empty, so the password is typed after it
-  await confirmWithPassword(dialog);
+  await expect(dialog.getByLabel('Confirm with your password')).toHaveValue(mockPassword);
   await expect(dialog.getByRole('button', { name: /^Re-send in 1:0\d$/ })).toBeDisabled();
   await expect(dialog.getByText(`We sent a 6-digit code to ${NEW_ADDRESS}.`)).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Update email' })).toBeDisabled();
@@ -174,6 +175,23 @@ test('an address that is already registered is refused when the code is requeste
   );
   await expect(dialog.getByLabel('Code sent to the new address')).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Verify' })).toBeEnabled();
+});
+
+test('an address that does not look like an email is stopped on the client, with no request', async ({ page }) => {
+  let calls = 0;
+  page.on('request', (request) => {
+    if (request.url().includes('/api/users/me/email-change-code')) calls += 1;
+  });
+  const dialog = await openChangeEmailDialog(page);
+
+  await dialog.getByLabel('New email address').fill('not-an-email');
+  await dialog.getByLabel('New email address').blur();
+
+  await expect(dialog.getByLabel('New email address')).toHaveAccessibleDescription(
+    'Enter a valid email address, like name@example.com.',
+  );
+  await expect(dialog.getByRole('button', { name: 'Verify' })).toBeDisabled();
+  expect(calls).toBe(0);
 });
 
 test('the account\'s own address is refused, whatever the letter case', async ({ page }) => {

@@ -120,10 +120,12 @@
     "resendIn": "Gửi lại sau {{time}}",
     "codeSent": "Chúng tôi đã gửi mã 6 chữ số đến {{email}}. Mã có hiệu lực trong {{minutes}} phút.",
     "codeLabel": "Mã gửi đến địa chỉ mới",
-    "warning": "Thao tác này sẽ hủy liên kết đăng nhập Google của bạn, và địa chỉ mới sẽ trở thành tên đăng nhập.",
     "submit": "Cập nhật email",
     "submitAdd": "Thêm email",
     "submitting": "Đang cập nhật…",
-    "cancel": "Hủy"
+    "cancel": "Hủy",
+    "error": {
+      "invalidEmail": "Hãy nhập địa chỉ email hợp lệ, ví dụ ten@example.com."
+    }
   }
 }

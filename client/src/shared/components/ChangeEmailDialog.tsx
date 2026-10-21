@@ -3,6 +3,7 @@ import { CODE_LENGTH, digitsOf, isCodeProofError, isDeadCodeError, isProofFieldE
 import type { EmailCodeSubject } from '@/features/profile/useChangeEmail';
 import type { CodeSender } from '@/features/profile/useConfirmationCode';
 import type { NewEmailCodeSender } from '@/features/profile/useEmailChangeCode';
+import { isValidEmail } from '@/shared/lib/emailFormat';
 import { formatCountdown } from '@/shared/lib/useCountdown';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
@@ -51,8 +52,9 @@ interface ChangeEmailDialogProps {
  * its code has six digits and the proof is filled. What the dialog does with each refusal (owner, 2026-10-21):
  * - `EMAIL_ALREADY_REGISTERED` on the `PUT`: the server dropped the new-address code, so the typed code
  *   is cleared and the code step closes; the line shows under the address, and the proof stays.
- * - Verify / Re-send: clears the typed new-address code and the caller's proof (a password or a typed
- *   code), so a resend always starts the proof from empty; re-sending the current-address code clears its input too.
+ * - Re-send (Verify while the code step is open): clears the typed new-address code and the caller's proof (a password
+ *   or a typed code), so a resend starts the proof from empty; the first Verify keeps the proof. Re-sending the
+ *   current-address code clears its own input too.
  * - any other refusal keeps the inputs next to the line; an expired or burned code is emptied because a new one is needed.
  * - a 503 keeps every input (the server kept both codes) and shows the shared "try again later" line.
  * `AppShell` mounts this only while open, so typed passwords and codes are dropped on every close.
@@ -76,6 +78,7 @@ export function ChangeEmailDialog({
   const hasEmail = currentEmail !== null;
   const [newEmail, setNewEmail] = useState('');
   const [newCode, setNewCode] = useState('');
+  const [hasLeftAddress, setHasLeftAddress] = useState(false);
   const [seenErrorCode, setSeenErrorCode] = useState<string | null>(errorCode);
 
   // A code error is about one of the two codes. The backend says which; if an old backend does not, a password proof leaves only the new-address code.
@@ -102,10 +105,15 @@ export function ChangeEmailDialog({
     }
   }
 
-  const addressError = isAddressError(errorCode) ? errorMessage : newEmailSender.errorMessage;
+  const trimmedAddress = newEmail.trim();
+  const isAddressValid = isValidEmail(trimmedAddress);
+  // The format hint waits until the user leaves the field, so it does not shout while they are still typing.
+  const formatError =
+    hasLeftAddress && trimmedAddress !== '' && !isAddressValid ? t('changeEmailDialog.error.invalidEmail') : null;
+  const addressError = isAddressError(errorCode) ? errorMessage : (newEmailSender.errorMessage ?? formatError);
   const isCodeStepOpen = newEmailSender.hasSent && !isAddressError(errorCode);
   const canVerify =
-    newEmail.trim() !== '' && !newEmailSender.isSending && newEmailSender.resendSecondsLeft === 0 && !isSubmitting;
+    isAddressValid && !newEmailSender.isSending && newEmailSender.resendSecondsLeft === 0 && !isSubmitting;
   const isComplete = proofState.isComplete && isCodeStepOpen && digitsOf(newCode).length === CODE_LENGTH;
 
   const changeAddress = (value: string) => {
@@ -114,9 +122,11 @@ export function ChangeEmailDialog({
     newEmailSender.closeCodeStep();
     onClearError();
   };
+  // The first Verify keeps what was typed as proof; only a Re-send (the code step is open, so a code is already out)
+  // starts the proof from empty.
   const verify = () => {
     setNewCode('');
-    proofState.clearInputs();
+    if (isCodeStepOpen) proofState.clearInputs();
     onClearError();
     newEmailSender.send(newEmail);
   };
@@ -183,6 +193,7 @@ export function ChangeEmailDialog({
               autoComplete="off"
               value={newEmail}
               onChange={(event) => changeAddress(event.target.value)}
+              onBlur={() => setHasLeftAddress(true)}
               aria-invalid={addressError !== null}
               aria-describedby={addressError !== null ? 'change-email-address-error' : undefined}
             />
@@ -224,7 +235,6 @@ export function ChangeEmailDialog({
             </div>
           )}
 
-          <p className="mb-2 text-2xs text-text-muted">{t('changeEmailDialog.warning')}</p>
           {showGeneralError && (
             <p role="alert" className="mt-2 text-2sm text-text-danger">
               {errorMessage}
