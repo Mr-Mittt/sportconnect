@@ -45,6 +45,7 @@ class ConfirmationCodeStore {
     private final int maxAttempts;
     private final Duration passwordWindow;
     private final int passwordMaxAttempts;
+    private final int newEmailDailyLimit;
     private final SecureRandom random = new SecureRandom();
 
     ConfirmationCodeStore(StringRedisTemplate redis,
@@ -52,13 +53,15 @@ class ConfirmationCodeStore {
                           @Value("${app.user.confirmation-resend-interval:60s}") Duration resendInterval,
                           @Value("${app.user.confirmation-max-attempts:5}") int maxAttempts,
                           @Value("${app.user.password-attempt-window:15m}") Duration passwordWindow,
-                          @Value("${app.user.password-max-attempts:5}") int passwordMaxAttempts) {
+                          @Value("${app.user.password-max-attempts:5}") int passwordMaxAttempts,
+                          @Value("${app.user.new-email-daily-limit:10}") int newEmailDailyLimit) {
         this.redis = redis;
         this.ttl = ttl;
         this.resendInterval = resendInterval;
         this.maxAttempts = maxAttempts;
         this.passwordWindow = passwordWindow;
         this.passwordMaxAttempts = passwordMaxAttempts;
+        this.newEmailDailyLimit = newEmailDailyLimit;
     }
 
     Duration ttl() {
@@ -76,6 +79,14 @@ class ConfirmationCodeStore {
      * @throws ServiceUnavailableException if Redis cannot be used
      */
     String issue(UUID userId, ConfirmationPurpose purpose) {
+        return issue(userId, purpose, null);
+    }
+
+    /**
+     * Same as {@link #issue(UUID, ConfirmationPurpose)}, with the code also bound to {@code binding} (U26: the exact address a
+     * {@code NEW_EMAIL} code is mailed to, so it cannot confirm a different address).
+     */
+    String issue(UUID userId, ConfirmationPurpose purpose, String binding) {
         try {
             String resendKey = key("resend", userId, purpose);
             if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(resendKey, "1", resendInterval))) {
@@ -85,11 +96,63 @@ class ConfirmationCodeStore {
                         Map.of("seconds", Math.max(1L, left == null ? 1L : left)));
             }
             String code = String.format("%0" + CODE_DIGITS + "d", random.nextInt((int) Math.pow(10, CODE_DIGITS)));
-            redis.opsForValue().set(key("code", userId, purpose), digest(userId, purpose, code), ttl);
+            redis.opsForValue().set(key("code", userId, purpose), digest(userId, purpose, binding, code), ttl);
             redis.delete(key("attempts", userId, purpose));
             return code;
         } catch (DataAccessException e) {
             throw new ServiceUnavailableException("The confirmation code could not be stored", e);
+        }
+    }
+
+    /**
+     * U26: refuses another new-address code once the user has asked for {@code app.user.new-email-daily-limit} today. It
+     * mails an address the caller names, so it is capped per user per day on top of the resend interval.
+     *
+     * @throws TooManyRequestsException {@code NEW_EMAIL_CODE_LIMIT_REACHED} ({@code seconds} until the day window frees)
+     * @throws ServiceUnavailableException if Redis cannot be used
+     */
+    void checkNewEmailCodeAllowed(UUID userId) {
+        try {
+            String key = key("new-email-day", userId, null);
+            String sent = redis.opsForValue().get(key);
+            if (sent != null && Integer.parseInt(sent) >= newEmailDailyLimit) {
+                Long left = redis.getExpire(key, TimeUnit.SECONDS);
+                throw new TooManyRequestsException("NEW_EMAIL_CODE_LIMIT_REACHED",
+                        "Too many codes were requested today; try again later",
+                        Map.of("seconds", Math.max(1L, left == null ? 1L : left)));
+            }
+        } catch (DataAccessException e) {
+            throw new ServiceUnavailableException("The new-email code allowance could not be read", e);
+        }
+    }
+
+    /** U26: counts one new-address code sent today (the window starts at the first one and lasts 24 hours). */
+    void recordNewEmailCodeSent(UUID userId) {
+        try {
+            String key = key("new-email-day", userId, null);
+            Long sent = redis.opsForValue().increment(key);
+            if (sent != null && sent == 1L) {
+                redis.expire(key, Duration.ofDays(1));
+            }
+        } catch (DataAccessException e) {
+            // best effort: the cap is an abuse limit, not a security check
+        }
+    }
+
+    /**
+     * U26: drops everything pending for the user after an email change: the codes and wrong-try counters of every purpose
+     * (a code mailed to the old address must not stay usable) and the verification-mail cooldown (the new address may be
+     * verified at once). Best effort; each key also expires by itself.
+     */
+    void purgeAfterEmailChange(UUID userId) {
+        try {
+            for (ConfirmationPurpose purpose : ConfirmationPurpose.values()) {
+                redis.delete(key("code", userId, purpose));
+                redis.delete(key("attempts", userId, purpose));
+            }
+            redis.delete(key("email-verify-resend", userId, null));
+        } catch (DataAccessException e) {
+            // best effort
         }
     }
 
@@ -132,6 +195,11 @@ class ConfirmationCodeStore {
      * @throws ServiceUnavailableException if Redis cannot be used
      */
     void verify(UUID userId, ConfirmationPurpose purpose, String code) {
+        verify(userId, purpose, null, code);
+    }
+
+    /** Same as {@link #verify(UUID, ConfirmationPurpose, String)} for a code issued with the same {@code binding}. */
+    void verify(UUID userId, ConfirmationPurpose purpose, String binding, String code) {
         try {
             String codeKey = key("code", userId, purpose);
             String attemptsKey = key("attempts", userId, purpose);
@@ -139,7 +207,7 @@ class ConfirmationCodeStore {
             if (stored == null) {
                 throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "The code has expired; request a new one", null);
             }
-            String presented = digest(userId, purpose, code == null ? "" : code.replaceAll("\\s+", ""));
+            String presented = digest(userId, purpose, binding, code == null ? "" : code.replaceAll("\\s+", ""));
             if (MessageDigest.isEqual(stored.getBytes(StandardCharsets.UTF_8), presented.getBytes(StandardCharsets.UTF_8))) {
                 // delete() reports whether this call removed it, so only one of two racing requests wins.
                 if (!Boolean.TRUE.equals(redis.delete(codeKey))) {
@@ -206,10 +274,12 @@ class ConfirmationCodeStore {
         return PREFIX + kind + ":" + (purpose == null ? "" : purpose.name() + ":") + userId;
     }
 
-    private static String digest(UUID userId, ConfirmationPurpose purpose, String code) {
+    private static String digest(UUID userId, ConfirmationPurpose purpose, String binding, String code) {
         try {
+            // Without a binding the text is exactly what U24 hashed, so a code issued before U26 still verifies.
+            String bound = binding == null ? "" : binding + ":";
             byte[] hash = MessageDigest.getInstance("SHA-256")
-                    .digest((userId + ":" + purpose.name() + ":" + code).getBytes(StandardCharsets.UTF_8));
+                    .digest((userId + ":" + purpose.name() + ":" + bound + code).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);

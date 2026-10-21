@@ -9,6 +9,8 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -20,7 +22,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,6 +80,16 @@ public final class TestKeycloak {
     /** A33: Keycloak's built-in emailVerified per user (absent: false) and the verification mails it was asked to send. */
     private static final Set<UUID> EMAIL_VERIFIED = ConcurrentHashMap.newKeySet();
     private static final Map<UUID, List<String>> VERIFICATION_REQUESTS = new ConcurrentHashMap<>();
+    /**
+     * U26: what the admin user endpoints keep of a user besides the username: the email, the attribute map (an update
+     * replaces it, as in Keycloak) and the identity provider links (Google...).
+     */
+    private static final Map<UUID, String> EMAILS = new ConcurrentHashMap<>();
+    private static final Map<UUID, Map<String, List<String>>> ATTRIBUTES = new ConcurrentHashMap<>();
+    private static final Map<UUID, Set<String>> IDENTITY_LINKS = new ConcurrentHashMap<>();
+    /** Mirrors the realm's editUsernameAllowed (infra/scripts/apply-realm-edit-username.sh); false refuses a username change. */
+    private static final AtomicBoolean EDIT_USERNAME_ALLOWED = new AtomicBoolean(true);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static final String ISSUER;
     public static final String JWK_SET_URI;
@@ -174,6 +189,79 @@ public final class TestKeycloak {
     public static void resetVerification() {
         EMAIL_VERIFIED.clear();
         VERIFICATION_REQUESTS.clear();
+    }
+
+    // ---------- U26: email change ----------
+
+    /**
+     * Registers a Keycloak user with an email as a registration through the realm's flows leaves it: the username and the
+     * {@code email_normalized} attribute (the A35 key) set. {@code password} may be null (a Google-only user).
+     */
+    public static void registerUser(UUID userId, String username, String email, String password) {
+        registerUser(userId, username, password);
+        EMAILS.put(userId, email.toLowerCase(Locale.ROOT));
+        Map<String, List<String>> attributes = new LinkedHashMap<>();
+        attributes.put("email_normalized", List.of(keyOf(email)));
+        ATTRIBUTES.put(userId, attributes);
+    }
+
+    /** Sets (replaces) one attribute of the user, as a realm mapper would (for example {@code picture}). */
+    public static void setAttribute(UUID userId, String name, String value) {
+        ATTRIBUTES.computeIfAbsent(userId, id -> new ConcurrentHashMap<>()).put(name, List.of(value));
+    }
+
+    /** Links the user to an identity provider, as a Google sign-in would. */
+    public static void linkIdentity(UUID userId, String alias) {
+        IDENTITY_LINKS.computeIfAbsent(userId, id -> ConcurrentHashMap.newKeySet()).add(alias);
+    }
+
+    public static Set<String> identityLinks(UUID userId) {
+        return Set.copyOf(IDENTITY_LINKS.getOrDefault(userId, Set.of()));
+    }
+
+    public static String emailOf(UUID userId) {
+        return EMAILS.get(userId);
+    }
+
+    public static String usernameOf(UUID userId) {
+        return USERNAMES.get(userId);
+    }
+
+    public static boolean isEmailVerified(UUID userId) {
+        return EMAIL_VERIFIED.contains(userId);
+    }
+
+    public static Map<String, List<String>> attributesOf(UUID userId) {
+        return Map.copyOf(ATTRIBUTES.getOrDefault(userId, Map.of()));
+    }
+
+    /** While {@code false}, a username change is refused as Keycloak does with editUsernameAllowed=false. */
+    public static void editUsernameAllowed(boolean allowed) {
+        EDIT_USERNAME_ALLOWED.set(allowed);
+    }
+
+    /** Forgets the emails, attributes and links (not the passwords) of every user. */
+    public static void resetIdentities() {
+        EMAILS.clear();
+        ATTRIBUTES.clear();
+        IDENTITY_LINKS.clear();
+        EDIT_USERNAME_ALLOWED.set(true);
+    }
+
+    /** What the realm's listener stores: the A35 key. A deliberately separate, small copy: the test pins the backend to it. */
+    private static String keyOf(String raw) {
+        String email = raw.trim().toLowerCase(Locale.ROOT);
+        int at = email.lastIndexOf('@');
+        String local = email.substring(0, at);
+        String domain = email.substring(at + 1);
+        if (!domain.equals("gmail.com") && !domain.equals("googlemail.com")) {
+            return email;
+        }
+        int plus = local.indexOf('+');
+        if (plus >= 0) {
+            local = local.substring(0, plus);
+        }
+        return local.replace(".", "") + "@gmail.com";
     }
 
     /** While {@code false}, the admin endpoints answer 503 (the password grant keeps working). */
@@ -438,7 +526,12 @@ public final class TestKeycloak {
             respond(exchange, 401, "{}");
             return;
         }
-        String[] parts = exchange.getRequestURI().getPath().substring("/admin/users/".length()).split("/");
+        String path = exchange.getRequestURI().getPath();
+        if ("/admin/users".equals(path) && "GET".equals(exchange.getRequestMethod())) {
+            handleUserSearch(exchange);
+            return;
+        }
+        String[] parts = path.substring("/admin/users/".length()).split("/");
         UUID userId;
         try {
             userId = UUID.fromString(parts[0]);
@@ -451,7 +544,29 @@ public final class TestKeycloak {
             return;
         }
         if (parts.length == 1 && "GET".equals(exchange.getRequestMethod())) {
-            respond(exchange, 200, "{\"id\":\"" + userId + "\",\"username\":\"" + USERNAMES.get(userId) + "\",\"emailVerified\":" + EMAIL_VERIFIED.contains(userId) + "}");
+            Map<String, Object> user = new LinkedHashMap<>();
+            user.put("id", userId.toString());
+            user.put("username", USERNAMES.get(userId));
+            if (EMAILS.containsKey(userId)) {
+                user.put("email", EMAILS.get(userId));
+            }
+            user.put("emailVerified", EMAIL_VERIFIED.contains(userId));
+            user.put("enabled", true);
+            user.put("attributes", ATTRIBUTES.getOrDefault(userId, Map.of()));
+            user.put("createdTimestamp", 1L);
+            user.put("totp", false);
+            user.put("disableableCredentialTypes", List.of());
+            user.put("notBefore", 0);
+            user.put("federatedIdentities", List.of());
+            respond(exchange, 200, MAPPER.writeValueAsString(user));
+            return;
+        }
+        if (parts.length == 1 && "PUT".equals(exchange.getRequestMethod())) {
+            handleUserUpdate(exchange, userId);
+            return;
+        }
+        if (parts.length >= 2 && "federated-identity".equals(parts[1])) {
+            handleFederatedIdentity(exchange, userId, parts);
             return;
         }
         if (parts.length == 2 && "send-verify-email".equals(parts[1]) && "PUT".equals(exchange.getRequestMethod())) {
@@ -470,6 +585,109 @@ public final class TestKeycloak {
             }
             PASSWORDS.put(userId, value.group(1));
             exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+            return;
+        }
+        respond(exchange, 404, "{}");
+    }
+
+    /** U26: GET /admin/users?q=name:value&exact=true or ?email=...&exact=true, as Keycloak lists the matches. */
+    private static void handleUserSearch(HttpExchange exchange) throws IOException {
+        Map<String, String> query = new HashMap<>();
+        for (String pair : String.valueOf(exchange.getRequestURI().getRawQuery()).split("&")) {
+            String[] kv = pair.split("=", 2);
+            if (kv.length == 2) {
+                query.put(kv[0], URLDecoder.decode(kv[1], StandardCharsets.UTF_8));
+            }
+        }
+        List<Map<String, Object>> found = new ArrayList<>();
+        for (UUID id : USERNAMES.keySet()) {
+            boolean match = false;
+            String q = query.get("q");
+            if (q != null && q.contains(":")) {
+                String name = q.substring(0, q.indexOf(':'));
+                String value = q.substring(q.indexOf(':') + 1);
+                match = ATTRIBUTES.getOrDefault(id, Map.of()).getOrDefault(name, List.of()).contains(value);
+            } else if (query.get("email") != null) {
+                match = query.get("email").equalsIgnoreCase(EMAILS.get(id));
+            }
+            if (match) {
+                Map<String, Object> user = new LinkedHashMap<>();
+                user.put("id", id.toString());
+                user.put("username", USERNAMES.get(id));
+                user.put("email", EMAILS.get(id));
+                found.add(user);
+            }
+        }
+        respond(exchange, 200, MAPPER.writeValueAsString(found));
+    }
+
+    /**
+     * U26: PUT /admin/users/{id} with a user record, with the refusals the realm gives: an email another user holds is a 409,
+     * an email_normalized another user holds is the A35 validator's 400 emailAlreadyUsed, a changed username is refused while
+     * editUsernameAllowed is false. The attribute map is replaced, not merged.
+     */
+    private static void handleUserUpdate(HttpExchange exchange, UUID userId) throws IOException {
+        Map<String, Object> body = MAPPER.readValue(exchange.getRequestBody().readAllBytes(), new TypeReference<>() { });
+        String email = (String) body.get("email");
+        @SuppressWarnings("unchecked")
+        Map<String, List<String>> attributes = body.get("attributes") == null
+                ? null : (Map<String, List<String>>) body.get("attributes");
+        if (email != null) {
+            for (Map.Entry<UUID, String> other : EMAILS.entrySet()) {
+                if (!other.getKey().equals(userId) && other.getValue().equalsIgnoreCase(email)) {
+                    respond(exchange, 409, "{\"errorMessage\":\"User exists with same email\"}");
+                    return;
+                }
+            }
+        }
+        if (attributes != null && attributes.get("email_normalized") != null) {
+            for (Map.Entry<UUID, Map<String, List<String>>> other : ATTRIBUTES.entrySet()) {
+                if (!other.getKey().equals(userId)
+                        && attributes.get("email_normalized").equals(other.getValue().get("email_normalized"))) {
+                    respond(exchange, 400, "{\"field\":\"email\",\"errorMessage\":\"emailAlreadyUsed\",\"params\":[\"email\"]}");
+                    return;
+                }
+            }
+        }
+        String username = (String) body.get("username");
+        if (username != null && !username.equals(USERNAMES.get(userId))) {
+            if (!EDIT_USERNAME_ALLOWED.get()) {
+                respond(exchange, 400, "{\"field\":\"username\",\"errorMessage\":\"error-user-attribute-read-only\"}");
+                return;
+            }
+            USERNAMES.put(userId, username);
+        }
+        if (email != null) {
+            EMAILS.put(userId, email);
+        }
+        if (body.get("emailVerified") != null) {
+            if (Boolean.TRUE.equals(body.get("emailVerified"))) {
+                EMAIL_VERIFIED.add(userId);
+            } else {
+                EMAIL_VERIFIED.remove(userId);
+            }
+        }
+        if (attributes != null) {
+            ATTRIBUTES.put(userId, new ConcurrentHashMap<>(attributes));
+        }
+        exchange.sendResponseHeaders(204, -1);
+        exchange.close();
+    }
+
+    /** U26: GET /admin/users/{id}/federated-identity and DELETE /admin/users/{id}/federated-identity/{alias}. */
+    private static void handleFederatedIdentity(HttpExchange exchange, UUID userId, String[] parts) throws IOException {
+        if (parts.length == 2 && "GET".equals(exchange.getRequestMethod())) {
+            List<Map<String, Object>> links = new ArrayList<>();
+            for (String alias : IDENTITY_LINKS.getOrDefault(userId, Set.of())) {
+                links.add(Map.of("identityProvider", alias, "userId", "idp-" + userId, "userName", "x"));
+            }
+            respond(exchange, 200, MAPPER.writeValueAsString(links));
+            return;
+        }
+        if (parts.length == 3 && "DELETE".equals(exchange.getRequestMethod())) {
+            boolean removed = IDENTITY_LINKS.getOrDefault(userId, ConcurrentHashMap.newKeySet()).remove(parts[2]);
+            exchange.sendResponseHeaders(removed ? 204 : 404, -1);
             exchange.close();
             return;
         }
