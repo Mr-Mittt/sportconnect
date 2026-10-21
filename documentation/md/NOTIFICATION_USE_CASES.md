@@ -148,3 +148,14 @@ is done. Should the account's email also get a plain notice ("your password was 
 deactivated"), so the owner of a hijacked session or mailbox learns of it? Open: email only (Keycloak itself can
 send a "password updated" mail through its own email theme) or also an in-app notification, and whether the
 deactivation notice belongs in the A26 re-activation flow's wording. U24 leaves it out of scope.
+
+### NOTIF-9 · Notice to the old address after an email change
+**Date added:** 2026-10-20
+**Status:** `CANDIDATE`
+**Source:** ACCOUNT-7 pickup (`/workon client account-7`), filed as part of user U26 — surfaced, not resolved on the spot.
+
+U26 lets a signed-in user change the account email after confirming with the password or a code emailed to the
+current address. Should the **old** address get a plain notice ("your email was changed to j***@…") so the owner of
+a hijacked session learns of it and can react? Same family as NOTIF-8. Open: email only or also in-app, whether the
+new address gets anything (it gets the A33 verification mail only when the user asks), and whether the notice can
+be sent at all when the old address was never verified. U26 settles it at pickup.

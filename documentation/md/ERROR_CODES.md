@@ -64,7 +64,7 @@
 
 | Code | Status | Params | When |
 |---|---|---|---|
-| `EMAIL_ALREADY_REGISTERED` | 409 | none | Was `POST /api/auth/register` (removed by A28) with an email that already exists (moved from 400 by A8). A26: also `POST /api/auth/callback` at the first sign-in when another account already holds the identity's email (the Keycloak session is ended). |
+| `EMAIL_ALREADY_REGISTERED` | 409 | none | Was `POST /api/auth/register` (removed by A28) with an email that already exists (moved from 400 by A8). A26: also `POST /api/auth/callback` at the first sign-in when another account already holds the identity's email (the Keycloak session is ended). U26: also `POST /api/users/me/email-change-code` and `PUT /api/users/me/email` (409) when another account holds the new address, by the A35 rule (dots, `+tag` and `googlemail.com` of a Gmail address count), in the `users` table or in Keycloak, or when Keycloak refuses the update as a duplicate. |
 | `INVALID_CREDENTIALS` | 401 | none | **No longer returned (A28):** the endpoint is gone (Keycloak owns this flow); the client copy was removed. Was: `POST /api/auth/login`: wrong password, unknown email, or a deactivated account (indistinguishable by design). |
 | `REFRESH_TOKEN_MISSING` | 401 | none | `POST /api/auth/refresh` without the refresh cookie. |
 | `REFRESH_TOKEN_INVALID` | 401 | none | **No longer returned (A26).** It was `POST /api/auth/refresh` with a token not in the legacy store; Keycloak answers `invalid_grant` for a never-issued token and an expired one alike, so both are `REFRESH_TOKEN_EXPIRED_OR_REVOKED` now. Kept registered because the client has copy for it. |
@@ -103,8 +103,10 @@ The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) 
 | `VERIFICATION_CODE_EXPIRED` | 400 | none | U24: no code is pending for that purpose (never asked for, older than 15 minutes, already used, or asked for a different purpose). |
 | `VERIFICATION_CODE_ATTEMPTS_EXCEEDED` | 400 | none | U24: the 5th wrong try; the code is burned and a new one must be requested. |
 | `VERIFICATION_EMAIL_UNAVAILABLE` | 400 | none | U24: `POST /api/users/me/confirmation-code` for an account with no email to send to (phone-only). |
+| `NEW_EMAIL_SAME_AS_CURRENT` | 400 | none | U26: `POST /api/users/me/email-change-code` or `PUT /api/users/me/email` with the address the account already has (any case). |
+| `NEW_EMAIL_CODE_LIMIT_REACHED` | 429 | `{seconds}` | U26: `POST /api/users/me/email-change-code` after `app.user.new-email-daily-limit` (10) codes mailed to addresses the caller named in 24 hours; `seconds` until the window frees. The 60 s resend rule is `VERIFICATION_RESEND_TOO_SOON`. |
 | `NEW_PASSWORD_REJECTED` | 400 | none | U24: `PUT /api/users/me/password`, the realm password policy refused the new value (nothing changed). |
-| `VERIFICATION_RESEND_TOO_SOON` | 429 | `{seconds}` | U24: `POST /api/users/me/confirmation-code` less than 60 seconds after the previous one for that purpose. |
+| `VERIFICATION_RESEND_TOO_SOON` | 429 | `{seconds}` | U24: `POST /api/users/me/confirmation-code` less than 60 seconds after the previous one for that purpose. U26: also `POST /api/users/me/email-change-code`. |
 | `PASSWORD_ATTEMPTS_EXCEEDED` | 429 | `{seconds}` | U24: 5 wrong current passwords within 15 minutes; Keycloak is not asked again until the window frees (the emailed code still works). |
 | `SEARCH_KEYWORD_TOO_SHORT` | 400 | `{min: 2}` | `GET /api/users/search` with fewer than 2 characters after trimming. |
 | `FRIEND_REQUEST_SELF` | 400 | none | Friend request addressed to the caller. |
