@@ -7,11 +7,14 @@ import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
 import { usePostErrorDialogStore } from '@/app/postErrorDialogStore';
 import { LogoutFailedDialog } from '@/features/auth/components/LogoutFailedDialog';
 import { useLogout } from '@/features/auth/useLogout';
+import { useChangeEmail } from '@/features/profile/useChangeEmail';
 import { useChangePassword } from '@/features/profile/useChangePassword';
 import { useCompleteProfilePrompt } from '@/features/profile/useCompleteProfilePrompt';
 import { useConfirmationCode } from '@/features/profile/useConfirmationCode';
 import { useDeactivateAccount } from '@/features/profile/useDeactivateAccount';
 import { useEditProfileSave } from '@/features/profile/useEditProfileSave';
+import { useEmailChangeCode } from '@/features/profile/useEmailChangeCode';
+import { useEmailVerification } from '@/features/profile/useEmailVerification';
 import { useMyProfile } from '@/features/profile/useMyProfile';
 import { useUserPreferences } from '@/features/profile/useUserPreferences';
 import { NotificationBell } from '@/features/notifications/components/NotificationBell';
@@ -26,6 +29,7 @@ import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { AccountSettingsModal } from './AccountSettingsModal';
 import { CompleteProfileDialog } from './CompleteProfileDialog';
+import { ChangeEmailDialog } from './ChangeEmailDialog';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeactivateAccountDialog } from './DeactivateAccountDialog';
 import { AuthLoadingState } from './AuthLoadingState';
@@ -155,6 +159,21 @@ export function AppShell() {
     },
   });
 
+  // ACCOUNT-7: changing the email, and asking for the verification mail. The change dialog is stacked and
+  // mounted only while open like the two above; its hooks live here so a close drops every typed code.
+  const [isChangeEmailOpen, setIsChangeEmailOpen] = useState(false);
+  const changeEmailCode = useConfirmationCode('CHANGE_EMAIL');
+  const newEmailCode = useEmailChangeCode();
+  const emailVerification = useEmailVerification();
+  const changeEmail = useChangeEmail({
+    onSuccess: () => {
+      newEmailCode.reset();
+      changeEmailCode.reset();
+      setIsChangeEmailOpen(false);
+      toast.success(t('accountSettings:email.success'));
+    },
+  });
+
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const sessionDetailData = useSessionDetailModalData(selectedSessionId, () => setSelectedSessionId(null));
   const sportProfilesQuery = useSportProfiles();
@@ -185,7 +204,11 @@ export function AppShell() {
           avatarUrl: user.avatarUrl ?? null,
         }}
         onLogout={logout}
-        onOpenAccountSettings={() => setIsAccountSettingsOpen(true)}
+        onOpenAccountSettings={() => {
+          // A verification done in the mail tab since the last open must show: read the profile again.
+          void profileQuery.refetch();
+          setIsAccountSettingsOpen(true);
+        }}
         notificationBell={<NotificationBell {...notificationBell} />}
       />
       <NavTabs active={activeTabFromPath(pathname)} onChange={(tab) => navigate(pathByTab[tab])} />
@@ -244,6 +267,30 @@ export function AppShell() {
           geoErrorCode={accountSettingsSave.geoErrorCode}
           onDeactivate={() => setIsDeactivateOpen(true)}
           onChangePassword={() => setIsChangePasswordOpen(true)}
+          onChangeEmail={() => setIsChangeEmailOpen(true)}
+          emailVerification={emailVerification}
+        />
+      )}
+
+      {isChangeEmailOpen && (
+        <ChangeEmailDialog
+          isOpen={isChangeEmailOpen}
+          onClose={() => {
+            changeEmail.reset();
+            changeEmailCode.reset();
+            newEmailCode.reset();
+            setIsChangeEmailOpen(false);
+          }}
+          currentEmail={profileQuery.data?.email ?? user.email}
+          onSubmit={changeEmail.changeEmail}
+          isSubmitting={changeEmail.isPending}
+          errorMessage={changeEmail.errorMessage}
+          errorCode={changeEmail.errorCode}
+          codeSubject={changeEmail.codeSubject}
+          passwordLockSeconds={changeEmail.passwordLockSeconds}
+          codeSender={changeEmailCode}
+          newEmailSender={newEmailCode}
+          onClearError={changeEmail.reset}
         />
       )}
 

@@ -27,7 +27,7 @@ export const WrongPassword: Story = {
   args: { errorMessage: 'Your current password is incorrect.', errorCode: 'CURRENT_PASSWORD_INCORRECT' },
 };
 export const GeneralError: Story = {
-  args: { errorMessage: 'The sign-in service isn’t reachable right now. Try again in a moment.', errorCode: 'SERVICE_UNAVAILABLE' },
+  args: { errorMessage: 'This service isn’t available right now. Try again later.', errorCode: 'SERVICE_UNAVAILABLE' },
 };
 export const PasswordLocked: Story = {
   args: {
@@ -74,7 +74,7 @@ export const EmailCanResend: Story = {
 export const EmailSendFailed: Story = {
   render: () => (
     <EmailMethod
-      codeSender={makeCodeSender({ errorMessage: 'The sign-in service isn’t reachable right now. Try again in a moment.' })}
+      codeSender={makeCodeSender({ errorMessage: 'This service isn’t available right now. Try again later.' })}
     />
   ),
 };

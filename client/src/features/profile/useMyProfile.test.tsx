@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
@@ -73,6 +73,22 @@ describe('useMyProfile', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/users/me');
     expect(result.current.data?.city).toBe('Hanoi');
     expect(result.current.data?.country).toBe('Vietnam');
+  });
+
+  it('reads the profile again when the window regains focus (an email verified in the mail tab shows up, ACCOUNT-7)', async () => {
+    const get = vi.spyOn(apiClient, 'get').mockResolvedValue({
+      data: { success: true, message: '', data: fixtureProfile, timestamp: '' },
+    });
+    const { result } = renderHook(() => useMyProfile(), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(get).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
   });
 
   it('does not fetch while no user id is known yet', () => {

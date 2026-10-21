@@ -4,8 +4,27 @@
     "profile": "Profile",
     "contact": "Contact",
     "personal": "Personal",
+    "email": "Email",
     "deactivate": "Deactivate account",
     "password": "Password"
+  },
+  "email": {
+    "none": "No email address",
+    "add": "Add email",
+    "change": "Change email",
+    "verified": "Verified",
+    "notVerified": "Not verified yet.",
+    "getVerification": "Get verification now",
+    "sending": "Sending…",
+    "resendIn": "Re-send in {{time}}",
+    "sentHint": "Open the link in the email we sent. It is valid for 12 hours.",
+    "success": "Your email was updated."
+  },
+  "verifyEmail": {
+    "error": {
+      "unavailable": "Your account has no email address, so a verification email can’t be sent.",
+      "generic": "Couldn’t send the verification email. Try again."
+    }
   },
   "field": {
     "firstName": "First name",
@@ -84,5 +103,27 @@
       "tooShort": "Password must be at least 8 characters.",
       "mismatch": "The two passwords don’t match."
     }
+  },
+  "changeEmailDialog": {
+    "title": "Change your email",
+    "titleAdd": "Add an email",
+    "body": "Confirm it’s you, then verify the new address with a code we send to it.",
+    "confirmHeading": "Confirm it’s you",
+    "newHeading": "Your new email",
+    "passwordLabel": "Confirm with your password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "newLabel": "New email address",
+    "verify": "Verify",
+    "sending": "Sending…",
+    "resend": "Re-send",
+    "resendIn": "Re-send in {{time}}",
+    "codeSent": "We sent a 6-digit code to {{email}}. It is valid for {{minutes}} minutes.",
+    "codeLabel": "Code sent to the new address",
+    "warning": "This unlinks your Google sign-in, and the new address becomes your sign-in name.",
+    "submit": "Update email",
+    "submitAdd": "Add email",
+    "submitting": "Updating…",
+    "cancel": "Cancel"
   }
 }

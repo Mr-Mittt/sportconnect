@@ -172,3 +172,45 @@ test('deactivating with unsaved edits in Account settings signs out without the 
   await expect(page).toHaveURL(KEYCLOAK_AUTH_URL);
   await expect(page.getByRole('dialog', { name: 'Unsaved changes' })).toBeHidden();
 });
+
+/*
+ * ACCOUNT-7 (owner, 2026-10-21): the "service not available, try again later" line is shared by the
+ * three account dialogs. A 503 (Keycloak or Redis unreachable) keeps what was typed and signs nobody out.
+ */
+const SERVICE_DOWN_BODY = JSON.stringify({
+  success: false,
+  message: 'Service unavailable',
+  errorCode: 'SERVICE_UNAVAILABLE',
+  data: null,
+  timestamp: '2026-10-21T10:00:00Z',
+});
+
+test('a 503 on the deactivation keeps the typed password, shows the try-again-later line and keeps the session', async ({ page }) => {
+  await page.route('**/api/users/me/deactivate', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: SERVICE_DOWN_BODY }),
+  );
+  const dialog = await openDeactivateDialog(page);
+  await dialog.getByLabel('Confirm with your password').click();
+  await dialog.getByLabel('Confirm with your password').fill(mockPassword);
+
+  await dialog.getByRole('button', { name: 'Deactivate' }).click();
+
+  await expect(dialog.getByRole('alert')).toHaveText('This service isn’t available right now. Try again later.');
+  await expect(dialog.getByLabel('Confirm with your password')).toHaveValue(mockPassword);
+  await expect(dialog).toBeVisible();
+  await expect(page).not.toHaveURL(KEYCLOAK_AUTH_URL);
+});
+
+test('a 503 when sending the emailed code shows the try-again-later line and starts no countdown', async ({ page }) => {
+  await page.route('**/api/users/me/confirmation-code', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: SERVICE_DOWN_BODY }),
+  );
+  const dialog = await openDeactivateDialog(page);
+  await dialog.getByRole('radio', { name: 'A code sent by email' }).check();
+
+  await dialog.getByRole('button', { name: 'Send code' }).click();
+
+  await expect(dialog.getByRole('alert')).toHaveText('This service isn’t available right now. Try again later.');
+  await expect(dialog.getByRole('button', { name: 'Send code' })).toBeEnabled();
+  await expect(dialog.getByText(/Resend in/)).toHaveCount(0);
+});

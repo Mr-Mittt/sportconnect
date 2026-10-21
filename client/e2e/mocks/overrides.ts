@@ -37,6 +37,8 @@ export interface SessionOverrides {
    * Badminton sessions, and `/discover` pages them for real (client page size 10) — enough to reach
    * a Discover section's "Load more". Off by default: `/discover` otherwise always returns one page. */
   discoverVolume: boolean;
+  /** ACCOUNT-7: the next `GET /users/me` answers `isEmailVerified: false` (the default fixture account is verified), consumed once, so the email row's "Get verification now" is reachable. */
+  emailUnverified: boolean;
 }
 
 function defaultOverrides(): SessionOverrides {
@@ -53,6 +55,7 @@ function defaultOverrides(): SessionOverrides {
     sessionsEmpty: false,
     historyVolume: false,
     discoverVolume: false,
+    emailUnverified: false,
   };
 }
 

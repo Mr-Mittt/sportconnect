@@ -27,6 +27,8 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import { Textarea } from '@/shared/ui/textarea';
+import type { EmailVerificationSender } from '@/features/profile/useEmailVerification';
+import { AccountEmailSection } from './AccountEmailSection';
 import { AccountSettingsUnsavedChangesDialog } from './AccountSettingsUnsavedChangesDialog';
 
 /** What `AccountSettingsModal` hands its parent on Save — a profile-field payload (may be empty) plus
@@ -57,6 +59,10 @@ interface AccountSettingsModalProps {
   onDeactivate?: () => void;
   /** ACCOUNT-3: opens the change-password dialog (owned by `AppShell`). When absent the "Password" section is not rendered. */
   onChangePassword?: () => void;
+  /** ACCOUNT-7: opens the change-email dialog (owned by `AppShell`). The email row renders only with this and `emailVerification`. */
+  onChangeEmail?: () => void;
+  /** ACCOUNT-7: the verification-mail sender behind the email row's "Get verification now" link. */
+  emailVerification?: EmailVerificationSender;
   /** CLIENT-I18N-6 convention: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -107,6 +113,8 @@ export function AccountSettingsModal({
   geoErrorCode = null,
   onDeactivate,
   onChangePassword,
+  onChangeEmail,
+  emailVerification,
   i18nOverridePrefix,
 }: AccountSettingsModalProps) {
   const t = useOverridableText('accountSettings', i18nOverridePrefix);
@@ -354,6 +362,16 @@ export function AccountSettingsModal({
                 <p role="alert" className="text-2sm text-text-danger">
                   {errorMessage}
                 </p>
+              )}
+
+              {onChangeEmail && emailVerification && (
+                <AccountEmailSection
+                  email={user.email}
+                  isVerified={user.isEmailVerified}
+                  verification={emailVerification}
+                  onChangeEmail={onChangeEmail}
+                  i18nOverridePrefix={i18nOverridePrefix}
+                />
               )}
 
               {onChangePassword && (

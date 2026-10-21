@@ -24,9 +24,10 @@ function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
  * ACCOUNT-6 / backend U24: `AccountConfirmationService.confirm` for the two endpoints below. Exactly
  * one proof (neither or both is 400 CONFIRMATION_REQUIRED), then the password (400
  * CURRENT_PASSWORD_INCORRECT, or the 429 lock with the seconds left) or the emailed code (400
- * VERIFICATION_CODE_INVALID / VERIFICATION_CODE_EXPIRED). Returns the error response, or `null` when the proof is right.
+ * VERIFICATION_CODE_INVALID / VERIFICATION_CODE_EXPIRED, which carry `errorParams.purpose` like the real store's). Returns the error
+ * response, or `null` when the proof is right. `purpose` is the code's purpose (`DEACTIVATE`, `CHANGE_PASSWORD`, `CHANGE_EMAIL`).
  */
-function rejectProof(body: { currentPassword?: string; verificationCode?: string }): Response | null {
+export function rejectProof(body: { currentPassword?: string; verificationCode?: string }, purpose: string): Response | null {
   const hasPassword = !!body.currentPassword?.trim();
   const hasCode = !!body.verificationCode?.trim();
   if (hasPassword === hasCode) {
@@ -45,15 +46,15 @@ function rejectProof(body: { currentPassword?: string; verificationCode?: string
     return null;
   }
   if (body.verificationCode === mockExpiredCode) {
-    return HttpResponse.json(apiError('The code has expired', 'VERIFICATION_CODE_EXPIRED'), { status: 400 });
+    return HttpResponse.json(apiError('The code has expired', 'VERIFICATION_CODE_EXPIRED', { purpose }), { status: 400 });
   }
   if (body.verificationCode !== mockVerificationCode) {
-    return HttpResponse.json(apiError('The code is not correct', 'VERIFICATION_CODE_INVALID'), { status: 400 });
+    return HttpResponse.json(apiError('The code is not correct', 'VERIFICATION_CODE_INVALID', { purpose }), { status: 400 });
   }
   return null;
 }
 
-function apiError(message: string, errorCode?: string, errorParams?: Record<string, unknown>): ApiResponse<null> {
+export function apiError(message: string, errorCode?: string, errorParams?: Record<string, unknown>): ApiResponse<null> {
   return {
     success: false,
     message,
@@ -161,7 +162,7 @@ export const authHandlers: HttpHandler[] = [
   // purpose; the mock answers the real numbers (60 s until a resend, 15 minutes valid) and sends nothing.
   http.post('/api/users/me/confirmation-code', async ({ request }) => {
     const body = (await request.json()) as { purpose?: string };
-    if (body.purpose !== 'DEACTIVATE' && body.purpose !== 'CHANGE_PASSWORD') {
+    if (body.purpose !== 'DEACTIVATE' && body.purpose !== 'CHANGE_PASSWORD' && body.purpose !== 'CHANGE_EMAIL') {
       return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { purpose: 'must not be null' } }), {
         status: 400,
       });
@@ -172,7 +173,7 @@ export const authHandlers: HttpHandler[] = [
   // ACCOUNT-4 / backend U22, ACCOUNT-6 / U24: self-deactivation with exactly one proof (see rejectProof).
   // (Stateless like the rest of this file: the mock account is not actually marked inactive.)
   http.post('/api/users/me/deactivate', async ({ request }) => {
-    const rejected = rejectProof((await request.json()) as { currentPassword?: string; verificationCode?: string });
+    const rejected = rejectProof((await request.json()) as { currentPassword?: string; verificationCode?: string }, 'DEACTIVATE');
     if (rejected) return rejected;
     return HttpResponse.json(apiResponse(null, 'Account deactivated successfully'));
   }),
@@ -188,7 +189,7 @@ export const authHandlers: HttpHandler[] = [
         status: 400,
       });
     }
-    const rejected = rejectProof(body);
+    const rejected = rejectProof(body, 'CHANGE_PASSWORD');
     if (rejected) return rejected;
     if (body.newPassword === 'password1') {
       return HttpResponse.json(apiError('The new password was rejected', 'NEW_PASSWORD_REJECTED'), { status: 400 });

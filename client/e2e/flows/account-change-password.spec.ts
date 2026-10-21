@@ -150,3 +150,45 @@ test('Esc closes only the dialog, leaving Account settings open', async ({ page 
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('dialog', { name: 'Account settings' })).toBeVisible();
 });
+
+/*
+ * ACCOUNT-7 (owner, 2026-10-21): the "service not available, try again later" line is shared by the
+ * three account dialogs. A 503 (Keycloak or Redis unreachable) keeps what was typed.
+ */
+const SERVICE_DOWN_BODY = JSON.stringify({
+  success: false,
+  message: 'Service unavailable',
+  errorCode: 'SERVICE_UNAVAILABLE',
+  data: null,
+  timestamp: '2026-10-21T10:00:00Z',
+});
+const TRY_LATER = 'This service isn’t available right now. Try again later.';
+
+test('a 503 on the change keeps the typed passwords and shows the try-again-later line', async ({ page }) => {
+  await page.route('**/api/users/me/password', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: SERVICE_DOWN_BODY }),
+  );
+  const dialog = await openChangePasswordDialog(page);
+  await fill(dialog, mockPassword, 'brand-new-password', 'brand-new-password');
+
+  await dialog.getByRole('button', { name: 'Change password' }).click();
+
+  await expect(dialog.getByRole('alert')).toHaveText(TRY_LATER);
+  await expect(dialog.getByLabel('Current password', { exact: true })).toHaveValue(mockPassword);
+  await expect(dialog.getByLabel('New password', { exact: true })).toHaveValue('brand-new-password');
+  await expect(dialog.getByRole('button', { name: 'Change password' })).toBeEnabled();
+});
+
+test('a 503 when sending the emailed code shows the try-again-later line and starts no countdown', async ({ page }) => {
+  await page.route('**/api/users/me/confirmation-code', (route) =>
+    route.fulfill({ status: 503, contentType: 'application/json', body: SERVICE_DOWN_BODY }),
+  );
+  const dialog = await openChangePasswordDialog(page);
+  await dialog.getByRole('radio', { name: 'A code sent by email' }).check();
+
+  await dialog.getByRole('button', { name: 'Send code' }).click();
+
+  await expect(dialog.getByRole('alert')).toHaveText(TRY_LATER);
+  await expect(dialog.getByRole('button', { name: 'Send code' })).toBeEnabled();
+  await expect(dialog.getByText(/Resend in/)).toHaveCount(0);
+});
