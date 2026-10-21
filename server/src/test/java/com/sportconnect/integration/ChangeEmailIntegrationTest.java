@@ -477,7 +477,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
         changeEmail(user, body("u26-r-new@example.com", wrong, "currentPassword", PASSWORD))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         assertUntouched(user, "u26-r@example.com", false, 0);
     }
 
@@ -515,7 +516,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
                     .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
         }
         changeEmail(user, body("u26-u-new@example.com", wrong, "currentPassword", PASSWORD))
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_ATTEMPTS_EXCEEDED"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_ATTEMPTS_EXCEEDED"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         changeEmail(user, body("u26-u-new@example.com", code, "currentPassword", PASSWORD))
                 .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"));
         assertUntouched(user, "u26-u@example.com", false, 0);
@@ -602,12 +604,14 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
         changeEmail(user, body("u26-aa-new@example.com", wrong, "verificationCode", own))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         // the new-address code expires (Redis drops it)
         redis.delete("user:confirm:code:NEW_EMAIL:" + user.getId());
         changeEmail(user, body("u26-aa-new@example.com", code, "verificationCode", own))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         assertUntouched(user, "u26-aa@example.com", false, 0);
         assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isTrue();
 
@@ -627,7 +631,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
         changeEmail(user, body("u26-ab-new@example.com", code, "verificationCode", wrongOwn))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("CHANGE_EMAIL"));
         assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isTrue();
 
         changeEmail(user, body("u26-ab-new@example.com", code, "verificationCode", own)).andExpect(status().isOk());
