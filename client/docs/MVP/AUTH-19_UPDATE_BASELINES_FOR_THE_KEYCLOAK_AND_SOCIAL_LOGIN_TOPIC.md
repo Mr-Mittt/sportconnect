@@ -1,6 +1,6 @@
 # AUTH-19 · Update the visual baselines for the whole Keycloak and social-login topic
 
-**Status:** `TODO` · **Type:** Testing · **Depends on:** all client work of the topic pushed (ACCOUNT-7 done 2026-10-21); best after AUTH-17 · **Gates:** nothing
+**Status:** `TODO` · **Type:** Testing · **Depends on:** all client work of the topic pushed (ACCOUNT-7 and AUTH-17 done 2026-10-21; AUTH-17 left the new globe and the new circle sizes in all 60 `auth-theme-*` files, none of which exists yet) · **Gates:** nothing
 
 **Filed:** 2026-10-21, at the ACCOUNT-7 close-out, on the owner's request: the topic (33 commits ahead of master, from AUTH-14 to ACCOUNT-7) left its baselines to the `update-baselines` dispatch and none was ever applied (a Windows host cannot render a valid baseline).
 
