@@ -223,12 +223,14 @@ class ConfirmationCodeStore {
     }
 
     private void verify(UUID userId, ConfirmationPurpose purpose, String binding, String code, boolean consume) {
+        // ACCOUNT-7: an email change takes two codes and answers both failures with the same code, so the params say which one.
+        Map<String, Object> whichCode = Map.of("purpose", purpose.name());
         try {
             String codeKey = key("code", userId, purpose);
             String attemptsKey = key("attempts", userId, purpose);
             String stored = redis.opsForValue().get(codeKey);
             if (stored == null) {
-                throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "The code has expired; request a new one", null);
+                throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "The code has expired; request a new one", whichCode);
             }
             String presented = digest(userId, purpose, binding, code == null ? "" : code.replaceAll("\\s+", ""));
             if (MessageDigest.isEqual(stored.getBytes(StandardCharsets.UTF_8), presented.getBytes(StandardCharsets.UTF_8))) {
@@ -237,7 +239,7 @@ class ConfirmationCodeStore {
                 }
                 // delete() reports whether this call removed it, so only one of two racing requests wins.
                 if (!Boolean.TRUE.equals(redis.delete(codeKey))) {
-                    throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "The code has expired; request a new one", null);
+                    throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "The code has expired; request a new one", whichCode);
                 }
                 redis.delete(attemptsKey);
                 return;
@@ -248,9 +250,9 @@ class ConfirmationCodeStore {
                 redis.delete(codeKey);
                 redis.delete(attemptsKey);
                 throw new BadRequestException("VERIFICATION_CODE_ATTEMPTS_EXCEEDED",
-                        "Too many wrong codes; request a new one", null);
+                        "Too many wrong codes; request a new one", whichCode);
             }
-            throw new BadRequestException("VERIFICATION_CODE_INVALID", "The code is not correct", null);
+            throw new BadRequestException("VERIFICATION_CODE_INVALID", "The code is not correct", whichCode);
         } catch (DataAccessException e) {
             throw new ServiceUnavailableException("The confirmation code could not be checked", e);
         }
