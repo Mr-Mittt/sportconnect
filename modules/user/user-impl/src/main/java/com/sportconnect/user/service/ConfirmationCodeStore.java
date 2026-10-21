@@ -200,6 +200,29 @@ class ConfirmationCodeStore {
 
     /** Same as {@link #verify(UUID, ConfirmationPurpose, String)} for a code issued with the same {@code binding}. */
     void verify(UUID userId, ConfirmationPurpose purpose, String binding, String code) {
+        verify(userId, purpose, binding, code, true);
+    }
+
+    /**
+     * U26: the same checks as {@link #verify(UUID, ConfirmationPurpose, String, String)} (a wrong code still counts toward the
+     * attempts), but a right code stays usable. An email change checks both of its codes first and spends them only once
+     * Keycloak has accepted the change, so a later refusal does not cost the user the code they typed correctly.
+     */
+    void check(UUID userId, ConfirmationPurpose purpose, String binding, String code) {
+        verify(userId, purpose, binding, code, false);
+    }
+
+    /** U26: drops the pending code and the wrong-try counter of one purpose (e.g. a new-address code for an address that turned out taken). */
+    void discard(UUID userId, ConfirmationPurpose purpose) {
+        try {
+            redis.delete(key("code", userId, purpose));
+            redis.delete(key("attempts", userId, purpose));
+        } catch (DataAccessException e) {
+            // best effort: the code expires by itself
+        }
+    }
+
+    private void verify(UUID userId, ConfirmationPurpose purpose, String binding, String code, boolean consume) {
         try {
             String codeKey = key("code", userId, purpose);
             String attemptsKey = key("attempts", userId, purpose);
@@ -209,6 +232,9 @@ class ConfirmationCodeStore {
             }
             String presented = digest(userId, purpose, binding, code == null ? "" : code.replaceAll("\\s+", ""));
             if (MessageDigest.isEqual(stored.getBytes(StandardCharsets.UTF_8), presented.getBytes(StandardCharsets.UTF_8))) {
+                if (!consume) {
+                    return;
+                }
                 // delete() reports whether this call removed it, so only one of two racing requests wins.
                 if (!Boolean.TRUE.equals(redis.delete(codeKey))) {
                     throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "The code has expired; request a new one", null);

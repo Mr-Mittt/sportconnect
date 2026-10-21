@@ -591,6 +591,101 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
         requestNewEmailCode(other, "u26-z-new@example.com").andExpect(status().isConflict());
     }
 
+    // ---------- a refusal does not cost the user a code they typed correctly ----------
+
+    @Test
+    void refusal_aWrongOrExpiredNewAddressCode_keepsTheCodeMailedToTheCurrentAddressUsable() throws Exception {
+        User user = register("u26-aa@example.com", PASSWORD);
+        String own = issueOwnCode(user);
+        String code = issueNewEmailCode(user, "u26-aa-new@example.com");
+        String wrong = code.equals("000000") ? "000001" : "000000";
+
+        changeEmail(user, body("u26-aa-new@example.com", wrong, "verificationCode", own))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+        // the new-address code expires (Redis drops it)
+        redis.delete("user:confirm:code:NEW_EMAIL:" + user.getId());
+        changeEmail(user, body("u26-aa-new@example.com", code, "verificationCode", own))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"));
+        assertUntouched(user, "u26-aa@example.com", false, 0);
+        assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isTrue();
+
+        // a fresh new-address code and the SAME code from the current address complete the change
+        liftResendWait();
+        String fresh = issueNewEmailCode(user, "u26-aa-new@example.com");
+        changeEmail(user, body("u26-aa-new@example.com", fresh, "verificationCode", own)).andExpect(status().isOk());
+        assertThat(TestKeycloak.emailOf(user.getId())).isEqualTo("u26-aa-new@example.com");
+    }
+
+    @Test
+    void refusal_aWrongCodeFromTheCurrentAddress_keepsTheNewAddressCodeUsable() throws Exception {
+        User user = register("u26-ab@example.com", PASSWORD);
+        String own = issueOwnCode(user);
+        String wrongOwn = own.equals("000000") ? "000001" : "000000";
+        String code = issueNewEmailCode(user, "u26-ab-new@example.com");
+
+        changeEmail(user, body("u26-ab-new@example.com", code, "verificationCode", wrongOwn))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+        assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isTrue();
+
+        changeEmail(user, body("u26-ab-new@example.com", code, "verificationCode", own)).andExpect(status().isOk());
+    }
+
+    @Test
+    void refusal_anAddressTakenSinceTheCodeWasSent_dropsTheNewAddressCode_butKeepsTheCurrentAddressCode() throws Exception {
+        User user = register("u26-ac@example.com", PASSWORD);
+        String own = issueOwnCode(user);
+        String code = issueNewEmailCode(user, "u26ac.race@gmail.com");
+        TestKeycloak.registerUser(UUID.randomUUID(), "u26acrace@gmail.com", "u26acrace@gmail.com", PASSWORD);
+
+        changeEmail(user, body("u26ac.race@gmail.com", code, "verificationCode", own))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("EMAIL_ALREADY_REGISTERED"));
+
+        assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isFalse();
+        assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isTrue();
+        // the taken address's code is gone for good, even for the same address
+        changeEmail(user, body("u26ac.race@gmail.com", code, "verificationCode", own))
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"));
+
+        // another address needs its own verification, and the same code from the current address still counts
+        liftResendWait();
+        String other = issueNewEmailCode(user, "u26-ac-other@example.com");
+        changeEmail(user, body("u26-ac-other@example.com", other, "verificationCode", own)).andExpect(status().isOk());
+    }
+
+    @Test
+    void refusal_keycloakDown_is503_andBothCodesStayUsable() throws Exception {
+        User user = register("u26-ad@example.com", PASSWORD);
+        String own = issueOwnCode(user);
+        String code = issueNewEmailCode(user, "u26-ad-new@example.com");
+
+        TestKeycloak.adminAvailable(false);
+        try {
+            changeEmail(user, body("u26-ad-new@example.com", code, "verificationCode", own)).andExpect(status().isServiceUnavailable());
+        } finally {
+            TestKeycloak.adminAvailable(true);
+        }
+        assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isTrue();
+        assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isTrue();
+
+        changeEmail(user, body("u26-ad-new@example.com", code, "verificationCode", own)).andExpect(status().isOk());
+        assertThat(TestKeycloak.emailOf(user.getId())).isEqualTo("u26-ad-new@example.com");
+    }
+
+    @Test
+    void change_spendsBothCodes_soTheyCannotBeUsedAgain() throws Exception {
+        User user = register("u26-ae@example.com", PASSWORD);
+        String own = issueOwnCode(user);
+        String code = issueNewEmailCode(user, "u26-ae-new@example.com");
+        changeEmail(user, body("u26-ae-new@example.com", code, "verificationCode", own)).andExpect(status().isOk());
+
+        assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isFalse();
+        assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isFalse();
+    }
+
     /** The credentials client's password grant against {@link TestKeycloak}, the way the backend checks a password. */
     private int passwordGrant(String username, String password) throws Exception {
         var request = java.net.http.HttpRequest.newBuilder(java.net.URI.create(TestKeycloak.TOKEN_URI))
