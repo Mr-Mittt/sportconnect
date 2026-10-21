@@ -48,4 +48,19 @@ class EmailRulesSpec extends Specification {
         where:
         typed << [null, "", "   ", "no-at-sign", "@gmail.com", "bao@"]
     }
+
+    /** U26: the backend (modules/auth/auth-impl EmailRules) keeps a copy of this rule and reads the same table. */
+    def "every row of the table shared with the backend's copy of the rule gives its key"() {
+        given:
+        def stream = getClass().getResourceAsStream("/email-rules-examples.csv")
+        assert stream != null: "shared table not found on the test classpath"
+        def lines = stream.getText("UTF-8").readLines().findAll { !it.startsWith("#") && !it.isBlank() }
+
+        expect:
+        lines.size() >= 15
+        lines.every { line ->
+            int comma = line.lastIndexOf(",")
+            EmailRules.normalized(line.substring(0, comma)) == (line.substring(comma + 1).trim() ?: null)
+        }
+    }
 }

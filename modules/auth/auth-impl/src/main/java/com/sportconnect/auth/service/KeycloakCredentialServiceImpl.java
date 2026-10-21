@@ -4,6 +4,7 @@ import com.sportconnect.auth.api.service.KeycloakCredentialService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.auth.config.KeycloakProperties;
 import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.common.exception.ServiceUnavailableException;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,10 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -51,6 +56,9 @@ class KeycloakCredentialServiceImpl implements KeycloakCredentialService {
     private final KeycloakProperties properties;
     private final RestClient restClient;
     private static final ObjectMapper JSON = new ObjectMapper();
+    /** Fields of a Keycloak user read that are not ours to write back on an update. */
+    private static final List<String> READ_ONLY_FIELDS = List.of("id", "createdTimestamp", "totp", "disableableCredentialTypes",
+            "notBefore", "access", "federatedIdentities", "federationLink", "self");
 
     KeycloakCredentialServiceImpl(KeycloakProperties properties) {
         this.properties = properties;
@@ -146,6 +154,132 @@ class KeycloakCredentialServiceImpl implements KeycloakCredentialService {
         throw new ServiceUnavailableException("Keycloak answered " + reply.status().value() + " to a verification email request");
     }
 
+    @Override
+    public boolean isEmailRegistered(String email, UUID exceptUserId) {
+        String address = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+        String key = EmailRules.normalized(address);
+        if (key == null) {
+            return false;
+        }
+        String adminToken = serviceAccountToken();
+        // By key (every account made through the realm's flows has one), and by the exact address for an account that has none.
+        List<Map<String, Object>> holders = new ArrayList<>(searchUsers(adminToken, EmailRules.ATTRIBUTE + ":" + key, null));
+        holders.addAll(searchUsers(adminToken, null, address));
+        return holders.stream().anyMatch(holder -> !String.valueOf(exceptUserId).equals(holder.get("id")));
+    }
+
+    @Override
+    public void replaceEmail(UUID userId, String newEmail) {
+        String address = newEmail == null ? "" : newEmail.trim().toLowerCase(Locale.ROOT);
+        String key = EmailRules.normalized(address);
+        if (key == null) {
+            throw new IllegalArgumentException("not an email address: " + newEmail);
+        }
+        String adminToken = serviceAccountToken();
+        Reply current = call(() -> restClient.get()
+                .uri(properties.getAdminUri() + "/users/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .exchange((request, response) -> new Reply(response.getStatusCode(), readJson(response))));
+        if (current.status().value() == 404) {
+            throw new ResourceNotFoundException("Keycloak user", "id", userId);
+        }
+        if (!current.status().is2xxSuccessful()) {
+            throw new ServiceUnavailableException("Keycloak answered " + current.status().value() + " to a user lookup");
+        }
+
+        // An update replaces the attribute map, so the whole record goes back with only these fields changed.
+        Map<String, Object> user = new LinkedHashMap<>(current.body());
+        String oldEmail = user.get("email") instanceof String old ? old : null;
+        Map<String, Object> attributes = user.get("attributes") instanceof Map<?, ?> existing
+                ? new LinkedHashMap<>(castAttributes(existing)) : new LinkedHashMap<>();
+        attributes.put(EmailRules.ATTRIBUTE, List.of(key));
+        attributes.remove("picture");
+        for (String readOnly : READ_ONLY_FIELDS) {
+            user.remove(readOnly);
+        }
+        user.put("attributes", attributes);
+        user.put("email", address);
+        user.put("emailVerified", true);
+        // A password account registered with an email has that email as its username (A27): the old address would keep
+        // signing in, and nobody else could register it. Any other username (a phone, a name) stays.
+        if (user.get("username") instanceof String username && oldEmail != null
+                && key(username) != null && key(username).equals(key(oldEmail))) {
+            user.put("username", address);
+        }
+
+        Reply update = call(() -> restClient.put()
+                .uri(properties.getAdminUri() + "/users/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(user)
+                .exchange((request, response) -> new Reply(response.getStatusCode(), readJson(response))));
+        if (!update.status().is2xxSuccessful()) {
+            int status = update.status().value();
+            if (status == 404) {
+                throw new ResourceNotFoundException("Keycloak user", "id", userId);
+            }
+            if (status == 409 || (status == 400 && "emailAlreadyUsed".equals(update.body().get("errorMessage")))) {
+                throw new ConflictException("EMAIL_ALREADY_REGISTERED", "This email address is already registered", null);
+            }
+            // Anything else is not the user's doing. A refused username (error-user-attribute-read-only) means the realm
+            // was not given editUsernameAllowed=true (infra/scripts/apply-realm-edit-username.sh).
+            log.error("Keycloak refused the email change of user {}: {} {}", userId, status, update.body());
+            throw new ServiceUnavailableException("Keycloak answered " + status + " to an email change");
+        }
+
+        unlinkEveryIdentityProvider(adminToken, userId);
+    }
+
+    /** Deletes the user's federated identities (the Google link); a failure is a 503 and the repeat of the change finishes it. */
+    private void unlinkEveryIdentityProvider(String adminToken, UUID userId) {
+        ListReply links = callList(() -> restClient.get()
+                .uri(properties.getAdminUri() + "/users/" + userId + "/federated-identity")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .exchange((request, response) -> new ListReply(response.getStatusCode(), readJsonList(response))));
+        if (!links.status().is2xxSuccessful()) {
+            log.error("The email of user {} changed but its identity providers could not be read: {}", userId, links.status().value());
+            throw new ServiceUnavailableException("Keycloak answered " + links.status().value() + " to a federated identity lookup");
+        }
+        for (Map<String, Object> link : links.body()) {
+            if (!(link.get("identityProvider") instanceof String alias)) {
+                continue;
+            }
+            Reply removed = call(() -> restClient.delete()
+                    .uri(properties.getAdminUri() + "/users/" + userId + "/federated-identity/{alias}", alias)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                    .exchange((request, response) -> new Reply(response.getStatusCode(), readJson(response))));
+            if (!removed.status().is2xxSuccessful() && removed.status().value() != 404) {
+                log.error("The email of user {} changed but the {} link could not be removed: {}", userId, alias, removed.status().value());
+                throw new ServiceUnavailableException("Keycloak answered " + removed.status().value() + " to a federated identity delete");
+            }
+        }
+    }
+
+    /** Users matching an attribute query ({@code name:value}, exact) or an exact email, as Keycloak lists them. */
+    private List<Map<String, Object>> searchUsers(String adminToken, String attributeQuery, String email) {
+        ListReply reply = callList(() -> {
+            RestClient.RequestHeadersSpec<?> request = attributeQuery != null
+                    ? restClient.get().uri(properties.getAdminUri() + "/users?q={q}&exact=true", attributeQuery)
+                    : restClient.get().uri(properties.getAdminUri() + "/users?email={email}&exact=true", email);
+            return request
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                    .exchange((req, response) -> new ListReply(response.getStatusCode(), readJsonList(response)));
+        });
+        if (!reply.status().is2xxSuccessful()) {
+            throw new ServiceUnavailableException("Keycloak answered " + reply.status().value() + " to a user search");
+        }
+        return reply.body();
+    }
+
+    private static String key(String value) {
+        return EmailRules.normalized(value);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castAttributes(Map<?, ?> attributes) {
+        return (Map<String, Object>) attributes;
+    }
+
     /** The user's Keycloak username (the password grant needs it), or {@code null} when Keycloak has no such user. */
     private String findUsername(UUID userId) {
         String adminToken = serviceAccountToken();
@@ -208,6 +342,32 @@ class KeycloakCredentialServiceImpl implements KeycloakCredentialService {
         } catch (IOException | RuntimeException e) {
             return Map.of();
         }
+    }
+
+    private static ListReply callList(Supplier<ListReply> request) {
+        try {
+            return request.get();
+        } catch (RestClientException e) {
+            throw new ServiceUnavailableException("Keycloak is not reachable: " + e.getMessage(), e);
+        }
+    }
+
+    /** The JSON body as a list of objects; empty for no body or one that is not a JSON array. */
+    private static List<Map<String, Object>> readJsonList(ClientHttpResponse response) {
+        try {
+            byte[] bytes = response.getBody().readAllBytes();
+            if (bytes.length == 0) {
+                return List.of();
+            }
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> body = JSON.readValue(bytes, List.class);
+            return body == null ? List.of() : body;
+        } catch (IOException | RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    private record ListReply(HttpStatusCode status, List<Map<String, Object>> body) {
     }
 
     private record Reply(HttpStatusCode status, Map<String, Object> body) {

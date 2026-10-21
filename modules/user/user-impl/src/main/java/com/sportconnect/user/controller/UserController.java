@@ -1,11 +1,13 @@
 package com.sportconnect.user.controller;
 
 import com.sportconnect.common.dto.ApiResponse;
+import com.sportconnect.user.api.dto.ChangeEmailRequest;
 import com.sportconnect.user.api.dto.ChangePasswordRequest;
 import com.sportconnect.user.api.dto.ConfirmationCodeRequest;
 import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
 import com.sportconnect.user.api.dto.EmailVerificationResponse;
 import com.sportconnect.user.api.dto.DeactivateAccountRequest;
+import com.sportconnect.user.api.dto.NewEmailCodeRequest;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
 import com.sportconnect.user.api.dto.UserResponse;
@@ -196,6 +198,44 @@ public class UserController {
             @AuthenticationPrincipal String callerIdStr) {
         EmailVerificationResponse response = userService.sendEmailVerification(UUID.fromString(callerIdStr));
         return ResponseEntity.ok(ApiResponse.success(response.isAlreadyVerified() ? "Email already verified" : "Verification email requested", response));
+    }
+
+    @Operation(summary = "Email a code to the new address of an email change", description = "U26, step 1. Checks that newEmail is free (the A35 rule: dots, +tag and googlemail.com of a Gmail address count as the same mailbox) and emails a 6-digit code, valid 15 minutes and for that exact address only, to it. Nothing is changed. At most one code per 60 seconds and 10 per day.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Code sent"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not an email address, or the same address as the account's (NEW_EMAIL_SAME_AS_CURRENT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or deactivated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Another account holds the address (EMAIL_ALREADY_REGISTERED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "A code was sent less than 60 seconds ago (VERIFICATION_RESEND_TOO_SOON) or the daily limit is reached (NEW_EMAIL_CODE_LIMIT_REACHED); errorParams.seconds"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the code store is unavailable")
+    })
+    @PostMapping("/me/email-change-code")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<ConfirmationCodeResponse>> sendNewEmailCode(
+            @AuthenticationPrincipal String callerIdStr,
+            @Valid @RequestBody NewEmailCodeRequest request) {
+        ConfirmationCodeResponse response = userService.sendNewEmailCode(UUID.fromString(callerIdStr), request.getNewEmail());
+        return ResponseEntity.ok(ApiResponse.success("Confirmation code sent", response));
+    }
+
+    @Operation(summary = "Change the caller's email", description = "U26, step 2. Confirms the caller with exactly one proof (currentPassword, or verificationCode emailed to the CURRENT address by POST /me/confirmation-code with purpose CHANGE_EMAIL) and the new mailbox with newEmailCode (from POST /me/email-change-code). Then the account holds the new address as verified, is unlinked from Google (Google avatar removed), signs in with the new address only, and every pending code is dropped.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Email changed"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, NEW_EMAIL_SAME_AS_CURRENT, neither/both proofs (CONFIRMATION_REQUIRED), CURRENT_PASSWORD_INCORRECT, or VERIFICATION_CODE_INVALID / _EXPIRED / _ATTEMPTS_EXCEEDED (for either code)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or deactivated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Another account holds the address (EMAIL_ALREADY_REGISTERED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Too many wrong passwords (PASSWORD_ATTEMPTS_EXCEEDED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the code store is unavailable")
+    })
+    @PutMapping("/me/email")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Void>> changeEmail(
+            @AuthenticationPrincipal String callerIdStr,
+            @Valid @RequestBody ChangeEmailRequest request) {
+        userService.changeEmail(UUID.fromString(callerIdStr), request);
+        return ResponseEntity.ok(ApiResponse.success("Email changed successfully", null));
     }
 
     @Operation(summary = "Delete a user", description = "Admin-only. Soft delete (isActive=false).")

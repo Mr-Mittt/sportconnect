@@ -1,0 +1,19 @@
+# typed address,A35 key (empty = no key). Read by BOTH EmailRulesSpec (the Keycloak extensions JAR) and the backend's
+# EmailRulesSpec (modules/auth/auth-impl), so the two copies of the rule cannot drift apart (U26).
+baonguyendangit@gmail.com,baonguyendangit@gmail.com
+bao.nguyen.dangit@gmail.com,baonguyendangit@gmail.com
+Bao.Nguyen.Dangit@Gmail.com,baonguyendangit@gmail.com
+baonguyendangit+shop@gmail.com,baonguyendangit@gmail.com
+bao.nguyen.dangit+a+b@gmail.com,baonguyendangit@gmail.com
+baonguyendangit@googlemail.com,baonguyendangit@gmail.com
+  bao.nguyendangit@GOOGLEMAIL.COM ,baonguyendangit@gmail.com
+A.B@Outlook.com,a.b@outlook.com
+ab@outlook.com,ab@outlook.com
+bao+tag@outlook.com,bao+tag@outlook.com
+bao.x@company.vn,bao.x@company.vn
+bao.x@mail.gmail.com,bao.x@mail.gmail.com
++tag@gmail.com,+tag@gmail.com
+..@gmail.com,..@gmail.com
+no-at-sign,
+@gmail.com,
+bao@,
