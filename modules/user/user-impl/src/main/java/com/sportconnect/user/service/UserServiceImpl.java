@@ -420,11 +420,19 @@ public class UserServiceImpl implements UserService {
             throw new BadRequestException("NEW_EMAIL_SAME_AS_CURRENT", "This is already the email address of the account", null);
         }
 
-        accountConfirmation.confirm(userId, ConfirmationPurpose.CHANGE_EMAIL, request.getCurrentPassword(), request.getVerificationCode());
-        accountConfirmation.confirmNewEmail(userId, address, request.getNewEmailCode());
-        requireNewAddress(user, address);
-
-        accountConfirmation.replaceEmailInKeycloak(userId, address);
+        // Both proofs are checked, not spent: a refusal below must not cost the user a code they typed correctly. Success
+        // spends them all (purgeAfterEmailChange).
+        accountConfirmation.check(userId, ConfirmationPurpose.CHANGE_EMAIL, request.getCurrentPassword(), request.getVerificationCode());
+        accountConfirmation.checkNewEmail(userId, address, request.getNewEmailCode());
+        try {
+            requireNewAddress(user, address);
+            accountConfirmation.replaceEmailInKeycloak(userId, address);
+        } catch (ConflictException e) {
+            // The address is taken (now, or by a race): its code is useless, the user must pick and verify another address.
+            // The caller's own proof stays valid for that second attempt.
+            accountConfirmation.discardNewEmailCode(userId);
+            throw e;
+        }
 
         user.setEmail(address);
         user.setIsEmailVerified(true);

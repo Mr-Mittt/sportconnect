@@ -190,11 +190,11 @@ class UserEmailChangeSpec extends Specification {
         then:
         1 * userRepository.findByIdForUpdate(ID) >> Optional.of(user)
 
-        then: "the caller is confirmed with the password"
-        1 * accountConfirmation.confirm(ID, ConfirmationPurpose.CHANGE_EMAIL, "pw", null)
+        then: "the caller is checked with the password (checked, not spent)"
+        1 * accountConfirmation.check(ID, ConfirmationPurpose.CHANGE_EMAIL, "pw", null)
 
-        then: "the new mailbox is confirmed for the exact lowercased address"
-        1 * accountConfirmation.confirmNewEmail(ID, "new@example.com", "123456")
+        then: "the new mailbox is checked for the exact lowercased address (checked, not spent)"
+        1 * accountConfirmation.checkNewEmail(ID, "new@example.com", "123456")
 
         then: "the address is checked again, then Keycloak is changed"
         1 * userRepository.existsByEmail("new@example.com") >> false
@@ -207,6 +207,8 @@ class UserEmailChangeSpec extends Specification {
         then: "pending codes are dropped and the access-state cache evicted"
         1 * accountConfirmation.purgeAfterEmailChange(ID)
         1 * accessStateCache.evictAfterCommit(ID)
+        0 * accountConfirmation.discardNewEmailCode(_)
+        0 * accountConfirmation.confirm(*_)
     }
 
     def "changeEmail accepts the emailed CHANGE_EMAIL code as the caller's proof"() {
@@ -215,7 +217,7 @@ class UserEmailChangeSpec extends Specification {
 
         then:
         1 * userRepository.findByIdForUpdate(ID) >> Optional.of(account())
-        1 * accountConfirmation.confirm(ID, ConfirmationPurpose.CHANGE_EMAIL, null, "654321")
+        1 * accountConfirmation.check(ID, ConfirmationPurpose.CHANGE_EMAIL, null, "654321")
         1 * userRepository.saveAndFlush(_) >> { User u -> u }
     }
 
@@ -286,15 +288,16 @@ class UserEmailChangeSpec extends Specification {
         0 * accountConfirmation._
     }
 
-    def "a wrong or missing caller proof stops the change: the new-address code is not consumed and nothing is written"() {
+    def "a wrong or missing caller proof stops the change: the new-address code is not checked, spent or discarded and nothing is written"() {
         when:
         userService.changeEmail(ID, request())
 
         then:
         1 * userRepository.findByIdForUpdate(ID) >> Optional.of(account())
-        1 * accountConfirmation.confirm(ID, ConfirmationPurpose.CHANGE_EMAIL, "pw", null) >> { throw failure }
+        1 * accountConfirmation.check(ID, ConfirmationPurpose.CHANGE_EMAIL, "pw", null) >> { throw failure }
         thrown(type)
-        0 * accountConfirmation.confirmNewEmail(*_)
+        0 * accountConfirmation.checkNewEmail(*_)
+        0 * accountConfirmation.discardNewEmailCode(_)
         0 * accountConfirmation.replaceEmailInKeycloak(*_)
         0 * userRepository.saveAndFlush(_)
         0 * accountConfirmation.purgeAfterEmailChange(_)
@@ -307,16 +310,18 @@ class UserEmailChangeSpec extends Specification {
         new ServiceUnavailableException("down")                                          | ServiceUnavailableException
     }
 
-    def "a wrong, expired or foreign new-address code stops the change before Keycloak is touched"() {
+    def "a wrong, expired or foreign new-address code stops the change before Keycloak is touched and keeps the codes for another try"() {
         when:
         userService.changeEmail(ID, request())
 
         then:
         1 * userRepository.findByIdForUpdate(ID) >> Optional.of(account())
-        1 * accountConfirmation.confirm(ID, ConfirmationPurpose.CHANGE_EMAIL, "pw", null)
-        1 * accountConfirmation.confirmNewEmail(ID, "new@example.com", "123456") >> { throw new BadRequestException(code, "x", null) }
+        1 * accountConfirmation.check(ID, ConfirmationPurpose.CHANGE_EMAIL, "pw", null)
+        1 * accountConfirmation.checkNewEmail(ID, "new@example.com", "123456") >> { throw new BadRequestException(code, "x", null) }
         def e = thrown(BadRequestException)
         e.errorCode == code
+        0 * accountConfirmation.confirm(*_)
+        0 * accountConfirmation.discardNewEmailCode(_)
         0 * accountConfirmation.replaceEmailInKeycloak(*_)
         0 * userRepository.saveAndFlush(_)
         0 * accountConfirmation.purgeAfterEmailChange(_)
@@ -325,7 +330,7 @@ class UserEmailChangeSpec extends Specification {
         code << ["VERIFICATION_CODE_INVALID", "VERIFICATION_CODE_EXPIRED", "VERIFICATION_CODE_ATTEMPTS_EXCEEDED"]
     }
 
-    def "an address taken since the code was sent stops the change before Keycloak is touched"() {
+    def "an address taken since the code was sent stops the change before Keycloak is touched, drops the new-address code and keeps the caller's proof"() {
         when:
         userService.changeEmail(ID, request())
 
@@ -335,6 +340,9 @@ class UserEmailChangeSpec extends Specification {
         (inDatabase ? 0 : 1) * accountConfirmation.isEmailRegisteredElsewhere(ID, "new@example.com") >> true
         def e = thrown(ConflictException)
         e.errorCode == "EMAIL_ALREADY_REGISTERED"
+        1 * accountConfirmation.discardNewEmailCode(ID)
+        0 * accountConfirmation.confirm(*_)
+        0 * accountConfirmation.purgeAfterEmailChange(_)
         0 * accountConfirmation.replaceEmailInKeycloak(*_)
         0 * userRepository.saveAndFlush(_)
 
@@ -358,11 +366,13 @@ class UserEmailChangeSpec extends Specification {
         0 * userRepository.saveAndFlush(_)
         0 * accountConfirmation.purgeAfterEmailChange(_)
         0 * accessStateCache.evictAfterCommit(_)
+        (discarded ? 1 : 0) * accountConfirmation.discardNewEmailCode(ID)
+        0 * accountConfirmation.confirm(*_)
 
         where:
-        failure                                                         | type
-        new ConflictException("EMAIL_ALREADY_REGISTERED", "taken", null) | ConflictException
-        new ServiceUnavailableException("down")                         | ServiceUnavailableException
+        failure                                                         | type                        | discarded
+        new ConflictException("EMAIL_ALREADY_REGISTERED", "taken", null) | ConflictException           | true
+        new ServiceUnavailableException("down")                         | ServiceUnavailableException | false
     }
 
     def "when the database write fails after Keycloak changed, the failure is rethrown and no cache or code is touched"() {
@@ -374,6 +384,7 @@ class UserEmailChangeSpec extends Specification {
         1 * accountConfirmation.replaceEmailInKeycloak(ID, "new@example.com")
         1 * userRepository.saveAndFlush(_) >> { throw new IllegalStateException("db down") }
         thrown(IllegalStateException)
+        0 * accountConfirmation.discardNewEmailCode(_)
         0 * accountConfirmation.purgeAfterEmailChange(_)
         0 * accessStateCache.evictAfterCommit(_)
     }

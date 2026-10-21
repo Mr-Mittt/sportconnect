@@ -293,21 +293,66 @@ class AccountConfirmationServiceSpec extends Specification {
         thrown(TooManyRequestsException)
     }
 
-    def "confirmNewEmail verifies the code for the NEW_EMAIL purpose and that exact address"() {
+    def "checkNewEmail checks the code for the NEW_EMAIL purpose and that exact address, without spending it"() {
         when:
-        service.confirmNewEmail(userId, "new@example.com", "123456")
+        service.checkNewEmail(userId, "new@example.com", "123456")
 
         then:
-        1 * store.verify(userId, ConfirmationPurpose.NEW_EMAIL, "new@example.com", "123456")
+        1 * store.check(userId, ConfirmationPurpose.NEW_EMAIL, "new@example.com", "123456")
+        0 * store.verify(*_)
     }
 
-    def "confirmNewEmail passes the store's refusal on"() {
+    def "checkNewEmail passes the store's refusal on"() {
         when:
-        service.confirmNewEmail(userId, "other@example.com", "123456")
+        service.checkNewEmail(userId, "other@example.com", "123456")
 
         then:
-        1 * store.verify(userId, ConfirmationPurpose.NEW_EMAIL, "other@example.com", "123456") >> { throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "x", null) }
+        1 * store.check(userId, ConfirmationPurpose.NEW_EMAIL, "other@example.com", "123456") >> { throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "x", null) }
         thrown(BadRequestException)
+    }
+
+    def "check with an emailed code checks it without spending it"() {
+        when:
+        service.check(userId, ConfirmationPurpose.CHANGE_EMAIL, null, "654321")
+
+        then:
+        1 * store.check(userId, ConfirmationPurpose.CHANGE_EMAIL, null, "654321")
+        0 * store.verify(*_)
+    }
+
+    def "check with a password asks Keycloak and never touches a code"() {
+        when:
+        service.check(userId, ConfirmationPurpose.CHANGE_EMAIL, "pw", null)
+
+        then:
+        1 * store.checkPasswordAllowed(userId)
+        1 * credentials.verifyPassword(userId, "pw") >> true
+        1 * store.clearPasswordFailures(userId)
+        0 * store.check(*_)
+        0 * store.verify(*_)
+    }
+
+    def "check still demands exactly one proof"() {
+        when:
+        service.check(userId, ConfirmationPurpose.CHANGE_EMAIL, password, code)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == "CONFIRMATION_REQUIRED"
+        0 * store._
+
+        where:
+        password | code
+        null     | null
+        "pw"     | "123456"
+    }
+
+    def "discardNewEmailCode drops only the NEW_EMAIL code"() {
+        when:
+        service.discardNewEmailCode(userId)
+
+        then:
+        1 * store.discard(userId, ConfirmationPurpose.NEW_EMAIL)
     }
 
     def "the Keycloak half and the clean-up are delegated"() {
