@@ -183,7 +183,6 @@ export function ChangeEmailDialog({
             i18nOverridePrefix={i18nOverridePrefix}
           />
 
-          <h5 className="mb-2 text-2sm font-semibold text-text-secondary">{t('changeEmailDialog.newHeading')}</h5>
           <div className="mb-3">
             <Label htmlFor="change-email-address">{t('changeEmailDialog.newLabel')}</Label>
             <Input
