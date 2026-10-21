@@ -13,6 +13,8 @@ interface AuthState {
   isBootstrapping: boolean;
   setSession: (user: User, accessToken: string) => void;
   clearSession: () => void;
+  /** ACCOUNT-7: keeps the login snapshot in step with a change made inside the session (the email, the avatar). */
+  patchUser: (patch: Partial<User>) => void;
   /** Flips isBootstrapping to false. Called once the initial refresh check
    * settles, whether it succeeded (session restored) or failed (normal
    * logged-out case) — either way there's nothing left to wait for. */
@@ -25,5 +27,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   isBootstrapping: true,
   setSession: (user, accessToken) => set({ user, accessToken }),
   clearSession: () => set({ user: null, accessToken: null }),
+  patchUser: (patch) => set((state) => (state.user ? { user: { ...state.user, ...patch } } : state)),
   setBootstrapped: () => set({ isBootstrapping: false }),
 }));

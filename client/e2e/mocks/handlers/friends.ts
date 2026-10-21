@@ -11,12 +11,22 @@ import type { UserResponse } from '../../../src/features/profile/types.ts';
 import {
   mockFriend,
   mockIncomingFriendRequest,
+  mockCodeLimitEmail,
+  mockDownEmail,
   mockMyProfile,
+  mockRaceEmail,
+  mockSameAsCurrentEmail,
   mockSearchResultUser,
   mockSentFriendRequest,
+  mockTakenEmail,
+  mockTooSoonEmail,
   mockUser,
+  mockVerificationCode,
+  mockExpiredCode,
 } from '../fixtures.ts';
+import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
+import { rejectProof } from './auth.ts';
 import { mockCountries, mockRegionsByCountryId } from './reference.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
@@ -270,8 +280,106 @@ export const friendHandlers: HttpHandler[] = [
   http.get('/api/users/me', ({ request }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
-    const session = friendsSessions.get(sessionIdFromRequest(request));
+    const sessionId = sessionIdFromRequest(request);
+    const session = friendsSessions.get(sessionId);
+    // ACCOUNT-7: `emailUnverified` starts the account unverified, once.
+    const overrides = getOverrides(sessionId);
+    if (overrides.emailUnverified) {
+      overrides.emailUnverified = false;
+      session.myProfileState = { ...session.myProfileState, isEmailVerified: false };
+    }
     return HttpResponse.json(apiResponse(session.myProfileState, 'User retrieved successfully'));
+  }),
+
+  // ACCOUNT-7 / backend U26: POST /api/users/me/email-change-code mails a 6-digit code to the new address
+  // (60 s until a resend, 15 minutes valid) and sends nothing here. Refusals, in the real order: the address
+  // is the account's own (400 NEW_EMAIL_SAME_AS_CURRENT), already registered (409), the daily limit (429),
+  // the per-user resend lock (429, with the seconds left), Keycloak or Redis down (503). The fixture addresses
+  // that trigger each are in fixtures.ts.
+  http.post('/api/users/me/email-change-code', async ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = friendsSessions.get(sessionIdFromRequest(request));
+    const body = (await request.json()) as { newEmail?: string };
+    const address = body.newEmail?.trim() ?? '';
+    if (address === '' || /\s/.test(address)) {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { newEmail: 'must be a valid email' } }), {
+        status: 400,
+      });
+    }
+    if (address.toLowerCase() === (session.myProfileState.email ?? '').toLowerCase() || address === mockSameAsCurrentEmail) {
+      return HttpResponse.json(apiError('That is already your email', 'NEW_EMAIL_SAME_AS_CURRENT'), { status: 400 });
+    }
+    if (address === mockTakenEmail) {
+      return HttpResponse.json(apiError('Email already registered', 'EMAIL_ALREADY_REGISTERED'), { status: 409 });
+    }
+    if (address === mockCodeLimitEmail) {
+      return HttpResponse.json(apiError('Too many codes today', 'NEW_EMAIL_CODE_LIMIT_REACHED', { seconds: 43200 }), { status: 429 });
+    }
+    if (address === mockTooSoonEmail) {
+      return HttpResponse.json(apiError('A code was just sent', 'VERIFICATION_RESEND_TOO_SOON', { seconds: 42 }), { status: 429 });
+    }
+    if (address === mockDownEmail) {
+      return HttpResponse.json(apiError('Service unavailable', 'SERVICE_UNAVAILABLE'), { status: 503 });
+    }
+    return HttpResponse.json(apiResponse({ resendAfterSeconds: 60, expiresInSeconds: 900 }, 'Verification code sent'));
+  }),
+
+  // ACCOUNT-7 / backend U26: PUT /api/users/me/email. Order of the real service: both codes are only checked
+  // (the caller's proof first, then the new-address code, whose refusals carry purpose NEW_EMAIL), then the
+  // address is written. A taken address answers 409 (the real server drops the new-address code, so the mock
+  // does too: `mockRaceEmail` is refused only here), Keycloak down is 503 and both codes stay usable. On
+  // success the account is on the new address, verified, and without a Google avatar.
+  http.put('/api/users/me/email', async ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = friendsSessions.get(sessionIdFromRequest(request));
+    const body = (await request.json()) as {
+      newEmail?: string;
+      newEmailCode?: string;
+      currentPassword?: string;
+      verificationCode?: string;
+    };
+    const address = body.newEmail?.trim() ?? '';
+    if (address === '' || !body.newEmailCode?.trim()) {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED'), { status: 400 });
+    }
+    const rejected = rejectProof(body, 'CHANGE_EMAIL');
+    if (rejected) return rejected;
+    if (body.newEmailCode === mockExpiredCode) {
+      return HttpResponse.json(apiError('The code has expired', 'VERIFICATION_CODE_EXPIRED', { purpose: 'NEW_EMAIL' }), { status: 400 });
+    }
+    if (body.newEmailCode !== mockVerificationCode) {
+      return HttpResponse.json(apiError('The code is not correct', 'VERIFICATION_CODE_INVALID', { purpose: 'NEW_EMAIL' }), { status: 400 });
+    }
+    if (address.toLowerCase() === (session.myProfileState.email ?? '').toLowerCase()) {
+      return HttpResponse.json(apiError('That is already your email', 'NEW_EMAIL_SAME_AS_CURRENT'), { status: 400 });
+    }
+    if (address === mockRaceEmail || address === mockTakenEmail) {
+      return HttpResponse.json(apiError('Email already registered', 'EMAIL_ALREADY_REGISTERED'), { status: 409 });
+    }
+    if (address === mockDownEmail) {
+      return HttpResponse.json(apiError('Service unavailable', 'SERVICE_UNAVAILABLE'), { status: 503 });
+    }
+    session.myProfileState = { ...session.myProfileState, email: address, isEmailVerified: true, avatarUrl: null };
+    return HttpResponse.json(apiResponse(null, 'Email changed successfully'));
+  }),
+
+  // ACCOUNT-7 / auth A33: POST /api/users/me/email-verification mails the link. An already verified account
+  // answers alreadyVerified: true and sends nothing; the mock keeps no lock, so a second press answers 200 again.
+  http.post('/api/users/me/email-verification', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = friendsSessions.get(sessionIdFromRequest(request));
+    if (session.myProfileState.email === null) {
+      return HttpResponse.json(apiError('No email', 'VERIFICATION_EMAIL_UNAVAILABLE'), { status: 400 });
+    }
+    return HttpResponse.json(
+      apiResponse(
+        { alreadyVerified: session.myProfileState.isEmailVerified, resendAfterSeconds: session.myProfileState.isEmailVerified ? 0 : 60 },
+        'Verification email sent',
+      ),
+    );
   }),
 
   // GET /api/users/{userId}. U11: authenticated (no longer public) and

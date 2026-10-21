@@ -238,6 +238,7 @@ e2e/
     auth-reactivate.spec.ts   # AUTH-10
     auth-logout-failed.spec.ts # AUTH-14
     account-change-password.spec.ts # ACCOUNT-3
+    account-change-email.spec.ts # ACCOUNT-7
     account-deactivate.spec.ts # ACCOUNT-4
     account-settings-unsaved.spec.ts # ACCOUNT-5
     complete-profile.spec.ts  # AUTH-16
@@ -1045,7 +1046,7 @@ The unsaved-changes guard on Account Settings. Related docs: `client/docs/MVP/AC
 | Save from the prompt | Saves the edit (`PUT` body carries the new bio), shows the "saved" toast and closes everything. |
 | Save button (ACCOUNT-3) | Saves, shows the toast, keeps the modal open with the value and Save disabled again; Esc then closes without the prompt. |
 
-### `e2e/flows/account-change-password.spec.ts` (ACCOUNT-3, ACCOUNT-6, 9 `test()`s)
+### `e2e/flows/account-change-password.spec.ts` (ACCOUNT-3, ACCOUNT-6, ACCOUNT-7, 11 `test()`s)
 
 Changing one's own password from Account Settings. The auth handler mirrors `UserController.changePassword`: `PUT /api/users/me/password` answers 200, 400 `VALIDATION_FAILED` (new password under 8 characters) or, since backend U24 (ACCOUNT-6), takes exactly one proof: `currentPassword` (400 `CURRENT_PASSWORD_INCORRECT`, or the 429 lock for `mockLockedPassword`) or `verificationCode` (`mockVerificationCode`; 400 `VERIFICATION_CODE_INVALID` otherwise); `password1` is the realm policy refusal (400 `NEW_PASSWORD_REJECTED`). `POST /api/users/me/confirmation-code` answers `{ resendAfterSeconds: 60, expiresInSeconds: 900 }`. Related docs: `client/docs/MVP/ACCOUNT-3_CHANGE_PASSWORD.md`, `client/docs/MVP/ACCOUNT-6_PASSWORD_CONFIRM_DIALOGS_FOR_KEYCLOAK_USERS.md`.
 
@@ -1060,6 +1061,32 @@ Changing one's own password from Account Settings. The auth handler mirrors `Use
 | policy refusal | `password1` shows the `NEW_PASSWORD_REJECTED` copy on the new-password field. |
 | lock | `mockLockedPassword` (429 with `seconds`) disables "My password", moves to the emailed-code method and keeps "Try again in m:ss" on screen. |
 | shared lock | After the lock in this dialog, Cancel and open Deactivate account: that dialog opens already locked, with the countdown (`passwordLockStore`; the backend allowance is per user, not per action). |
+| 503 on the change (ACCOUNT-7) | A forced 503 `SERVICE_UNAVAILABLE` on `PUT /me/password` shows the shared "This service isn’t available right now. Try again later." line and keeps both typed passwords. |
+| 503 on sending the code (ACCOUNT-7) | A forced 503 on `POST /me/confirmation-code` shows the same line, starts no "Resend in" countdown and leaves Send code enabled. |
+
+### `e2e/flows/account-change-email.spec.ts` (ACCOUNT-7, 17 `test()`s)
+
+The email row of Account Settings and the change-email dialog. The handlers sit next to `GET /users/me` in `e2e/mocks/handlers/friends.ts` (they change the session's profile state) and mirror backend U26 and auth A33 in the real order: `PUT /users/me/email` checks the caller's proof (`rejectProof`, whose code errors carry `errorParams.purpose`), then the new-address code (purpose `NEW_EMAIL`), then the address. Addresses that trigger each refusal are fixtures: `mockTakenEmail` (409 when the code is requested), `mockRaceEmail` (409 only on the update), `mockSameAsCurrentEmail` (the account's own address in other case), `mockCodeLimitEmail` (429 daily limit), `mockTooSoonEmail` (429 resend lock, 42 s), `mockDownEmail` (503 on the request). The `emailUnverified` override (`seedUnverifiedEmailOnNextLoad`) starts the account unverified, once. Verify empties the typed proof by design, so the tests type the password or code after it. Related docs: `client/docs/MVP/ACCOUNT-7_VERIFY_EMAIL_FROM_ACCOUNT_SETTINGS.md`, `modules/user/user-impl/docs/MVP/U26_CHANGE_EMAIL.md`.
+
+| Test | What it checks |
+|---|---|
+| verified row | The row shows the address and "Verified"; no verification link. |
+| password change | Verify posts the trimmed address and shows the code input beside a disabled "Re-send in 1:0x"; Update stays disabled until the proof and six digits are filled; the PUT carries `{ newEmail, newEmailCode, currentPassword }`; the dialog closes, "Your email was updated." shows, the row shows the new address Verified, and the avatar menu (login snapshot) shows it too. |
+| emailed-code proof | "A code sent by email" > Send code posts `{ purpose: 'CHANGE_EMAIL' }`; the PUT carries `verificationCode` and no password. |
+| wrong new-address code | The line sits on the new-address code input; every input is kept. |
+| wrong current-address code | The line sits on the proof code, not on the new-address code. |
+| wrong password | The line sits on the password field; the new-address code is kept. |
+| taken at Verify | The line sits under the address, no code input appears, Verify stays enabled. |
+| same as current | "That is already your email address." under the address, whatever the case. |
+| taken after Verify | The line sits under the address, the code step closes and its code is cleared, the password stays, Update is disabled, and editing the address leaves the 60 s countdown on the button. |
+| resend lock | `VERIFICATION_RESEND_TOO_SOON` counts down on the button with no error line and no code step. |
+| daily limit | The limit is told in words; no countdown starts. |
+| Re-send | With a 1 s lock forced by `page.route`: Re-send empties the typed password and the typed new-address code, and Update goes disabled. |
+| 503 on Verify | The shared try-again-later line under the address; no countdown. |
+| 503 on Update | The shared line as the dialog alert; password, code and address are kept and Update stays enabled. |
+| unverified row | "Not verified yet." > "Get verification now" posts `/me/email-verification`; the link becomes "Re-send in 1:0x" with the 12-hour hint. |
+| 503 on the verification mail | The shared line shows under the status. |
+| Esc | Esc closes only the dialog; Account settings stays open. |
 
 ### `e2e/flows/auth-logout-failed.spec.ts` (AUTH-14, 3 `test()`s)
 
@@ -1071,7 +1098,7 @@ A `503 SERVICE_UNAVAILABLE` on `POST /api/auth/logout` (Keycloak unreachable) ke
 | Try again | Retrying repeats the logout, which now succeeds and ends on the Keycloak page |
 | vi | The dialog copy is Vietnamese |
 
-### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, ACCOUNT-6, 10 `test()`s; AUTH-14: ends on the Keycloak page, the "log in again to re-activate" hint is gone)
+### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, ACCOUNT-6, ACCOUNT-7, 12 `test()`s; AUTH-14: ends on the Keycloak page, the "log in again to re-activate" hint is gone)
 
 Deactivating one's own account from Account Settings. The auth handler (`e2e/mocks/handlers/auth.ts`) mirrors backend U22 and U24: `POST /api/users/me/deactivate` takes exactly one proof, `currentPassword` (200 for `mockPassword`, 400 `CURRENT_PASSWORD_INCORRECT` for any other, the 429 lock for `mockLockedPassword`) or `verificationCode` (200 for `mockVerificationCode`, 400 `VERIFICATION_CODE_INVALID`, 400 `VERIFICATION_CODE_EXPIRED` for `mockExpiredCode`); neither or both is 400 `CONFIRMATION_REQUIRED`. Related docs: `client/docs/MVP/ACCOUNT-4_DEACTIVATE_ACCOUNT.md`.
 
@@ -1087,6 +1114,8 @@ Deactivating one's own account from Account Settings. The auth handler (`e2e/moc
 | wrong password | The error offers "Use an emailed code instead"; one click switches the radio and shows Send code. |
 | lock | The 429 disables "My password", checks the email method and shows Send code. |
 | deactivate with unsaved edits | An unsaved Bio edit does not trap the sign-out: the user lands on `/login` and the "Unsaved changes" prompt never appears (ACCOUNT-5). |
+| 503 on the deactivation (ACCOUNT-7) | A forced 503 on `POST /me/deactivate` shows the shared try-again-later line, keeps the typed password and the dialog, and signs nobody out. |
+| 503 on sending the code (ACCOUNT-7) | A forced 503 on `POST /me/confirmation-code` shows the same line and starts no countdown. |
 
 ### `e2e/flows/user-errors.spec.ts` (CLIENT-ERR-3, 4 `test()`s)
 

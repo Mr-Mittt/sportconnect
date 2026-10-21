@@ -567,6 +567,49 @@ describe('AccountSettingsModal · deactivate account (ACCOUNT-4)', () => {
     expect(onChangePassword).toHaveBeenCalledTimes(1);
     expect(onSave).not.toHaveBeenCalled();
   });
+
+  const verification = { send: vi.fn(), isSending: false, hasSent: false, resendSecondsLeft: 0, errorMessage: null };
+
+  it('has no email row without its handler and sender (ACCOUNT-7)', () => {
+    renderWithProviders(<AccountSettingsModal {...baseProps} user={user()} />);
+    expect(screen.queryByRole('button', { name: 'Change email' })).not.toBeInTheDocument();
+  });
+
+  it('shows the email row above Change password and calls onChangeEmail, without saving (ACCOUNT-7)', async () => {
+    const onChangeEmail = vi.fn();
+    const onSave = vi.fn();
+    renderWithProviders(
+      <AccountSettingsModal
+        {...baseProps}
+        onSave={onSave}
+        user={user()}
+        onChangePassword={vi.fn()}
+        onChangeEmail={onChangeEmail}
+        emailVerification={verification}
+      />,
+    );
+
+    const emailButton = screen.getByRole('button', { name: 'Change email' });
+    const passwordButton = screen.getByRole('button', { name: 'Change password' });
+    expect(emailButton.compareDocumentPosition(passwordButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await userEvent.click(emailButton);
+
+    expect(onChangeEmail).toHaveBeenCalledTimes(1);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('shows the verification status of the user (ACCOUNT-7)', () => {
+    renderWithProviders(
+      <AccountSettingsModal
+        {...baseProps}
+        user={{ ...user(), isEmailVerified: false }}
+        onChangeEmail={vi.fn()}
+        emailVerification={verification}
+      />,
+    );
+    expect(screen.getByText('Not verified yet.')).toBeInTheDocument();
+  });
 });
 
 describe('AccountSettingsModal · unsaved-changes guard (ACCOUNT-5)', () => {

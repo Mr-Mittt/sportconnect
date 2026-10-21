@@ -101,6 +101,21 @@ export const Default: Story = {};
 /** ACCOUNT-3: the Password section shows once `AppShell` passes the change-password handler. */
 export const WithChangePassword: Story = { args: { onChangePassword: () => {} } };
 
+/** ACCOUNT-7: the email row above Change password (verified), and the unverified variant with its link. */
+export const WithEmailRow: Story = {
+  args: {
+    onChangePassword: () => {},
+    onChangeEmail: () => {},
+    emailVerification: { send: () => {}, isSending: false, hasSent: false, resendSecondsLeft: 0, errorMessage: null },
+  },
+};
+export const WithUnverifiedEmailRow: Story = {
+  args: {
+    ...WithEmailRow.args,
+    user: { ...baseUser, isEmailVerified: false },
+  },
+};
+
 /** Every optional field unset — the empty-state layout, including no Country/Region/Language
  * chosen yet (CLIENT-REF-3). */
 export const EmptyProfile: Story = {
