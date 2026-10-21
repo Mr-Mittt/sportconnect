@@ -169,6 +169,12 @@ class KeycloakCredentialServiceImpl implements KeycloakCredentialService {
     }
 
     @Override
+    public boolean isSameMailbox(String first, String second) {
+        String firstKey = EmailRules.normalized(first);
+        return firstKey != null && firstKey.equals(EmailRules.normalized(second));
+    }
+
+    @Override
     public void replaceEmail(UUID userId, String newEmail) {
         String address = newEmail == null ? "" : newEmail.trim().toLowerCase(Locale.ROOT);
         String key = EmailRules.normalized(address);

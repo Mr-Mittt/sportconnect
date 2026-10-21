@@ -47,7 +47,7 @@ PUT    /api/users/{userId}/profile       ROLE_USER
 POST   /api/users/me/deactivate          ROLE_USER  (U22, U24: body { currentPassword | verificationCode }, exactly one; soft-deletes the caller; the A25 gate refuses them from the next request)
 PUT    /api/users/me/password            ROLE_USER  (U24: { currentPassword | verificationCode, newPassword }; the new password is set in Keycloak)
 POST   /api/users/me/confirmation-code   ROLE_USER  (U24: { purpose: DEACTIVATE | CHANGE_PASSWORD | CHANGE_EMAIL } -> emails a 6-digit code to the CURRENT address, { resendAfterSeconds: 60, expiresInSeconds: 900 }; NEW_EMAIL is refused here)
-POST   /api/users/me/email-change-code   ROLE_USER  (U26 step 1: { newEmail } -> 409 EMAIL_ALREADY_REGISTERED / 400 NEW_EMAIL_SAME_AS_CURRENT, else emails a code bound to that exact address to it; 60 s lock, 10 a day)
+POST   /api/users/me/email-change-code   ROLE_USER  (U26 step 1: { newEmail } -> 409 EMAIL_ALREADY_REGISTERED / 400 NEW_EMAIL_SAME_AS_CURRENT (also a re-spelling of the own mailbox by the A35 key, `KeycloakCredentialService.isSameMailbox`), else emails a code bound to that exact address to it; 60 s lock, 10 a day)
 PUT    /api/users/me/email              ROLE_USER  (U26 step 2: { newEmail, newEmailCode, currentPassword | verificationCode } -> Keycloak and the copy move to the new address, verified; Google unlinked, Google picture cleared)
 POST   /api/users/me/email-verification    ROLE_USER  (A33: asks Keycloak to email its verification link -> { alreadyVerified, resendAfterSeconds: 60 }; nothing is sent and the copy is synced when Keycloak already has the email verified; 429 VERIFICATION_RESEND_TOO_SOON)
 DELETE /api/users/{userId}               ROLE_ADMIN

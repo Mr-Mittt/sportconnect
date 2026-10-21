@@ -416,7 +416,7 @@ public class UserServiceImpl implements UserService {
                 .filter(User::getIsActive)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
         String address = lowercaseAddress(request.getNewEmail());
-        if (address.equals(user.getEmail())) {
+        if (isCurrentMailbox(user, address)) {
             throw new BadRequestException("NEW_EMAIL_SAME_AS_CURRENT", "This is already the email address of the account", null);
         }
 
@@ -469,9 +469,20 @@ public class UserServiceImpl implements UserService {
         return raw.trim().toLowerCase(Locale.ROOT);
     }
 
-    /** The address must differ from the caller's own and be held by nobody else, in the database or in Keycloak. */
+    /**
+     * ACCOUNT-7: whether {@code address} is the account's own mailbox by the A35 key, which covers the identical address
+     * (the key lowercases every domain) and a re-spelling of it (dots or {@code +tag} on a Gmail address,
+     * {@code googlemail.com}). Such a "change" would send a code to the mailbox the account already has and still unlink
+     * Google. An account with no email (phone only) has no mailbox to match.
+     */
+    private boolean isCurrentMailbox(User user, String address) {
+        String current = user.getEmail();
+        return current != null && accountConfirmation.isSameMailbox(current, address);
+    }
+
+    /** The address must differ from the caller's own mailbox and be held by nobody else, in the database or in Keycloak. */
     private void requireNewAddress(User user, String address) {
-        if (address.equals(user.getEmail())) {
+        if (isCurrentMailbox(user, address)) {
             throw new BadRequestException("NEW_EMAIL_SAME_AS_CURRENT", "This is already the email address of the account", null);
         }
         if (userRepository.existsByEmail(address) || accountConfirmation.isEmailRegisteredElsewhere(user.getId(), address)) {

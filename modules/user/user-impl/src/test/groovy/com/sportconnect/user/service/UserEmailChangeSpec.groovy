@@ -105,10 +105,25 @@ class UserEmailChangeSpec extends Specification {
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(ID) >> Optional.of(account())
+        1 * accountConfirmation.isSameMailbox("old@example.com", "old@example.com") >> true
         def e = thrown(BadRequestException)
         e.errorCode == "NEW_EMAIL_SAME_AS_CURRENT"
         0 * userRepository.existsByEmail(_)
         0 * accountConfirmation._
+    }
+
+    def "sendNewEmailCode refuses a re-spelling of the caller's own mailbox (the A35 key) before the duplicate lookup and sends nothing"() {
+        when:
+        userService.sendNewEmailCode(ID, "Old+News@Example.com")
+
+        then:
+        1 * userRepository.findByIdAndIsActiveTrue(ID) >> Optional.of(account())
+        1 * accountConfirmation.isSameMailbox("old@example.com", "old+news@example.com") >> true
+        def e = thrown(BadRequestException)
+        e.errorCode == "NEW_EMAIL_SAME_AS_CURRENT"
+        0 * userRepository.existsByEmail(_)
+        0 * accountConfirmation.isEmailRegisteredElsewhere(*_)
+        0 * accountConfirmation.sendNewEmailCode(*_)
     }
 
     def "sendNewEmailCode refuses an address another account holds, by the users table or by Keycloak, and sends nothing"() {
@@ -155,6 +170,7 @@ class UserEmailChangeSpec extends Specification {
 
         then:
         1 * userRepository.findByIdAndIsActiveTrue(ID) >> Optional.of(account(email: null, phoneNumber: "+84901234567"))
+        0 * accountConfirmation.isSameMailbox(*_)
         1 * userRepository.existsByEmail("first@example.com") >> false
         1 * accountConfirmation.isEmailRegisteredElsewhere(ID, "first@example.com") >> false
         1 * accountConfirmation.sendNewEmailCode(ID, "first@example.com", Optional.of("vi")) >> ConfirmationCodeResponse.builder().build()
@@ -283,9 +299,25 @@ class UserEmailChangeSpec extends Specification {
 
         then:
         1 * userRepository.findByIdForUpdate(ID) >> Optional.of(account())
+        1 * accountConfirmation.isSameMailbox("old@example.com", "old@example.com") >> true
         def e = thrown(BadRequestException)
         e.errorCode == "NEW_EMAIL_SAME_AS_CURRENT"
         0 * accountConfirmation._
+    }
+
+    def "changeEmail refuses a re-spelling of the account's own mailbox before any proof is checked or spent"() {
+        when:
+        userService.changeEmail(ID, request(newEmail: "Old+News@Example.com"))
+
+        then:
+        1 * userRepository.findByIdForUpdate(ID) >> Optional.of(account())
+        1 * accountConfirmation.isSameMailbox("old@example.com", "old+news@example.com") >> true
+        def e = thrown(BadRequestException)
+        e.errorCode == "NEW_EMAIL_SAME_AS_CURRENT"
+        0 * accountConfirmation.check(*_)
+        0 * accountConfirmation.checkNewEmail(*_)
+        0 * accountConfirmation.replaceEmailInKeycloak(*_)
+        0 * accountConfirmation.discardNewEmailCode(_)
     }
 
     def "a wrong or missing caller proof stops the change: the new-address code is not checked, spent or discarded and nothing is written"() {
