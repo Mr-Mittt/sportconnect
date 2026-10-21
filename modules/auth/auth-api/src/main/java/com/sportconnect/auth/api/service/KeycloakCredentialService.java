@@ -67,6 +67,16 @@ public interface KeycloakCredentialService {
     boolean isEmailRegistered(String email, UUID exceptUserId);
 
     /**
+     * ACCOUNT-7: whether two addresses are the same mailbox by the A35 rule: equal after lowercasing, and for the Google
+     * domains also equal without dots and {@code +tag} in the local part, with {@code googlemail.com} read as
+     * {@code gmail.com}. Pure comparison, no call to Keycloak; the same key {@link #isEmailRegistered} uses for other
+     * accounts, so an email change to a re-spelling of the account's own address can be refused as "no change".
+     *
+     * @return {@code false} when either value is blank or not {@code local@domain}
+     */
+    boolean isSameMailbox(String first, String second);
+
+    /**
      * U26: moves the account to {@code newEmail} in Keycloak, in one update, and cuts every tie to the old address.
      *
      * <p>Flow: read the user; write back the whole record (an update replaces the attribute map) with the new email,

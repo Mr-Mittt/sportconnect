@@ -210,6 +210,27 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
     }
 
     @Test
+    void step1_aRespellingOfTheAccountsOwnGmailAddress_is400_sameAsCurrent_andNothingIsSent() throws Exception {
+        User user = register("u26.resp@gmail.com", PASSWORD);
+
+        for (String respelling : new String[] {"u26resp@gmail.com", "u26.resp+news@gmail.com", "U26.Resp@googlemail.com", "u2.6r.esp@gmail.com"}) {
+            requestNewEmailCode(user, respelling)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("NEW_EMAIL_SAME_AS_CURRENT"));
+        }
+
+        Mockito.verify(emailSender, Mockito.never()).send(Mockito.any());
+        assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isFalse();
+    }
+
+    @Test
+    void step1_otherProvidersKeepDotsSignificant_soADottedRespellingThereIsADifferentMailbox() throws Exception {
+        User user = register("u26.dots@example.com", PASSWORD);
+
+        requestNewEmailCode(user, "u26dots@example.com").andExpect(status().isOk());
+    }
+
+    @Test
     void step1_theAccountsOwnAddress_is400_sameAsCurrent() throws Exception {
         User user = register("u26-d@example.com", PASSWORD);
 
@@ -535,6 +556,21 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("EMAIL_ALREADY_REGISTERED"));
         assertUntouched(user, "u26-v@example.com", false, 1);
+    }
+
+    @Test
+    void refusal_aRespellingOfTheAccountsOwnGmailAddress_is400_andNoProofIsSpent_andGoogleStaysLinked() throws Exception {
+        User user = register("u26.resp2@gmail.com", PASSWORD);
+        TestKeycloak.linkIdentity(user.getId(), "google");
+        String own = issueOwnCode(user);
+
+        changeEmail(user, body("u26resp2+x@googlemail.com", "123456", "verificationCode", own))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("NEW_EMAIL_SAME_AS_CURRENT"));
+
+        // nothing changed, the Google link is still there, and the proof code was not consumed
+        assertUntouched(user, "u26.resp2@gmail.com", false, 1);
+        assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isTrue();
     }
 
     @Test

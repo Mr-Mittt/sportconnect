@@ -103,7 +103,7 @@ The 401 written by `JwtAuthenticationEntryPoint` (missing/invalid access token) 
 | `VERIFICATION_CODE_EXPIRED` | 400 | `purpose` | U24 (`purpose` as on `VERIFICATION_CODE_INVALID`): no code is pending for that purpose (never asked for, older than 15 minutes, already used, or asked for a different purpose). |
 | `VERIFICATION_CODE_ATTEMPTS_EXCEEDED` | 400 | `purpose` | U24 (`purpose` as on `VERIFICATION_CODE_INVALID`): the 5th wrong try; the code is burned and a new one must be requested. |
 | `VERIFICATION_EMAIL_UNAVAILABLE` | 400 | none | U24: `POST /api/users/me/confirmation-code` for an account with no email to send to (phone-only). |
-| `NEW_EMAIL_SAME_AS_CURRENT` | 400 | none | U26: `POST /api/users/me/email-change-code` or `PUT /api/users/me/email` with the address the account already has (any case). |
+| `NEW_EMAIL_SAME_AS_CURRENT` | 400 | none | U26: `POST /api/users/me/email-change-code` or `PUT /api/users/me/email` with the address the account already has (any case), or (ACCOUNT-7) a re-spelling of it that the A35 rule reads as the same mailbox: dots or `+tag` on a Gmail address, `googlemail.com`. |
 | `NEW_EMAIL_CODE_LIMIT_REACHED` | 429 | `{seconds}` | U26: `POST /api/users/me/email-change-code` after `app.user.new-email-daily-limit` (10) codes mailed to addresses the caller named in 24 hours; `seconds` until the window frees. The 60 s resend rule is `VERIFICATION_RESEND_TOO_SOON`. |
 | `NEW_PASSWORD_REJECTED` | 400 | none | U24: `PUT /api/users/me/password`, the realm password policy refused the new value (nothing changed). |
 | `VERIFICATION_RESEND_TOO_SOON` | 429 | `{seconds}` | U24: `POST /api/users/me/confirmation-code` less than 60 seconds after the previous one for that purpose. U26: also `POST /api/users/me/email-change-code`. |

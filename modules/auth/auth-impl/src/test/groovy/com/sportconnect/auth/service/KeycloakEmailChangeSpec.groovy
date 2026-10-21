@@ -163,6 +163,29 @@ class KeycloakEmailChangeSpec extends Specification {
         '[]'                                                      || false
     }
 
+    def "isSameMailbox compares the A35 keys without asking Keycloak: '#first' and '#second' are #expected"() {
+        expect:
+        service.isSameMailbox(first, second) == expected
+        seen.isEmpty()
+
+        where:
+        first                | second                    || expected
+        "jordan@example.com" | "JORDAN@example.com"      || true
+        "j.doe@gmail.com"    | "jdoe@gmail.com"          || true    // dots do not count at Google
+        "j.doe@gmail.com"    | "jdoe+news@gmail.com"     || true    // nor does +tag
+        "j.doe@gmail.com"    | "J.Doe@googlemail.com"    || true    // googlemail.com is gmail.com
+        "j.doe@gmail.com"    | "j.doe@gmail.com"         || true
+        "j.doe@example.com"  | "jdoe@example.com"        || false   // other providers keep dots
+        "j.doe@example.com"  | "j.doe+x@example.com"     || false   // and +
+        "j.doe@gmail.com"    | "j.dae@gmail.com"         || false
+        "j.doe@gmail.com"    | "j.doe@yahoo.com"         || false
+        null                 | "jdoe@gmail.com"          || false
+        "jdoe@gmail.com"     | null                      || false
+        null                 | null                      || false
+        ""                   | ""                        || false
+        "no-at-sign"         | "no-at-sign"              || false   // not an address: no key, never "the same"
+    }
+
     def "isEmailRegistered answers false without asking Keycloak for something that is not an address"() {
         expect:
         !service.isEmailRegistered(value, USER_ID)
