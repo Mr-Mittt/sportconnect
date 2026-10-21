@@ -120,10 +120,12 @@
     "resendIn": "Re-send in {{time}}",
     "codeSent": "We sent a 6-digit code to {{email}}. It is valid for {{minutes}} minutes.",
     "codeLabel": "Code sent to the new address",
-    "warning": "This unlinks your Google sign-in, and the new address becomes your sign-in name.",
     "submit": "Update email",
     "submitAdd": "Add email",
     "submitting": "Updating…",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "error": {
+      "invalidEmail": "Enter a valid email address, like name@example.com."
+    }
   }
 }
