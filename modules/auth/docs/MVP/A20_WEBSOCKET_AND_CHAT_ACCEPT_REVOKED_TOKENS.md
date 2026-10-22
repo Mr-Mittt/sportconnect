@@ -28,3 +28,5 @@ IT: log out (or deactivate), then a STOMP `CONNECT` with the old token is reject
 ## Out of scope
 
 Redesigning the chat auth model; refresh-token handling.
+
+**Delta (2026-10-16, CHAT-17):** the chat half is answered: the chat service now verifies Keycloak RS256 tokens by JWKS and deliberately does no `is_active` or revocation check; a deactivated user keeps chat access for at most the 5-minute token life, accepted. Only the STOMP interceptor half remains for A28/A25. Syncing `is_active` into the chat cache is a separate decision, not filed.

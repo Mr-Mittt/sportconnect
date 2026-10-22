@@ -85,7 +85,7 @@ export default defineConfig({
       // plain `pnpm dev` run standalone never sets this, so it keeps
       // targeting :8080 (vite.config.ts's own fallback). CHAT-10: same
       // treatment for the separate /api/chat proxy entry — without this it
-      // silently targeted a real chat service on :8081 that doesn't exist in
+      // silently targeted a real chat service on :8090 that doesn't exist in
       // CI, so every chat request 404'd/connection-refused before this fix.
       // The chat MSW handlers (handlers/chat.ts) expect the bare,
       // prefix-stripped paths vite.config.ts's rewrite already produces —

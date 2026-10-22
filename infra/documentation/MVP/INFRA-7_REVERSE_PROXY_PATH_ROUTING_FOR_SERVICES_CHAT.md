@@ -12,7 +12,7 @@ when INFRA-3 was written.
 
 **What ships:**
 - Nginx or Caddy config (whichever INFRA-3 actually provisioned) with two `location`/route blocks
-  on the single EC2 instance: `/api/chat/**` → the chat container's port (`8081` locally; confirm
+  on the single EC2 instance: `/api/chat/**` → the chat container's port (`8090` locally, since CHAT-19; confirm
   the prod container port matches `CHAT_HTTP_ADDR`), everything else → the server container's port.
 - Confirm the WebSocket upgrade (`GET /conversations/{id}/ws`) actually proxies correctly — Nginx
   in particular needs explicit `Upgrade`/`Connection` header passthrough config for this path,

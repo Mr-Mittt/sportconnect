@@ -88,3 +88,13 @@ func TestAuthorizeByID_DirectOutcomes(t *testing.T) {
 	_, err = svc.AuthorizeByID(ctx, conv.ID, userC)
 	assert.True(t, errors.Is(err, ErrNotFriends), "a caller who was never a participant in this DIRECT conversation must be rejected")
 }
+
+// TestAuthorizeByID_UnknownConversation: an id with no row used to surface pgx.ErrNoRows, which the
+// API layer did not map (CHAT-18, a 500). It is now its own sentinel.
+func TestAuthorizeByID_UnknownConversation(t *testing.T) {
+	svc, _ := newTestService(t)
+
+	_, err := svc.AuthorizeByID(context.Background(), 987654321, userA)
+
+	assert.True(t, errors.Is(err, ErrConversationNotFound), "got %v", err)
+}

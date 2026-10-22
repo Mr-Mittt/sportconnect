@@ -110,7 +110,7 @@ the ambiguity; `package.json`'s `dev` script is just `vite` with no extra flags,
    backend) when unset — so a bare `pnpm dev` run outside Playwright is completely unaffected by any
    of this. **CHAT-10:**
    also passes `VITE_CHAT_PROXY_TARGET`, the equivalent for the separate `/api/chat` proxy entry
-   (chat is its own backend, `services/chat`, normally `:8081` — without this it silently targeted a
+   (chat is its own backend, `services/chat`, normally `:8090` — without this it silently targeted a
    real chat service that doesn't exist in CI/most local setups, and every `/api/chat/**` e2e request
    404'd or connection-refused). Both env vars point at the **same** mock server process — the chat
    MSW handlers (`handlers/chat.ts`) are matched against bare paths (`/conversations/...`), the same

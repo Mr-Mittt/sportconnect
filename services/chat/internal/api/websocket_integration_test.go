@@ -14,11 +14,10 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Mr-Mittt/sportconnect/services/chat/internal/auth"
+	"github.com/Mr-Mittt/sportconnect/services/chat/internal/auth/authtest"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/conversation"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/message"
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/sync"
@@ -36,34 +35,19 @@ const wsUserID = "88888888-8888-8888-8888-888888888888"
 // immediately sends needs this small margin to be reliable.
 const registrationSettleDelay = 200 * time.Millisecond
 
-func mintTestToken(t *testing.T, secret, subject string) string {
-	t.Helper()
-	claims := auth.Claims{
-		Username: "wstestuser",
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   subject,
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		},
-	}
-	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
-	require.NoError(t, err)
-	return signed
-}
-
-func newTestRouterServer(t *testing.T) (*httptest.Server, string, *sync.CacheStore) {
+func newTestRouterServer(t *testing.T) (*httptest.Server, *authtest.Issuer, *sync.CacheStore) {
 	t.Helper()
 	pool := testdb.RequirePool(t)
 	tx := testdb.BeginTx(t, pool)
 
-	secret := os.Getenv("JWT_SECRET")
-	require.NotEmpty(t, secret, "JWT_SECRET must be set (see services/chat/.env)")
+	issuer := authtest.New(t) // stub Keycloak: real RS256 tokens, no running Keycloak needed
 
 	cache := sync.NewCacheStore(tx)
 	convService := conversation.NewService(conversation.NewRepository(tx), cache)
 	msgService := message.NewService(message.NewRepository(tx), cache)
 
 	router := NewRouter(Dependencies{
-		Verifier:      auth.NewVerifier(secret),
+		Verifier:      issuer.Verifier(),
 		Conversations: convService,
 		Messages:      msgService,
 		Cache:         cache,
@@ -75,7 +59,7 @@ func newTestRouterServer(t *testing.T) (*httptest.Server, string, *sync.CacheSto
 	server := httptest.NewServer(router)
 	t.Cleanup(server.Close)
 
-	return server, secret, cache
+	return server, issuer, cache
 }
 
 func openGroupConversation(t *testing.T, baseURL, authHeader string, groupID int64) int64 {
@@ -210,7 +194,7 @@ func assertNoWSMessage(t *testing.T, conn *websocket.Conn, wait time.Duration) {
 // fans a message out to every other connection on the same conversation,
 // and never to a different one.
 func TestWebSocketBroadcast_DeliversToSameConversationOnly(t *testing.T) {
-	server, secret, cache := newTestRouterServer(t)
+	server, issuer, cache := newTestRouterServer(t)
 	ctx := context.Background()
 
 	const groupAID int64 = 91001
@@ -219,7 +203,7 @@ func TestWebSocketBroadcast_DeliversToSameConversationOnly(t *testing.T) {
 	require.NoError(t, cache.UpsertGroupMember(ctx, groupAID, wsUserID, "MEMBER"))
 	require.NoError(t, cache.UpsertGroupMember(ctx, groupBID, wsUserID, "MEMBER"))
 
-	authHeader := "Bearer " + mintTestToken(t, secret, wsUserID)
+	authHeader := "Bearer " + issuer.Mint(t, wsUserID)
 
 	convAID := openGroupConversation(t, server.URL, authHeader, groupAID)
 	convBID := openGroupConversation(t, server.URL, authHeader, groupBID)
@@ -249,13 +233,13 @@ func TestWebSocketBroadcast_DeliversToSameConversationOnly(t *testing.T) {
 // connection with the {type, message} envelope, not just that sending a new
 // message does.
 func TestWebSocketBroadcast_EditAndDeleteMessage(t *testing.T) {
-	server, secret, cache := newTestRouterServer(t)
+	server, issuer, cache := newTestRouterServer(t)
 	ctx := context.Background()
 
 	const groupID int64 = 91003
 
 	require.NoError(t, cache.UpsertGroupMember(ctx, groupID, wsUserID, "MEMBER"))
-	authHeader := "Bearer " + mintTestToken(t, secret, wsUserID)
+	authHeader := "Bearer " + issuer.Mint(t, wsUserID)
 
 	convID := openGroupConversation(t, server.URL, authHeader, groupID)
 	wsBaseURL := "ws" + strings.TrimPrefix(server.URL, "http")
@@ -292,7 +276,7 @@ func TestWebSocketBroadcast_EditAndDeleteMessage(t *testing.T) {
 // ErrMessageNotFound are returned; this is the one place that mapping to
 // 403/404 is exercised end to end. No WebSocket needed for this one.
 func TestEditDeleteMessage_HTTPStatusCodes(t *testing.T) {
-	server, secret, cache := newTestRouterServer(t)
+	server, issuer, cache := newTestRouterServer(t)
 	ctx := context.Background()
 
 	const groupID int64 = 91004
@@ -301,8 +285,8 @@ func TestEditDeleteMessage_HTTPStatusCodes(t *testing.T) {
 	require.NoError(t, cache.UpsertGroupMember(ctx, groupID, wsUserID, "MEMBER"))
 	require.NoError(t, cache.UpsertGroupMember(ctx, groupID, otherUserID, "MEMBER"))
 
-	authHeader := "Bearer " + mintTestToken(t, secret, wsUserID)
-	otherAuthHeader := "Bearer " + mintTestToken(t, secret, otherUserID)
+	authHeader := "Bearer " + issuer.Mint(t, wsUserID)
+	otherAuthHeader := "Bearer " + issuer.Mint(t, otherUserID)
 
 	convID := openGroupConversation(t, server.URL, authHeader, groupID)
 	messageID := sendTestMessage(t, server.URL, authHeader, convID, "mine")
@@ -343,7 +327,7 @@ func TestEditDeleteMessage_HTTPStatusCodes(t *testing.T) {
 // just that it reaches everyone else) — the one behavior genuinely new to
 // this ticket, unlike message send/edit/delete which deliberately echo back.
 func TestWebSocketBroadcast_TypingIndicatorExcludesSender(t *testing.T) {
-	server, secret, cache := newTestRouterServer(t)
+	server, issuer, cache := newTestRouterServer(t)
 	ctx := context.Background()
 
 	const groupID int64 = 91005
@@ -354,8 +338,8 @@ func TestWebSocketBroadcast_TypingIndicatorExcludesSender(t *testing.T) {
 	require.NoError(t, cache.UpsertGroupMember(ctx, groupID, otherMemberID, "MEMBER"))
 	require.NoError(t, cache.UpsertUserProfile(ctx, sync.UserProfile{UserID: wsUserID, FullName: "Typing Person"}))
 
-	authHeader := "Bearer " + mintTestToken(t, secret, wsUserID)
-	otherAuthHeader := "Bearer " + mintTestToken(t, secret, otherMemberID)
+	authHeader := "Bearer " + issuer.Mint(t, wsUserID)
+	otherAuthHeader := "Bearer " + issuer.Mint(t, otherMemberID)
 
 	convID := openGroupConversation(t, server.URL, authHeader, groupID)
 	wsBaseURL := "ws" + strings.TrimPrefix(server.URL, "http")
@@ -390,7 +374,7 @@ func TestWebSocketBroadcast_TypingIndicatorExcludesSender(t *testing.T) {
 	require.NoError(t, err)
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/conversations/%d/typing", server.URL, convID), bytes.NewReader(payload))
 	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+mintTestToken(t, secret, strangerID))
+	req.Header.Set("Authorization", "Bearer "+issuer.Mint(t, strangerID))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

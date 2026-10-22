@@ -76,7 +76,11 @@ func main() {
 		}
 	}()
 
-	verifier := auth.NewVerifier(cfg.JWTSecret)
+	verifier := auth.NewVerifier(auth.Config{
+		Issuer:   cfg.KeycloakIssuerURI,
+		JWKSURL:  cfg.KeycloakJWKSURI,
+		Audience: "sportconnect-api", // the realm client adds this aud (infra/keycloak/realm/sportconnect-realm.json)
+	})
 	convService := conversation.NewService(conversation.NewRepository(pool), cache)
 	msgService := message.NewService(message.NewRepository(pool), cache)
 	hub := ws.NewHub()
