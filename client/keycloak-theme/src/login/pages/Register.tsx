@@ -36,11 +36,14 @@ export default function Register(props: RegisterProps) {
     // phone-only account), so Keycloak now lists a `username` attribute on this page. The registration flow fills it
     // on the server (the email, else the phone), so the page keeps showing no username field. It is hidden and not
     // required rather than removed: Keycloakify places the password fields after the username attribute, so removing
-    // it would remove them. The context must keep one identity across renders (Keycloakify caches its form state by it).
+    // it would remove them. The hidden username is placed right after the email, so the page reads Email, Password,
+    // Confirm password, then the rest (the password fields follow the username attribute). The context must keep one
+    // identity across renders (Keycloakify caches its form state by it).
     const fieldsContext = useMemo(() => {
-        const { username, ...others } = kcContext.profile.attributesByName;
-        const attributesByName =
-            username === undefined ? others : { username: { ...username, required: false, annotations: { ...username.annotations, inputType: "hidden" } }, ...others };
+        const { username, email, ...others } = kcContext.profile.attributesByName;
+        const hiddenUsername =
+            username === undefined ? {} : { username: { ...username, required: false, annotations: { ...username.annotations, inputType: "hidden" } } };
+        const attributesByName = { ...(email === undefined ? {} : { email }), ...hiddenUsername, ...others };
         return { ...kcContext, profile: { ...kcContext.profile, attributesByName } };
     }, [kcContext]);
 
