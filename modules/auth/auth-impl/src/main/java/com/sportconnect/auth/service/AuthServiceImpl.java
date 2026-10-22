@@ -32,6 +32,9 @@ import java.util.UUID;
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
+    /** The alias of the realm's Google identity provider, as the `identity_provider` claim carries it (A29). */
+    private static final String GOOGLE_PROVIDER = "google";
+
     private final UserService userService;
     private final KeycloakTokenClient keycloak;
     private final JwtDecoder jwtDecoder;
@@ -57,7 +60,8 @@ public class AuthServiceImpl implements AuthService {
         try {
             Jwt jwt = verify(tokens.accessToken());
             UUID userId = subjectOf(jwt);
-            boolean social = jwt.getClaimAsString("identity_provider") != null;
+            String identityProvider = jwt.getClaimAsString("identity_provider");
+            boolean social = identityProvider != null;
             ProvisionedUser provisioned = provision(identityOf(jwt, userId));
             user = provisioned.user();
             created = provisioned.created();
@@ -67,6 +71,9 @@ public class AuthServiceImpl implements AuthService {
             }
             if (Boolean.TRUE.equals(user.getIsActive())) {
                 userService.updateLastLogin(userId);
+                if (GOOGLE_PROVIDER.equals(identityProvider)) {
+                    user = applyGooglePicture(user, jwt.getClaimAsString("picture"));
+                }
             }
         } catch (RuntimeException e) {
             endSessionQuietly(tokens.refreshToken());
@@ -250,6 +257,20 @@ public class AuthServiceImpl implements AuthService {
         } catch (DataIntegrityViolationException | ConflictException e) {
             log.info("First sign-in for {} lost a race or clashed ({}); re-reading the account", identity.getId(), e.getClass().getSimpleName());
             return userService.provisionExternalUser(identity);
+        }
+    }
+
+    /**
+     * A36: the first Google sign-in of an account may give it the Google picture as its avatar (the rule is
+     * {@code UserService.applyGoogleAvatarOnce}). A sign-in never fails over a picture: any error is logged and the
+     * user is returned as they were.
+     */
+    private UserResponse applyGooglePicture(UserResponse user, String picture) {
+        try {
+            return userService.applyGoogleAvatarOnce(user.getId(), picture);
+        } catch (RuntimeException e) {
+            log.warn("Could not apply the Google picture for user {}: {}", user.getId(), e.getMessage());
+            return user;
         }
     }
 

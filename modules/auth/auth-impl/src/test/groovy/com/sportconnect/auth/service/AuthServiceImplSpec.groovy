@@ -159,6 +159,7 @@ class AuthServiceImplSpec extends Specification {
         keycloak.exchangeCode("c", "v") >> tokens()
         jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", identity_provider: "google"])
         userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, false), false)
+        userService.applyGoogleAvatarOnce(sub, _) >> userResponse(sub, true)
 
         when:
         def result = authService.callback("c", "v")
@@ -168,6 +169,91 @@ class AuthServiceImplSpec extends Specification {
         1 * userService.updateLastLogin(sub)
         0 * tickets.issue(_, _)
         result.accessToken == ACCESS
+    }
+
+    // ---------- A36: the Google picture as the avatar ----------
+
+    private static final String PICTURE = "https://lh3.googleusercontent.com/a/photo=s96-c"
+
+    def "a Google sign-in hands the picture claim to the once-only avatar rule and answers with the user it returns"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", identity_provider: "google", picture: PICTURE])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, true), false)
+
+        when:
+        def result = authService.callback("c", "v")
+
+        then:
+        1 * userService.applyGoogleAvatarOnce(sub, PICTURE) >> userResponse(sub, true).tap { avatarUrl = PICTURE }
+        result.user.avatarUrl == PICTURE
+    }
+
+    def "a Google sign-in without a picture claim still runs the rule (it records the first sign-in)"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", identity_provider: "google"])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, true), false)
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        1 * userService.applyGoogleAvatarOnce(sub, null) >> userResponse(sub, true)
+    }
+
+    def "a password sign-in and another provider never touch the avatar"() {
+        given:
+        def sub = UUID.randomUUID()
+        def claims = [email: "a@example.com", picture: PICTURE]
+        if (provider) {
+            claims.identity_provider = provider
+        }
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, claims)
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, true), false)
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        0 * userService.applyGoogleAvatarOnce(_, _)
+
+        where:
+        provider << [null, "facebook"]
+    }
+
+    def "a deactivated Google user is re-activated first, then the rule runs on the active user"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", identity_provider: "google", picture: PICTURE])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, false), false)
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        1 * userService.reactivateUser(sub) >> userResponse(sub, true)
+        1 * userService.applyGoogleAvatarOnce(sub, PICTURE) >> userResponse(sub, true)
+    }
+
+    def "a failure of the avatar rule is logged and the sign-in still opens the session"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", identity_provider: "google", picture: PICTURE])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, true), false)
+        userService.applyGoogleAvatarOnce(sub, PICTURE) >> { throw new IllegalStateException("db down") }
+
+        when:
+        def result = authService.callback("c", "v")
+
+        then:
+        result.accessToken == ACCESS
+        0 * keycloak.endSession(_)
     }
 
     def "callback for a deactivated password user issues a ticket and throws ACCOUNT_DEACTIVATED carrying it, with no session"() {

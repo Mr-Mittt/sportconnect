@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/app/i18n';
 import { TopBar } from './TopBar';
 
-const user = { initials: 'JL', name: 'Jordan Lee', email: 'jordan@example.com' };
+const user = { initials: 'JL', name: 'Jordan Lee', email: 'jordan@example.com', avatarUrl: null };
 
 describe('TopBar', () => {
   // The vi test switches i18n directly (not via localeStore), which src/test/setup.ts's own
@@ -16,6 +16,71 @@ describe('TopBar', () => {
   it('shows the user initials', () => {
     render(<TopBar user={user} onLogout={vi.fn()} onOpenAccountSettings={vi.fn()} notificationBell={null} />);
     expect(screen.getByText('JL')).toBeInTheDocument();
+  });
+
+  describe('avatar (A36)', () => {
+    const originalImage = window.Image;
+    // Radix only renders the <img> after the browser loads it; jsdom never does, so a stand-in image that loads (or fails) on cue.
+    function stubImage(outcome: 'load' | 'error') {
+      class StubImage {
+        referrerPolicy = '';
+        crossOrigin: string | null = null;
+        complete = false;
+        naturalWidth = 0;
+        private listeners = new Map<string, (event: { currentTarget: unknown }) => void>();
+        addEventListener(type: string, listener: (event: { currentTarget: unknown }) => void) {
+          this.listeners.set(type, listener);
+        }
+        removeEventListener(type: string) {
+          this.listeners.delete(type);
+        }
+        set src(_value: string) {
+          queueMicrotask(() => {
+            this.complete = true;
+            this.naturalWidth = outcome === 'load' ? 1 : 0;
+            this.listeners.get(outcome)?.({ currentTarget: this });
+          });
+        }
+      }
+      window.Image = StubImage as unknown as typeof Image;
+    }
+    afterEach(() => {
+      window.Image = originalImage;
+    });
+
+    it('shows the avatar picture in the account button and in the open menu when there is one', async () => {
+      stubImage('load');
+      const player = userEvent.setup();
+      const { container } = render(
+        <TopBar
+          user={{ ...user, avatarUrl: 'https://lh3.googleusercontent.com/a/photo=s96-c' }}
+          onLogout={vi.fn()}
+          onOpenAccountSettings={vi.fn()}
+          notificationBell={null}
+        />,
+      );
+      await vi.waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toBe('https://lh3.googleusercontent.com/a/photo=s96-c'));
+      expect(container.querySelector('img')?.getAttribute('referrerpolicy')).toBe('no-referrer');
+
+      await player.click(screen.getByRole('button', { name: 'Your account' }));
+      await vi.waitFor(() => expect(document.body.querySelectorAll('img')).toHaveLength(2));
+    });
+
+    it('keeps the initials when there is no avatar', () => {
+      const { container } = render(<TopBar user={user} onLogout={vi.fn()} onOpenAccountSettings={vi.fn()} notificationBell={null} />);
+      expect(container.querySelector('img')).toBeNull();
+      expect(screen.getByText('JL')).toBeInTheDocument();
+    });
+
+    it('falls back to the initials when the picture cannot be loaded', async () => {
+      stubImage('error');
+      const { container } = render(
+        <TopBar user={{ ...user, avatarUrl: 'https://lh3.googleusercontent.com/gone' }} onLogout={vi.fn()} onOpenAccountSettings={vi.fn()} notificationBell={null} />,
+      );
+      expect(screen.getByText('JL')).toBeInTheDocument();
+      await Promise.resolve();
+      expect(container.querySelector('img')).toBeNull();
+    });
   });
 
   it('renders the notificationBell slot as a separate click target from the account menu', async () => {

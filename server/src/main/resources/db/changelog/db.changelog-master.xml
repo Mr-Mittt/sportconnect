@@ -226,4 +226,7 @@
     <!-- A28: drop refresh_tokens, password_reset_tokens, email_verifications (Keycloak owns sessions, reset and verification). -->
     <include file="db/changelog/changes/V081__drop_legacy_auth_token_tables.sql" relativeToChangelogFile="false"/>
 
+    <!-- A36: marks that the first Google sign-in has checked whether to use the Google picture as the avatar. -->
+    <include file="db/changelog/changes/V082__users_google_avatar_checked_at.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>
