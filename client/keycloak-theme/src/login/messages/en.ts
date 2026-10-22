@@ -47,6 +47,18 @@ const en = {
   geoHintTimeout: 'Location took too long to respond. You can still pick these manually.',
   geoOptionalNote:
     'Your zone is optional. Set it to discover the sport community in your area; you can change it any time in Account Settings.',
+  // A29: linking a social sign-in to an existing account (pages login-idp-link-confirm / login-idp-link-email).
+  linkAccountTitle: 'This email already has an account',
+  linkAccountIntro:
+    'An account with {0} already exists. To add your {1} sign-in to it, first confirm the account is yours.',
+  linkUsePassword: 'Use my password',
+  linkVerifyByEmail: 'Verify by email',
+  linkVerifyByEmailHint: 'We will send a verification link to {0}.',
+  linkEmailSentTitle: 'Check your email',
+  linkEmailSentBody: 'We sent a verification email to {0}. Open it and click the link to continue.',
+  linkResend: 'Resend email',
+  linkResendIn: 'Resend email in {0}s',
+  linkBackToLogin: 'Back to log in',
 } as const;
 
 export type ThemeMessageKey = keyof typeof en;

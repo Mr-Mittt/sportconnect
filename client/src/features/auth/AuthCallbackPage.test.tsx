@@ -65,7 +65,7 @@ function renderCallback(search = '?code=abc&state=s1') {
 
 describe('AuthCallbackPage', () => {
   beforeEach(() => {
-    sessionStorage.clear();
+    localStorage.clear();
     useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: false });
     vi.restoreAllMocks();
     savePkceState({ codeVerifier: 'verifier-1', state: 's1', returnTo: '/groups' });
@@ -80,7 +80,7 @@ describe('AuthCallbackPage', () => {
     expect(post).toHaveBeenCalledTimes(1);
     expect(post).toHaveBeenCalledWith('/auth/callback', { code: 'abc', codeVerifier: 'verifier-1' });
     expect(useAuthStore.getState().accessToken).toBe('token-xyz');
-    expect(sessionStorage.getItem('sportconnect.pkce')).toBeNull();
+    expect(localStorage.getItem('sportconnect.pkce.s1')).toBeNull();
   });
 
   it('refuses a state that does not match, without calling the backend', async () => {

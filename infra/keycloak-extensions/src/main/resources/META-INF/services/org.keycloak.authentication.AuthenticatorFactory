@@ -1,2 +1,3 @@
 com.sportconnect.keycloak.PhoneLoginFormFactory
 com.sportconnect.keycloak.NormalizedCreateUserIfUniqueAuthenticatorFactory
+com.sportconnect.keycloak.LinkExistingAccountAuthenticatorFactory

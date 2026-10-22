@@ -1,11 +1,25 @@
 /**
  * AUTH-14: the PKCE pair and the one-shot hand-over across the Keycloak redirect.
  *
- * The verifier, `state` and `returnTo` live in `sessionStorage` only for the length of the redirect
- * and are removed the moment `/auth/callback` reads them (`takePkceState`). They are not a token —
- * the "no token in storage" rule (client/CLAUDE.md § Auth) still holds.
+ * The verifier, `state` and `returnTo` live in `localStorage`, one entry per login attempt keyed by its
+ * `state`, only for the length of the redirect: they expire after `PKCE_TTL_MS` and are removed the moment
+ * `/auth/callback` reads them (`takePkceState`). They are not a token — the "no token in storage" rule
+ * (client/CLAUDE.md § Auth) still holds, and the verifier alone is useless without the one-time code.
+ *
+ * Why not `sessionStorage` (A29): an emailed Keycloak link (linking a Google sign-in to an existing account,
+ * later email verification) opens a NEW tab, and Keycloak finishes the login there. A per-tab store is empty in
+ * that tab, so the callback could not find its verifier and refused a perfectly good code. `state` is a 128-bit
+ * random value, so only the tab holding the redirect URL can name the entry, and it is read once.
  */
-const STORAGE_KEY = 'sportconnect.pkce';
+const KEY_PREFIX = 'sportconnect.pkce.';
+
+/**
+ * How long an entry may wait for its callback. It must outlast the emailed link (30 minutes, realm attribute
+ * `actionTokenGeneratedByUserLifespan.idp-verify-account-via-email`) and Keycloak's own login timeout (30
+ * minutes by default): a link opened in the last minute still has to find its verifier. Past that Keycloak
+ * refuses the flow itself, so an older entry is dead weight and is swept.
+ */
+export const PKCE_TTL_MS = 35 * 60 * 1000;
 
 export interface PkceState {
   codeVerifier: string;
@@ -46,22 +60,45 @@ export function safeReturnTo(value: string | undefined | null): string {
   return value;
 }
 
+/** Drops every entry past its expiry (an abandoned login would otherwise stay in the browser for good). */
+function sweepExpired(now: number): void {
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith(KEY_PREFIX)) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) ?? '') as { expiresAt?: unknown };
+      if (typeof parsed.expiresAt === 'number' && parsed.expiresAt > now) continue;
+    } catch {
+      // unreadable: drop it
+    }
+    localStorage.removeItem(key);
+  }
+}
+
 export function savePkceState(value: PkceState): void {
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    const now = Date.now();
+    sweepExpired(now);
+    localStorage.setItem(KEY_PREFIX + value.state, JSON.stringify({ ...value, expiresAt: now + PKCE_TTL_MS }));
   } catch {
     // Storage blocked: the callback finds nothing and shows its "try again" view.
   }
 }
 
-/** Reads and removes the stored entry, so a code can only be exchanged by the tab that asked for it, once. */
-export function takePkceState(): PkceState | null {
+/**
+ * Reads and removes the entry the callback's `state` names, so a code can be exchanged once and only by a tab
+ * that holds that state. Null when there is none, it expired, or it is malformed.
+ */
+export function takePkceState(state: string | null): PkceState | null {
+  if (!state) return null;
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    sessionStorage.removeItem(STORAGE_KEY);
+    const key = KEY_PREFIX + state;
+    const raw = localStorage.getItem(key);
+    localStorage.removeItem(key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<PkceState>;
-    if (typeof parsed.codeVerifier !== 'string' || typeof parsed.state !== 'string') return null;
+    const parsed = JSON.parse(raw) as Partial<PkceState> & { expiresAt?: unknown };
+    if (typeof parsed.expiresAt !== 'number' || parsed.expiresAt <= Date.now()) return null;
+    if (typeof parsed.codeVerifier !== 'string' || parsed.state !== state) return null;
     return {
       codeVerifier: parsed.codeVerifier,
       state: parsed.state,

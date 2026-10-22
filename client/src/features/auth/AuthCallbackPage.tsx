@@ -10,7 +10,8 @@ import { useReactivate } from './useReactivate';
 
 /**
  * AUTH-14: Keycloak sends the browser back here with `?code=…&state=…` (or `?error=…`). The page
- * checks `state` against the one stored before the redirect, posts `{code, codeVerifier}` to the
+ * looks up the PKCE entry stored under `state` before the redirect (any tab of this browser: an emailed Keycloak
+ * link finishes the login in a new tab), posts `{code, codeVerifier}` to the
  * backend once, and then:
  * - success → into the app, at the path `ProtectedRoute` had redirected from (`returnTo`);
  * - a deactivated password user → `ReactivateAccountDialog` with the one-time ticket (Confirm
@@ -42,9 +43,9 @@ export function AuthCallbackPage() {
     if (isBootstrapping || hasExchanged.current) return;
     hasExchanged.current = true;
 
-    const saved = takePkceState();
+    const saved = takePkceState(params.get('state'));
     const code = params.get('code');
-    if (params.get('error') || !code || !saved || saved.state !== params.get('state')) {
+    if (params.get('error') || !code || !saved) {
       exchange('invalid');
       return;
     }
