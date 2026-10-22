@@ -55,7 +55,7 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
 
     @Test
     void unsupportedContentType_is415() throws Exception {
-        mockMvc.perform(post("/api/auth/login").with(anonymous())
+        mockMvc.perform(post("/api/auth/callback").with(anonymous())
                         .contentType(MediaType.TEXT_PLAIN)
                         .content("email=x"))
                 .andExpect(status().isUnsupportedMediaType())
@@ -67,7 +67,7 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
 
     @Test
     void unreadableJsonBody_is400() throws Exception {
-        mockMvc.perform(post("/api/auth/login").with(anonymous())
+        mockMvc.perform(post("/api/auth/callback").with(anonymous())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ broken"))
                 .andExpect(status().isBadRequest())
@@ -97,15 +97,15 @@ class GlobalExceptionMappingIntegrationTest extends BaseIT {
      */
     @Test
     void validationFailure_carriesFieldsInErrorParams_andNoData() throws Exception {
-        mockMvc.perform(post("/api/auth/login").with(anonymous())
+        mockMvc.perform(post("/api/auth/callback").with(anonymous())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.errorParams.fields.email").value("Email is required"))
-                .andExpect(jsonPath("$.errorParams.fields.password").value("Password is required"))
+                .andExpect(jsonPath("$.errorParams.fields.code").isNotEmpty())
+                .andExpect(jsonPath("$.errorParams.fields.codeVerifier").isNotEmpty())
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 }

@@ -47,13 +47,7 @@ logging:
   file:
     name: /var/log/sportconnect/application.log
 
-# Production JWT (must be set via environment variables)
 app:
-  jwt:
-    secret: ${JWT_SECRET}
-    expiration: 86400000 # 24 hours
-    refresh-expiration: 604800000 # 7 days
-
   # A25: no defaults in production (INFRA-14 provides the real Keycloak)
   keycloak:
     issuer-uri: ${KEYCLOAK_ISSUER_URI}

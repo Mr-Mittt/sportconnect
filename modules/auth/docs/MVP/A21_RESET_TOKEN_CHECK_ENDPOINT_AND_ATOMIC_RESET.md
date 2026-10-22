@@ -52,3 +52,7 @@ Rate limiting the endpoint (A5, moved to V1 — the token is a random UUID, so g
 - `PublicSurfaceAccessIntegrationTest`: `/api/auth/reset-password/validate` added to the anonymous-reachable list.
 - Re-run unchanged and green: `AuthErrorCodesIntegrationTest` (12), `AccountReactivationIntegrationTest` (9). `PasswordResetServiceSpec` rewritten for `completeReset` and `checkToken`.
 - `:server:test` was run scoped to these four classes, not the full suite (standing rule). Real server check: the user's used token and an unknown token both got the identical 404, a blank token 400.
+
+---
+
+**Superseded (A28, 2026-10-16):** `POST /api/auth/reset-password/validate`, `/reset-password`, `PasswordResetService` and the `password_reset_tokens` table are removed; the reset link and its single-use, expiry and atomic password change are Keycloak's (its `reset-credentials` action token, one-hour life set by `infra/scripts/realm-email-theme.mjs`). Kept as a record.

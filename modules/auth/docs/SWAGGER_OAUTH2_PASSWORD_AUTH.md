@@ -1,3 +1,5 @@
+> **Superseded by A28 (2026-10-16).** `SwaggerOAuth2TokenController` and `/api/auth/oauth-token` are removed (they called the legacy login and handed out tokens nothing accepted since A25). Swagger UI's Authorize now uses the Authorization Code flow with PKCE against Keycloak: the `keycloak` security scheme in `OpenApiConfig`, `springdoc.swagger-ui.oauth` in `application.yml`, and the realm client `sportconnect-swagger` (`infra/scripts/realm-swagger-client.mjs`). The text below is the history of the old design.
+
 # Swagger UI — authorize with email + password instead of a raw bearer token
 
 **Status:** `DONE` (2026-07-14) · **Type:** Tooling (dev experience) — not a backlog ticket, requested

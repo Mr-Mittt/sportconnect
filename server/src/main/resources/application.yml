@@ -103,11 +103,6 @@ server:
 
 # Application Configuration
 app:
-  jwt:
-    secret: ${JWT_SECRET:your-secret-key-change-this-in-production-min-256-bits}
-    expiration: 86400000 # 24 hours in milliseconds
-    refresh-expiration: 604800000 # 7 days in milliseconds
-
   # A25: Keycloak is the token issuer. Access tokens are verified against the realm JWKS (fetched lazily, so the
   # app boots without Keycloak). The defaults are the local dev stack (infra/docker-compose.dev.yml, INFRA-13);
   # application-prod.yml requires the real values.
@@ -151,14 +146,8 @@ app:
 
 
   email:
-    verification-url: ${EMAIL_VERIFICATION_URL:http://localhost:3000/verify-email}
-    # A10: default matches the new client's route (AUTH-9: /reset-password?token=…); prod sets RESET_PASSWORD_URL.
-    reset-password-url: ${RESET_PASSWORD_URL:http://localhost:5173/reset-password}
     from: ${EMAIL_FROM:noreply@sportconnect.com}
 
-  # A10: how long a password-reset link stays valid. One property, read by the token service and the email text.
-  password-reset:
-    expiration-minutes: ${PASSWORD_RESET_EXPIRATION_MINUTES:60}
 
 # Logging Configuration
 logging:
@@ -190,3 +179,7 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     enabled: true
+    # A28: Authorize signs in at Keycloak with the realm client sportconnect-swagger (infra/scripts/realm-swagger-client.mjs)
+    oauth:
+      client-id: sportconnect-swagger
+      use-pkce-with-authorization-code-grant: true

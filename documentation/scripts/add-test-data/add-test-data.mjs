@@ -5,9 +5,10 @@
  * (localhost:8080, sportconnect_dev) for a given date, via the real POST /api/sessions endpoint —
  * not a raw DB insert, so the service layer's own side effects (companion SESSION_POST creation,
  * creator auto-join, validation) all run exactly as they would for a session created through the
- * UI. Authenticates as each row's assigned author via the real POST /api/auth/login (all 6
- * bao.mmo* dev accounts share one known password — see AUTHOR_PASSWORD below), one login per
- * distinct author, cached and reused across that author's rows rather than logging in per row.
+ * UI. Authenticates as each row's assigned author by signing in at the dev Keycloak (A28: the old POST
+ * /api/auth/login is gone; see loginAs below for the scripted Authorization Code + PKCE login). All 6 bao.mmo*
+ * dev accounts share one known password — see AUTHOR_PASSWORD below. One login per distinct author, cached and
+ * reused across that author's rows rather than logging in per row.
  *
  * Usage: node add-test-data.mjs --date 2026-09-25
  *
@@ -23,7 +24,8 @@
  *      the dev Postgres container using the just-created session's real id.
  *
  * Prerequisites: `npm install` once in this folder (installs exceljs), the dev backend running on
- * :8080 (./gradlew :server:bootRun), and the dev Postgres container up (docker compose -f
+ * :8080 (./gradlew :server:bootRun), the dev Keycloak up on :8081 (docker compose -f infra/docker-compose.dev.yml
+ * up -d keycloak; the six author accounts must exist in its sportconnect realm), and the dev Postgres container up (docker compose -f
  * infra/docker-compose.dev.yml up -d) for the private-row fix step.
  *
  * Not idempotent — running this twice for the same date creates 75 more (duplicate) sessions.
@@ -32,6 +34,7 @@
  */
 
 import ExcelJS from 'exceljs';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,6 +43,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const XLSX_PATH = path.resolve(__dirname, '../../md/BADMINTON_STANDALONE_SESSIONS_TEST_DATA.xlsx');
 const BACKEND_BASE_URL = 'http://localhost:8080';
+const KEYCLOAK_OIDC = process.env.KEYCLOAK_OIDC_URL ?? 'http://localhost:8081/realms/sportconnect/protocol/openid-connect';
+const KEYCLOAK_CLIENT_ID = 'sportconnect-web';
+const KEYCLOAK_REDIRECT_URI = 'http://localhost:5173/auth/callback'; // only has to be a registered redirect; nothing listens
 // All 6 bao.mmo* dev accounts share this password (confirmed by the user directly, 2026-09-23) —
 // dev-only test accounts, not real credentials.
 const AUTHOR_PASSWORD = '123123123';
@@ -122,22 +128,69 @@ function flipIsPublicFalse(sessionId) {
 
 const tokenCache = new Map(); // email -> accessToken, one real login per distinct author per run
 
+/** Collects the cookies of a response into a Cookie header value (a minimal jar: name=value only). */
+function cookieHeader(jar, res) {
+  for (const line of res.headers.getSetCookie()) {
+    const [pair] = line.split(';');
+    jar.set(pair.slice(0, pair.indexOf('=')), pair.slice(pair.indexOf('=') + 1));
+  }
+  return [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+/**
+ * A28: a real Keycloak sign-in without a browser. Starts the Authorization Code + PKCE flow the web app uses, posts the
+ * credentials to the login form's action (the themed login page embeds it as "loginAction" in its kcContext), reads the
+ * code from the redirect and exchanges it for an access token. Throws with Keycloak's own page text when the sign-in is
+ * refused (unknown user, wrong password, or a required action such as a pending email verification).
+ */
 async function loginAs(email) {
   if (tokenCache.has(email)) return tokenCache.get(email);
 
-  const res = await fetch(`${BACKEND_BASE_URL}/api/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: AUTHOR_PASSWORD }),
-  });
-  const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(`login failed for ${email}: HTTP ${res.status}: ${json ? JSON.stringify(json) : await res.text()}`);
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  const authUrl =
+    `${KEYCLOAK_OIDC}/auth?client_id=${KEYCLOAK_CLIENT_ID}&response_type=code&scope=openid` +
+    `&code_challenge=${challenge}&code_challenge_method=S256&redirect_uri=${encodeURIComponent(KEYCLOAK_REDIRECT_URI)}`;
+
+  const jar = new Map();
+  const page = await fetch(authUrl);
+  cookieHeader(jar, page);
+  const html = await page.text();
+  const action = /"loginAction":\s*"([^"]+)"/.exec(html)?.[1];
+  if (!page.ok || !action) {
+    throw new Error(`login failed for ${email}: Keycloak's login page did not load (HTTP ${page.status}); is the dev Keycloak up on :8081?`);
   }
-  const token = json.data.accessToken;
-  tokenCache.set(email, token);
+
+  const submit = await fetch(action, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookieHeader(jar, page) },
+    body: new URLSearchParams({ username: email, password: AUTHOR_PASSWORD, credentialId: '' }),
+  });
+  const location = submit.headers.get('location') ?? '';
+  const code = location.startsWith(KEYCLOAK_REDIRECT_URI) ? new URL(location).searchParams.get('code') : null;
+  if (!code) {
+    const text = (await submit.text()).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 300);
+    throw new Error(`login failed for ${email}: HTTP ${submit.status}, no code in the redirect (${location || text})`);
+  }
+
+  const tokenRes = await fetch(`${KEYCLOAK_OIDC}/token`, {
+    method: 'POST',
+    body: new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: KEYCLOAK_CLIENT_ID,
+      code,
+      code_verifier: verifier,
+      redirect_uri: KEYCLOAK_REDIRECT_URI,
+    }),
+  });
+  const json = await tokenRes.json().catch(() => null);
+  if (!tokenRes.ok || !json?.access_token) {
+    throw new Error(`login failed for ${email}: token exchange HTTP ${tokenRes.status}: ${JSON.stringify(json)}`);
+  }
+  tokenCache.set(email, json.access_token);
   console.log(`  logged in as ${email}`);
-  return token;
+  return json.access_token;
 }
 
 async function createSession(row, date) {

@@ -1,8 +1,8 @@
 package com.sportconnect.integration;
 
-import com.jayway.jsonpath.JsonPath;
-import com.sportconnect.auth.repository.RefreshTokenRepository;
+import com.sportconnect.user.api.dto.PhoneStatus;
 import com.sportconnect.user.entity.Role;
+import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
@@ -13,9 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,8 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * U23 — a user is identified by an email, a phone (stored as E.164, unique), or both. Through the real request
- * pipeline ({@code POST /api/auth/register}, {@code PUT /api/users/{id}/profile}, {@code GlobalExceptionHandler}) and
- * real H2 writes against the {@code schema.sql} mirror of {@code V079}.
+ * pipeline (the first sign-in {@code POST /api/auth/callback} that provisions the user, A28: the register endpoint is
+ * gone; {@code PUT /api/users/{id}/profile}; {@code GlobalExceptionHandler}) and real H2 writes against the
+ * {@code schema.sql} mirror of {@code V079}.
  *
  * <p>What a mocked Spock spec cannot prove and this does: that the phone is stored normalised and that the same number
  * typed in another format collides on the real unique column; that the {@code PHONE_ALREADY_USED} /
@@ -39,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
-    private static final String PASSWORD = "password123";
+    private static final String VERIFIER = "v".repeat(43);
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -47,8 +48,6 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     private UserRepository userRepository;
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
-    @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
     @Autowired
     private RoleRepository roleRepository;
 
@@ -66,27 +65,38 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     }
 
     private void clean() {
-        refreshTokenRepository.deleteAll();
         userPreferenceRepository.deleteAll();
         userRepository.deleteAll();
     }
 
-    private ResultActions register(String email, String phoneJson) throws Exception {
-        String body = "{\"email\": \"" + email + "\", \"password\": \"" + PASSWORD + "\", \"fullName\": \"Phone Tester\""
-                + (phoneJson == null ? "" : ", \"phoneNumber\": " + phoneJson) + "}";
-        return mockMvc.perform(post("/api/auth/register").with(anonymous())
-                .contentType(MediaType.APPLICATION_JSON).content(body));
+    /** The first sign-in of a new Keycloak identity: provisions the {@code users} row. */
+    private ResultActions firstSignIn(String email, String phone) throws Exception {
+        TestKeycloak.Identity identity = TestKeycloak.Identity.of(UUID.randomUUID()).email(email).names("Phone", "Tester");
+        if (phone != null) {
+            identity = identity.phone(phone);
+        }
+        String code = TestKeycloak.issueCode(identity, VERIFIER);
+        return mockMvc.perform(post("/api/auth/callback").with(anonymous()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"code\": \"" + code + "\", \"codeVerifier\": \"" + VERIFIER + "\"}"));
     }
 
-    private MvcResult registerOk(String email, String phoneJson) throws Exception {
-        return register(email, phoneJson).andExpect(status().isOk()).andReturn();
+    /** An existing user, as an earlier sign-in would have stored them ({@code phone} already in E.164, or null). */
+    private User existingUser(String email, String phone) {
+        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
+        return userRepository.save(User.builder()
+                .email(email)
+                .phoneNumber(phone)
+                .phoneStatus(phone == null ? null : PhoneStatus.VALID)
+                .firstName("Phone")
+                .lastName("Tester")
+                .isActive(true)
+                .roles(Set.of(userRole))
+                .build());
     }
 
-    private ResultActions updateProfile(MvcResult session, String json) throws Exception {
-        String token = accessTokenOf(session);
-        String userId = JsonPath.read(session.getResponse().getContentAsString(), "$.data.user.id");
-        return mockMvc.perform(put("/api/users/{id}/profile", userId)
-                .header("Authorization", "Bearer " + token)
+    private ResultActions updateProfile(User user, String json) throws Exception {
+        return mockMvc.perform(put("/api/users/{id}/profile", user.getId())
+                .header("Authorization", bearer(user.getId()))
                 .contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
@@ -106,19 +116,17 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     // ---------- through the request pipeline ----------
 
     @Test
-    void register_withANationalFormatPhone_storesE164() throws Exception {
-        register("u23-national@example.com", "\"0901234567\"")
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.user.phoneNumber").value("+84901234567"));
+    void firstSignIn_withANationalFormatPhone_storesE164() throws Exception {
+        firstSignIn("u23-national@example.com", "0901234567").andExpect(status().isOk());
 
         assertThat(storedPhone("u23-national@example.com")).isEqualTo("+84901234567");
     }
 
     @Test
-    void register_withAPhoneAnotherAccountHoldsInAnotherFormat_isRejectedAndCreatesNoUser() throws Exception {
-        registerOk("u23-first@example.com", "\"+84901234567\"");
+    void firstSignIn_withAPhoneAnotherAccountHoldsInAnotherFormat_isRejectedAndCreatesNoUser() throws Exception {
+        existingUser("u23-first@example.com", "+84901234567");
 
-        register("u23-second@example.com", "\"0901 234 567\"")
+        firstSignIn("u23-second@example.com", "0901 234 567")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("PHONE_ALREADY_USED"));
 
@@ -126,25 +134,26 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void register_withAnInvalidPhone_isABadRequestAndCreatesNoUser() throws Exception {
-        register("u23-bad@example.com", "\"555-0100\"")
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_PHONE_NUMBER"));
+    void firstSignIn_withAPhoneThatDoesNotParse_isProvisionedWithStatusInvalid_notRefused() throws Exception {
+        // U25: the Keycloak account already exists, so a 400 would lock the user out for good.
+        firstSignIn("u23-bad@example.com", "555-0100").andExpect(status().isOk());
 
-        assertThat(userRepository.findByEmail("u23-bad@example.com")).isEmpty();
+        User saved = userRepository.findByEmail("u23-bad@example.com").orElseThrow();
+        assertThat(saved.getPhoneNumber()).isEqualTo("555-0100");
+        assertThat(saved.getPhoneStatus()).isEqualTo(PhoneStatus.INVALID);
     }
 
     @Test
-    void register_withNoPhone_leavesItNull() throws Exception {
-        registerOk("u23-nophone@example.com", null);
+    void firstSignIn_withNoPhone_leavesItNull() throws Exception {
+        firstSignIn("u23-nophone@example.com", null).andExpect(status().isOk());
 
         assertThat(storedPhone("u23-nophone@example.com")).isNull();
     }
 
     @Test
     void updateProfile_withAPhoneAnotherAccountHolds_isRejectedWithPhoneAlreadyUsed() throws Exception {
-        registerOk("u23-holder@example.com", "\"+84901234567\"");
-        MvcResult other = registerOk("u23-other@example.com", null);
+        existingUser("u23-holder@example.com", "+84901234567");
+        User other = existingUser("u23-other@example.com", null);
 
         updateProfile(other, "{\"phoneNumber\": \"0901234567\"}")
                 .andExpect(status().isConflict())
@@ -155,7 +164,7 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     @Test
     void updateProfile_resendingTheCallersOwnNumberInAnotherFormat_succeeds() throws Exception {
-        MvcResult me = registerOk("u23-own@example.com", "\"+84901234567\"");
+        User me = existingUser("u23-own@example.com", "+84901234567");
 
         updateProfile(me, "{\"phoneNumber\": \"0901234567\"}")
                 .andExpect(status().isOk())
@@ -164,7 +173,7 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     @Test
     void updateProfile_withAPhoneThatDoesNotParse_isSavedAsTypedWithStatusInvalid() throws Exception {
-        MvcResult me = registerOk("u25-invalid@example.com", "\"+84901234567\"");
+        User me = existingUser("u25-invalid@example.com", "+84901234567");
 
         updateProfile(me, "{\"phoneNumber\": \"555-0100\"}")
                 .andExpect(status().isOk())
@@ -180,17 +189,17 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     @Test
     void updateProfile_aPhoneThatDoesNotParse_neverCollidesWithAnotherAccount() throws Exception {
-        MvcResult first = registerOk("u25-bad-a@example.com", null);
+        User first = existingUser("u25-bad-a@example.com", null);
         updateProfile(first, "{\"phoneNumber\": \"not-a-number\"}").andExpect(status().isOk());
 
         // PHONE_ALREADY_USED is about usable numbers only: a valid number is not blocked by someone's invalid text.
-        MvcResult second = registerOk("u25-bad-b@example.com", null);
+        User second = existingUser("u25-bad-b@example.com", null);
         updateProfile(second, "{\"phoneNumber\": \"0901234567\"}").andExpect(status().isOk());
     }
 
     @Test
     void updateProfile_replacingTheOnlyIdentifierOfAnEmaillessAccountWithAnInvalidPhone_isRejected() throws Exception {
-        MvcResult me = registerOk("u25-phoneonly@example.com", "\"+84901234567\"");
+        User me = existingUser("u25-phoneonly@example.com", "+84901234567");
         jdbc.update("UPDATE users SET email = NULL WHERE phone_number = ?", "+84901234567");
 
         updateProfile(me, "{\"phoneNumber\": \"555-0100\"}")
@@ -200,7 +209,7 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     @Test
     void updateProfile_withABlankPhone_clearsItWhenTheAccountHasAnEmail() throws Exception {
-        MvcResult me = registerOk("u23-clear@example.com", "\"+84901234567\"");
+        User me = existingUser("u23-clear@example.com", "+84901234567");
 
         updateProfile(me, "{\"phoneNumber\": \"\"}").andExpect(status().isOk());
 
@@ -209,9 +218,8 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     @Test
     void updateProfile_clearingTheOnlyIdentifierOfAnEmaillessAccount_isRejectedWithIdentifierRequired() throws Exception {
-        // A phone-only account cannot be created through the legacy register endpoint (it still requires an email),
-        // so take the email away from a registered account the way A26's provisioning will leave it.
-        MvcResult me = registerOk("u23-phoneonly@example.com", "\"+84901234567\"");
+        // Take the email away from an account the way a phone-only first sign-in would have left it.
+        User me = existingUser("u23-phoneonly@example.com", "+84901234567");
         jdbc.update("UPDATE users SET email = NULL WHERE email = ?", "u23-phoneonly@example.com");
 
         updateProfile(me, "{\"phoneNumber\": \"\"}")

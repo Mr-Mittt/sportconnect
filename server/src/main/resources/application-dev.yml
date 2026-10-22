@@ -26,6 +26,17 @@ spring:
       port: 6379
       password: ""
 
+  # A28: the welcome email goes to the dev Mailpit sink (infra/docker-compose.dev.yml, UI http://localhost:8025), the same
+  # one Keycloak's reset and verification mails use, so nothing leaves the machine. MAIL_HOST etc. still override it.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
   rabbitmq:
     host: localhost
     port: 5672
@@ -60,12 +71,7 @@ logging:
     org.springframework.security: DEBUG
     org.hibernate.SQL: DEBUG
 
-# Development JWT (shorter expiration for testing)
 app:
-  jwt:
-    secret: dev-secret-key-for-development-only-change-in-production-min-256-bits
-    expiration: 3600000 # 1 hour
-    refresh-expiration: 86400000 # 1 day
   cookie:
     secure: false # Vite (:5173) -> API (:8080) over plain HTTP locally
   # Dev-only: adds wildcard LAN patterns on top of the base app.cors.allowed-origins (application.yml)

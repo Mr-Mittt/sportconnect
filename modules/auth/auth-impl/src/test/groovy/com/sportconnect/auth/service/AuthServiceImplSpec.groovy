@@ -1,313 +1,41 @@
 package com.sportconnect.auth.service
 
-import com.sportconnect.auth.api.dto.LoginRequest
-import com.sportconnect.auth.api.dto.RegisterRequest
-import com.sportconnect.auth.api.service.JwtTokenService
-import com.sportconnect.auth.config.JwtProperties
-import com.sportconnect.auth.entity.RefreshToken
-import com.sportconnect.auth.repository.EmailVerificationRepository
-import com.sportconnect.auth.repository.PasswordResetTokenRepository
-import com.sportconnect.auth.repository.RefreshTokenRepository
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.UnauthorizedException
-import com.sportconnect.user.api.dto.CredentialCheck
-import com.sportconnect.user.api.dto.UserRegistrationDetails
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserService
 import com.sportconnect.common.exception.ServiceUnavailableException
 import com.sportconnect.user.api.dto.ExternalIdentity
+import com.sportconnect.user.api.dto.ProvisionedUser
 import com.sportconnect.user.api.dto.UserAccessState
 import org.springframework.dao.DataIntegrityViolationException
-import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtException
 import spock.lang.Specification
 import spock.lang.Subject
 
-import java.time.LocalDateTime
-import java.util.HashSet
 
 class AuthServiceImplSpec extends Specification {
 
-    RefreshTokenRepository refreshTokenRepository
-    PasswordEncoder passwordEncoder
-    JwtTokenService jwtTokenService
-    EmailVerificationRepository emailVerificationRepository
-    PasswordResetTokenRepository passwordResetTokenRepository
     UserService userService
-    JwtProperties jwtProperties
     KeycloakTokenClient keycloak
     JwtDecoder jwtDecoder
     ReactivationTicketStore tickets
+    WelcomeEmailService welcomeEmails
 
     @Subject
     AuthServiceImpl authService
 
     def setup() {
-        refreshTokenRepository = Mock(RefreshTokenRepository)
-        passwordEncoder = Mock(PasswordEncoder)
-        jwtTokenService = Mock(JwtTokenService)
-        emailVerificationRepository = Mock(EmailVerificationRepository)
-        passwordResetTokenRepository = Mock(PasswordResetTokenRepository)
         userService = Mock(UserService)
-        jwtProperties = Mock(JwtProperties)
         keycloak = Mock(KeycloakTokenClient)
         jwtDecoder = Mock(JwtDecoder)
         tickets = Mock(ReactivationTicketStore)
+        welcomeEmails = Mock(WelcomeEmailService)
 
-        authService = new AuthServiceImpl(
-            refreshTokenRepository,
-            passwordEncoder,
-            jwtTokenService,
-            emailVerificationRepository,
-            passwordResetTokenRepository,
-            userService,
-            jwtProperties,
-            keycloak,
-            jwtDecoder,
-            tickets
-        )
-    }
-
-    def "should register user successfully"() {
-        given: "a registration request"
-        def request = RegisterRequest.builder()
-            .email("test@example.com")
-            .password("password123")
-            .fullName("John Doe")
-            .phoneNumber("1234567890")
-            .build()
-
-        and: "email doesn't exist"
-        userService.existsByEmail(request.email) >> false
-
-        and: "password encoder encodes password"
-        passwordEncoder.encode(request.password) >> "encoded-password"
-
-        and: "user service creates user"
-        def userResponse = Mock(UserResponse)
-        userResponse.getId() >> UUID.randomUUID()
-        userResponse.getEmail() >> request.email
-        userResponse.getFirstName() >> "John"
-        userResponse.getLastName() >> "Doe"
-        userResponse.getUsername() >> null
-        userResponse.getRoles() >> new HashSet<>(["USER"])
-        userResponse.getIsActive() >> true
-        userService.createUser(_, _, _, _, _, _) >> userResponse
-
-        and: "jwt service generates tokens"
-        jwtTokenService.generateAccessToken(_) >> "access-token"
-        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
-        jwtTokenService.getRefreshExpiration() >> 604800000L
-        jwtProperties.getExpiration() >> 3600000L
-
-        when: "registering user"
-        def result = authService.register(request)
-
-        then: "should return auth response"
-        result != null
-        result.accessToken == "access-token"
-        result.refreshToken == "refresh-token"
-        1 * refreshTokenRepository.save(_)
-    }
-
-    // ---------- U16: optional sign-up geo/language details ----------
-
-    private UserResponse registeredUser(String email) {
-        def userResponse = Mock(UserResponse)
-        userResponse.getId() >> UUID.randomUUID()
-        userResponse.getEmail() >> email
-        userResponse.getFirstName() >> "John"
-        userResponse.getLastName() >> "Doe"
-        userResponse.getRoles() >> new HashSet<>(["USER"])
-        userResponse.getIsActive() >> true
-        return userResponse
-    }
-
-    def "register passes the optional language, country, region and coordinates through to createUser"() {
-        given:
-        def request = RegisterRequest.builder()
-                .email("geo@example.com").password("password123").fullName("Geo User")
-                .languageCode("vi").countryId(7L).regionId(80L).latitude(10.78d).longitude(106.70d)
-                .build()
-        userService.existsByEmail(request.email) >> false
-        passwordEncoder.encode(request.password) >> "encoded-password"
-        jwtTokenService.generateAccessToken(_) >> "access-token"
-        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
-        jwtTokenService.getRefreshExpiration() >> 604800000L
-        jwtProperties.getExpiration() >> 3600000L
-
-        when:
-        authService.register(request)
-
-        then:
-        1 * userService.createUser("geo@example.com", "encoded-password", "Geo", "User", null,
-                { UserRegistrationDetails d ->
-                    d.languageCode == "vi" && d.countryId == 7L && d.regionId == 80L &&
-                            d.latitude == 10.78d && d.longitude == 106.70d
-                }) >> registeredUser("geo@example.com")
-    }
-
-    def "register without any extras sends all-null details, exactly what an old client gets"() {
-        given:
-        def request = RegisterRequest.builder().email("plain@example.com").password("password123").fullName("Plain User").build()
-        userService.existsByEmail(request.email) >> false
-        passwordEncoder.encode(request.password) >> "encoded-password"
-        jwtTokenService.generateAccessToken(_) >> "access-token"
-        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
-        jwtTokenService.getRefreshExpiration() >> 604800000L
-        jwtProperties.getExpiration() >> 3600000L
-
-        when:
-        authService.register(request)
-
-        then:
-        1 * userService.createUser(_, _, _, _, _,
-                { UserRegistrationDetails d ->
-                    d.languageCode == null && d.countryId == null && d.regionId == null &&
-                            d.latitude == null && d.longitude == null
-                }) >> registeredUser("plain@example.com")
-    }
-
-    def "a bad selection surfaces as the 400 createUser throws, and no token or refresh row is created"() {
-        given:
-        def request = RegisterRequest.builder().email("bad@example.com").password("password123").fullName("Bad Region")
-                .countryId(7L).regionId(999L).build()
-        userService.existsByEmail(request.email) >> false
-        passwordEncoder.encode(request.password) >> "encoded-password"
-
-        when:
-        authService.register(request)
-
-        then:
-        1 * userService.createUser(*_) >> { throw new BadRequestException("Region 999 is unknown") }
-        thrown(BadRequestException)
-        0 * jwtTokenService.generateAccessToken(_)
-        0 * refreshTokenRepository.save(_)
-    }
-
-    def "register rejects a duplicate email with a 409 ConflictException coded EMAIL_ALREADY_REGISTERED"() {
-        given:
-        def request = RegisterRequest.builder()
-                .email("dup@example.com").password("password123").fullName("Dup User").build()
-        userService.existsByEmail(request.email) >> true
-
-        when:
-        authService.register(request)
-
-        then:
-        def e = thrown(ConflictException)
-        e.message == "Email already registered"
-        e.errorCode == "EMAIL_ALREADY_REGISTERED"
-        0 * userService.createUser(*_)
-    }
-
-    def "login with bad credentials throws UnauthorizedException coded INVALID_CREDENTIALS"() {
-        given:
-        def request = LoginRequest.builder().email("a@example.com").password("wrong").build()
-        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.NO_MATCH
-
-        when:
-        authService.login(request)
-
-        then:
-        def e = thrown(UnauthorizedException)
-        e.message == "Invalid email or password"
-        e.errorCode == "INVALID_CREDENTIALS"
-    }
-
-    def "login with the correct password for a deactivated account throws ACCOUNT_DEACTIVATED and issues no tokens"() {
-        given:
-        def request = LoginRequest.builder().email("gone@example.com").password("right").build()
-        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH_INACTIVE
-
-        when:
-        authService.login(request)
-
-        then:
-        def e = thrown(UnauthorizedException)
-        e.message == "Account is deactivated"
-        e.errorCode == "ACCOUNT_DEACTIVATED"
-        0 * userService.getUserByEmail(_)
-        0 * userService.updateLastLogin(_)
-        0 * jwtTokenService.generateAccessToken(_)
-        0 * refreshTokenRepository.save(_)
-    }
-
-    def "should login user successfully"() {
-        given: "a login request"
-        def request = LoginRequest.builder()
-            .email("test@example.com")
-            .password("password123")
-            .build()
-
-        and: "password verification succeeds"
-        userService.verifyCredentials(request.email, request.password) >> CredentialCheck.MATCH
-
-        and: "user service returns user"
-        def userResponse = Mock(UserResponse)
-        userResponse.getId() >> UUID.randomUUID()
-        userResponse.getEmail() >> request.email
-        userResponse.getFirstName() >> "John"
-        userResponse.getLastName() >> "Doe"
-        userResponse.getUsername() >> null
-        userResponse.getRoles() >> new HashSet<>(["USER"])
-        userResponse.getIsActive() >> true
-        userService.getUserByEmail(request.email) >> userResponse
-
-        and: "jwt service generates tokens"
-        jwtTokenService.generateAccessToken(_) >> "access-token"
-        jwtTokenService.generateRefreshToken(_) >> "refresh-token"
-        jwtTokenService.getRefreshExpiration() >> 604800000L
-        jwtProperties.getExpiration() >> 3600000L
-
-        when: "logging in"
-        def result = authService.login(request)
-
-        then: "should return auth response"
-        result != null
-        result.accessToken == "access-token"
-        result.refreshToken == "refresh-token"
-        1 * userService.updateLastLogin(_)
-        1 * refreshTokenRepository.save(_)
-    }
-
-    def "should logout user and revoke all tokens"() {
-        given: "a user ID"
-        def userId = UUID.randomUUID()
-        def now = LocalDateTime.now()
-
-        when: "logging out user"
-        authService.logout(userId)
-
-        then: "should revoke all user tokens"
-        1 * refreshTokenRepository.revokeAllUserTokens(userId, _)
-    }
-
-    def "should create refresh token with correct expiration"() {
-        given: "user ID and token string"
-        def userId = UUID.randomUUID()
-        def tokenString = "refresh-token-123"
-        def refreshExpiration = 604800000L // 7 days
-        
-        and: "jwt service returns expiration"
-        jwtTokenService.getRefreshExpiration() >> refreshExpiration
-
-        when: "creating refresh token"
-        def result = authService.createRefreshToken(userId, tokenString)
-
-        then: "should save token with correct data"
-        1 * refreshTokenRepository.save({ RefreshToken token ->
-            token.userId == userId &&
-            token.token == tokenString &&
-            token.expiresAt.isAfter(LocalDateTime.now()) &&
-            token.revokedAt == null
-        })
-        
-        and: "should return token string"
-        result == tokenString
+        authService = new AuthServiceImpl(userService, keycloak, jwtDecoder, tickets, welcomeEmails)
     }
 
     // ---------- A26: Keycloak sign-in ----------
@@ -344,13 +72,47 @@ class AuthServiceImplSpec extends Specification {
             i.id == sub && i.email == "a@example.com" && i.emailVerified && i.username == "au" &&
                     i.firstName == "A" && i.lastName == "U" && i.fullName == "A U" &&
                     i.phoneNumber == "0901234567" && i.languageCode == "vi"
-        }) >> userResponse(sub, true)
+        }) >> new ProvisionedUser(userResponse(sub, true), true)
         1 * userService.updateLastLogin(sub)
         result.accessToken == ACCESS
         result.refreshToken == "kc-refresh-token"
         result.refreshTokenMaxAgeSeconds == 86400L
         result.expiresIn == 300000L
         0 * keycloak.endSession(_)
+    }
+
+    def "callback sends the welcome email once, only for the sign-in that created the account"() {
+        given:
+        def sub = UUID.randomUUID()
+        def user = userResponse(sub, true)
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(user, created)
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        (created ? 1 : 0) * welcomeEmails.sendTo(user)
+
+        where:
+        created << [true, false]
+    }
+
+    def "callback sends no welcome email to a deactivated user, who gets a ticket instead"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens("parked-refresh")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, false), false)
+        tickets.issue(_, _) >> "the-ticket"
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        thrown(UnauthorizedException)
+        0 * welcomeEmails.sendTo(_)
     }
 
     def "callback treats an absent email_verified claim as unverified"() {
@@ -363,7 +125,7 @@ class AuthServiceImplSpec extends Specification {
         authService.callback("c", "v")
 
         then:
-        1 * userService.provisionExternalUser({ ExternalIdentity i -> !i.emailVerified }) >> userResponse(sub, true)
+        1 * userService.provisionExternalUser({ ExternalIdentity i -> !i.emailVerified }) >> new ProvisionedUser(userResponse(sub, true), false)
     }
 
     def "callback reads the register page's geo claims whether Keycloak sends strings or numbers"() {
@@ -380,7 +142,7 @@ class AuthServiceImplSpec extends Specification {
         1 * userService.provisionExternalUser({ ExternalIdentity i ->
             i.countryId == expectedCountry && i.regionId == expectedRegion &&
                     i.latitude == expectedLatitude && i.longitude == expectedLongitude
-        }) >> userResponse(sub, true)
+        }) >> new ProvisionedUser(userResponse(sub, true), false)
 
         where:
         countryId | regionId | latitude  | longitude  || expectedCountry | expectedRegion | expectedLatitude | expectedLongitude
@@ -396,7 +158,7 @@ class AuthServiceImplSpec extends Specification {
         def sub = UUID.randomUUID()
         keycloak.exchangeCode("c", "v") >> tokens()
         jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", identity_provider: "google"])
-        userService.provisionExternalUser(_) >> userResponse(sub, false)
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, false), false)
 
         when:
         def result = authService.callback("c", "v")
@@ -413,7 +175,7 @@ class AuthServiceImplSpec extends Specification {
         def sub = UUID.randomUUID()
         keycloak.exchangeCode("c", "v") >> tokens("parked-refresh")
         jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
-        userService.provisionExternalUser(_) >> userResponse(sub, false)
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, false), false)
 
         when:
         authService.callback("c", "v")
@@ -433,7 +195,7 @@ class AuthServiceImplSpec extends Specification {
         def sub = UUID.randomUUID()
         keycloak.exchangeCode("c", "v") >> tokens("parked-refresh")
         jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com"])
-        userService.provisionExternalUser(_) >> userResponse(sub, false)
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, false), false)
         tickets.issue(_, _) >> { throw new ServiceUnavailableException("redis down") }
 
         when:
@@ -473,8 +235,9 @@ class AuthServiceImplSpec extends Specification {
 
         then:
         1 * userService.provisionExternalUser(_) >> { throw new DataIntegrityViolationException("users_pkey") }
-        1 * userService.provisionExternalUser(_) >> userResponse(sub, true)
+        1 * userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, true), false)
         result.accessToken == ACCESS
+        0 * welcomeEmails.sendTo(_) // the winner of the race sends it, never the loser
     }
 
     def "callback retries once on a conflict, and a genuine clash still surfaces"() {

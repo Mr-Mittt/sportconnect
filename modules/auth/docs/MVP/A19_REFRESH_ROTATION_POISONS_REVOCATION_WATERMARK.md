@@ -30,3 +30,7 @@ The watermark must come only from deliberate revocations (deactivation, password
 ## Tests
 
 IT: with a cold cache, refresh then use the new access token (200) and another device's still-valid access token (200); deactivation, password reset and log out everywhere still reject everything issued before them. Carried into A15's test plan.
+
+---
+
+**Superseded (A28, 2026-10-16):** the revocation watermark this bug poisoned was removed by A25 and the `refresh_tokens` table dropped by A28, so the defect cannot occur. Kept as a record.

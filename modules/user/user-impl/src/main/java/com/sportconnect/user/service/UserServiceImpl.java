@@ -1,13 +1,12 @@
 package com.sportconnect.user.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sportconnect.auth.api.service.AuthService;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
-import com.sportconnect.user.api.dto.CredentialCheck;
 import com.sportconnect.user.api.dto.ExternalIdentity;
+import com.sportconnect.user.api.dto.ProvisionedUser;
 import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.Gender;
@@ -21,7 +20,6 @@ import com.sportconnect.reference.api.dto.CountryResponse;
 import com.sportconnect.reference.api.dto.RegionResponse;
 import com.sportconnect.reference.api.service.ReferenceService;
 import com.sportconnect.user.api.dto.UserInfoResponse;
-import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
@@ -34,7 +32,6 @@ import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -74,7 +71,6 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserFriendService userFriendService;
-    private final AuthService authService;
     private final UserSportProfileService userSportProfileService;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
@@ -87,23 +83,11 @@ public class UserServiceImpl implements UserService {
     private final UserProvisioningLock provisioningLock;
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
-    /**
-     * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code authService}
-     * must be {@code @Lazy}: U12 made AuthServiceImpl depend on UserService (it already did) AND
-     * UserServiceImpl depend on AuthService (new, for deleteUser()'s session revocation) — eager
-     * construction of both beans forms a cycle Spring refuses to start with by default, same
-     * class of problem as GroupServiceImpl's own {@code @Lazy PostService} (see that class for the
-     * fuller explanation). authService is only used here for one call in deleteUser() — a lazy
-     * proxy defers resolving the real AuthServiceImpl bean until that call actually happens, well
-     * after both beans exist. Relying on Lombok to copy @Lazy onto a generated constructor
-     * parameter is not guaranteed without a lombok.config entry, so this is spelled out by hand.
-     */
     public UserServiceImpl(
             UserRepository userRepository,
             RoleRepository roleRepository,
             PasswordEncoder passwordEncoder,
             UserFriendService userFriendService,
-            @Lazy AuthService authService,
             UserSportProfileService userSportProfileService,
             StringRedisTemplate stringRedisTemplate,
             ObjectMapper objectMapper,
@@ -119,7 +103,6 @@ public class UserServiceImpl implements UserService {
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.userFriendService = userFriendService;
-        this.authService = authService;
         this.userSportProfileService = userSportProfileService;
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
@@ -340,15 +323,10 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Soft delete (isActive=false) plus U12's session-revocation follow-through, in one
-     * transaction. {@code findByIdForUpdate} takes an exclusive row lock held until this
-     * transaction commits — deliberately acquired <em>before</em> {@link #authService}'s revoke
-     * call touches {@code refresh_tokens}, matching the same "users row first, refresh_tokens
-     * second" lock order {@code AuthServiceImpl.refreshToken()} now also follows, so the two can
-     * never deadlock on each other. While this lock is held, a concurrent
-     * {@code getActiveUserForUpdate} (a racing refresh for this same user) blocks until this
-     * transaction commits, then correctly observes {@code isActive = false} instead of racing
-     * ahead on stale data. See U12's implementation doc for the full race analysis this closes.
+     * Soft delete ({@code isActive=false}). {@code findByIdForUpdate} takes an exclusive row lock held until the transaction
+     * commits, so a concurrent re-activation or self-deactivation of the same user waits for this one and then observes
+     * the new state instead of racing ahead on stale data (U12). No session call is made (A28): the per-request gate
+     * refuses the user from the next request on, and a refresh ends the Keycloak session.
      */
     @Override
     @Transactional
@@ -360,8 +338,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * U22: the caller deactivates their own account. Same lock order as {@link #deleteUser} (users row first,
-     * refresh_tokens second); a deactivated caller gets the same not-found as {@link #changePassword}, and a wrong
+     * U22: the caller deactivates their own account. Same row lock as {@link #deleteUser}; a deactivated caller gets the same not-found as {@link #changePassword}, and a wrong
      * password leaves everything untouched.
      */
     @Override
@@ -379,11 +356,13 @@ public class UserServiceImpl implements UserService {
         log.info("User deactivated their own account: {}", userId);
     }
 
-    /** Flips {@code isActive} off and revokes every session (U12); the caller already holds the row lock. */
+    /**
+     * Flips {@code isActive} off; the caller already holds the row lock. No session call is needed (A28): the per-request
+     * gate refuses the user from the next request on, and a refresh ends the Keycloak session (A25, A26).
+     */
     private void deactivate(User user) {
         user.setIsActive(false);
         userRepository.save(user);
-        authService.logout(user.getId());
         accessStateCache.evictAfterCommit(user.getId());
     }
 
@@ -391,15 +370,6 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public boolean existsByEmail(String email) {
         return !isBlank(email) && userRepository.existsByEmail(email);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<UUID> findUserIdByEmail(String email) {
-        if (isBlank(email)) {
-            return Optional.empty();
-        }
-        return userRepository.findByEmail(email).map(User::getId);
     }
 
     @Override
@@ -422,75 +392,6 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public boolean existsByUsername(String username) {
         return userRepository.existsByUsername(username);
-    }
-
-    /** {@inheritDoc} Delegates to the detailed overload with no extras. */
-    @Override
-    @Transactional
-    public UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber) {
-        return createUser(email, passwordHash, firstName, lastName, phoneNumber, null);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Validation order matters: the geo selection and the language are checked, and the coordinate pair
-     * verified, <em>before</em> {@code userRepository.save} — so a {@code 400} leaves no user behind (and the
-     * enclosing {@code register} transaction rolls back regardless). The optional {@link UserPreference} row is
-     * written in the same transaction as the user.
-     */
-    @Override
-    @Transactional
-    public UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber,
-                                   UserRegistrationDetails details) {
-        UserRegistrationDetails extras = details != null ? details : new UserRegistrationDetails();
-
-        referenceService.requireValidSelection(extras.getCountryId(), extras.getRegionId());
-
-        String languageCode = extras.getLanguageCode() == null || extras.getLanguageCode().isBlank()
-                ? null : extras.getLanguageCode().trim();
-        if (languageCode != null && !referenceService.isActiveLanguage(languageCode)) {
-            throw new BadRequestException("LANGUAGE_UNKNOWN", "Unknown or inactive language: " + languageCode, Map.of("language", languageCode));
-        }
-
-        Point location = toPoint(extras.getLatitude(), extras.getLongitude());
-
-        // U23: an account is identified by an email, a phone, or both. The phone is stored as E.164 and must be free.
-        String phone = PhoneNumbers.normalize(phoneNumber);
-        String emailValue = isBlank(email) ? null : email;
-        if (emailValue == null && phone == null) {
-            throw new BadRequestException("IDENTIFIER_REQUIRED", "An email or a phone number is required", null);
-        }
-        requirePhoneFree(phone, null);
-
-        User user = User.builder()
-                .email(emailValue)
-                .passwordHash(passwordHash)
-                .firstName(firstName)
-                .lastName(lastName)
-                .phoneNumber(phone)
-                .phoneStatus(phone == null ? null : PhoneStatus.VALID)
-                .countryId(extras.getCountryId())
-                .regionId(extras.getRegionId())
-                .location(location)
-                .isEmailVerified(false)
-                .isActive(true)
-                .build();
-
-        // Assign default USER role
-        Role userRole = roleRepository.findByName(Role.USER)
-                .orElseThrow(() -> new RuntimeException("Default USER role not found"));
-        user.addRole(userRole);
-
-        User savedUser = saveUserFlushed(user);
-        if (languageCode != null) {
-            userPreferenceRepository.save(UserPreference.builder()
-                    .userId(savedUser.getId())
-                    .language(languageCode)
-                    .build());
-        }
-        log.info("Created new user: {}", email);
-        return toUserResponse(savedUser);
     }
 
     private static boolean isBlank(String value) {
@@ -595,33 +496,6 @@ public class UserServiceImpl implements UserService {
         user.setRegionId(request.getRegionId());
     }
 
-    /**
-     * A WGS 84 point (X = longitude, Y = latitude) or {@code null} for neither. Only one of the pair, or a value
-     * out of range, is a {@code 400} — the request DTO validates the same rules, this guards direct callers.
-     */
-    private Point toPoint(Double latitude, Double longitude) {
-        if (latitude == null && longitude == null) {
-            return null;
-        }
-        if (latitude == null || longitude == null) {
-            throw new BadRequestException("LOCATION_INCOMPLETE", "latitude and longitude must be provided together", null);
-        }
-        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
-            throw new BadRequestException("LOCATION_OUT_OF_RANGE", "latitude must be between -90 and 90 and longitude between -180 and 180", null);
-        }
-        return geometryFactory.createPoint(new Coordinate(longitude, latitude));
-    }
-
-    @Override
-    @Transactional
-    public void updateUserPassword(UUID userId, String newPasswordHash) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
-        user.setPasswordHash(newPasswordHash);
-        userRepository.save(user);
-        log.info("Updated password for user: {}", userId);
-    }
-
     @Override
     @Transactional(readOnly = true)
     public Set<String> getUserRoles(UUID userId) {
@@ -632,38 +506,7 @@ public class UserServiceImpl implements UserService {
                 .collect(java.util.stream.Collectors.toSet());
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public CredentialCheck verifyCredentials(String email, String rawPassword) {
-        if (isBlank(email)) {
-            return CredentialCheck.NO_MATCH;
-        }
-        User user = userRepository.findByEmail(email)
-                .orElse(null);
-        if (user == null || !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            return CredentialCheck.NO_MATCH;
-        }
-        return user.getIsActive() ? CredentialCheck.MATCH : CredentialCheck.MATCH_INACTIVE;
-    }
-
-    @Override
-    @Transactional
-    public UserResponse reactivateUserByEmail(String email) {
-        if (isBlank(email)) {
-            throw new ResourceNotFoundException("User", "email", email);
-        }
-        User user = userRepository.findByEmailForUpdate(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "email", email));
-        if (!user.getIsActive()) {
-            user.setIsActive(true);
-            userRepository.save(user);
-            accessStateCache.evictAfterCommit(user.getId());
-            log.info("Re-activated user: {}", user.getId());
-        }
-        return toUserResponse(user);
-    }
-
-    /** {@inheritDoc} Same row lock as {@link #reactivateUserByEmail} so it cannot interleave with a deactivation. */
+    /** {@inheritDoc} Takes the row lock {@link #deleteUser} takes, so a re-activation cannot interleave with a deactivation. */
     @Override
     @Transactional
     public UserResponse reactivateUser(UUID userId) {
@@ -682,18 +525,18 @@ public class UserServiceImpl implements UserService {
      * {@inheritDoc}
      *
      * <p>Flow: the per-subject advisory lock is taken first (a concurrent first sign-in of the same subject waits there
-     * and then finds the row); an existing row wins (returned untouched); otherwise the identifier rules of {@link #createUser} apply
+     * and then finds the row); an existing row wins (returned untouched); otherwise the identifier rules apply
      * (email or phone, phone normalised and free), the email must be free, and the row is saved and flushed inside this
      * transaction so a lost race surfaces here as a {@code DataIntegrityViolationException} (primary key) or a coded
      * 409 (email, phone) instead of at commit time.
      */
     @Override
     @Transactional
-    public UserResponse provisionExternalUser(ExternalIdentity identity) {
+    public ProvisionedUser provisionExternalUser(ExternalIdentity identity) {
         provisioningLock.acquire(identity.getId());
         Optional<User> existing = userRepository.findById(identity.getId());
         if (existing.isPresent()) {
-            return toUserResponse(existing.get());
+            return new ProvisionedUser(toUserResponse(existing.get()), false);
         }
 
         // U25: the Keycloak account already exists, so a phone that does not parse cannot be refused (a 400 would lock the
@@ -746,7 +589,7 @@ public class UserServiceImpl implements UserService {
             userPreferenceRepository.save(UserPreference.builder().userId(saved.getId()).language(language).build());
         }
         log.info("Provisioned user {} from the identity provider", saved.getId());
-        return toUserResponse(saved);
+        return new ProvisionedUser(toUserResponse(saved), true);
     }
 
     /**

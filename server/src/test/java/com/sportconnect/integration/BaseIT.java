@@ -1,7 +1,6 @@
 package com.sportconnect.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +18,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.HashSet;
 import java.util.List;
@@ -57,16 +55,6 @@ public abstract class BaseIT {
     /** The {@code Authorization} header value for a valid Keycloak-style token of {@code userId} (A25). */
     protected static String bearer(UUID userId) {
         return "Bearer " + TestKeycloak.token(userId);
-    }
-
-    /**
-     * A25: the register/login endpoints still return the legacy HS256 token, which nothing accepts any more, so a
-     * test that needs to call an authenticated endpoint as the user it just registered mints a Keycloak-style token
-     * for that user's id instead.
-     */
-    protected static String accessTokenOf(MvcResult result) throws Exception {
-        String userId = JsonPath.read(result.getResponse().getContentAsString(), "$.data.user.id");
-        return TestKeycloak.token(UUID.fromString(userId));
     }
 
     @Autowired

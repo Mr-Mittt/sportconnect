@@ -3,7 +3,7 @@ package com.sportconnect.auth.service
 import spock.lang.Specification
 import spock.lang.Subject
 
-/** A10: which language an email goes out in, and that the en/vi reset text renders correctly. */
+/** A10, A28: which language an email goes out in, and that the en/vi welcome text renders correctly. */
 class EmailMessagesSpec extends Specification {
 
     @Subject
@@ -25,25 +25,21 @@ class EmailMessagesSpec extends Specification {
         Optional.empty()       | "en"
     }
 
-    def "the English reset email keeps its apostrophe and fills in the link and minutes"() {
-        when:
-        def body = messages.resetPasswordBody("en", "http://x/reset?token=abc", 60)
-
-        then:
-        messages.resetPasswordSubject("en") == "Reset Your Password - SportConnect"
-        body.contains("http://x/reset?token=abc")
-        body.contains("This link will expire in 60 minutes.")
-        body.contains("If you didn't request a password reset")
+    def "the English welcome email addresses the user by first name, or neutrally without one"() {
+        expect:
+        messages.welcomeSubject("en") == "Welcome to SportConnect!"
+        messages.welcomeBody("en", "Linh").startsWith("Hi Linh,")
+        messages.welcomeBody("en", null).startsWith("Hi there,")
+        messages.welcomeBody("en", "  ").startsWith("Hi there,")
     }
 
-    def "the Vietnamese reset email is real Vietnamese, not the English text, with the link and minutes"() {
+    def "the Vietnamese welcome email is real Vietnamese, not the English text"() {
         when:
-        def body = messages.resetPasswordBody("vi", "http://x/reset?token=abc", 90)
+        def body = messages.welcomeBody("vi", "Linh")
 
         then:
-        messages.resetPasswordSubject("vi") == "Đặt lại mật khẩu - SportConnect"
-        body.contains("http://x/reset?token=abc")
-        body.contains("Liên kết này sẽ hết hạn sau 90 phút.")
-        !body.contains("Hello")
+        messages.welcomeSubject("vi") != messages.welcomeSubject("en")
+        body.contains("Linh")
+        !body.contains("Welcome")
     }
 }

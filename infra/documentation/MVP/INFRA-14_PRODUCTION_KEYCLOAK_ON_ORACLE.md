@@ -25,3 +25,11 @@ The dev Compose service (INFRA-13); any AWS plan.
 ## Done when
 
 The production realm runs from the committed import, Keycloak survives a restart, backups include its schema, and the measured production-mode memory is recorded here.
+
+## Notes from A28 (2026-10-16)
+
+- **The email theme has to ship with the production Keycloak.** Dev mounts the directory `infra/keycloak/themes/` into the Compose Keycloak; production bakes it into the image (or mounts it) beside the login theme JAR, and the realm sets `emailTheme: sportconnect` (already in `sportconnect-realm.json`). Without it Keycloak falls back to its stock English messages.
+- **Keycloak needs real SMTP in production** (reset and verification mails): `smtpServer` in the realm file points at the dev Mailpit; set the real host, port and credentials through the admin API or env, never in the file. The backend sends the welcome email through its own `spring.mail` settings (`MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `EMAIL_FROM`); the dev profile points those at Mailpit, production must set them.
+- **`JWT_SECRET` is gone** from the backend (`application-prod.yml` no longer reads it); remove it from any deployment config. Chat dropped it in CHAT-17.
+- **The realm file carries a dev-only client, `sportconnect-swagger`** (redirect `http://localhost:8080/swagger-ui/oauth2-redirect.html`). Decide whether Swagger is served in production at all (INFRA-10); if not, drop the client from the production realm, if so add its origin to the client's redirect URIs and web origins.
+- **Reset link life** is 1 hour (realm attribute `actionTokenGeneratedByUserLifespan.reset-credentials` = 3600, set by `infra/scripts/realm-email-theme.mjs`).

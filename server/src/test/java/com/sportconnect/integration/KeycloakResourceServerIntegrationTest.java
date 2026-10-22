@@ -1,6 +1,10 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.auth.api.service.JwtTokenService;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.JWSObject;
+import com.nimbusds.jose.Payload;
+import com.nimbusds.jose.crypto.MACSigner;
 import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -10,7 +14,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -35,8 +38,6 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
 
     @Autowired
     private UserRepository userRepository;
-    @Autowired
-    private JwtTokenService jwtTokenService;
 
     private UUID userId;
 
@@ -87,9 +88,13 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
 
     @Test
     void theLegacyHs256Token_isNoLongerAccepted() throws Exception {
-        // What the old login still mints (until A26 replaces it): valid for the old filter, refused by the new one.
-        String legacy = jwtTokenService.generateAccessToken(Map.of(
-                "id", userId, "email", "legacy@example.com", "username", "legacy", "roles", List.of("USER")));
+        // What the pre-Keycloak login minted (removed by A28): an HS256 token signed with the shared secret. The
+        // resource server accepts RS256 from the realm's JWKS only.
+        JWSObject jws = new JWSObject(new JWSHeader(JWSAlgorithm.HS256), new Payload(Map.of(
+                "sub", userId.toString(), "email", "legacy@example.com", "roles", java.util.List.of("USER"),
+                "exp", System.currentTimeMillis() / 1000 + 300)));
+        jws.sign(new MACSigner("legacy-secret-key-for-the-removed-hs256-mint-min-256-bits".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String legacy = jws.serialize();
 
         me(legacy).andExpect(status().isUnauthorized());
     }

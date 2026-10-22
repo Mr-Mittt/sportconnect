@@ -2,18 +2,9 @@ package com.sportconnect.auth.controller;
 
 import com.sportconnect.auth.api.dto.AuthResponse;
 import com.sportconnect.auth.api.dto.CallbackRequest;
-import com.sportconnect.auth.api.dto.ForgotPasswordRequest;
-import com.sportconnect.auth.api.dto.LoginRequest;
 import com.sportconnect.auth.api.dto.ReactivationTicketRequest;
-import com.sportconnect.auth.api.dto.RegisterRequest;
-import com.sportconnect.auth.api.dto.ResetPasswordRequest;
-import com.sportconnect.auth.api.dto.ValidateResetTokenRequest;
-import com.sportconnect.auth.api.dto.VerifyEmailRequest;
 import com.sportconnect.auth.api.service.AuthService;
 import com.sportconnect.auth.config.CookieProperties;
-import com.sportconnect.auth.config.JwtProperties;
-import com.sportconnect.auth.service.EmailVerificationService;
-import com.sportconnect.auth.service.PasswordResetService;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.exception.UnauthorizedException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,52 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Auth", description = "Registration, login, token refresh, logout, and password/email verification.")
+@Tag(name = "Auth", description = "Completing a Keycloak sign-in, re-activation, token refresh and logout. Registration, password login, password reset and email verification are Keycloak's own pages.")
 public class AuthController {
 
     private static final String REFRESH_COOKIE_NAME = "refreshToken";
 
     private final AuthService authService;
-    private final EmailVerificationService emailVerificationService;
-    private final PasswordResetService passwordResetService;
     private final CookieProperties cookieProperties;
-    private final JwtProperties jwtProperties;
-
-    /**
-     * Registers a new user and logs them in immediately. Sets the refresh token as an httpOnly
-     * cookie (see {@link #buildRefreshCookie}) rather than returning it in the body — the
-     * response's {@code data.refreshToken} is always absent (see {@link AuthResponse}).
-     */
-    @Operation(summary = "Register a new user", security = {},
-            description = "Registers a new user and logs them in immediately. Sets the refresh token as an httpOnly cookie rather than returning it in the body.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Registered and logged in"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email already registered (errorCode EMAIL_ALREADY_REGISTERED)")
-    })
-    @PostMapping("/register")
-    public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
-        AuthResponse response = authService.register(request);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response).toString())
-                .body(ApiResponse.success("User registered successfully", response));
-    }
-
-    /** Same refresh-token-cookie contract as {@link #register}. */
-    @Operation(summary = "Log in", security = {},
-            description = "Same refresh-token-cookie contract as register.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Login successful"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid email or password (errorCode INVALID_CREDENTIALS), or correct credentials for a deactivated account (errorCode ACCOUNT_DEACTIVATED, no tokens issued -- see /reactivate)")
-    })
-    @PostMapping("/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
-        AuthResponse response = authService.login(request);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, buildRefreshCookie(response).toString())
-                .body(ApiResponse.success("Login successful", response));
-    }
 
     /**
      * A26: completes the sign-in the client started at Keycloak (Authorization Code + PKCE). Public: the caller has no
@@ -193,19 +145,19 @@ public class AuthController {
      * Builds the {@code Set-Cookie} header value carrying the refresh token. {@code Secure} is
      * profile-conditional ({@link CookieProperties}) since it's false in local dev (plain HTTP);
      * {@code Path} scopes it to {@code /api/auth} so it's never sent on unrelated requests. {@code Max-Age} is
-     * the refresh token's own lifetime (A26: Keycloak's {@code refresh_expires_in}) when the response carries it.
+     * the refresh token's own lifetime (A26: Keycloak's {@code refresh_expires_in}); every session response carries it,
+     * and without one the cookie is a browser-session cookie.
      */
     private ResponseCookie buildRefreshCookie(AuthResponse response) {
-        long maxAgeSeconds = response.getRefreshTokenMaxAgeSeconds() != null
-                ? response.getRefreshTokenMaxAgeSeconds()
-                : jwtProperties.getRefreshExpiration() / 1000;
-        return ResponseCookie.from(REFRESH_COOKIE_NAME, response.getRefreshToken())
+        ResponseCookie.ResponseCookieBuilder cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, response.getRefreshToken())
                 .httpOnly(true)
                 .secure(cookieProperties.isSecure())
                 .sameSite("Strict")
-                .path("/api/auth")
-                .maxAge(maxAgeSeconds)
-                .build();
+                .path("/api/auth");
+        if (response.getRefreshTokenMaxAgeSeconds() != null) {
+            cookie.maxAge(response.getRefreshTokenMaxAgeSeconds());
+        }
+        return cookie.build();
     }
 
     /** Same attributes as {@link #buildRefreshCookie}, minus the value, with Max-Age=0 to clear it. */
@@ -217,56 +169,5 @@ public class AuthController {
                 .path("/api/auth")
                 .maxAge(0)
                 .build();
-    }
-
-    @Operation(summary = "Verify an email address", security = {},
-            description = "Consumes the token sent in the verification email.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Email verified"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, already verified, or token expired"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid verification token")
-    })
-    @PostMapping("/verify-email")
-    public ResponseEntity<ApiResponse<Void>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
-        emailVerificationService.verifyEmail(request.getToken());
-        return ResponseEntity.ok(ApiResponse.success("Email verified successfully", null));
-    }
-
-    @Operation(summary = "Request a password reset email", security = {},
-            description = "Emails a one-hour reset link when an account (active or deactivated) has this email. The answer is identical whether or not it does, so it cannot be used to discover which emails are registered.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Always returned, regardless of whether the email exists"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed")
-    })
-    @PostMapping("/forgot-password")
-    public ResponseEntity<ApiResponse<Void>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        passwordResetService.requestReset(request.getEmail());
-        return ResponseEntity.ok(ApiResponse.success("If the email exists, a password reset link has been sent", null));
-    }
-
-    @Operation(summary = "Reset a password", security = {},
-            description = "Consumes the token sent in the reset-password email.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Password reset"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, token already used, or token expired"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid reset token")
-    })
-    @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        passwordResetService.completeReset(request.getToken(), request.getNewPassword());
-        return ResponseEntity.ok(ApiResponse.success("Password reset successfully", null));
-    }
-
-    @Operation(summary = "Check that a password-reset link can still be used", security = {},
-            description = "Does not consume the token. Every unusable token (unknown, already used, expired) gets the same 404 RESET_TOKEN_INVALID, so this cannot be used to learn why a token failed.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "The token can be used"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "The token cannot be used (unknown, used or expired)")
-    })
-    @PostMapping("/reset-password/validate")
-    public ResponseEntity<ApiResponse<Void>> validateResetToken(@Valid @RequestBody ValidateResetTokenRequest request) {
-        passwordResetService.checkToken(request.getToken());
-        return ResponseEntity.ok(ApiResponse.success("Reset token is valid", null));
     }
 }

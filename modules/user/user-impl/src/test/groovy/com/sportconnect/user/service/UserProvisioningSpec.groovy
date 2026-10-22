@@ -1,7 +1,6 @@
 package com.sportconnect.user.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.sportconnect.auth.api.service.AuthService
 import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ResourceNotFoundException
@@ -29,7 +28,6 @@ class UserProvisioningSpec extends Specification {
     RoleRepository roleRepository = Mock()
     PasswordEncoder passwordEncoder = Mock()
     UserFriendService userFriendService = Mock()
-    AuthService authService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
     ReferenceService referenceService = Mock()
@@ -39,7 +37,7 @@ class UserProvisioningSpec extends Specification {
 
     @Subject
     UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService,
-            authService, userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService,
+            userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService,
             userPreferenceRepository, accessStateCache, provisioningLock)
 
     private static final Role USER_ROLE = new Role(id: 1, name: "USER")
@@ -55,9 +53,11 @@ class UserProvisioningSpec extends Specification {
 
     def "creates the user with the subject as id, the USER role, no password and the verified flag from the token"() {
         when:
-        def result = userService.provisionExternalUser(identity().build())
+        def provisioned = userService.provisionExternalUser(identity().build())
+        def result = provisioned.user()
 
         then:
+        provisioned.created() // A28: the one call that inserts the row says so, which is what sends the welcome email
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail("a@example.com") >> false
         1 * userRepository.existsByUsername("auser") >> false
@@ -73,7 +73,7 @@ class UserProvisioningSpec extends Specification {
 
     def "the per-subject lock is taken before the row is looked up, for a new and for an existing subject"() {
         when:
-        userService.provisionExternalUser(identity().build())
+        userService.provisionExternalUser(identity().build()).user()
 
         then:
         1 * provisioningLock.acquire(sub)
@@ -87,9 +87,11 @@ class UserProvisioningSpec extends Specification {
         def existing = User.builder().id(sub).email("kept@example.com").isActive(false).roles([USER_ROLE] as Set).build()
 
         when:
-        def result = userService.provisionExternalUser(identity().email("other@example.com").build())
+        def provisioned = userService.provisionExternalUser(identity().email("other@example.com").build())
+        def result = provisioned.user()
 
         then:
+        !provisioned.created()
         1 * userRepository.findById(sub) >> Optional.of(existing)
         0 * userRepository.save(_)
         0 * userPreferenceRepository.save(_)
@@ -99,7 +101,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a national-format phone is stored as E.164 and must be free"() {
         when:
-        userService.provisionExternalUser(identity().email(null).phoneNumber("0901234567").build())
+        userService.provisionExternalUser(identity().email(null).phoneNumber("0901234567").build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -110,7 +112,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a phone another account holds is PHONE_ALREADY_USED and nothing is saved"() {
         when:
-        userService.provisionExternalUser(identity().phoneNumber("0901234567").build())
+        userService.provisionExternalUser(identity().phoneNumber("0901234567").build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -122,7 +124,7 @@ class UserProvisioningSpec extends Specification {
 
     def "neither email nor phone is IDENTIFIER_REQUIRED"() {
         when:
-        userService.provisionExternalUser(identity().email(email).phoneNumber(null).build())
+        userService.provisionExternalUser(identity().email(email).phoneNumber(null).build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -135,7 +137,7 @@ class UserProvisioningSpec extends Specification {
 
     def "an unparseable phone is stored as typed with status INVALID and never fails the sign-in (U25)"() {
         when:
-        def result = userService.provisionExternalUser(identity().phoneNumber("12").build())
+        def result = userService.provisionExternalUser(identity().phoneNumber("12").build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -148,7 +150,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a parseable phone is stored with status VALID (U25)"() {
         when:
-        userService.provisionExternalUser(identity().phoneNumber("0901234567").build())
+        userService.provisionExternalUser(identity().phoneNumber("0901234567").build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -159,7 +161,7 @@ class UserProvisioningSpec extends Specification {
 
     def "an unparseable phone is no identifier: without an email it is IDENTIFIER_REQUIRED (U25)"() {
         when:
-        userService.provisionExternalUser(identity().email(null).phoneNumber("12").build())
+        userService.provisionExternalUser(identity().email(null).phoneNumber("12").build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -170,7 +172,7 @@ class UserProvisioningSpec extends Specification {
 
     def "no phone leaves the status null (U25)"() {
         when:
-        userService.provisionExternalUser(identity().phoneNumber(null).build())
+        userService.provisionExternalUser(identity().phoneNumber(null).build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -180,7 +182,7 @@ class UserProvisioningSpec extends Specification {
 
     def "an email another account holds is EMAIL_ALREADY_REGISTERED"() {
         when:
-        userService.provisionExternalUser(identity().build())
+        userService.provisionExternalUser(identity().build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -198,7 +200,7 @@ class UserProvisioningSpec extends Specification {
         userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException(detail)) }
 
         when:
-        userService.provisionExternalUser(identity().build())
+        userService.provisionExternalUser(identity().build()).user()
 
         then:
         def e = thrown(expected)
@@ -217,7 +219,7 @@ class UserProvisioningSpec extends Specification {
         def longName = "n" * 60
 
         when:
-        userService.provisionExternalUser(identity().username(longName).build())
+        userService.provisionExternalUser(identity().username(longName).build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -231,7 +233,7 @@ class UserProvisioningSpec extends Specification {
 
     def "no username in the token leaves it null"() {
         when:
-        userService.provisionExternalUser(identity().username(null).build())
+        userService.provisionExternalUser(identity().username(null).build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -243,7 +245,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a username that is an email address (the realm's email-as-username) is not copied: it is shown to other users"() {
         when:
-        userService.provisionExternalUser(identity().username("a@example.com").build())
+        userService.provisionExternalUser(identity().username("a@example.com").build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -269,7 +271,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a valid country, region and location claim are stored on the new user"() {
         when:
-        userService.provisionExternalUser(identity().countryId(7L).regionId(70L).latitude(10.78d).longitude(106.69d).build())
+        userService.provisionExternalUser(identity().countryId(7L).regionId(70L).latitude(10.78d).longitude(106.69d).build()).user()
 
         then:
         interaction { expectNewUser() }
@@ -284,7 +286,7 @@ class UserProvisioningSpec extends Specification {
 
     def "an unknown or inactive country drops the country and the region, and the sign-in still provisions"() {
         when:
-        userService.provisionExternalUser(identity().countryId(999L).regionId(70L).build())
+        userService.provisionExternalUser(identity().countryId(999L).regionId(70L).build()).user()
 
         then:
         interaction { expectNewUser() }
@@ -296,7 +298,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a valid country with a region that is not valid for it keeps the country and drops the region"() {
         when:
-        userService.provisionExternalUser(identity().countryId(7L).regionId(80L).build())
+        userService.provisionExternalUser(identity().countryId(7L).regionId(80L).build()).user()
 
         then:
         interaction { expectNewUser() }
@@ -308,7 +310,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a region without a country is dropped without asking the reference service"() {
         when:
-        userService.provisionExternalUser(identity().regionId(70L).build())
+        userService.provisionExternalUser(identity().regionId(70L).build()).user()
 
         then:
         interaction { expectNewUser() }
@@ -319,7 +321,7 @@ class UserProvisioningSpec extends Specification {
 
     def "a location is kept only as an in-range pair"() {
         when:
-        userService.provisionExternalUser(identity().latitude(lat).longitude(lng).build())
+        userService.provisionExternalUser(identity().latitude(lat).longitude(lng).build()).user()
 
         then:
         interaction { expectNewUser() }
@@ -337,7 +339,7 @@ class UserProvisioningSpec extends Specification {
 
     def "no geo claims leave the zone and the location empty and never touch the reference service for it"() {
         when:
-        userService.provisionExternalUser(identity().build())
+        userService.provisionExternalUser(identity().build()).user()
 
         then:
         interaction { expectNewUser() }
@@ -349,7 +351,7 @@ class UserProvisioningSpec extends Specification {
 
     def "only a full name splits into first and last name; a given and family name win over it"() {
         when:
-        userService.provisionExternalUser(identity().firstName(null).lastName(null).fullName("Tran Van Binh").build())
+        userService.provisionExternalUser(identity().firstName(null).lastName(null).fullName("Tran Van Binh").build()).user()
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
@@ -369,7 +371,7 @@ class UserProvisioningSpec extends Specification {
         userRepository.save(_) >> { User u -> u }
 
         when:
-        userService.provisionExternalUser(identity().languageCode(locale).build())
+        userService.provisionExternalUser(identity().languageCode(locale).build()).user()
 
         then:
         saved * userPreferenceRepository.save({ UserPreference p -> p.userId == sub && p.language == "vi" })

@@ -1,6 +1,5 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.UserRepository;
@@ -23,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * hold, even though the access token's signature and {@code exp} remain perfectly valid. Real {@code MockMvc} requests
  * through the real {@code JwtAuthenticationFilter} and the real per-request gate ({@code UserService.getAccessState},
  * cached in a real Redis via {@link RedisBaseIT}), with a real {@code UserServiceImpl.deleteUser()} and
- * {@code reactivateUserByEmail()}.
+ * {@code reactivateUser()}.
  *
  * <p>What changed from the HS256 era: an access token is no longer revoked by a watermark stamped on
  * {@code refresh_tokens}; the gate looks at the user's current {@code is_active}, so a deactivation takes effect on the
@@ -35,9 +34,6 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
     private UserRepository userRepository;
 
     @Autowired
-    private RefreshTokenRepository refreshTokenRepository;
-
-    @Autowired
     private UserServiceImpl userServiceImpl;
 
     @Autowired
@@ -45,7 +41,6 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
 
     @AfterEach
     void cleanup() {
-        refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
     }
 
@@ -66,7 +61,7 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void deactivation_revokesRefreshTokens_refreshWithAPreDeactivationTokenFails() throws Exception {
+    void deactivation_refreshWithAPreDeactivationTokenFails_andEndsTheKeycloakSession() throws Exception {
         User user = createActiveUser();
         // A26: the session is Keycloak's; the cookie holds its refresh token.
         String refreshToken = TestKeycloak.startSession(TestKeycloak.Identity.of(user.getId()).email(user.getEmail()));
@@ -118,7 +113,7 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
         // The 401 above cached "inactive"; reactivating must evict it, not wait for the TTL.
         assertThat(stringRedisTemplate.opsForValue().get(cacheKey(user.getId()))).startsWith("0|");
 
-        userServiceImpl.reactivateUserByEmail(user.getEmail());
+        userServiceImpl.reactivateUser(user.getId());
 
         mockMvc.perform(get("/api/users/me").header("Authorization", authorization)).andExpect(status().isOk());
     }

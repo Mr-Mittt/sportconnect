@@ -1,11 +1,10 @@
 package com.sportconnect.user.api.service;
 
-import com.sportconnect.user.api.dto.CredentialCheck;
 import com.sportconnect.user.api.dto.ExternalIdentity;
+import com.sportconnect.user.api.dto.ProvisionedUser;
 import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
-import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
@@ -134,17 +133,6 @@ public interface UserService {
     boolean existsByEmail(String email);
 
     /**
-     * Resolve a user id from an email address, <em>including deactivated accounts</em> (A10: a deactivated user may
-     * still reset their password).
-     *
-     * <p>Unlike {@link #getUserByEmail(String)}, which is active-only and throws on a miss, this never throws and
-     * returns no profile data — just the id — so the caller cannot learn more than "an account exists".
-     *
-     * @return the user's id, or empty when no user has that exact email (and for a {@code null}/blank value, U23)
-     */
-    Optional<UUID> findUserIdByEmail(String email);
-
-    /**
      * The language to write to this user in when no UI is involved (A10: the password-reset email), as an
      * <em>active</em> reference language code. Includes deactivated users; returns only a code, no profile data.
      *
@@ -165,62 +153,9 @@ public interface UserService {
     boolean existsByUsername(String username);
 
     /**
-     * Create a new user (for registration)
-     */
-    UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber);
-
-    /**
-     * Create a new user with the optional sign-up extras (U16). Same as the 5-argument overload, which delegates
-     * here with {@code null} details.
-     *
-     * <p>Flow — everything is validated <em>before</em> the user is saved, so a bad request creates nothing:
-     * the country/region selection ({@code ReferenceService.requireValidSelection}), then the language code
-     * ({@code isActiveLanguage}). The user is then saved with {@code countryId}/{@code regionId} and, if
-     * coordinates were given, a location point (X = longitude); a {@code UserPreference} row is created holding
-     * the language when one was given (otherwise preferences stay lazily created, as before).
-     *
-     * <p>U23: {@code email} may be {@code null}/blank for a phone-only account, but one of {@code email} and
-     * {@code phoneNumber} is required. The phone is normalised to E.164 (default region VN, so {@code 0901234567} and
-     * {@code +84901234567} are the same number) and must be unused.
-     *
-     * @param details optional extras; {@code null} or all-null means none
-     * @throws com.sportconnect.common.exception.BadRequestException for a region without a country, an unknown or
-     *         inactive country/region, a region outside the country, an unknown or inactive language, or only one
-     *         of latitude/longitude; {@code INVALID_PHONE_NUMBER} for a phone that does not parse or is not valid;
-     *         {@code IDENTIFIER_REQUIRED} when both email and phone are absent
-     * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}
-     */
-    UserResponse createUser(String email, String passwordHash, String firstName, String lastName, String phoneNumber,
-                            UserRegistrationDetails details);
-
-    /**
-     * Update user password (for password reset)
-     */
-    void updateUserPassword(UUID userId, String newPasswordHash);
-
-    /**
      * Get user roles (for JWT token generation)
      */
     Set<String> getUserRoles(UUID userId);
-
-    /**
-     * Checks an email and password pair (for authentication). The password is checked for deactivated
-     * accounts too, so {@link CredentialCheck#MATCH_INACTIVE} is only returned when the password is
-     * correct and a wrong password never reveals whether the account exists or is deactivated.
-     * U23: a {@code null} or blank email is {@link CredentialCheck#NO_MATCH}; a phone-only or social account has no
-     * password hash and never matches.
-     */
-    CredentialCheck verifyCredentials(String email, String rawPassword);
-
-    /**
-     * A9: re-activates the account with this email (sets {@code isActive = true}) and returns it. A no-op for an
-     * already active account. The caller must have verified the password first
-     * ({@link #verifyCredentials}); this method does not. Takes the same exclusive row lock as
-     * {@code deleteUser}, so it serializes with a concurrent deactivation. Does not issue or revoke any token.
-     *
-     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no account has this email (or it is blank, U23)
-     */
-    UserResponse reactivateUserByEmail(String email);
 
     /**
      * A26: re-activates a deactivated account by id (the Keycloak sign-in knows the subject, not an email, and a phone-only
@@ -248,13 +183,14 @@ public interface UserService {
      * not in its country is dropped alone, coordinates are kept only as an in-range pair. The Keycloak account already exists
      * when they arrive, so a 400 here would strand a signed-up user.
      *
+     * @return the account and whether this call created it (A28: the caller sends the welcome email once, on {@code true})
      * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED} (no email and no usable
      *         phone; an {@code INVALID} phone is not usable)
      * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}, {@code EMAIL_ALREADY_REGISTERED}
      * @throws org.springframework.dao.DataIntegrityViolationException when two first sign-ins for the same subject race and
      *         this one loses on the primary key; the caller re-reads the account
      */
-    UserResponse provisionExternalUser(ExternalIdentity identity);
+    ProvisionedUser provisionExternalUser(ExternalIdentity identity);
 
     /**
      * A25: the per-request authentication gate. Resolves a token subject to whether the account may act and what

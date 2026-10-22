@@ -1,148 +1,42 @@
 package com.sportconnect.auth.service;
 
 import com.sportconnect.auth.api.dto.AuthResponse;
-import com.sportconnect.auth.config.JwtProperties;
-import com.sportconnect.auth.api.dto.LoginRequest;
-import com.sportconnect.auth.api.dto.RegisterRequest;
 import com.sportconnect.auth.api.service.AuthService;
-import com.sportconnect.auth.api.service.JwtTokenService;
-import com.sportconnect.auth.entity.RefreshToken;
-import com.sportconnect.auth.repository.EmailVerificationRepository;
-import com.sportconnect.auth.repository.PasswordResetTokenRepository;
-import com.sportconnect.auth.repository.RefreshTokenRepository;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ServiceUnavailableException;
 import com.sportconnect.common.exception.UnauthorizedException;
-import com.sportconnect.user.api.dto.CredentialCheck;
 import com.sportconnect.user.api.dto.ExternalIdentity;
+import com.sportconnect.user.api.dto.ProvisionedUser;
 import com.sportconnect.user.api.dto.UserAccessState;
-import com.sportconnect.user.api.dto.UserRegistrationDetails;
 import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Auth service implementation
- * Decoupled from user-impl, now depends only on user-api
+ * Auth service implementation (A26, A28): every session is a Keycloak session. Depends on user-impl only through
+ * user-api.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
-    private final RefreshTokenRepository refreshTokenRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtTokenService jwtTokenService;
-    private final EmailVerificationRepository emailVerificationRepository;
-    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final UserService userService;
-    private final JwtProperties jwtProperties;
     private final KeycloakTokenClient keycloak;
     private final JwtDecoder jwtDecoder;
     private final ReactivationTicketStore reactivationTickets;
-
-    @Override
-    @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        // Check if email already exists
-        if (userService.existsByEmail(request.getEmail())) {
-            throw new ConflictException("EMAIL_ALREADY_REGISTERED", "Email already registered", null);
-        }
-
-        // Parse full name into first and last name
-        String[] nameParts = request.getFullName().trim().split("\\s+", 2);
-        String firstName = nameParts[0];
-        String lastName = nameParts.length > 1 ? nameParts[1] : "";
-
-        // Create user via UserService
-        String encodedPassword = passwordEncoder.encode(request.getPassword());
-        UserResponse userResponse = userService.createUser(
-                request.getEmail(),
-                encodedPassword,
-                firstName,
-                lastName,
-                request.getPhoneNumber(),
-                // U16: the optional language / country / region / coordinates. Validated inside createUser, before
-                // the user is saved, so a bad selection is a 400 that creates nothing.
-                UserRegistrationDetails.builder()
-                        .languageCode(request.getLanguageCode())
-                        .countryId(request.getCountryId())
-                        .regionId(request.getRegionId())
-                        .latitude(request.getLatitude())
-                        .longitude(request.getLongitude())
-                        .build()
-        );
-
-        log.info("Registered new user: {}", userResponse.getEmail());
-
-        // Generate tokens
-        String accessToken = jwtTokenService.generateAccessToken(toTokenData(userResponse));
-        String refreshToken = jwtTokenService.generateRefreshToken(toTokenData(userResponse));
-
-        // Save refresh token
-        createRefreshToken(userResponse.getId(), refreshToken);
-
-        return AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .expiresIn(jwtProperties.getExpiration())
-                .user(toUserResponse(userResponse))
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public AuthResponse login(LoginRequest request) {
-        CredentialCheck check = userService.verifyCredentials(request.getEmail(), request.getPassword());
-        if (check == CredentialCheck.NO_MATCH) {
-            throw new UnauthorizedException("INVALID_CREDENTIALS", "Invalid email or password", null);
-        }
-        if (check == CredentialCheck.MATCH_INACTIVE) {
-            // A9: only reachable with the correct password, so this does not reveal account state to a
-            // stranger. No tokens; the client may offer reactivate().
-            throw new UnauthorizedException("ACCOUNT_DEACTIVATED", "Account is deactivated", null);
-        }
-
-        return startSession(userService.getUserByEmail(request.getEmail()));
-    }
-
-    /** Stamps the last login, mints the access/refresh pair and stores the refresh token (login and reactivate). */
-    private AuthResponse startSession(UserResponse user) {
-        // Update last login
-        userService.updateLastLogin(user.getId());
-
-        log.info("User logged in: {}", user.getEmail());
-
-        // Generate tokens
-        String accessToken = jwtTokenService.generateAccessToken(toTokenData(user));
-        String refreshToken = jwtTokenService.generateRefreshToken(toTokenData(user));
-
-        // Save refresh token
-        createRefreshToken(user.getId(), refreshToken);
-
-        return AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .expiresIn(jwtProperties.getExpiration())
-                .user(toUserResponse(user))
-                .build();
-    }
+    private final WelcomeEmailService welcomeEmails;
 
     /**
      * {@inheritDoc}
@@ -159,11 +53,14 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse callback(String code, String codeVerifier) {
         KeycloakTokens tokens = keycloak.exchangeCode(code, codeVerifier);
         UserResponse user;
+        boolean created;
         try {
             Jwt jwt = verify(tokens.accessToken());
             UUID userId = subjectOf(jwt);
             boolean social = jwt.getClaimAsString("identity_provider") != null;
-            user = provision(identityOf(jwt, userId));
+            ProvisionedUser provisioned = provision(identityOf(jwt, userId));
+            user = provisioned.user();
+            created = provisioned.created();
             if (!Boolean.TRUE.equals(user.getIsActive()) && social) {
                 // A social sign-in is the user's own confirmation that they are back.
                 user = userService.reactivateUser(userId);
@@ -189,6 +86,11 @@ public class AuthServiceImpl implements AuthService {
                     Map.of("reactivationTicket", ticket));
         }
         log.info("User signed in through Keycloak: {}", user.getId());
+        if (created) {
+            // A28: once per account. Provisioning has committed by now; a sign-in that only re-read the row, including
+            // the loser of a first-sign-in race, reports created = false and sends nothing.
+            welcomeEmails.sendTo(user);
+        }
         return sessionOf(tokens, user);
     }
 
@@ -342,7 +244,7 @@ public class AuthServiceImpl implements AuthService {
      * here), and a second call then simply finds the winner's row by id. A genuine clash (another account holds the
      * email or phone) fails the same way again and is rethrown by that second call.
      */
-    private UserResponse provision(ExternalIdentity identity) {
+    private ProvisionedUser provision(ExternalIdentity identity) {
         try {
             return userService.provisionExternalUser(identity);
         } catch (DataIntegrityViolationException | ConflictException e) {
@@ -369,45 +271,6 @@ public class AuthServiceImpl implements AuthService {
                 .expiresIn(tokens.expiresIn() * 1000)
                 .user(toUserResponse(user))
                 .build();
-    }
-
-    @Override
-    @Transactional
-    public void logout(UUID userId) {
-        refreshTokenRepository.revokeAllUserTokens(userId, LocalDateTime.now());
-        log.info("Logged out user: {}", userId);
-    }
-
-    /**
-     * Helper method to create refresh token
-     */
-    protected String createRefreshToken(UUID userId, String tokenString) {
-        LocalDateTime expiresAt = LocalDateTime.now()
-                .plusSeconds(jwtTokenService.getRefreshExpiration() / 1000);
-
-        RefreshToken refreshToken = RefreshToken.builder()
-                .token(tokenString)
-                .userId(userId)
-                .expiresAt(expiresAt)
-                .build();
-
-        refreshTokenRepository.save(refreshToken);
-        return tokenString;
-    }
-
-    /**
-     * Convert UserResponse to token data format for JWT generation
-     */
-    private Map<String, Object> toTokenData(UserResponse user) {
-        // U23: email is absent for a phone-only account, and Map.of rejects null values.
-        Map<String, Object> data = new HashMap<>();
-        data.put("id", user.getId());
-        if (user.getEmail() != null) {
-            data.put("email", user.getEmail());
-        }
-        data.put("username", user.getUsername() != null ? user.getUsername() : "");
-        data.put("roles", user.getRoles());
-        return data;
     }
 
     /**

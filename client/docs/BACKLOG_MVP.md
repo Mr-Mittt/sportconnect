@@ -70,10 +70,15 @@ New tickets get inserted at the appropriate position when filed, same as before 
 |---|---|---|---|
 | 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
-| 18 | [AUTH-11](MVP/AUTH-11_LOG_OUT_THIS_DEVICE_ONLY.md) | "Log out" signs out this device only once backend per-session logout ships, plus a "Log out everywhere" action (and a device list if A15 includes one), en/vi copy; **blocked on backend A15** | `TODO` |
-| 19 | [AUTH-12](MVP/AUTH-12_ACTIVE_SESSIONS_LIST.md) | Active sessions list with per-session sign-out, against backend A18 (split out of AUTH-11) | `TODO` |
-| 23 | [ACCOUNT-6](MVP/ACCOUNT-6_PASSWORD_CONFIRM_DIALOGS_FOR_KEYCLOAK_USERS.md) | Change-password and deactivate confirmations for Keycloak users (no local password, so both always fail today); scope set by the backend U24 decision | `TODO` |
-| 24 | [AUTH-17](MVP/AUTH-17_REPLACE_WATERMARKED_EARTH_IMAGE.md) | Replace the watermarked `earth.png` (a "Vecteezy" stock watermark is tiled across the globe) in the auth illustration with a clean original; then regenerate the baselines that contain it | `TODO` |
+| 21 | [ACCOUNT-6](MVP/ACCOUNT-6_PASSWORD_CONFIRM_DIALOGS_FOR_KEYCLOAK_USERS.md) | Change-password and deactivate confirmations for Keycloak users (no local password, so both always fail today); scope set by the backend U24 decision | `TODO` |
+| 22 | [AUTH-17](MVP/AUTH-17_REPLACE_WATERMARKED_EARTH_IMAGE.md) | Replace the watermarked `earth.png` (a "Vecteezy" stock watermark is tiled across the globe) in the auth illustration with a clean original; then regenerate the baselines that contain it | `TODO` |
+
+#### Removed / Deferred
+
+| Ticket | Decision |
+|---|---|
+| [AUTH-11](MVP/AUTH-11_LOG_OUT_THIS_DEVICE_ONLY.md) · "Log out" signs out this device only, plus "Log out everywhere" | Superseded (2026-10-16, backend A28 closed A15): a session is a Keycloak SSO session, so plain logout already ends only this device's session and there is no per-user watermark to extend. A "log out everywhere" action would be a new ticket against Keycloak. |
+| [AUTH-12](MVP/AUTH-12_ACTIVE_SESSIONS_LIST.md) · Active sessions list with per-session sign-out | Superseded (2026-10-16, backend A28 closed A18): no session list or revoke endpoint exists any more; a sessions screen would read Keycloak's account API and be a new ticket. |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
