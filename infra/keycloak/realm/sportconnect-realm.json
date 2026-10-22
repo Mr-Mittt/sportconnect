@@ -227,7 +227,8 @@
   "passwordPolicy": "length(8)",
   "emailTheme": "sportconnect",
   "attributes": {
-    "actionTokenGeneratedByUserLifespan.reset-credentials": "3600"
+    "actionTokenGeneratedByUserLifespan.reset-credentials": "3600",
+    "actionTokenGeneratedByUserLifespan.idp-verify-account-via-email": "1800"
   },
   "eventsListeners": [
     "sc-email-normalizer",
@@ -1097,32 +1098,6 @@
       ]
     },
     {
-      "id": "85a76549-a524-4f24-8909-2cf8fe56bc77",
-      "alias": "sportconnect first broker login Account verification options",
-      "description": "Method with which to verity the existing account",
-      "providerId": "basic-flow",
-      "topLevel": false,
-      "builtIn": false,
-      "authenticationExecutions": [
-        {
-          "authenticator": "idp-email-verification",
-          "authenticatorFlow": false,
-          "requirement": "ALTERNATIVE",
-          "priority": 10,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticatorFlow": true,
-          "requirement": "ALTERNATIVE",
-          "priority": 20,
-          "autheticatorFlow": true,
-          "flowAlias": "sportconnect first broker login Verify Existing Account by Re-authentication",
-          "userSetupAllowed": false
-        }
-      ]
-    },
-    {
       "id": "606ff439-484e-42a7-9eb7-1aa7a31411bc",
       "alias": "sportconnect first broker login First Broker Login - Conditional Organization",
       "description": "Flow to determine if the authenticator that adds organization members is to be used",
@@ -1149,57 +1124,6 @@
       ]
     },
     {
-      "id": "cc32a222-3b08-405f-abe2-bb653f13b5e1",
-      "alias": "sportconnect first broker login First broker login - Conditional 2FA",
-      "description": "Flow to determine if any 2FA is required for the authentication",
-      "providerId": "basic-flow",
-      "topLevel": false,
-      "builtIn": false,
-      "authenticationExecutions": [
-        {
-          "authenticator": "conditional-user-configured",
-          "authenticatorFlow": false,
-          "requirement": "REQUIRED",
-          "priority": 10,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticatorConfig": "sportconnect first broker login first-broker-login-conditional-credential",
-          "authenticator": "conditional-credential",
-          "authenticatorFlow": false,
-          "requirement": "REQUIRED",
-          "priority": 20,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticator": "auth-otp-form",
-          "authenticatorFlow": false,
-          "requirement": "ALTERNATIVE",
-          "priority": 30,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticator": "webauthn-authenticator",
-          "authenticatorFlow": false,
-          "requirement": "DISABLED",
-          "priority": 40,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticator": "auth-recovery-authn-code-form",
-          "authenticatorFlow": false,
-          "requirement": "DISABLED",
-          "priority": 50,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        }
-      ]
-    },
-    {
       "id": "6f2ef307-6b28-4c18-b6ce-b5acae81c175",
       "alias": "sportconnect first broker login Handle Existing Account",
       "description": "Handle what to do if there is existing account with same email/username like authenticated identity provider",
@@ -1208,19 +1132,11 @@
       "builtIn": false,
       "authenticationExecutions": [
         {
-          "authenticator": "idp-confirm-link",
+          "authenticator": "sc-link-existing-account",
           "authenticatorFlow": false,
           "requirement": "REQUIRED",
-          "priority": 10,
+          "priority": 21,
           "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticatorFlow": true,
-          "requirement": "REQUIRED",
-          "priority": 20,
-          "autheticatorFlow": true,
-          "flowAlias": "sportconnect first broker login Account verification options",
           "userSetupAllowed": false
         }
       ]
@@ -1247,32 +1163,6 @@
           "priority": 21,
           "autheticatorFlow": true,
           "flowAlias": "sportconnect first broker login Handle Existing Account",
-          "userSetupAllowed": false
-        }
-      ]
-    },
-    {
-      "id": "4629ef69-6b78-4e26-97d6-838fc9d4de8b",
-      "alias": "sportconnect first broker login Verify Existing Account by Re-authentication",
-      "description": "Reauthentication of existing account",
-      "providerId": "basic-flow",
-      "topLevel": false,
-      "builtIn": false,
-      "authenticationExecutions": [
-        {
-          "authenticator": "idp-username-password-form",
-          "authenticatorFlow": false,
-          "requirement": "REQUIRED",
-          "priority": 10,
-          "autheticatorFlow": false,
-          "userSetupAllowed": false
-        },
-        {
-          "authenticatorFlow": true,
-          "requirement": "CONDITIONAL",
-          "priority": 20,
-          "autheticatorFlow": true,
-          "flowAlias": "sportconnect first broker login First broker login - Conditional 2FA",
           "userSetupAllowed": false
         }
       ]
@@ -1384,13 +1274,6 @@
       }
     },
     {
-      "id": "0b57545c-19d1-471b-ac12-ef7394d29020",
-      "alias": "sportconnect first broker login first-broker-login-conditional-credential",
-      "config": {
-        "credentials": "webauthn-passwordless"
-      }
-    },
-    {
       "id": "8c66acb1-79ac-4c11-8217-284b8de782c4",
       "alias": "sportconnect first broker login review profile config",
       "config": {
@@ -1398,5 +1281,25 @@
       }
     }
   ],
-  "firstBrokerLoginFlow": "sportconnect first broker login"
+  "firstBrokerLoginFlow": "sportconnect first broker login",
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": false,
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "config": {
+        "clientId": "set-by-realm-google-provider-api",
+        "clientSecret": "set-by-realm-google-provider-api",
+        "defaultScope": "openid email profile",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
+    }
+  ]
 }

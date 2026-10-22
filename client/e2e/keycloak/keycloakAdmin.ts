@@ -109,7 +109,18 @@ export async function allowClientOrigin(origin: string): Promise<void> {
 /** Adds a placeholder OIDC provider (never used to sign in: its endpoints are not real). */
 export async function ensureIdentityProvider(alias: string, displayName: string): Promise<void> {
   const existing = await admin(`/identity-provider/instances/${alias}`);
-  if (existing.ok) return;
+  if (existing.ok) {
+    // A29: the realm file ships `google` disabled (no OAuth client in the repo); the page needs it enabled to show the button.
+    const provider = (await existing.json()) as { enabled?: boolean };
+    if (!provider.enabled) {
+      const enabled = await admin(`/identity-provider/instances/${alias}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...provider, enabled: true }),
+      });
+      if (!enabled.ok) throw new Error(`enable identity provider ${alias} failed: ${enabled.status} ${await enabled.text()}`);
+    }
+    return;
+  }
   const created = await admin('/identity-provider/instances', {
     method: 'POST',
     body: JSON.stringify({

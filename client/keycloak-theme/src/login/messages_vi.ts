@@ -157,6 +157,14 @@ const messages = {
   'webauthn-help-text': 'Dùng khóa bảo mật của bạn để đăng nhập.',
   'webauthn-passwordless-display-name': 'Khóa bảo mật',
   'webauthn-passwordless-help-text': 'Dùng khóa bảo mật của bạn để đăng nhập không cần mật khẩu.',
+  // A29: linking a social sign-in to an existing account (pages login-idp-link-confirm, login-idp-link-email, select-authenticator).
+  confirmOverrideIdpContinue: 'Có, thay liên kết cũ bằng tài khoản này',
+  confirmOverrideIdpTitle: 'Tài khoản đã được liên kết',
+  doContinue: 'Tiếp tục',
+  federatedIdentityConfirmOverrideMessage: 'Bạn đang liên kết tài khoản {0} với tài khoản {1} {2}, nhưng tài khoản của bạn đã liên kết với một tài khoản {3} khác ({4}). Bạn có muốn thay liên kết hiện có bằng tài khoản mới không?',
+  identityProviderLinkSuccess: 'Bạn đã xác minh email thành công. Hãy quay lại trình duyệt ban đầu để tiếp tục đăng nhập.',
+  linkIdpActionMessage: 'Bạn có muốn liên kết tài khoản của mình với {0} không?',
+  linkIdpActionTitle: 'Liên kết {0}',
 };
 
 const themeKeys: Record<ThemeMessageKey, string> = {
@@ -198,6 +206,17 @@ const themeKeys: Record<ThemeMessageKey, string> = {
   geoHintUnavailable: 'Vị trí hiện không khả dụng. Bạn vẫn có thể chọn thủ công.',
   geoHintNoMatch: 'Chúng tôi chưa xác định được bạn ở đâu từ vị trí này. Vui lòng chọn quốc gia và khu vực bên dưới.',
   geoHintTimeout: 'Việc định vị mất quá nhiều thời gian. Bạn vẫn có thể chọn thủ công.',
+  linkAccountTitle: 'Email này đã có tài khoản',
+  linkAccountIntro:
+    'Đã có tài khoản dùng {0}. Để thêm đăng nhập {1} vào tài khoản này, trước hết hãy xác nhận đó là tài khoản của bạn.',
+  linkUsePassword: 'Dùng mật khẩu của tôi',
+  linkVerifyByEmail: 'Xác minh qua email',
+  linkVerifyByEmailHint: 'Chúng tôi sẽ gửi liên kết xác minh tới {0}.',
+  linkEmailSentTitle: 'Hãy kiểm tra email của bạn',
+  linkEmailSentBody: 'Chúng tôi đã gửi email xác minh tới {0}. Hãy mở email và nhấp vào liên kết để tiếp tục.',
+  linkResend: 'Gửi lại email',
+  linkResendIn: 'Gửi lại email sau {0} giây',
+  linkBackToLogin: 'Quay lại đăng nhập',
   geoOptionalNote:
     'Khu vực của bạn là tùy chọn. Hãy chọn để khám phá cộng đồng thể thao trong khu vực; bạn có thể thay đổi bất cứ lúc nào trong Cài đặt tài khoản.',
 };

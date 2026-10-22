@@ -107,6 +107,25 @@ export const RegisterWithErrors = story('register.ftl', {
 export const ResetPassword = story('login-reset-password.ftl');
 export const UpdatePassword = story('login-update-password.ftl');
 export const VerifyEmail = story('login-verify-email.ftl');
+/** A29: a Google sign-in whose email already belongs to a password account; password is the default way. */
+export const LinkAccountConfirm = story('login-idp-link-confirm.ftl', { idpAlias: 'google' });
+/** A29: the account has no password (it was created another way), so the email is the only way. */
+export const LinkAccountEmailOnly = story('login-idp-link-confirm.ftl', {
+  idpAlias: 'google',
+  scLink: { email: 'jordan@example.com', hasPassword: false, emailAvailable: true },
+});
+/** A29: the typed password was wrong. */
+export const LinkAccountWrongPassword = story('login-idp-link-confirm.ftl', {
+  idpAlias: 'google',
+  message: { type: 'error', summary: 'Invalid email or password.' },
+});
+/** A29: the verification email has been sent; resend waits a minute. */
+export const LinkAccountEmailSent = story('login-idp-link-email.ftl', { idpAlias: 'google' });
+/** A29: the minute has passed, so resend is available. */
+export const LinkAccountEmailSentCanResend = story('login-idp-link-email.ftl', {
+  idpAlias: 'google',
+  scLink: { email: 'jordan@example.com', resendIn: 0 },
+});
 export const IdpReviewProfile = story('idp-review-user-profile.ftl');
 export const Otp = story('login-otp.ftl');
 export const ConfigTotp = story('login-config-totp.ftl');

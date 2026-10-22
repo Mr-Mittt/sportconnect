@@ -3,7 +3,7 @@ import { codeChallengeFor, takePkceState } from './pkce';
 import { buildKeycloakAuthUrl } from './redirectToKeycloak';
 
 describe('buildKeycloakAuthUrl', () => {
-  beforeEach(() => sessionStorage.clear());
+  beforeEach(() => localStorage.clear());
 
   it('builds the Authorization Code + PKCE request for the sportconnect realm', async () => {
     const url = new URL(await buildKeycloakAuthUrl('login', '/groups'));
@@ -21,7 +21,7 @@ describe('buildKeycloakAuthUrl', () => {
 
   it('stores the verifier, state and returnTo for the callback; the challenge matches the verifier', async () => {
     const url = new URL(await buildKeycloakAuthUrl('login', '/posts/7'));
-    const saved = takePkceState();
+    const saved = takePkceState(url.searchParams.get('state'));
     expect(saved?.returnTo).toBe('/posts/7');
     expect(saved?.state).toBe(url.searchParams.get('state'));
     expect(await codeChallengeFor(saved!.codeVerifier)).toBe(url.searchParams.get('code_challenge'));
@@ -30,6 +30,6 @@ describe('buildKeycloakAuthUrl', () => {
   it('asks for the create-account step when registering', async () => {
     const url = new URL(await buildKeycloakAuthUrl('register'));
     expect(url.searchParams.get('prompt')).toBe('create');
-    expect(takePkceState()?.returnTo).toBe('/');
+    expect(takePkceState(url.searchParams.get('state'))?.returnTo).toBe('/');
   });
 });
