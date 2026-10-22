@@ -272,6 +272,40 @@ class ReferenceServiceImplSpec extends Specification {
         e.errorParams == [region: 80L, country: 7L]
     }
 
+    // ---------- isValidSelection (A32): the same rules, answered as a boolean, never throwing ----------
+
+    def "isValidSelection answers true for both null and for an active country alone, false for an unknown one"() {
+        given:
+        countryRepository.existsByIdAndIsActiveTrue(7L) >> true
+        countryRepository.existsByIdAndIsActiveTrue(999L) >> false
+
+        expect:
+        service.isValidSelection(null, null)
+        service.isValidSelection(7L, null)
+        !service.isValidSelection(999L, null)
+    }
+
+    def "isValidSelection is false for a region without a country, before any lookup"() {
+        when:
+        def valid = service.isValidSelection(null, 70L)
+
+        then:
+        !valid
+        0 * countryRepository._
+        0 * regionRepository._
+    }
+
+    def "isValidSelection is true only for an active region that belongs to the country"() {
+        given:
+        countryRepository.existsByIdAndIsActiveTrue(7L) >> true
+        regionRepository.existsByIdAndCountryIdAndIsActiveTrue(70L, 7L) >> true
+        regionRepository.existsByIdAndCountryIdAndIsActiveTrue(80L, 7L) >> false
+
+        expect:
+        service.isValidSelection(7L, 70L)
+        !service.isValidSelection(7L, 80L)
+    }
+
     // ---------- resolve / resolveByCoordinates (REF-2) ----------
     //
     // The boundary resolver is mocked here on purpose: these specs pin the *priority and fall-through rules*

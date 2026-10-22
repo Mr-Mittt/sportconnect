@@ -65,6 +65,19 @@ public interface ReferenceService {
     void requireValidSelection(Long countryId, Long regionId);
 
     /**
+     * The non-throwing form of {@link #requireValidSelection}: the same rules, answered as a boolean.
+     *
+     * <p>For a caller that treats a bad selection as ignorable input inside its own transaction (first-sign-in
+     * provisioning, A32). The throwing form cannot be caught there: it passes through this service's transactional
+     * proxy, which marks the caller's transaction rollback-only even when the exception is caught.
+     *
+     * @return {@code true} for both {@code null}; a country alone that is active; an active country plus an active
+     *         region that belongs to it. {@code false} for a region without a country, or an unknown, inactive or
+     *         foreign country/region
+     */
+    boolean isValidSelection(Long countryId, Long regionId);
+
+    /**
      * Finds the active country — and, where regions are seeded, the active region — containing a coordinate.
      *
      * <p>Point-in-polygon against the bundled boundaries; empty when the point is in no country polygon (open

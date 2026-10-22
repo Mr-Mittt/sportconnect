@@ -294,7 +294,46 @@ public class AuthServiceImpl implements AuthService {
                 .fullName(jwt.getClaimAsString("name"))
                 .phoneNumber(jwt.getClaimAsString("phone_number"))
                 .languageCode(jwt.getClaimAsString("locale"))
+                .countryId(longClaim(jwt, "country_id"))
+                .regionId(longClaim(jwt, "region_id"))
+                .latitude(doubleClaim(jwt, "latitude"))
+                .longitude(doubleClaim(jwt, "longitude"))
                 .build();
+    }
+
+    /**
+     * A32: an optional numeric claim. Keycloak's attribute mapper emits strings, so a string or a number is accepted;
+     * anything that does not parse is absent (the register-page values are untrusted input and must never fail a sign-in).
+     */
+    private static Long longClaim(Jwt jwt, String name) {
+        Object value = jwt.getClaim(name);
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            try {
+                return Long.parseLong(text.trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /** A32: as {@link #longClaim}, for a decimal; NaN and infinity are absent. */
+    private static Double doubleClaim(Jwt jwt, String name) {
+        Object value = jwt.getClaim(name);
+        Double parsed = null;
+        if (value instanceof Number number) {
+            parsed = number.doubleValue();
+        } else if (value instanceof String text && !text.isBlank()) {
+            try {
+                parsed = Double.parseDouble(text.trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return parsed != null && Double.isFinite(parsed) ? parsed : null;
     }
 
     /**

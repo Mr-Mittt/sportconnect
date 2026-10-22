@@ -366,6 +366,31 @@ class AuthServiceImplSpec extends Specification {
         1 * userService.provisionExternalUser({ ExternalIdentity i -> !i.emailVerified }) >> userResponse(sub, true)
     }
 
+    def "callback reads the register page's geo claims whether Keycloak sends strings or numbers"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", country_id: countryId, region_id: regionId,
+                latitude: latitude, longitude: longitude])
+
+        when:
+        authService.callback("c", "v")
+
+        then:
+        1 * userService.provisionExternalUser({ ExternalIdentity i ->
+            i.countryId == expectedCountry && i.regionId == expectedRegion &&
+                    i.latitude == expectedLatitude && i.longitude == expectedLongitude
+        }) >> userResponse(sub, true)
+
+        where:
+        countryId | regionId | latitude  | longitude  || expectedCountry | expectedRegion | expectedLatitude | expectedLongitude
+        "7"       | "70"     | "10.7769" | "106.7009" || 7L             | 70L            | 10.7769d         | 106.7009d
+        7         | 70       | 10.7769d  | 106.7009d  || 7L             | 70L            | 10.7769d         | 106.7009d
+        " 7 "     | ""       | " 10.5 "  | ""         || 7L             | null           | 10.5d            | null
+        "seven"   | "x"      | "north"   | "NaN"      || null           | null           | null             | null
+        "Infinity"| "1.5"    | "Infinity"| "-Infinity"|| null           | null           | null             | null
+    }
+
     def "callback for a deactivated social user re-activates and opens the session"() {
         given:
         def sub = UUID.randomUUID()

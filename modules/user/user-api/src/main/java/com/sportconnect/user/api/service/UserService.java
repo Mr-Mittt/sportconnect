@@ -240,6 +240,11 @@ public interface UserService {
      * the phone is normalised like every other phone (U23); the language becomes the preference only when it is an active
      * language; {@code is_email_verified} follows the token. There is no password hash (Keycloak holds the credential).
      *
+     * <p>A32: the register page's country, region and location arrive as optional claims and are stored on the new row only,
+     * each part dropped (logged, never a failure) when invalid: an unknown or inactive country drops the region too, a region
+     * not in its country is dropped alone, coordinates are kept only as an in-range pair. The Keycloak account already exists
+     * when they arrive, so a 400 here would strand a signed-up user.
+     *
      * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED} (neither email nor phone),
      *         {@code INVALID_PHONE_NUMBER}
      * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}, {@code EMAIL_ALREADY_REGISTERED}
