@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAuthStore } from '@/app/authStore';
 import { useJoinFeedbackStore } from '@/app/joinFeedbackStore';
 import { usePostErrorDialogStore } from '@/app/postErrorDialogStore';
+import { LogoutFailedDialog } from '@/features/auth/components/LogoutFailedDialog';
 import { useLogout } from '@/features/auth/useLogout';
 import { useChangePassword } from '@/features/profile/useChangePassword';
 import { useDeactivateAccount } from '@/features/profile/useDeactivateAccount';
@@ -93,7 +94,12 @@ export function AppShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const user = useAuthStore((state) => state.user)!;
-  const { logout } = useLogout({ onSettled: () => navigate('/login') });
+  const {
+    logout,
+    isPending: isLoggingOut,
+    failed: logoutFailed,
+    dismissFailure: dismissLogoutFailure,
+  } = useLogout({ onSignedOut: () => navigate('/login') });
   const sportCatalog = useSportCatalog();
   useSportCatalogStore.getState().setCatalog(sportCatalog.data);
 
@@ -174,6 +180,13 @@ export function AppShell() {
       />
       <NavTabs active={activeTabFromPath(pathname)} onChange={(tab) => navigate(pathByTab[tab])} />
       <Outlet />
+
+      <LogoutFailedDialog
+        isOpen={logoutFailed}
+        onRetry={logout}
+        onStay={dismissLogoutFailure}
+        isRetrying={isLoggingOut}
+      />
 
       {isAccountSettingsOpen && profileQuery.data !== undefined && (
         <AccountSettingsModal

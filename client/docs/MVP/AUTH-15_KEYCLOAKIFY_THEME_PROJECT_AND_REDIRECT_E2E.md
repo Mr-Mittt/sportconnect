@@ -29,3 +29,10 @@ Measured in A24 (`modules/auth/docs/MVP/A24_SPIKE_KEYCLOAKIFY_LOOK_AND_FEEL.md`)
 - **Class map** is the stylesheet for every stock page (default CSS off); polish the required-field `*`, checkbox/radio rows and the OTP instruction list.
 - **Baselines:** add Storybook-based baselines for the theme pages (Playwright captures the static Storybook; Linux CI renders them). AUTH-14 removes AUTH-13's 21 client auth baselines with the screens.
 - **Local rebuild on Windows:** delete `dist_keycloak/*.jar` before `keycloakify build` (the final rename fails with `EPERM` otherwise); install the JAR by copying to `infra/keycloak/providers/` and restarting, never `docker cp` into the read-only mount.
+
+## Delta (2026-10-15, from AUTH-14)
+
+- **The redirect is covered by a stand-in until this ticket:** AUTH-14's e2e specs drive the real client redirect against `e2e/mocks/keycloakStub.ts` (a browser-level 302 back to `/auth/callback`) and the MSW `/api/auth/callback` handler. This ticket adds the one e2e against a **real Keycloak** (the realm with the theme); keep `keycloakStub.ts` for the other specs, which only need to be signed in.
+- **The `login` namespace stays:** AUTH-14 deleted the `register`, `forgotPassword` and `resetPassword` locale files, but kept `src/locales/{en,vi}/login.json` (tagline, heading, subheading, the `form.*` strings) because the theme imports them (A24). Strings the Keycloak pages need beyond those (register labels, forgot/reset copy, update-password) are authored in the theme, not recovered from the deleted client files (git history has them).
+- **a11y gate:** AUTH-14 removed the `/login`, `/register`, `/forgot-password` and `/reset-password` axe/overflow/Tab-order tests from `a11y.spec.ts`; the themed pages need the equivalent gate (Storybook-based or against the real Keycloak).
+- **Hosted-page translations:** AUTH-14 sends `ui_locales=<app language>`; verify the themed page opens in Vietnamese from it (A24 could not).

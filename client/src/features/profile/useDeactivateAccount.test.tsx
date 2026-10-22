@@ -4,7 +4,6 @@ import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
-import { useAccountNoticeStore } from '@/features/auth/accountNoticeStore';
 import { useDeactivateAccount } from './useDeactivateAccount';
 
 function wrapper({ children }: { children: ReactNode }) {
@@ -29,7 +28,7 @@ describe('useDeactivateAccount', () => {
     vi.restoreAllMocks();
   });
 
-  it('posts the password, raises the deactivated notice, clears the session and calls onSuccess', async () => {
+  it('posts the password, clears the session and calls onSuccess', async () => {
     const post = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: { success: true, message: 'ok', data: null, timestamp: '' },
     });
@@ -40,9 +39,7 @@ describe('useDeactivateAccount', () => {
 
     await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
     expect(post).toHaveBeenCalledWith('/users/me/deactivate', { currentPassword: 'password123' });
-    expect(useAccountNoticeStore.getState().deactivated).toBe(true);
     expect(useAuthStore.getState().accessToken).toBeNull();
-    useAccountNoticeStore.getState().setDeactivated(false);
   });
 
   it('keeps the session and shows the localized line for a wrong password; reset clears it', async () => {
@@ -67,7 +64,6 @@ describe('useDeactivateAccount', () => {
     await waitFor(() => expect(result.current.errorMessage).toBe('Your current password is incorrect.'));
     expect(onSuccess).not.toHaveBeenCalled();
     expect(useAuthStore.getState().accessToken).toBe('token-abc');
-    expect(useAccountNoticeStore.getState().deactivated).toBe(false);
 
     act(() => result.current.reset());
     await waitFor(() => expect(result.current.errorMessage).toBeNull());

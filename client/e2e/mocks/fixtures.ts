@@ -19,6 +19,7 @@ import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
 import type { Location } from '../../src/shared/types/location.ts';
 import type { Session, SessionParticipant } from '../../src/shared/types/session.ts';
 import type { UserSportProfileResponse } from '../../src/shared/types/sport.ts';
+import { signIn } from './keycloakStub.ts';
 import { MOCK_SERVER_URL } from './mockServerConfig.ts';
 
 // Reused across AUTH-8 and FEED-10 rather than each test inventing its own
@@ -50,14 +51,9 @@ export const mockAdminUser: User = {
 };
 
 export const mockPassword = 'password123';
-// CLIENT-ERR-2: sign-up with this address gets the duplicate-email 409 from the auth handler.
-export const mockTakenEmail = 'taken@example.com';
-// AUTH-10: a deactivated account — login with the right password answers ACCOUNT_DEACTIVATED.
-export const mockDeactivatedEmail = 'deactivated@example.com';
-// AUTH-9: reset tokens the auth handler recognises (anything else answers RESET_TOKEN_INVALID).
-export const mockResetToken = 'reset-token-valid';
-export const mockUsedResetToken = 'reset-token-used';
-export const mockExpiredResetToken = 'reset-token-expired';
+// AUTH-14: the one-time ticket the auth handler returns for a deactivated password user
+// (`deactivated-code` on /auth/callback) and accepts on /auth/reactivate.
+export const mockReactivationTicket = 'mock-reactivation-ticket';
 export const mockAccessToken = 'mock-access-token';
 
 // A distinct refresh-token string used only to simulate the httpOnly cookie
@@ -965,11 +961,9 @@ export function mockPageResponse<T>(content: T[]): PageResponse<T> {
  * Must be called with a page from the mock-server-wired `test` in `test.ts`.
  */
 export async function seedAuthenticatedSession(page: Page, targetPath = '/'): Promise<void> {
-  await page.goto(targetPath);
-  await page.waitForURL(/\/login/, { timeout: 10000 });
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Password', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Log in' }).click();
+  // AUTH-14: the visit bounces through the real redirect flow (ProtectedRoute -> /login -> the
+  // Keycloak stand-in -> /auth/callback -> returnTo); see keycloakStub.ts.
+  await signIn(page, 'user', { path: targetPath });
   await page.waitForURL(
     (url) => url.pathname + url.search === targetPath || (targetPath === '/' && url.pathname === '/'),
     { timeout: 10000 },

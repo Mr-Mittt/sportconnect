@@ -7,14 +7,15 @@ interface ReactivateAccountDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   isSubmitting: boolean;
-  /** Localized line for a failed re-activation (e.g. wrong password); the dialog stays open. */
+  /** Localized line for a failed re-activation (e.g. an expired ticket); the dialog stays open. */
   errorMessage: string | null;
 }
 
 /**
- * AUTH-10: shown by the login page after a login answered `ACCOUNT_DEACTIVATED`. Confirm
- * re-activates with the credentials the user just typed (the page holds them, this component never
- * sees them); Cancel, the close action and Esc just close it and send nothing.
+ * AUTH-10, reworked by AUTH-14: shown by `/auth/callback` after the sign-in answered
+ * `ACCOUNT_DEACTIVATED` with a one-time ticket. Confirm re-activates with that ticket (the page
+ * holds it, this component never sees it — no password is involved); Cancel, the close action and
+ * Esc call `onClose`, which declines the ticket.
  */
 export function ReactivateAccountDialog({
   isOpen,

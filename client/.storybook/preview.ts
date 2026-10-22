@@ -12,7 +12,6 @@ import notificationsEn from '../src/locales/en/notifications.json';
 import accountSettingsEn from '../src/locales/en/accountSettings.json';
 import profileEn from '../src/locales/en/profile.json';
 import profilePageEn from '../src/locales/en/profilePage.json';
-import registerEn from '../src/locales/en/register.json';
 import sessionEn from '../src/locales/en/session.json';
 import sharedComponentsEn from '../src/locales/en/sharedComponents.json';
 import sharedDialogsEn from '../src/locales/en/sharedDialogs.json';
@@ -28,7 +27,6 @@ import notificationsVi from '../src/locales/vi/notifications.json';
 import accountSettingsVi from '../src/locales/vi/accountSettings.json';
 import profileVi from '../src/locales/vi/profile.json';
 import profilePageVi from '../src/locales/vi/profilePage.json';
-import registerVi from '../src/locales/vi/register.json';
 import sessionVi from '../src/locales/vi/session.json';
 import sharedComponentsVi from '../src/locales/vi/sharedComponents.json';
 import sharedDialogsVi from '../src/locales/vi/sharedDialogs.json';
@@ -63,7 +61,6 @@ void i18next.use(initReactI18next).init({
   resources: {
     en: {
       common: commonEn,
-      register: registerEn,
       accountSettings: accountSettingsEn,
       profile: profileEn,
       profilePage: profilePageEn,
@@ -81,7 +78,6 @@ void i18next.use(initReactI18next).init({
     },
     vi: {
       common: commonVi,
-      register: registerVi,
       accountSettings: accountSettingsVi,
       profile: profileVi,
       profilePage: profilePageVi,
@@ -101,7 +97,7 @@ void i18next.use(initReactI18next).init({
   lng: 'en',
   fallbackLng: 'en',
   defaultNS: 'common',
-  ns: ['common', 'register', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session', 'errors'],
+  ns: ['common', 'accountSettings', 'profile', 'profilePage', 'login', 'shell', 'sharedDialogs', 'homeFeed', 'sharedComponents', 'enums', 'groups', 'friends', 'notifications', 'session', 'errors'],
   interpolation: { escapeValue: false },
   returnNull: false,
 });

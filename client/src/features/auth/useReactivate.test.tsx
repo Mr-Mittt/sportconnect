@@ -28,12 +28,12 @@ describe('useReactivate', () => {
     vi.restoreAllMocks();
   });
 
-  it('posts to /auth/reactivate, populates authStore and calls onSuccess', async () => {
+  it('posts the ticket to /auth/reactivate, populates authStore and calls onSuccess', async () => {
     const post = vi.spyOn(apiClient, 'post').mockResolvedValueOnce({
       data: {
         success: true,
         message: 'Account reactivated',
-        data: { accessToken: 'token-xyz', tokenType: 'Bearer', expiresIn: 3600, user: fixtureUser },
+        data: { accessToken: 'token-xyz', tokenType: 'Bearer', expiresIn: 300, user: fixtureUser },
         timestamp: new Date().toISOString(),
       },
     });
@@ -41,23 +41,23 @@ describe('useReactivate', () => {
     const { result } = renderHook(() => useReactivate({ onSuccess }), { wrapper });
 
     act(() => {
-      result.current.reactivate({ email: 'jordan@example.com', password: 'password123' });
+      result.current.reactivate('ticket-1');
     });
 
     await waitFor(() => expect(useAuthStore.getState().accessToken).toBe('token-xyz'));
-    expect(post).toHaveBeenCalledWith('/auth/reactivate', { email: 'jordan@example.com', password: 'password123' });
+    expect(post).toHaveBeenCalledWith('/auth/reactivate', { ticket: 'ticket-1' });
     expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({ email: 'jordan@example.com' }));
   });
 
-  it('shows the localized INVALID_CREDENTIALS copy for a wrong password, and reset clears it', async () => {
+  it('shows the localized REACTIVATION_TICKET_INVALID copy for a used ticket, and reset clears it', async () => {
     vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
       isAxiosError: true,
       response: {
         status: 401,
         data: {
           success: false,
-          message: 'Invalid email or password',
-          errorCode: 'INVALID_CREDENTIALS',
+          message: 'Re-activation ticket invalid',
+          errorCode: 'REACTIVATION_TICKET_INVALID',
           data: null,
           timestamp: new Date().toISOString(),
         },
@@ -66,13 +66,31 @@ describe('useReactivate', () => {
     const { result } = renderHook(() => useReactivate(), { wrapper });
 
     act(() => {
-      result.current.reactivate({ email: 'jordan@example.com', password: 'wrong' });
+      result.current.reactivate('ticket-1');
     });
 
-    await waitFor(() => expect(result.current.errorMessage).toBe('Invalid email or password.'));
+    await waitFor(() =>
+      expect(result.current.errorMessage).toBe('This re-activation request expired. Sign in again to continue.'),
+    );
     expect(useAuthStore.getState().accessToken).toBeNull();
 
     act(() => result.current.reset());
     await waitFor(() => expect(result.current.errorMessage).toBeNull());
+  });
+
+  it('cancel posts the ticket to /auth/reactivate/cancel and calls onCancelled, even if the call fails', async () => {
+    const post = vi
+      .spyOn(apiClient, 'post')
+      .mockResolvedValueOnce({ data: { success: true, message: 'ok', data: null, timestamp: '' } })
+      .mockRejectedValueOnce(new Error('network error'));
+    const onCancelled = vi.fn();
+    const { result } = renderHook(() => useReactivate({ onCancelled }), { wrapper });
+
+    act(() => result.current.cancel('ticket-1'));
+    await waitFor(() => expect(onCancelled).toHaveBeenCalledTimes(1));
+    expect(post).toHaveBeenCalledWith('/auth/reactivate/cancel', { ticket: 'ticket-1' });
+
+    act(() => result.current.cancel('ticket-2'));
+    await waitFor(() => expect(onCancelled).toHaveBeenCalledTimes(2));
   });
 });

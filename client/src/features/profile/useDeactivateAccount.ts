@@ -1,7 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
 import { useAuthStore } from '@/app/authStore';
-import { useAccountNoticeStore } from '@/features/auth/accountNoticeStore';
 import { getErrorMessage } from '@/shared/lib/apiError';
 
 async function deactivateAccount(currentPassword: string): Promise<void> {
@@ -11,12 +10,15 @@ async function deactivateAccount(currentPassword: string): Promise<void> {
 /**
  * Wraps `POST /api/users/me/deactivate` (backend U22) — the caller deactivates their own account
  * after re-entering their password. The server soft-deletes the account and revokes every session,
- * so on success this raises the "deactivated" login notice (`accountNoticeStore` — router state cannot
- * carry it, `ProtectedRoute` replaces it), clears the local session too and calls `onSuccess` (the
- * shell navigates to `/login`). A wrong password is
+ * so on success this clears the local session too and calls `onSuccess` (the shell navigates to
+ * `/login`, which sends the user to Keycloak). A wrong password is
  * `CURRENT_PASSWORD_INCORRECT`; `errorMessage` is its localized line (inline, in the dialog), and
- * `reset` clears it when the dialog closes. The account can come back through the login page's
- * re-activate offer (AUTH-10).
+ * `reset` clears it when the dialog closes. The account comes back through the re-activate dialog
+ * `/auth/callback` shows after the next sign-in (AUTH-14).
+ *
+ * AUTH-14 dropped the "log in again to re-activate" hint this hook used to raise for the login form:
+ * `/login` is now an immediate redirect to Keycloak, and the dialog explains re-activation when it
+ * is needed. Open: users provisioned from Keycloak have no local password, see ACCOUNT-6 / backend U24.
  */
 export function useDeactivateAccount(options?: { onSuccess?: () => void }): {
   deactivate: (currentPassword: string) => void;
@@ -25,13 +27,11 @@ export function useDeactivateAccount(options?: { onSuccess?: () => void }): {
   reset: () => void;
 } {
   const clearSession = useAuthStore((state) => state.clearSession);
-  const setDeactivatedNotice = useAccountNoticeStore((state) => state.setDeactivated);
 
   const mutation = useMutation({
     meta: { errorDisplay: 'inline' },
     mutationFn: deactivateAccount,
     onSuccess: () => {
-      setDeactivatedNotice(true);
       clearSession();
       options?.onSuccess?.();
     },

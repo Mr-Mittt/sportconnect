@@ -119,10 +119,8 @@ current whenever I18N-4 itself finally gets scoped:**
 
 | Page | Form/flow | Hook | Phase C ticket |
 |---|---|---|---|
-| `/login` | Log in (and the re-activate dialog after `ACCOUNT_DEACTIVATED`; its wrong-password failure shows the `INVALID_CREDENTIALS` copy inside the dialog) | `useLogin`, `useReactivate` | CLIENT-ERR-2, AUTH-10 (done 2026-10-13) |
-| `/register` | Sign up | `useRegister` | CLIENT-ERR-2 |
-| `/forgot-password` | Request a reset link (the server answers 200 whether or not the email exists; only a malformed email or a transport failure shows an error, via the shared classifier) | `useForgotPassword` | AUTH-9 (done 2026-10-13) |
-| `/reset-password` | Set a new password (`RESET_TOKEN_INVALID`/`_USED`/`_EXPIRED` replace the form with an inline state using `errors:codes` copy; `VALIDATION_FAILED` stays a banner; the link is also checked on page load through `useResetTokenCheck`, one generic `RESET_TOKEN_INVALID`) | `useResetPassword`, `useResetTokenCheck` | AUTH-9 (done 2026-10-13) |
+| `/auth/callback` (AUTH-14: `/login` and `/register` are redirects to Keycloak) | Finish the sign-in: `AUTH_CODE_INVALID`, `ACCOUNT_DEACTIVATED` (opens the re-activate dialog, whose failure `REACTIVATION_TICKET_INVALID` shows inside it), `SERVICE_UNAVAILABLE` and the other codes via `errors:codes` in the error view | `useAuthCallback`, `useReactivate` | CLIENT-ERR-2, AUTH-10, AUTH-14 (done 2026-10-15) |
+| Any page (avatar dropdown, `/admin`) | Log out: a 503 `SERVICE_UNAVAILABLE` keeps the session and opens the `logoutFailed` dialog (client copy, no server text) | `useLogout` | AUTH-14 (done 2026-10-15) |
 | Any page (avatar dropdown) | Account Settings modal (ACCOUNT-1 — was the `/profile` Edit Profile modal's body) | `useEditProfileSave` (wraps `useUpdateMyProfile` + `useUpdateMyPreferences`) | CLIENT-ERR-3 (done 2026-10-05) |
 | Any page (avatar dropdown) | Account Settings > Deactivate account (password-confirm dialog; a wrong password shows `CURRENT_PASSWORD_INCORRECT` from `errors:codes`, anything else the shared classifier line) | `useDeactivateAccount` | ACCOUNT-4 (done 2026-10-13) |
 | Any page (avatar dropdown) | Account Settings > Change password (dialog; a wrong current password shows `CURRENT_PASSWORD_INCORRECT` from `errors:codes` on the current-password field, anything else the shared classifier line; the 8-character minimum and the confirm match are client-side hints in `accountSettings:changePasswordDialog.error.*`) | `useChangePassword` | ACCOUNT-3 (done 2026-10-13) |

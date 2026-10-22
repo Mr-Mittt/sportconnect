@@ -1,17 +1,13 @@
 import { http, HttpResponse, type HttpHandler } from 'msw';
-import type { AuthResult, LoginPayload, RegisterPayload } from '../../../src/features/auth/types.ts';
+import type { AuthResult, CallbackPayload } from '../../../src/features/auth/types.ts';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import {
   mockAccessToken,
   mockAdminRefreshToken,
   mockAdminUser,
-  mockDeactivatedEmail,
-  mockExpiredResetToken,
   mockPassword,
+  mockReactivationTicket,
   mockRefreshToken,
-  mockResetToken,
-  mockTakenEmail,
-  mockUsedResetToken,
   mockUser,
 } from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
@@ -42,7 +38,7 @@ function refreshCookie(token: string, maxAgeSeconds: number): string {
 const authResult: AuthResult = {
   accessToken: mockAccessToken,
   tokenType: 'Bearer',
-  expiresIn: 3600,
+  expiresIn: 300,
   user: mockUser,
 };
 
@@ -65,72 +61,56 @@ function sessionFor(refreshToken: string | undefined): AuthResult | null {
 }
 
 export const authHandlers: HttpHandler[] = [
-  // CLIENT-REF-2: `body` is typed against the widened `RegisterPayload` (adds optional
-  // languageCode/countryId/regionId/latitude/longitude, 1:1 with backend U16's RegisterRequest),
-  // but this handler still only validates the original three required fields — the new ones are
-  // genuinely optional and the response's `user` doesn't echo them back either (verified against
-  // AuthServiceImpl.toUserResponse(), see CLIENT-REF-2's ticket doc), so there's nothing else for
-  // this handler to do with them. e2e specs assert what was actually sent via the real outgoing
-  // request (`page.on('request')`), not via anything this handler echoes.
-  http.post('/api/auth/register', async ({ request }) => {
-    const body = (await request.json()) as RegisterPayload;
-    // Mirrors RegisterRequest's @NotBlank rules, which the form's own checks do not fully cover
-    // (a password of 8 spaces passes the client's length rule, not the server's blank rule).
-    const fields: Record<string, string> = {};
-    if (!body.email?.trim()) fields.email = 'Email is required';
-    if (!body.password?.trim()) fields.password = 'Password is required';
-    if (!body.fullName?.trim()) fields.fullName = 'Full name is required';
-    if (Object.keys(fields).length > 0) {
-      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields }), { status: 400 });
+  // AUTH-14 / backend A26: finishes a Keycloak sign-in. The browser-level Keycloak stand-in
+  // (mocks/keycloakStub.ts) sends the app back with one of three codes: `user-code` and
+  // `admin-code` answer the account's session plus its refresh cookie; `deactivated-code` answers
+  // the real 401 ACCOUNT_DEACTIVATED with the ticket in `errorParams.reactivationTicket` (no
+  // cookie); anything else is 401 AUTH_CODE_INVALID. A verifier outside 43 to 128 characters is the
+  // 400 the backend's bean validation gives.
+  http.post('/api/auth/callback', async ({ request }) => {
+    const body = (await request.json()) as CallbackPayload;
+    if (!body.codeVerifier || body.codeVerifier.length < 43 || body.codeVerifier.length > 128) {
+      return HttpResponse.json(
+        apiError('Validation failed', 'VALIDATION_FAILED', { fields: { codeVerifier: 'size must be between 43 and 128' } }),
+        { status: 400 },
+      );
     }
-    // CLIENT-ERR-2: a fixed taken address, so a spec can reach the duplicate-email (409) path.
-    if (body.email === mockTakenEmail) {
-      return HttpResponse.json(apiError('Email already registered', 'EMAIL_ALREADY_REGISTERED'), { status: 409 });
+    if (body.code === 'deactivated-code') {
+      return HttpResponse.json(
+        apiError('Account is deactivated', 'ACCOUNT_DEACTIVATED', { reactivationTicket: mockReactivationTicket }),
+        { status: 401 },
+      );
     }
-    return HttpResponse.json(apiResponse(authResult, 'User registered successfully'), {
-      status: 200,
-      headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
-    });
-  }),
-
-  http.post('/api/auth/login', async ({ request }) => {
-    const body = (await request.json()) as LoginPayload;
-    if (body.password !== mockPassword) {
-      return HttpResponse.json(apiError('Invalid email or password', 'INVALID_CREDENTIALS'), { status: 401 });
-    }
-    // ADMIN-1: two accounts now exist. Each gets its own refresh-token string so
-    // a later bootstrap refresh can tell them apart (see sessionFor).
-    if (body.email === mockDeactivatedEmail) {
-      return HttpResponse.json(apiError('Account is deactivated', 'ACCOUNT_DEACTIVATED'), { status: 401 });
-    }
-    if (body.email === mockAdminUser.email) {
+    if (body.code === 'admin-code') {
       return HttpResponse.json(apiResponse(adminAuthResult, 'Login successful'), {
         status: 200,
         headers: { 'Set-Cookie': refreshCookie(mockAdminRefreshToken, 604800) },
       });
     }
-    if (body.email !== mockUser.email) {
-      return HttpResponse.json(apiError('Invalid email or password', 'INVALID_CREDENTIALS'), { status: 401 });
+    if (body.code === 'user-code') {
+      return HttpResponse.json(apiResponse(authResult, 'Login successful'), {
+        status: 200,
+        headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
+      });
     }
-    return HttpResponse.json(apiResponse(authResult, 'Login successful'), {
-      status: 200,
-      headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
-    });
+    return HttpResponse.json(apiError('Invalid authorization code', 'AUTH_CODE_INVALID'), { status: 401 });
   }),
 
-  // AUTH-10 / backend A9: same body as login; re-verifies the credentials and, for the deactivated
-  // fixture account with the right password, "re-activates" it and logs in. Anything else is the
-  // generic INVALID_CREDENTIALS.
+  // AUTH-14 / backend A26: confirms re-activation with the one-time ticket. The one known ticket
+  // logs the user in; anything else is 401 REACTIVATION_TICKET_INVALID.
   http.post('/api/auth/reactivate', async ({ request }) => {
-    const body = (await request.json()) as LoginPayload;
-    if (body.email !== mockDeactivatedEmail || body.password !== mockPassword) {
-      return HttpResponse.json(apiError('Invalid email or password', 'INVALID_CREDENTIALS'), { status: 401 });
+    const body = (await request.json()) as { ticket?: string };
+    if (body.ticket !== mockReactivationTicket) {
+      return HttpResponse.json(apiError('Invalid reactivation ticket', 'REACTIVATION_TICKET_INVALID'), { status: 401 });
     }
     return HttpResponse.json(apiResponse(authResult, 'Account reactivated'), {
       status: 200,
       headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
     });
   }),
+
+  // AUTH-14 / backend A26: declining always answers 200, known ticket or not.
+  http.post('/api/auth/reactivate/cancel', () => HttpResponse.json(apiResponse(null, 'Reactivation cancelled'))),
 
   // ACCOUNT-4 / backend U22: self-deactivation. The right password answers 200; anything else is the
   // 400 CURRENT_PASSWORD_INCORRECT the real service throws. (Stateless like the rest of this file: the
@@ -192,63 +172,13 @@ export const authHandlers: HttpHandler[] = [
     });
   }),
 
-  // AUTH-9: mirrors AuthController.forgotPassword — the same 200 whether or not the email has an
-  // account (anti-enumeration), 400 only for a blank/malformed address.
-  http.post('/api/auth/forgot-password', async ({ request }) => {
-    const body = (await request.json()) as { email?: string };
-    if (!body.email?.trim()) {
-      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { email: 'Email is required' } }), {
-        status: 400,
-      });
-    }
-    return HttpResponse.json(apiResponse(null, 'If the email exists, a password reset link has been sent'));
-  }),
-
-  // AUTH-9: mirrors AuthController.resetPassword and the A8 codes — 404 RESET_TOKEN_INVALID for an
-  // unknown token, 400 RESET_TOKEN_USED / RESET_TOKEN_EXPIRED for the two fixed tokens, 400
-  // VALIDATION_FAILED for a password under 8 characters.
-  http.post('/api/auth/reset-password', async ({ request }) => {
-    const body = (await request.json()) as { token?: string; newPassword?: string };
-    if (!body.newPassword || body.newPassword.length < 8) {
-      return HttpResponse.json(
-        apiError('Validation failed', 'VALIDATION_FAILED', { fields: { newPassword: 'Password must be at least 8 characters' } }),
-        { status: 400 },
-      );
-    }
-    if (body.token === mockUsedResetToken) {
-      return HttpResponse.json(apiError('Reset token already used', 'RESET_TOKEN_USED'), { status: 400 });
-    }
-    if (body.token === mockExpiredResetToken) {
-      return HttpResponse.json(apiError('Reset token expired', 'RESET_TOKEN_EXPIRED'), { status: 400 });
-    }
-    if (body.token !== mockResetToken) {
-      return HttpResponse.json(apiError('Invalid reset token', 'RESET_TOKEN_INVALID'), { status: 404 });
-    }
-    return HttpResponse.json(apiResponse(null, 'Password reset successfully'));
-  }),
-
-  // AUTH-9 / backend A21: the page-load check. 200 only for the one live token; every other token
-  // (unknown, used, expired) gets the same generic 404 RESET_TOKEN_INVALID, like the real backend.
-  http.post('/api/auth/reset-password/validate', async ({ request }) => {
-    const body = (await request.json()) as { token?: string };
-    if (!body.token?.trim()) {
-      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { token: 'Token is required' } }), {
-        status: 400,
-      });
-    }
-    if (body.token !== mockResetToken) {
-      return HttpResponse.json(apiError('Invalid reset token', 'RESET_TOKEN_INVALID'), { status: 404 });
-    }
-    return HttpResponse.json(apiResponse(null, 'Reset token is valid'));
-  }),
-
-  http.post('/api/auth/logout', ({ request }) => {
-    if (!request.headers.get('Authorization')) {
-      return HttpResponse.json(apiError('Unauthorized'), { status: 401 });
-    }
-    return HttpResponse.json(apiResponse(null, 'Logged out successfully'), {
+  // AUTH-14 / backend A26: logout is public and driven by the refresh cookie (no Bearer needed), and
+  // no cookie is still 200. The 503 "Keycloak unreachable" case is simulated per test with
+  // `page.route`, since it is a browser-visible failure rather than mock state.
+  http.post('/api/auth/logout', () =>
+    HttpResponse.json(apiResponse(null, 'Logged out successfully'), {
       status: 200,
       headers: { 'Set-Cookie': refreshCookie('', 0) },
-    });
-  }),
+    }),
+  ),
 ];

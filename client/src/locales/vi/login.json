@@ -1,9 +1,5 @@
 {
   "tagline": "Đồng đội, trận đấu và hội bạn — tất cả trong một nơi.",
-  "notice": {
-    "passwordReset": "Đã cập nhật mật khẩu. Hãy đăng nhập bằng mật khẩu mới.",
-    "accountDeactivated": "Tài khoản của bạn đã bị vô hiệu hóa. Hãy đăng nhập lại bất cứ lúc nào để kích hoạt lại."
-  },
   "heading": "Chào mừng trở lại",
   "subheading": "Đăng nhập để tiếp tục nơi bạn đã dừng lại.",
   "form": {
@@ -26,13 +22,14 @@
     "submit": "Đăng nhập",
     "submitting": "Đang đăng nhập…",
     "or": "hoặc",
-    "oauth": {
-      "facebook": "Tiếp tục với Facebook",
-      "google": "Tiếp tục với Google",
-      "apple": "Tiếp tục với Apple"
-    },
     "newToSportHub": "Chưa có tài khoản?",
     "createAccount": "Tạo tài khoản"
+  },
+  "redirecting": "Đang chuyển bạn đến trang đăng nhập…",
+  "callback": {
+    "signingIn": "Đang đăng nhập cho bạn…",
+    "errorTitle": "Không thể đăng nhập",
+    "retry": "Thử lại"
   },
   "reactivate": {
     "title": "Kích hoạt lại tài khoản?",
@@ -40,5 +37,12 @@
     "confirm": "Kích hoạt lại",
     "confirming": "Đang kích hoạt…",
     "cancel": "Hủy"
+  },
+  "logoutFailed": {
+    "title": "Không thể đăng xuất",
+    "body": "Chúng tôi không kết nối được với dịch vụ đăng nhập nên bạn vẫn đang đăng nhập. Hãy thử lại hoặc tạm thời giữ nguyên trạng thái đăng nhập.",
+    "retry": "Thử lại",
+    "retrying": "Đang thử…",
+    "stay": "Giữ đăng nhập"
   }
 }

@@ -5,7 +5,14 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './app/apiClient';
 import { useAuthStore } from './app/authStore';
+import { savePkceState } from './features/auth/pkce';
+import { redirectToKeycloak } from './features/auth/redirectToKeycloak';
 import { routes } from './router';
+
+// AUTH-14: /login and /register redirect the browser to Keycloak (window.location.assign, which jsdom
+// does not implement) — the redirect itself is covered in redirectToKeycloak.test.ts and by the e2e
+// Keycloak stand-in; here the question is only who gets sent, with which return-to.
+vi.mock('./features/auth/redirectToKeycloak', () => ({ redirectToKeycloak: vi.fn() }));
 
 const fixtureUser = {
   id: '1',
@@ -107,25 +114,23 @@ describe('App routing', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders LoginPage on /login, outside AppShell (no TopBar/NavTabs)', async () => {
+  it('/login redirects to Keycloak, outside AppShell (no TopBar/NavTabs)', async () => {
     renderApp(['/login']);
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
-    expect(screen.queryByText('SportHub')).toBeInTheDocument(); // the login page's own logo, not TopBar's
+    await waitFor(() => expect(redirectToKeycloak).toHaveBeenCalledWith('login', '/'));
+    expect(screen.getByRole('status')).toHaveTextContent('Taking you to sign in…');
     expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
   });
 
-  it('renders RegisterPage on /register, outside AppShell (no TopBar/NavTabs)', async () => {
+  it('/register redirects to Keycloak asking for the create-account step', async () => {
     renderApp(['/register']);
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument());
-    expect(screen.queryByText('SportHub')).toBeInTheDocument(); // the register page's own logo, not TopBar's
+    await waitFor(() => expect(redirectToKeycloak).toHaveBeenCalledWith('register', '/'));
     expect(screen.queryByRole('button', { name: 'Home' })).not.toBeInTheDocument();
   });
 
-  it('redirects to /login when a logged-out visitor hits a protected route directly', async () => {
-    renderApp(['/']);
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
+  it('redirects a logged-out visitor on a protected route to Keycloak, remembering where they were headed', async () => {
+    renderApp(['/groups']);
+    await waitFor(() => expect(redirectToKeycloak).toHaveBeenCalledWith('login', '/groups'));
   });
-
   it('redirects an already-authenticated visitor away from /login to Home Feed', async () => {
     vi.spyOn(apiClient, 'post').mockResolvedValue(fixtureAuthResponse);
     renderApp(['/login']);
@@ -575,10 +580,9 @@ describe('App routing', () => {
     await user.click(screen.getByRole('button', { name: 'Your account' }));
     await user.click(screen.getByRole('menuitem', { name: 'Log out' }));
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
+    await waitFor(() => expect(redirectToKeycloak).toHaveBeenCalledWith('login', '/'));
     expect(useAuthStore.getState().user).toBeNull();
   });
-
   it('opens Account settings from the account menu, seeded from GET /users/me (ACCOUNT-1)', async () => {
     vi.spyOn(apiClient, 'post').mockImplementation((url: string) => {
       if (url === '/reference/resolve') {
@@ -629,22 +633,18 @@ describe('App routing', () => {
     expect(within(dialog).queryByLabelText('Avatar URL')).not.toBeInTheDocument();
   });
 
-  it('redirects to /login for a protected route while logged out, and back to it after a successful login', async () => {
+  it('returns to the page the visitor was headed for after the Keycloak round trip (/auth/callback)', async () => {
     vi.spyOn(apiClient, 'post').mockImplementation((url: string) => {
       if (url === '/auth/refresh') return Promise.reject(new Error('no session'));
-      if (url === '/auth/login') return Promise.resolve(fixtureAuthResponse);
+      if (url === '/auth/callback') return Promise.resolve(fixtureAuthResponse);
       return Promise.reject(new Error(`unexpected call: ${url}`));
     });
+    savePkceState({ codeVerifier: 'v'.repeat(64), state: 'abc', returnTo: '/groups' });
 
-    const user = userEvent.setup();
-    renderApp(['/groups']);
-
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument());
-
-    await user.type(screen.getByLabelText('Email'), 'jordan@example.com');
-    await user.type(screen.getByLabelText('Password'), 'password123');
-    await user.click(screen.getByRole('button', { name: 'Log in' }));
+    renderApp(['/auth/callback?code=the-code&state=abc']);
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Groups' })).toBeInTheDocument());
+    expect(apiClient.post).toHaveBeenCalledWith('/auth/callback', { code: 'the-code', codeVerifier: 'v'.repeat(64) });
+    expect(useAuthStore.getState().user?.email).toBe('jordan@example.com');
   });
 });

@@ -1,4 +1,4 @@
-import { mockPassword, mockUser } from '../mocks/fixtures.ts';
+import { KEYCLOAK_AUTH_URL, keycloakCode, keycloakRedirectBack, signIn } from '../mocks/keycloakStub.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /**
@@ -26,11 +26,7 @@ test('Accept-Language defaults to en with nothing stored', async ({ page }) => {
     }
   });
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Password', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Log in' }).click();
-  await page.waitForURL('/');
+  await signIn(page);
 
   await expect(page.getByRole('heading', { name: 'Home Feed' })).toBeVisible();
   expect(headers.length).toBeGreaterThan(0);
@@ -53,19 +49,17 @@ test('Accept-Language follows a locale stored before the app loads', async ({ pa
     }
   });
 
+  // AUTH-14: /login is a redirect to Keycloak now, so the translated page is Keycloak's; the client's
+  // part is asking for the user's language (`ui_locales`) and sending Accept-Language on its own API calls.
+  let authRequestUrl = '';
+  await page.route(KEYCLOAK_AUTH_URL, (route) => {
+    authRequestUrl = route.request().url();
+    return keycloakRedirectBack(keycloakCode.user)(route);
+  });
   await page.goto('/login');
-  await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
-  // CLIENT-I18N-2: confirms the page actually rendered translated, not just the header changing.
-  await expect(page.getByRole('heading', { name: 'Chào mừng trở lại' })).toBeVisible();
-
-  // "Email" stays "Email" in the vi bundle (same convention as sign-up's Email field).
-  // exact: true on both — "Mật khẩu" is a substring of the toggle button's "Hiện mật khẩu"/"Ẩn
-  // mật khẩu" aria-label, same collision the English locator comment already calls out above.
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
   await page.waitForURL('/');
-
+  await expect(page.locator('html')).toHaveAttribute('lang', 'vi');
+  expect(new URL(authRequestUrl).searchParams.get('ui_locales')).toBe('vi');
   await expect(page.getByRole('heading', { name: 'Bảng tin' })).toBeVisible();
   expect(headers.length).toBeGreaterThan(0);
   expect(headers.every((header) => header === 'vi')).toBe(true);
@@ -81,11 +75,7 @@ test('Groups page renders Vietnamese copy under a stored vi locale', async ({ pa
     localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
   });
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
-  await page.waitForURL('/');
+  await signIn(page);
 
   await page.getByRole('navigation').getByRole('button', { name: 'Nhóm', exact: true }).click();
   await expect(page).toHaveURL('/groups');
@@ -108,11 +98,7 @@ test('Friends page renders Vietnamese copy under a stored vi locale', async ({ p
     localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
   });
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
-  await page.waitForURL('/');
+  await signIn(page);
 
   await page.getByRole('navigation').getByRole('button', { name: 'Bạn bè', exact: true }).click();
   await expect(page).toHaveURL('/friends');
@@ -133,11 +119,7 @@ test('Notification bell renders Vietnamese copy under a stored vi locale', async
     localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
   });
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
-  await page.waitForURL('/');
+  await signIn(page);
 
   await page.getByRole('button', { name: 'Thông báo' }).click();
   const dialog = page.getByRole('dialog');
@@ -155,11 +137,7 @@ test('Matches page renders Vietnamese copy under a stored vi locale', async ({ p
     localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
   });
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
-  await page.waitForURL('/');
+  await signIn(page);
 
   await page.getByRole('navigation').getByRole('button', { name: 'Chơi', exact: true }).click();
   await expect(page).toHaveURL('/matches');
@@ -184,11 +162,7 @@ test('sport names render in Vietnamese under a stored vi locale', async ({ page 
     localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
   });
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
-  await page.waitForURL('/');
+  await signIn(page);
 
   await page.getByRole('navigation').getByRole('button', { name: 'Chơi', exact: true }).click();
   await page.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();
@@ -207,11 +181,7 @@ test('LocationPicker renders Vietnamese copy under a stored vi locale', async ({
     localStorage.setItem('locale-storage', JSON.stringify({ state: { locale: 'vi' }, version: 0 }));
   });
 
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(mockUser.email);
-  await page.getByLabel('Mật khẩu', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Đăng nhập' }).click();
-  await page.waitForURL('/');
+  await signIn(page);
 
   await page.getByRole('navigation').getByRole('button', { name: 'Chơi', exact: true }).click();
   await page.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();

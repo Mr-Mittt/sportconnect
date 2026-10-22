@@ -166,8 +166,32 @@ describe('handleResponseError', () => {
     expect(postSpy).not.toHaveBeenCalled();
   });
 
-  it.each(['/auth/login', '/auth/register'])(
-    'does not attempt a refresh for a 401 from %s (bad credentials, not an expired session)',
+  it('keeps the session when the refresh fails with a 503 (Keycloak unreachable says nothing about the session)', async () => {
+    useAuthStore.setState({ user: fixtureUser, accessToken: 'stale-token' });
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce({
+      isAxiosError: true,
+      response: { status: 503 },
+    });
+    const error = fake401(fakeRequest('/posts/feed'));
+
+    await expect(handleResponseError(error)).rejects.toBe(error);
+
+    expect(useAuthStore.getState().user).not.toBeNull();
+    expect(useAuthStore.getState().accessToken).toBe('stale-token');
+  });
+
+  it('keeps the session when the refresh gets no response at all (network failure)', async () => {
+    useAuthStore.setState({ user: fixtureUser, accessToken: 'stale-token' });
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('network error'));
+    const error = fake401(fakeRequest('/posts/feed'));
+
+    await expect(handleResponseError(error)).rejects.toBe(error);
+
+    expect(useAuthStore.getState().user).not.toBeNull();
+  });
+
+  it.each(['/auth/callback', '/auth/reactivate', '/auth/reactivate/cancel'])(
+    'does not attempt a refresh for a 401 from %s (a bad code or ticket, not an expired session)',
     async (url) => {
       const postSpy = vi.spyOn(apiClient, 'post');
       const originalRequest = fakeRequest(url);

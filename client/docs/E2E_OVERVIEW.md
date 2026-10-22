@@ -225,11 +225,10 @@ e2e/
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
     profile-journey.spec.ts   # PROFILE-8
     locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7, CLIENT-I18N-8, CLIENT-I18N-9, CLIENT-I18N-10, CLIENT-I18N-11, CLIENT-I18N-12
-    signup-locale.spec.ts     # CLIENT-REF-2
     error-handling.spec.ts    # CLIENT-ERR-1
     auth-errors.spec.ts       # CLIENT-ERR-2
-    password-reset.spec.ts    # AUTH-9
     auth-reactivate.spec.ts   # AUTH-10
+    auth-logout-failed.spec.ts # AUTH-14
     account-change-password.spec.ts # ACCOUNT-3
     account-deactivate.spec.ts # ACCOUNT-4
     account-settings-unsaved.spec.ts # ACCOUNT-5
@@ -251,13 +250,13 @@ e2e/
     app-notification-bell.spec.ts  # CLIENT-NOTIF-2
     app-profile.spec.ts       # PROFILE-7
     app-sport-reactivate.spec.ts  # SPORT-12
-    auth-screens.spec.ts      # AUTH-13
     account-settings.spec.ts  # AUTH-13
     __screenshots__/         # committed baselines (Linux-rendered, see §6)
   mocks/
     mockServer.ts            # the standalone Node HTTP server
     mockServerConfig.ts       # shared port/URL/header-name constants
     sessionStore.ts           # generic per-session state map
+    keycloakStub.ts           # AUTH-14 — browser-level stand-in for Keycloak's hosted pages (signIn helper)
     overrides.ts              # per-session error/empty/expired/history-volume flags
     paginatedFeedFixture.ts   # the 21-post pagination fixture builder
     test.ts                   # custom `test` — session header wiring
@@ -424,7 +423,9 @@ helpers called.
 | `Escape closes only the open Time/Location popover, then a second Escape closes the "Join a match" modal` | Selects the Badminton pill → "Join a match" → Time → asserts the popover's Before button is visible → **Escape** → popover gone **and dialog still visible** → same for the Location filter (search input) → a third Escape (no popover open) closes the dialog | **CLIENT-SESSION-27 (2026-09-24).** Radix `react-dialog`/`react-menu` resolved `react-dismissable-layer` 1.1.15 while `react-popover` resolved 1.1.19; the layer stack is a module-level context, so two copies = two independent stacks, each layer thought it was the highest and both answered the same Escape. Fixed by `pnpm.overrides` in `client/package.json` pinning one copy — a dependency-graph regression, no component code changed. Verified to **fail without the fix** (dialog gone after the first Escape) |
 | `every "Join a match" filter popover stays inside the dialog @ 375px` / `@ 320px` (one `test()` per width) | Sets the viewport → Badminton pill → "Join a match" → for each of Time / Location / Status / Fee: opens the popover, `expect.poll`s until its bounding box lies within the dialog's box (±0.5px), then closes it with Escape and asserts the dialog is still open | **CLIENT-SESSION-32 (2026-09-24).** `DialogContent` is `overflow-hidden` and a nested popover portals into it (CLIENT-SESSION-29), but Radix Popper collided against the viewport only, so at 375px the Location popover (`w-72`) fit the viewport yet ran 16px past the 343px dialog and was clipped. Fixed at the shared `PopoverContent` (`collisionBoundary` = the dialog's Content node, `collisionPadding` 8, `max-w-[var(--radix-popover-content-available-width)]`). 320px additionally exercises the `max-w` cap (there `w-72` exceeds the whole 288px dialog; Time's `w-auto` popover already overhung). Verified to **fail without the fix** at both widths. jsdom has no layout — real-browser only |
 
-### `e2e/flows/a11y.spec.ts` (HF-8 + AUTH-6 + AUTH-9 + GRP-3 + FRIEND-1 + PROFILE-7 + ACCOUNT-1, several independent `test()`s)
+### `e2e/flows/a11y.spec.ts` (HF-8 + GRP-3 + FRIEND-1 + PROFILE-7 + ACCOUNT-1, several independent `test()`s)
+
+> **AUTH-14:** the `/login`, `/register`, `/forgot-password` and `/reset-password` rows (overflow, axe, Tab order) are gone with those screens — the sign-in pages are Keycloak's now. Their a11y gate returns with the themed pages in AUTH-15.
 
 | Test(s) | What it checks | Notes |
 |---|---|---|
@@ -438,34 +439,17 @@ helpers called.
 | `profile page — Settings tab — axe reports no critical/serious violations` | Same axe gate, Settings tab active (per-sport profile editor) | PROFILE-7: one representative state, same "richer state, not a full matrix" scoping the Groups/Friends checks above use |
 | `profile page — Edit Profile modal open — axe reports no critical/serious violations` | Same axe gate, `EditProfileModal` open | PROFILE-7 |
 | `profile page — Account settings modal open — axe reports no critical/serious violations` | Same axe gate, `AccountSettingsModal` open via the avatar dropdown | ACCOUNT-1 |
-| `/login`/`/register` @ {375,768,1280}px — no horizontal overflow (×6) | Same overflow check, logged-out pages | No `seedAuthenticatedSession` — these routes aren't behind `ProtectedRoute` |
-| `/login`/`/register` @ {375,768,1280}px — axe violations (×6) | Same axe gate | |
-| `/login: Tab reaches every control in order` | Explicit Tab sequence: Email → "Forgot password?" link (AUTH-9) → Password → "Show password" toggle → Log in → "Create an account" link | `getByLabel('Password', { exact: true })` — substring matching would collide with the toggle's `aria-label="Show password"` |
-| `/register: Tab reaches every control in order` | Email → Password → toggle → Full name → Phone (optional) → Create account → "Log in" link | |
 
-### `e2e/flows/auth-journey.spec.ts` (AUTH-8, 3 `test()`s)
+### `e2e/flows/auth-journey.spec.ts` (AUTH-8, reworked by AUTH-14, 4 `test()`s)
 
-**Test 1 — `Auth journey — register, logout, login`** (steps 1-4):
+`/login` and `/register` redirect to Keycloak, so these specs go through `signIn(page)` from `mocks/keycloakStub.ts`: the real client builds the PKCE request and navigates, the browser-level stand-in answers with a 302 back to `/auth/callback?code=…&state=…`, and the MSW `/api/auth/callback` handler finishes the exchange. Without `signIn`, the Keycloak authorization URL gets a static "Keycloak sign-in" page (installed for every test by `mocks/test.ts`) — also where the app lands after a logout.
 
-| Step | What it checks | Notes |
-|---|---|---|
-| 1. register | Valid details → auto-login (AUTH-2), lands on Home Feed | |
-| 2. log out | Redirected to `/login`; `/friends` while logged out also redirects there; bounces through `about:blank` before re-visiting `/login` | The `about:blank` bounce guarantees a genuinely fresh navigation — `goto()` to the current URL can be a same-document no-op that keeps stale redirect-back state |
-| 3. log in (valid) | Lands back on `/` | |
-| 4. log in (invalid) | Logs out first, then wrong password → inline `role="alert"` error, stays on `/login` | |
-
-**Test 2 — `Auth journey — reload while logged in stays authenticated`** (step 5, **restored by MSW-1**):
-
-| Step | What it checks | Notes |
-|---|---|---|
-| 5. reload while logged in | Fresh login → `page.reload()` → still shows Home Feed, still at `/` | **Could not be tested before MSW-1** — needed a real `Set-Cookie` response the browser's cookie jar actually honors, which a Service-Worker-mocked response never provided. Dedicated test (not chained onto steps 1-4) since step 4 ends logged out and every test already gets an isolated session for free. Verified flake-free at `--repeat-each=10`. |
-
-**Test 3 — `Auth journey — expired session, then protected deep link`** (steps 6-7):
-
-| Step | What it checks | Notes |
-|---|---|---|
-| 6. simulated expired session | Login, then force one 401 on `POST /api/auth/logout` via `page.route()` → AUTH-5's retry interceptor attempts a silent refresh (fails, no valid cookie) → session cleared regardless → redirected to `/login`; re-visiting `/` redirects again (not a stale render) | **Deliberately not reload-based** — an earlier reload-triggered version was unreliable even under normal, non-repeated runs (a genuine stuck state, not the MSW-1 race) |
-| 7. deep link while logged out | `/friends` → redirected to `/login` → log in → redirected **back to `/friends`** | Tests the redirect-back mechanism specifically |
+| Test | What it checks |
+|---|---|
+| sign in, log out, sign in again | `signIn` lands on Home Feed; Log out ends on the Keycloak stand-in page; a protected route (`/friends`) redirects there too; a second `signIn` works |
+| `/register` asks Keycloak for the create-account step | The authorization request carries `prompt=create`, `code_challenge_method=S256`, `client_id=sportconnect-web` and `redirect_uri=<origin>/auth/callback`; the round trip lands on Home Feed |
+| reload while logged in stays authenticated | After `signIn`, a reload restores the session from the refresh cookie |
+| expired session, then protected deep link | Logout forced to 401 once still signs the user out locally (only a 503 keeps the session); then `signIn(page, 'user', { path: '/friends' })` returns to `/friends` (ProtectedRoute return-to through the redirect) |
 
 ### `e2e/flows/feed-groups-journey.spec.ts` (FEED-10 + CLIENT-MODAL-1, one `test()` with 9 steps + 7 separate `test()`s)
 
@@ -646,7 +630,7 @@ switcher + tab click.
 conversation ids starting at `90001`; each test gets a fresh session with exactly one conversation
 opened, so `90001` is deterministic in step 6/7's `pushChatEvent` calls, not a hardcoded guess.
 
-### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works)
+### `e2e/flows/msw-setup.spec.ts` (proves the mock server itself works; AUTH-14: uses `/api/auth/callback`, and logout answers 200 without a Bearer header)
 
 | Test | What it checks | Notes |
 |---|---|---|
@@ -1016,28 +1000,28 @@ The app-wide error layer, with only the network faked (`page.route`). Related do
 | like with the network down → offline toast | The like request is aborted: the toast reads "Can't reach the server. Check your connection." |
 | inline error does not also toast | The Add-sport 400 shows its own `role="alert"` in the dialog and no `[data-sonner-toast]` exists (the hook declares `errorDisplay: 'inline'`). |
 
-### `e2e/flows/auth-errors.spec.ts` (CLIENT-ERR-2, 6 `test()`s)
+### `e2e/flows/auth-errors.spec.ts` (CLIENT-ERR-2, reworked by AUTH-14, 4 `test()`s)
 
-The auth forms' server errors localized from the error code. The auth handler (`e2e/mocks/handlers/auth.ts`) now mirrors the real codes: login 401 carries `INVALID_CREDENTIALS`; sign-up with `mockTakenEmail` (`fixtures.ts`) gets 409 `EMAIL_ALREADY_REGISTERED`; a blank-after-trim register field gets 400 `VALIDATION_FAILED` with `errorParams.fields` (an 8-space password passes the form's own length rule). `auth-journey.spec.ts` step 4 now expects "Invalid email or password." (the localized copy, with a period). Related docs: `client/docs/MVP/CLIENT-ERR-2_AUTH_ERROR_ADAPTATION.md`, `documentation/md/ERROR_HANDLING_DESIGN.md`.
-
-| Test | What it checks |
-|---|---|
-| duplicate email (en) | Banner "An account with this email already exists.", stays on `/register`, email input kept, "Sign in instead" link goes to `/login`. |
-| duplicate email (vi) | Same banner and link in Vietnamese. |
-| validation failure (en) | Generic "Some of the information you entered isn't valid…" line plus "Check: Password."; no sign-in link. |
-| validation failure (vi) | Same, in Vietnamese ("Kiểm tra: Mật khẩu."). |
-| invalid credentials (vi) | Login 401: "Email hoặc mật khẩu không đúng.", stays on `/login`, email kept. |
-| login 400 VALIDATION_FAILED | `page.route` answers 400 with field detail; the banner shows only "Invalid email or password." |
-
-### `e2e/flows/auth-reactivate.spec.ts` (AUTH-10, 3 `test()`s)
-
-Re-activating a deactivated account from the login page. The auth handler mirrors backend A9: `mockDeactivatedEmail` (`fixtures.ts`) with the right password gets 401 `ACCOUNT_DEACTIVATED` on `/auth/login`, and `POST /auth/reactivate` logs that account in (anything else: 401 `INVALID_CREDENTIALS`). Related docs: `client/docs/MVP/AUTH-10_REACTIVATE_DEACTIVATED_ACCOUNT_ON_LOGIN.md`.
+The sign-in's server errors localized from the error code, at the only place they can occur inside the app now: `/auth/callback`. The MSW handler answers 401 `AUTH_CODE_INVALID` for a code it does not know.
 
 | Test | What it checks |
 |---|---|
-| confirm | The dialog "Re-activate your account?" opens; Re-activate posts the typed email and password to `/auth/reactivate` and the user leaves `/login`. |
-| decline | Cancel closes the dialog, no `/auth/reactivate` request is made, the user stays on `/login` with the email kept. |
-| wrong password on re-activation | A 401 `INVALID_CREDENTIALS` from `/auth/reactivate` keeps the dialog open with "Invalid email or password." in its alert. |
+| unknown code | Localized "We couldn't sign you in" + the `AUTH_CODE_INVALID` line, URL stays on `/auth/callback`; "Try again" goes back to the Keycloak page |
+| the same in vi | Vietnamese heading and line |
+| backend 503 | A 503 `SERVICE_UNAVAILABLE` on the callback shows the sign-in-service line |
+| forged `state` / Keycloak `error` | Refused with the same line and **no** `POST /api/auth/callback` |
+
+Related docs: `client/docs/MVP/CLIENT-ERR-2_AUTH_ERROR_ADAPTATION.md`, `client/docs/MVP/AUTH-14_REDIRECT_LOGIN_CALLBACK_AND_TICKET_REACTIVATE.md`.
+
+### `e2e/flows/auth-reactivate.spec.ts` (AUTH-10, reworked by AUTH-14, 3 `test()`s)
+
+`signIn(page, 'deactivated')` makes `POST /api/auth/callback` answer 401 `ACCOUNT_DEACTIVATED` with `errorParams.reactivationTicket` (backend A26), so `/auth/callback` opens the re-activate dialog. No password is involved.
+
+| Test | What it checks |
+|---|---|
+| confirm | `POST /api/auth/reactivate` carries `{ ticket }` and the user lands on Home Feed |
+| decline | `POST /api/auth/reactivate/cancel` carries the ticket, no `/auth/reactivate` call is made, the user ends on the Keycloak page without a session |
+| expired ticket | A 401 `REACTIVATION_TICKET_INVALID` keeps the dialog open with the localized line |
 
 ### `e2e/flows/account-settings-unsaved.spec.ts` (ACCOUNT-5, 4 `test()`s)
 
@@ -1061,7 +1045,17 @@ Changing one's own password from Account Settings. The auth handler mirrors `Use
 | client validation | A new password under 8 characters, then a mismatched confirm, each show their hint and send no request. |
 | Esc | Esc closes only the dialog; Account settings stays open. |
 
-### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, 5 `test()`s)
+### `e2e/flows/auth-logout-failed.spec.ts` (AUTH-14, 3 `test()`s)
+
+A `503 SERVICE_UNAVAILABLE` on `POST /api/auth/logout` (Keycloak unreachable) keeps the refresh cookie on the backend, so the app keeps the session and says so. The 503 is simulated per test with `page.route` (once, then falls back to the MSW handler).
+
+| Test | What it checks |
+|---|---|
+| Stay signed in | The dialog "Couldn't sign you out" opens; "Stay signed in" closes it, the user is still on Home Feed and a reload keeps the session |
+| Try again | Retrying repeats the logout, which now succeeds and ends on the Keycloak page |
+| vi | The dialog copy is Vietnamese |
+
+### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, 5 `test()`s; AUTH-14: ends on the Keycloak page, the "log in again to re-activate" hint is gone)
 
 Deactivating one's own account from Account Settings. The auth handler (`e2e/mocks/handlers/auth.ts`) mirrors backend U22: `POST /api/users/me/deactivate` answers 200 for `mockPassword`, 400 `CURRENT_PASSWORD_INCORRECT` for any other, 400 `VALIDATION_FAILED` for blank. Related docs: `client/docs/MVP/ACCOUNT-4_DEACTIVATE_ACCOUNT.md`.
 
@@ -1072,23 +1066,6 @@ Deactivating one's own account from Account Settings. The auth handler (`e2e/moc
 | stacks over settings | The dialog opens over Account settings; Cancel returns to it with an unsaved Bio edit intact and nothing is sent. |
 | Esc | Esc closes only the confirmation; Account settings stays open. |
 | deactivate with unsaved edits | An unsaved Bio edit does not trap the sign-out: the user lands on `/login` and the "Unsaved changes" prompt never appears (ACCOUNT-5). |
-
-### `e2e/flows/password-reset.spec.ts` (AUTH-9, 13 `test()`s)
-
-The forgot-password and reset-password screens. The auth handler (`e2e/mocks/handlers/auth.ts`) mirrors the real backend: `forgot-password` always answers 200 (400 only for a blank email); `reset-password/validate` answers 200 for `mockResetToken` and one generic 404 `RESET_TOKEN_INVALID` for every other token; `reset-password` answers 200 for `mockResetToken`, 400 `RESET_TOKEN_USED` / `RESET_TOKEN_EXPIRED` for `mockUsedResetToken` / `mockExpiredResetToken`, 404 `RESET_TOKEN_INVALID` for any other token and 400 `VALIDATION_FAILED` for a password under 8 characters (all three tokens in `fixtures.ts`). `a11y.spec.ts` also gained the two new routes in its `authPages` matrix (overflow + axe at 375/768/1280, 6 more tests) and its `/login` Tab-order test now expects the "Forgot password?" link between Email and Password. Related docs: `client/docs/MVP/AUTH-9_FORGOT_AND_RESET_PASSWORD_SCREENS.md`.
-
-| Test | What it checks |
-|---|---|
-| login → forgot password → confirmation | Email typed on `/login` prefills `/forgot-password`; submitting shows the neutral "If an account exists…" status and removes the form; "Back to sign in" returns to `/login`. |
-| unknown email | An address with no account gets the identical confirmation. |
-| reset with a valid link | New password + confirmation, "Update password" → `/login` with "Password updated. Sign in with your new password." |
-| mismatched passwords | Inline "The passwords don't match." and the URL stays on `/reset-password`. |
-| missing token | `/reset-password` with no `token` shows the invalid-link alert; "Request a new link" goes to `/forgot-password`. |
-| dead link on load (×3) | `reset-token-used`, `reset-token-expired` and an unknown token each show the problem state with "Request a new link" as soon as the page opens, before any submit (backend A21 check: one generic 404 `RESET_TOKEN_INVALID`); the form is absent. |
-| check request shape | The page-load check is a `POST` to `/api/auth/reset-password/validate` with `{"token":…}` in the body, and a live token shows the form. |
-| link goes bad after load | `page.route` answers the submit with 400 `RESET_TOKEN_USED`; the page lands on the problem state. |
-| vi: forgot + dead link on load | Vietnamese heading, button, confirmation, and the dead-link copy shown on load for an expired token. |
-| vi: successful reset | Vietnamese "Đã cập nhật mật khẩu." notice on `/login`. |
 
 ### `e2e/flows/user-errors.spec.ts` (CLIENT-ERR-3, 4 `test()`s)
 
@@ -1179,29 +1156,6 @@ Chat's failure states. The chat service answers with a status only (no error cod
 | forbidden direct chat | Forced 403 on `open/direct`: the panel reads "You can't chat with this person right now.", no Retry button, the composer is disabled, and the friends list stays visible. |
 | forbidden group chat | Forced 403 on `open/group`: the Chat tab reads "You're no longer part of this group's chat.", the composer is disabled, and the tabs stay usable. |
 | failed send | Forced 503 on the first message POST: "Couldn't send. Your message is still in the box." shows, the composer keeps the text, and Retry sends it (the message appears, the composer empties, the notice goes away). |
-
-### `e2e/flows/signup-locale.spec.ts` (CLIENT-REF-2, 4 `test()`s, 2 inside a `test.describe`)
-
-Sign-up's optional Language/Country/Region (`GeoLocaleFields`, wired via `useGeoLocaleFieldsData()`
-directly inside `RegisterForm`) and the Language field switching the UI locale live. Reuses
-`e2e/mocks/handlers/reference.ts`'s existing CLIENT-REF-1 fixtures verbatim — no new MSW handler.
-
-| Test | What it checks |
-|---|---|
-| `timezone-based pre-fill` → pre-fills Language/Country | `test.use({ timezoneId: 'Asia/Ho_Chi_Minh' })` → the silent mount resolve pre-fills Country=Vietnam, Language=`vi`, Region stays empty (never set by a non-coordinate resolve) — and the heading stays English, since a passive pre-fill never calls `setLocale` on its own |
-| `timezone-based pre-fill` → geolocation denied keeps the timezone pre-fill | No permission granted (Chromium auto-denies in headless) → the denied hint shows, Country/Language stay at their timezone pre-fill, registration still succeeds with `latitude`/`longitude` omitted from the request body |
-| geolocation granted — fills region and posts coordinates | `context.grantPermissions(['geolocation'])` + `setGeolocation` to the exact `COORDINATES_TEST_LATITUDE/LONGITUDE` fixture → Region fills to Ho Chi Minh City, and the real `/api/auth/register` request body carries `latitude`/`longitude`/`countryId`/`regionId` |
-| choosing a language switches visible copy and the header | Selecting "Tiếng Việt" flips the heading text immediately (no pre-fill in this test — default timezone) and the eventual register request's `Accept-Language` header is `vi`, `languageCode: 'vi'` in the body |
-
-The two timezone-dependent tests are scoped inside their own `test.describe` with
-`test.use({ timezoneId: 'Asia/Ho_Chi_Minh' })` so the other two tests (which each need an explicit,
-change-triggering `selectOption('vi')`) don't inherit a pre-filled `'vi'` value that would make
-their own selection a no-op. Coordinates/header assertions read the real outgoing request via
-`page.waitForRequest`/`postDataJSON()`, not anything the MSW handler echoes back — confirmed against
-real backend source that `AuthResponse.user` doesn't carry these fields either (see the ticket's
-Delta correction), so there's nothing to assert against in the response.
-
-Related doc: `client/docs/MVP/CLIENT-REF-2_SIGNUP_LANGUAGE_COUNTRY_REGION.md`.
 
 ### `e2e/visual/app-home-feed.spec.ts` (HF-10b, `visual-regression` project)
 
@@ -1487,21 +1441,9 @@ byte-identical.
 - Visual-regression spec touching a new page? Freeze the clock before the first navigation if the page
   renders any relative timestamp.
 
-### `e2e/visual/auth-screens.spec.ts` (AUTH-13, `visual-regression` project)
+### `e2e/visual/auth-screens.spec.ts` — removed by AUTH-14
 
-Full-page screenshots of the four public auth screens (none had visual coverage before). Parameterized: 3 breakpoints × 7 states = **21 test instances**, `<screen> — <state> @ <width>px`. No login needed — every screen is public.
-
-| State | Setup | Baseline |
-|---|---|---|
-| login — default | `goto('/login')` | `auth-login-default-{width}.png` |
-| login — password updated notice | completes a reset with `mockResetToken` (the notice travels via `accountNoticeStore`, so it cannot be deep-linked) | `auth-login-password-updated-{width}.png` |
-| register — default | `goto('/register')` | `auth-register-default-{width}.png` |
-| forgot password — form | `goto('/forgot-password')` | `auth-forgot-password-form-{width}.png` |
-| forgot password — sent | submits `mockUser.email` | `auth-forgot-password-sent-{width}.png` |
-| reset password — form | `/reset-password?token=${mockResetToken}` | `auth-reset-password-form-{width}.png` |
-| reset password — link problem | `/reset-password?token=${mockExpiredResetToken}` (the mock validate endpoint 404s every token but the live one) | `auth-reset-password-link-problem-{width}.png` |
-
-Every instance freezes the clock, blurs the active element, waits for `document.fonts.ready` and passes `animations: 'disabled'` (the community illustration floats continuously). Baselines are Linux-rendered via the `client-ci` `update-baselines` dispatch (never a Windows host) and committed — all 21 current as of AUTH-13. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
+The 21 AUTH-13 baselines (`auth-login-*`, `auth-register-*`, `auth-forgot-password-*`, `auth-reset-password-*`, each at 375/768/1280) covered client screens that no longer exist. AUTH-15 baselines the Keycloakify theme pages instead (Storybook captures on the Linux runner).
 
 ### `e2e/visual/account-settings.spec.ts` (AUTH-13 scope change, `visual-regression` project)
 

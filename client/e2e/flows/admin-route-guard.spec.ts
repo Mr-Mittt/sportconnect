@@ -1,4 +1,4 @@
-import { mockAdminUser, mockPassword, mockUser } from '../mocks/fixtures.ts';
+import { KEYCLOAK_AUTH_URL, signIn } from '../mocks/keycloakStub.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -21,16 +21,12 @@ import { expect, test } from '../mocks/test.ts';
  * Both accounts share mockPassword; they differ only in email and roles.
  */
 
-async function logIn(page: import('@playwright/test').Page, email: string) {
-  await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill(email);
-  await page.getByLabel('Password', { exact: true }).fill(mockPassword);
-  await page.getByRole('button', { name: 'Log in' }).click();
-  await page.waitForURL('/');
+async function logIn(page: import('@playwright/test').Page, as: 'user' | 'admin') {
+  await signIn(page, as);
 }
 
 test('Admin route guard — a user without ADMIN is redirected away from /admin', async ({ page }) => {
-  await logIn(page, mockUser.email);
+  await logIn(page, 'user');
 
   await page.goto('/admin');
 
@@ -41,7 +37,7 @@ test('Admin route guard — a user without ADMIN is redirected away from /admin'
 });
 
 test('Admin route guard — a user holding ADMIN reaches /admin', async ({ page }) => {
-  await logIn(page, mockAdminUser.email);
+  await logIn(page, 'admin');
 
   await page.goto('/admin');
 
@@ -60,22 +56,22 @@ test('Admin route guard — a user holding ADMIN reaches /admin', async ({ page 
  * session exit that replaces it.
  */
 test('Admin logout — an admin logs out from the admin shell', async ({ page }) => {
-  await logIn(page, mockAdminUser.email);
+  await logIn(page, 'admin');
   await page.goto('/admin');
 
   await page.getByRole('button', { name: 'Log out' }).click();
 
-  await page.waitForURL('/login');
-  await expect(page.getByRole('button', { name: 'Log in' })).toBeVisible();
+  await page.waitForURL(KEYCLOAK_AUTH_URL);
+  await expect(page.getByRole('heading', { name: 'Keycloak sign-in' })).toBeVisible();
 
   // The session is genuinely gone, not just navigated away from: /admin bounces back
-  // to /login rather than rendering for a still-authenticated admin.
+  // to sign-in rather than rendering for a still-authenticated admin.
   await page.goto('/admin');
-  await page.waitForURL(/\/login/);
+  await page.waitForURL(KEYCLOAK_AUTH_URL);
 });
 
 test('Admin logout — the control is present on a nested admin route', async ({ page }) => {
-  await logIn(page, mockAdminUser.email);
+  await logIn(page, 'admin');
 
   await page.goto('/admin/sports/1');
 
