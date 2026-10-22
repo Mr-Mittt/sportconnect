@@ -63,6 +63,8 @@ test('a protected deep link lands on the themed sign-in page with the three prov
   // The theme: our card, heading and tagline, not Keycloak's stock page.
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
   await expect(page.getByText('Your teams, matches, and crew')).toBeVisible();
+  // The field is labelled "Email" (the username is internal; phone wording waits for AUTH-18).
+  await expect(page.locator('label[for="username"]')).toHaveText('Email');
   await expect(page.getByRole('link', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Continue with Facebook' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Continue with Zalo' })).toBeVisible();
@@ -124,6 +126,10 @@ test('/register opens the themed create-account form and registering returns to 
   };
   created.push(registered);
   await expect(page.locator('#username')).toHaveCount(0);
+  // The email comes first, then the password fields, then the names and the rest.
+  expect(
+    await page.locator('#kc-register-form input:not([type=hidden])').evaluateAll((els) => els.map((e) => e.id).slice(0, 3)),
+  ).toEqual(['email', 'password', 'password-confirm']);
   await page.locator('#email').fill(registered.email);
   await page.locator('#firstName').fill('E2E');
   await page.locator('#lastName').fill('Registered');

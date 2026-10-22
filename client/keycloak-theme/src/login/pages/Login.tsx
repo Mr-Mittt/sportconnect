@@ -32,11 +32,9 @@ export default function Login(props: PageProps<Extract<KcContext, { pageId: 'log
     return () => window.removeEventListener('pageshow', reset);
   }, []);
 
-  const usernameLabel = !realm.loginWithEmailAllowed
-    ? msg('username')
-    : !realm.registrationEmailAsUsername
-      ? msg('usernameOrEmail')
-      : msg('email');
+  // The username is not something the user picks (the register page hides it; Keycloak fills it with the
+  // email), so the field is labelled "Email". The phone-or-email wording waits for phone registration (AUTH-18).
+  const usernameLabel = realm.loginWithEmailAllowed ? msg('email') : msg('username');
 
   return (
     <Template
