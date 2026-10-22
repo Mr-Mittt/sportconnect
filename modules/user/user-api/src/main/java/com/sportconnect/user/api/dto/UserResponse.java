@@ -23,6 +23,9 @@ public class UserResponse {
     private String lastName;
     private String username;
     private String phoneNumber;
+
+    /** U25: {@code null} when there is no phone; INVALID means {@link #phoneNumber} is the text as typed. */
+    private PhoneStatus phoneStatus;
     private LocalDate dateOfBirth;
     private String gender;
     private String bio;

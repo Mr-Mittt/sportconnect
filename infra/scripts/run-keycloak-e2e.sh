@@ -54,6 +54,7 @@ docker rm -f "$name" >/dev/null 2>&1 || true
 docker run -d --name "$name" -p "$port:8080" \
   -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
   -e KC_HOSTNAME="http://localhost:$port" \
+  -e SPORTCONNECT_API_BASE_URL="http://localhost:${MOCK_SERVER_PORT:-9876}/api" \
   -v "$(native "$repo/infra/keycloak/realm")/sportconnect-realm.json:/opt/keycloak/data/import/sportconnect-realm.json:ro" \
   -v "$(native "$work/providers"):/opt/keycloak/providers:ro" \
   "$image" start-dev --import-realm >/dev/null

@@ -1,8 +1,11 @@
 package com.sportconnect.user.entity;
 
 import com.sportconnect.user.api.dto.PhoneMask;
+import com.sportconnect.user.api.dto.PhoneStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -73,9 +76,17 @@ public class User implements Persistable<UUID> {
     @Column(unique = true, length = 50)
     private String username;
 
-    /** E.164 (U23), unique when present. Written only through {@code PhoneNumbers.normalize}. */
-    @Column(name = "phone_number", length = 20, unique = true)
+    /**
+     * E.164 (U23) when {@link #phoneStatus} is VALID or VERIFIED, unique among those; the text as typed when INVALID.
+     * Written only through {@code PhoneNumbers}. The unique index is partial (V080), so it is not declared here.
+     */
+    @Column(name = "phone_number", length = 20)
     private String phoneNumber;
+
+    /** Null exactly when {@link #phoneNumber} is null (DB check). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "phone_status", length = 10)
+    private PhoneStatus phoneStatus;
 
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;

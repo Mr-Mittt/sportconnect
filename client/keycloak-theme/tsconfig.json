@@ -23,6 +23,8 @@
     "vite.config.ts",
     "../src/shared/ui",
     "../src/shared/lib/utils.ts",
+    "../src/shared/lib/detectEnvironment.ts",
+    "../src/shared/types/reference.ts",
     "../src/features/auth/components/AuthShell.tsx",
     "../src/features/auth/components/CommunityIllustration.tsx"
   ]

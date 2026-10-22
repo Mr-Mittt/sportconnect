@@ -278,6 +278,42 @@ describe('AccountSettingsModal', () => {
       expect(screen.getByLabelText('Country')).toHaveValue('');
     });
 
+    it('hints that a saved phone is invalid (U25), and drops the hint once the field is edited', async () => {
+      const testUser = userEvent.setup();
+      renderWithProviders(
+        <AccountSettingsModal
+          isOpen
+          onClose={vi.fn()}
+          user={user({ phoneNumber: '555-0100', phoneStatus: 'INVALID' })}
+          languageCode="en"
+          onSave={vi.fn()}
+          isSaving={false}
+          errorMessage={null}
+        />,
+      );
+
+      expect(screen.getByText('This phone number doesn’t look valid. Check it and save again.')).toBeInTheDocument();
+      expect(screen.getByLabelText('Phone number')).toHaveAccessibleDescription(/doesn’t look valid/);
+      await testUser.type(screen.getByLabelText('Phone number'), '1');
+      expect(screen.queryByText(/doesn’t look valid/)).not.toBeInTheDocument();
+    });
+
+    it('shows no phone hint for a valid or verified phone', () => {
+      renderWithProviders(
+        <AccountSettingsModal
+          isOpen
+          onClose={vi.fn()}
+          user={user({ phoneNumber: '+84901234567', phoneStatus: 'VERIFIED' })}
+          languageCode="en"
+          onSave={vi.fn()}
+          isSaving={false}
+          errorMessage={null}
+        />,
+      );
+
+      expect(screen.queryByText(/doesn’t look valid/)).not.toBeInTheDocument();
+    });
+
     it('submit sends countryId and regionId together when the country changes', async () => {
       const testUser = userEvent.setup();
       const onSave = vi.fn();

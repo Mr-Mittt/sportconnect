@@ -307,6 +307,23 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', BASE_URL);
 
+    // AUTH-16: the Keycloak-hosted register page (a different origin: the e2e container on :8082) reads the
+    // public reference lists from the browser, as it will from the real API (whose CORS list allows the
+    // Keycloak origin). Only /api/reference/*, only localhost origins.
+    const origin = req.headers.origin;
+    if (url.pathname.startsWith('/api/reference/') && typeof origin === 'string' && /^http:\/\/localhost:\d+$/.test(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Vary', 'Origin');
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204, {
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Accept',
+        });
+        res.end();
+        return;
+      }
+    }
+
     if (url.pathname.startsWith('/__mock/')) {
       await handleAdminRoute(req, res, url.pathname);
       return;

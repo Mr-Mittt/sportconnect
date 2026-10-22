@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from './app/apiClient';
 import { useAuthStore } from './app/authStore';
+import { useCompleteProfileStore } from './app/completeProfileStore';
 import { savePkceState } from './features/auth/pkce';
 import { redirectToKeycloak } from './features/auth/redirectToKeycloak';
 import { routes } from './router';
@@ -80,6 +81,9 @@ describe('App routing', () => {
     // Reset the singleton authStore between tests — Zustand state doesn't
     // reset on its own between renders, unlike a fresh QueryClient per test.
     useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: true });
+    // AUTH-16: a country-less profile opens the "complete your profile" dialog over the page; these
+    // routing tests are not about it, so it is skipped for the fixture user (one test below wants it).
+    useCompleteProfileStore.setState({ skippedFor: fixtureUser.id });
     // No MSW in Vitest (Playwright-only, see MSW-0) — default to "no valid
     // session" so auth-page tests don't need an authenticated fixture.
     vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('no session'));
@@ -631,6 +635,36 @@ describe('App routing', () => {
     expect(within(dialog).getByLabelText('Bio')).toHaveValue('Weekend baller.');
     // Avatar/cover live in the /profile Edit profile modal, not here.
     expect(within(dialog).queryByLabelText('Avatar URL')).not.toBeInTheDocument();
+  });
+
+  it('asks a signed-in user with no country to complete the profile, and Skip for now closes it (AUTH-16)', async () => {
+    useCompleteProfileStore.setState({ skippedFor: null });
+    vi.spyOn(apiClient, 'post').mockImplementation((url: string) => {
+      if (url === '/reference/resolve') {
+        return Promise.resolve({
+          data: { success: true, message: '', data: { language: null, country: null, region: null, source: null }, timestamp: '' },
+        });
+      }
+      return Promise.resolve(fixtureAuthResponse);
+    });
+    const defaultGet = vi.mocked(apiClient.get).getMockImplementation()!;
+    const ok = (data: unknown) => ({ data: { success: true, message: '', data, timestamp: '' } });
+    vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
+      if (url === '/users/me') {
+        return ok({ ...fixtureUser, country: null, countryId: null, regionId: null, regionName: null, location: null });
+      }
+      if (url === '/reference/languages' || url === '/reference/countries') return ok([]);
+      return defaultGet(url);
+    });
+
+    const user = userEvent.setup();
+    renderApp(['/']);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Complete your profile' });
+    expect(within(dialog).getByText(/change it any time in Account Settings/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Skip for now' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Complete your profile' })).not.toBeInTheDocument());
+    expect(useCompleteProfileStore.getState().skippedFor).toBe(fixtureUser.id);
   });
 
   it('returns to the page the visitor was headed for after the Keycloak round trip (/auth/callback)', async () => {

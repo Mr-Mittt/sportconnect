@@ -1,5 +1,6 @@
 package com.sportconnect.integration;
 
+import com.sportconnect.user.api.dto.PhoneStatus;
 import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.RoleRepository;
@@ -135,6 +136,7 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
         return userRepository.save(User.builder()
                 .email(email)
                 .phoneNumber(phone)
+                .phoneStatus(phone == null ? null : PhoneStatus.VALID)
                 .firstName("Old")
                 .lastName("Name")
                 .username("old" + System.nanoTime())
@@ -561,12 +563,35 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void anInvalidPhone_is400_andEndsTheKeycloakSession() throws Exception {
+    void anInvalidPhone_isStoredAsTypedWithStatusInvalid_andTheSignInSucceeds() throws Exception {
         UUID sub = UUID.randomUUID();
 
-        signIn(TestKeycloak.Identity.of(sub).email("badphone@example.com").phone("12"))
+        signIn(TestKeycloak.Identity.of(sub).email("badphone@example.com").phone("12")).andExpect(status().isOk());
+
+        User user = userRepository.findById(sub).orElseThrow();
+        assertThat(user.getPhoneNumber()).isEqualTo("12");
+        assertThat(user.getPhoneStatus()).isEqualTo(PhoneStatus.INVALID);
+        assertThat(TestKeycloak.sessionEnded(TestKeycloak.latestRefreshToken(sub))).isFalse();
+    }
+
+    @Test
+    void aValidPhone_isStoredAsE164WithStatusValid() throws Exception {
+        UUID sub = UUID.randomUUID();
+
+        signIn(TestKeycloak.Identity.of(sub).email("goodphone@example.com").phone("0901234567")).andExpect(status().isOk());
+
+        User user = userRepository.findById(sub).orElseThrow();
+        assertThat(user.getPhoneNumber()).isEqualTo("+84901234567");
+        assertThat(user.getPhoneStatus()).isEqualTo(PhoneStatus.VALID);
+    }
+
+    @Test
+    void anInvalidPhoneWithoutAnEmail_isNoIdentifier_400_andEndsTheKeycloakSession() throws Exception {
+        UUID sub = UUID.randomUUID();
+
+        signIn(TestKeycloak.Identity.of(sub).username("phoneonly").phone("12"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("INVALID_PHONE_NUMBER"));
+                .andExpect(jsonPath("$.errorCode").value("IDENTIFIER_REQUIRED"));
 
         assertThat(userRepository.findById(sub)).isEmpty();
         assertThat(TestKeycloak.sessionEnded(TestKeycloak.latestRefreshToken(sub))).isTrue();

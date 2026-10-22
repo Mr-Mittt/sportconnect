@@ -58,5 +58,13 @@
       "title": "Session unavailable",
       "gotIt": "Got it"
     }
+  },
+  "completeProfile": {
+    "title": "Complete your profile",
+    "intro": "Tell us where you play so we can show you what's around you.",
+    "notice": "Set your zone (country and region) to discover the sport community in your area. You can change it any time in Account Settings.",
+    "save": "Save",
+    "saving": "Saving…",
+    "skip": "Skip for now"
   }
 }

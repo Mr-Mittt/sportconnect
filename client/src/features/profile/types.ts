@@ -20,6 +20,13 @@ export const MAX_BIO_LENGTH = 500;
  * (`GET /api/users/{userId}` since U11) — see `features/friends`'
  * `UserInfo` / `useUserInfo`.
  */
+/**
+ * `users.phone_status` (U25), mirroring the backend `PhoneStatus` enum: `INVALID` = the phone is kept as the user typed
+ * it because it did not parse as a real number; `VALID` = a real number, stored as E.164; `VERIFIED` = proven to be the
+ * user's. A switch over it must stay exhaustive, so a new backend value fails the build here.
+ */
+export type PhoneStatus = 'INVALID' | 'VALID' | 'VERIFIED';
+
 export interface UserResponse {
   id: string;
   email: string | null;
@@ -27,6 +34,8 @@ export interface UserResponse {
   lastName: string | null;
   username: string | null;
   phoneNumber: string | null;
+  /** `null` when there is no phone. Optional: a server older than U25 does not send it. */
+  phoneStatus?: PhoneStatus | null;
   dateOfBirth: string | null;
   gender: string | null;
   bio: string | null;

@@ -29,7 +29,7 @@ public class ExternalIdentity {
     private String lastName;
     /** The token's {@code name}; split into first and last name only when both are absent. */
     private String fullName;
-    /** Any format {@code PhoneNumbers.normalize} accepts; an unparseable value is a 400. */
+    /** Any text: a number that parses is stored as E.164 (VALID), anything else as typed (INVALID, U25), never a failure. */
     private String phoneNumber;
     /** The token's {@code locale}; kept as the language preference only when it is an active language. */
     private String languageCode;

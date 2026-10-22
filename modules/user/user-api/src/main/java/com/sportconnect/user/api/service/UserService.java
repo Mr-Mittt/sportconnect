@@ -99,13 +99,15 @@ public interface UserService {
      * {@link com.sportconnect.user.api.dto.Gender}'s names ({@code MALE}, {@code FEMALE}) - anything else, including
      * lower-case, is a {@code BadRequestException}; {@code null} skips the field and the empty string clears it.
      *
-     * <p>{@code phoneNumber} (U23) is normalised to E.164 (default region VN) and checked against other accounts
-     * before any field is applied: {@code null} skips it, a blank value clears it, and re-sending the caller's own
-     * number is not a conflict. Clearing the phone of an account that has no email is refused ({@code IDENTIFIER_REQUIRED}),
-     * since the account would be left with no identifier.
+     * <p>{@code phoneNumber} (U23, U25) is classified before any field is applied: {@code null} skips it, a blank value
+     * clears it (and its status). A number that parses is stored as E.164 (default region VN) with status {@code VALID} and
+     * checked against other accounts; re-sending the caller's own number is not a conflict, and keeps {@code VERIFIED}. One
+     * that does not parse is saved <em>as typed</em> with status {@code INVALID} - never a 400 - and is not unique or an
+     * identifier. Clearing the phone of an account that has no email, or replacing it with an {@code INVALID} one, is
+     * refused ({@code IDENTIFIER_REQUIRED}), since the account would be left with no identifier.
      *
      * @throws com.sportconnect.common.exception.BadRequestException on an invalid gender, geo selection or physical stat,
-     *         an invalid phone ({@code INVALID_PHONE_NUMBER}), or clearing the only identifier ({@code IDENTIFIER_REQUIRED})
+     *         or clearing the only identifier ({@code IDENTIFIER_REQUIRED})
      * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED} when another account holds the number
      * @throws com.sportconnect.common.exception.ForbiddenException if {@code callerId} is not {@code userId}
      */
@@ -237,7 +239,8 @@ public interface UserService {
      *
      * <p>On creation: the username is {@code preferred_username} (cut to 50 characters, with a {@code -<sub prefix>}
      * suffix when taken); first and last name come from the given and family names, else from splitting the full name;
-     * the phone is normalised like every other phone (U23); the language becomes the preference only when it is an active
+     * the phone is classified like every other phone (U23, U25: one that does not parse is stored as typed with status
+     * {@code INVALID}, never refused, because the Keycloak account already exists); the language becomes the preference only when it is an active
      * language; {@code is_email_verified} follows the token. There is no password hash (Keycloak holds the credential).
      *
      * <p>A32: the register page's country, region and location arrive as optional claims and are stored on the new row only,
@@ -245,8 +248,8 @@ public interface UserService {
      * not in its country is dropped alone, coordinates are kept only as an in-range pair. The Keycloak account already exists
      * when they arrive, so a 400 here would strand a signed-up user.
      *
-     * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED} (neither email nor phone),
-     *         {@code INVALID_PHONE_NUMBER}
+     * @throws com.sportconnect.common.exception.BadRequestException {@code IDENTIFIER_REQUIRED} (no email and no usable
+     *         phone; an {@code INVALID} phone is not usable)
      * @throws com.sportconnect.common.exception.ConflictException {@code PHONE_ALREADY_USED}, {@code EMAIL_ALREADY_REGISTERED}
      * @throws org.springframework.dao.DataIntegrityViolationException when two first sign-ins for the same subject race and
      *         this one loses on the primary key; the caller re-reads the account

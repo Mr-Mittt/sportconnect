@@ -21,6 +21,9 @@ export const classes = {
   kcInputClass: input,
   kcInputGroup: 'relative',
   kcInputErrorMessageClass: 'mt-1.5 block text-2xs text-text-danger',
+  // The glyph font is not shipped, so the eye is drawn by theme.css (.kc-eye / .kc-eye-off).
+  kcFormPasswordVisibilityIconShow: 'kc-eye',
+  kcFormPasswordVisibilityIconHide: 'kc-eye-off',
   kcFormPasswordVisibilityButtonClass:
     'absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer p-2 text-text-muted hover:text-text-primary',
   kcFormOptionsClass: 'mb-4 flex justify-between text-2sm',

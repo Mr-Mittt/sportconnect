@@ -29,7 +29,13 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    keycloakify({ themeName: 'sportconnect', accountThemeImplementation: 'none' }),
+    keycloakify({
+      themeName: 'sportconnect',
+      accountThemeImplementation: 'none',
+      // AUTH-16: where the register page's zone block reads the public /api/reference lists. Set per
+      // environment on the Keycloak process (an env var of this name); the default is the local API.
+      environmentVariables: [{ name: 'SPORTCONNECT_API_BASE_URL', default: 'http://localhost:8080/api' }],
+    }),
   ],
   test: {
     environment: 'node',

@@ -19,6 +19,7 @@
     "weightKg": "Cân nặng (kg)",
     "shoeSizeMm": "Cỡ giày (JP, mm)"
   },
+  "phoneInvalid": "Số điện thoại này có vẻ không hợp lệ. Vui lòng kiểm tra và lưu lại.",
   "legacyCountry": "Hiện đang đặt là \"{{country}}\" — chọn một quốc gia bên dưới để thay thế.",
   "save": "Lưu thay đổi",
   "saving": "Đang lưu…",

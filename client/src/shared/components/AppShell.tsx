@@ -8,6 +8,7 @@ import { usePostErrorDialogStore } from '@/app/postErrorDialogStore';
 import { LogoutFailedDialog } from '@/features/auth/components/LogoutFailedDialog';
 import { useLogout } from '@/features/auth/useLogout';
 import { useChangePassword } from '@/features/profile/useChangePassword';
+import { useCompleteProfilePrompt } from '@/features/profile/useCompleteProfilePrompt';
 import { useDeactivateAccount } from '@/features/profile/useDeactivateAccount';
 import { useEditProfileSave } from '@/features/profile/useEditProfileSave';
 import { useMyProfile } from '@/features/profile/useMyProfile';
@@ -23,6 +24,7 @@ import { useSportProfiles } from '@/shared/hooks/useSportProfiles';
 import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { AccountSettingsModal } from './AccountSettingsModal';
+import { CompleteProfileDialog } from './CompleteProfileDialog';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { DeactivateAccountDialog } from './DeactivateAccountDialog';
 import { AuthLoadingState } from './AuthLoadingState';
@@ -122,6 +124,9 @@ export function AppShell() {
   const profileQuery = useMyProfile();
   const preferencesQuery = useUserPreferences();
   const accountSettingsSave = useEditProfileSave();
+  // AUTH-16: asks a user with no country (or a country with regions but no region) to complete the zone.
+  // Skippable; shares the Account Settings save, which refreshes the profile and so closes the dialog.
+  const completeProfilePrompt = useCompleteProfilePrompt(profileQuery.data);
   // ACCOUNT-4: deactivating one's own account. The confirmation dialog stacks on top of the settings
   // modal (which keeps its unsaved edits, and is where Cancel/Esc returns to) and is mounted only
   // while open, so the typed password never outlives it.
@@ -187,6 +192,30 @@ export function AppShell() {
         onStay={dismissLogoutFailure}
         isRetrying={isLoggingOut}
       />
+
+      {completeProfilePrompt.isOpen && profileQuery.data !== undefined && !isAccountSettingsOpen && (
+        <CompleteProfileDialog
+          isOpen
+          user={profileQuery.data}
+          languageCode={preferencesQuery.data?.language ?? null}
+          onSave={(payload) =>
+            accountSettingsSave.save(payload, {
+              onSuccess: () => {
+                toast.success(t('accountSettings:saved'));
+                // A country without a region is saved as the user chose it: not asked again this session.
+                completeProfilePrompt.skip();
+              },
+            })
+          }
+          onSkip={() => {
+            accountSettingsSave.reset();
+            completeProfilePrompt.skip();
+          }}
+          isSaving={accountSettingsSave.isSaving}
+          errorMessage={accountSettingsSave.errorMessage}
+          geoErrorCode={accountSettingsSave.geoErrorCode}
+        />
+      )}
 
       {isAccountSettingsOpen && profileQuery.data !== undefined && (
         <AccountSettingsModal

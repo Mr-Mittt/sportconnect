@@ -12,6 +12,7 @@ import com.sportconnect.user.api.dto.UserAccessState;
 import com.sportconnect.user.api.dto.FriendRequestResponse;
 import com.sportconnect.user.api.dto.Gender;
 import com.sportconnect.user.api.dto.LocationResponse;
+import com.sportconnect.user.api.dto.PhoneStatus;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
@@ -241,17 +242,19 @@ public class UserServiceImpl implements UserService {
         applyGeoSelection(user, request);
         // U20: same reasoning - validated before any field is touched, so a bad gender saves nothing.
         String resolvedGender = resolveGender(request.getGender());
-        // U23: same reasoning - the phone is normalised and checked before any field is touched. null skips the field, a
-        // blank value clears it; a user with no email cannot clear their only identifier.
+        // U23/U25: same reasoning - the phone is classified and checked before any field is touched. null skips the field,
+        // a blank value clears it. A number that does not parse is saved as typed with status INVALID (the client shows a
+        // hint), but it is not an identifier: a user with no email cannot clear or replace their only phone with one.
         boolean phoneProvided = request.getPhoneNumber() != null;
-        String resolvedPhone = null;
+        PhoneNumbers.Classified resolvedPhone = null;
         if (phoneProvided) {
-            resolvedPhone = PhoneNumbers.normalize(request.getPhoneNumber());
-            if (resolvedPhone == null && isBlank(user.getEmail())) {
+            resolvedPhone = PhoneNumbers.classify(request.getPhoneNumber());
+            if (isBlank(user.getEmail()) && (resolvedPhone == null || resolvedPhone.status() == PhoneStatus.INVALID)) {
                 throw new BadRequestException("IDENTIFIER_REQUIRED", "An account needs an email or a phone number", null);
             }
-            if (resolvedPhone != null && !resolvedPhone.equals(user.getPhoneNumber())) {
-                requirePhoneFree(resolvedPhone, userId);
+            if (resolvedPhone != null && resolvedPhone.status() == PhoneStatus.VALID
+                    && !resolvedPhone.number().equals(user.getPhoneNumber())) {
+                requirePhoneFree(resolvedPhone.number(), userId);
             }
         }
 
@@ -272,7 +275,7 @@ public class UserServiceImpl implements UserService {
             user.setUsername(request.getUsername());
         }
         if (phoneProvided) {
-            user.setPhoneNumber(resolvedPhone);
+            applyPhone(user, resolvedPhone);
         }
         if (request.getDateOfBirth() != null) {
             user.setDateOfBirth(request.getDateOfBirth());
@@ -466,6 +469,7 @@ public class UserServiceImpl implements UserService {
                 .firstName(firstName)
                 .lastName(lastName)
                 .phoneNumber(phone)
+                .phoneStatus(phone == null ? null : PhoneStatus.VALID)
                 .countryId(extras.getCountryId())
                 .regionId(extras.getRegionId())
                 .location(location)
@@ -491,6 +495,23 @@ public class UserServiceImpl implements UserService {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    /**
+     * U25: writes a classified phone (or clears it). Re-sending the number the user already has keeps a VERIFIED status;
+     * any other change is only as trusted as its own classification, because a changed number was never proven.
+     */
+    private static void applyPhone(User user, PhoneNumbers.Classified phone) {
+        if (phone == null) {
+            user.setPhoneNumber(null);
+            user.setPhoneStatus(null);
+            return;
+        }
+        boolean sameVerified = user.getPhoneStatus() == PhoneStatus.VERIFIED
+                && phone.status() == PhoneStatus.VALID
+                && phone.number().equals(user.getPhoneNumber());
+        user.setPhoneNumber(phone.number());
+        user.setPhoneStatus(sameVerified ? PhoneStatus.VERIFIED : phone.status());
     }
 
     /**
@@ -675,15 +696,20 @@ public class UserServiceImpl implements UserService {
             return toUserResponse(existing.get());
         }
 
-        String phone = PhoneNumbers.normalize(identity.getPhoneNumber());
+        // U25: the Keycloak account already exists, so a phone that does not parse cannot be refused (a 400 would lock the
+        // user out of the app for good). It is stored as typed with status INVALID; the client shows a hint in Account Settings.
+        PhoneNumbers.Classified phone = PhoneNumbers.classify(identity.getPhoneNumber());
+        boolean usablePhone = phone != null && phone.status() != PhoneStatus.INVALID;
         String email = isBlank(identity.getEmail()) ? null : identity.getEmail().trim();
-        if (email == null && phone == null) {
+        if (email == null && !usablePhone) {
             throw new BadRequestException("IDENTIFIER_REQUIRED", "An email or a phone number is required", null);
         }
         if (email != null && userRepository.existsByEmail(email)) {
             throw emailAlreadyRegistered();
         }
-        requirePhoneFree(phone, null);
+        if (usablePhone) {
+            requirePhoneFree(phone.number(), null);
+        }
 
         String firstName = blankToNull(identity.getFirstName());
         String lastName = blankToNull(identity.getLastName());
@@ -702,7 +728,8 @@ public class UserServiceImpl implements UserService {
                 .firstName(firstName)
                 .lastName(lastName)
                 .username(availableUsername(identity.getUsername(), identity.getId()))
-                .phoneNumber(phone)
+                .phoneNumber(phone == null ? null : phone.number())
+                .phoneStatus(phone == null ? null : phone.status())
                 .countryId(zone[0])
                 .regionId(zone[1])
                 .location(usableLocation(identity))
@@ -945,6 +972,7 @@ public class UserServiceImpl implements UserService {
                 .lastName(user.getLastName())
                 .username(user.getUsername())
                 .phoneNumber(user.getPhoneNumber())
+                .phoneStatus(user.getPhoneStatus())
                 .dateOfBirth(user.getDateOfBirth())
                 .gender(user.getGender())
                 .bio(user.getBio())

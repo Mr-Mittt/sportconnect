@@ -4,10 +4,12 @@ import { classes } from './classes';
 import { useI18n } from './i18n';
 import type { KcContext } from './KcContext';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import Template from './Template';
 import '../theme.css';
 
-const UserProfileFormFields = lazy(() => import('keycloakify/login/UserProfileFormFields'));
+// AUTH-16: the stock profile-field renderer, plus the register page's country / region block.
+const UserProfileFormFields = lazy(() => import('./components/UserProfileFormFieldsWithGeo'));
 
 /**
  * Page switch. `login.ftl` is our own page; every other page (register, reset, update-password,
@@ -25,6 +27,14 @@ export default function KcPage(props: { kcContext: KcContext }) {
         switch (kcContext.pageId) {
           case 'login.ftl':
             return <Login {...{ kcContext, i18n, Template, classes, doUseDefaultCss: false }} />;
+          case 'register.ftl':
+            return (
+              <Register
+                {...{ kcContext, i18n, Template, classes, doUseDefaultCss: false }}
+                UserProfileFormFields={UserProfileFormFields}
+                doMakeUserConfirmPassword={true}
+              />
+            );
           default:
             return (
               <DefaultPage

@@ -14,6 +14,10 @@ Keycloak creates its tables but not its database or role. The deploy runs `infra
 
 **Back up and restore Keycloak's database together with the app's.** `users.id` equals the Keycloak `sub`, so restoring only one side leaves app users pointing at an identity that does not exist, or the reverse. The backup and the restore drill must cover both.
 
+> **Added 2026-10-15 (client AUTH-16):** the Keycloak register page reads the public `/api/reference` lists from the browser.
+> Production therefore needs (1) the Keycloak origin in the API's `CORS_ORIGINS`, and (2) the Keycloak environment variable
+> `SPORTCONNECT_API_BASE_URL` set to the API's public `/api` URL (the theme's default is the local one). Both are checked by the
+> same smoke test as the theme itself: open `/register` on the production Keycloak and see the country list load.
 ## Out of scope
 
 The dev Compose service (INFRA-13); any AWS plan.

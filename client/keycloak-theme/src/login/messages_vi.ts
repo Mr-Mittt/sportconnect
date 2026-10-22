@@ -185,6 +185,21 @@ const themeKeys: Record<ThemeMessageKey, string> = {
   registerSubmit: 'Tạo tài khoản',
   haveAccount: 'Đã có tài khoản?',
   requiredMark: 'bắt buộc',
+  geoCountry: 'Quốc gia',
+  geoRegion: 'Khu vực',
+  geoSelectCountry: 'Chọn quốc gia',
+  geoSelectRegion: 'Chọn khu vực',
+  geoNoRegions: 'Quốc gia này không có khu vực nào',
+  geoRegionsLoadError: 'Không thể tải danh sách khu vực lúc này',
+  geoReferenceLoadError: 'Không thể tải danh sách quốc gia lúc này',
+  geoUseMyLocation: 'Dùng vị trí hiện tại của tôi',
+  geoLocating: 'Đang định vị…',
+  geoHintDenied: 'Quyền truy cập vị trí đã bị từ chối. Bạn vẫn có thể chọn thủ công.',
+  geoHintUnavailable: 'Vị trí hiện không khả dụng. Bạn vẫn có thể chọn thủ công.',
+  geoHintNoMatch: 'Chúng tôi chưa xác định được bạn ở đâu từ vị trí này. Vui lòng chọn quốc gia và khu vực bên dưới.',
+  geoHintTimeout: 'Việc định vị mất quá nhiều thời gian. Bạn vẫn có thể chọn thủ công.',
+  geoOptionalNote:
+    'Khu vực của bạn là tùy chọn. Hãy chọn để khám phá cộng đồng thể thao trong khu vực; bạn có thể thay đổi bất cứ lúc nào trong Cài đặt tài khoản.',
 };
 
 const vi: Record<string, string> = { ...messages, ...themeKeys };

@@ -90,7 +90,7 @@ public class AuthController {
             description = "Exchanges the authorization code and PKCE verifier with Keycloak, creates the user on first sign-in, and returns the access token with the refresh token in an httpOnly cookie. A deactivated account that signed in with a social provider is re-activated; one that signed in with a password gets ACCOUNT_DEACTIVATED and a reactivationTicket (errorParams) instead.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Signed in"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or the identity has neither email nor phone (IDENTIFIER_REQUIRED, INVALID_PHONE_NUMBER)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or the identity has no email and no usable phone (IDENTIFIER_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Code or verifier refused (AUTH_CODE_INVALID), or a deactivated password account (ACCOUNT_DEACTIVATED, errorParams.reactivationTicket)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PHONE_ALREADY_USED or EMAIL_ALREADY_REGISTERED at first sign-in"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the ticket store is not answering")

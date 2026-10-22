@@ -186,5 +186,6 @@
         }
       }
     ]
-  }
+  },
+  "passwordPolicy": "length(8)"
 }
