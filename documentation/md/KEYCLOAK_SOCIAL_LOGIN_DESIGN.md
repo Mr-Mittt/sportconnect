@@ -90,3 +90,9 @@ The Keycloak register page renders the zone itself (country, region, "use my cur
 ## 6. Not changing
 
 Posts, groups, sessions, sports and notifications; `users.is_active` as the account state; the `JwtTokenService` interface; INFRA-12's gate on production.
+
+## 5c. Update 2026-10-16: phone rules and the username (A27)
+
+Section 5b is superseded on one point. The realm no longer uses "email as username" (`registrationEmailAsUsername: false`), because that setting makes an email mandatory and so rules out a phone-only account. The Keycloak username is now **the identifier the user registered with**: the email for an email user (so every existing user is unchanged), the E.164 phone for a phone-only user. A registration step in the realm's `sportconnect registration` flow fills a missing `username`, so the register page still shows no username field; the theme hides the `username` attribute Keycloak now lists. The backend still never copies `preferred_username` into the public `users.username` when it contains `@`, and now also not when it is a phone number.
+
+The phone rules are enforced in Keycloak by the provider JAR `infra/keycloak-extensions` (`modules/auth/docs/MVP/A27_KEYCLOAK_JAVA_EXTENSION_PHONE_RULES.md`): a unique phone, email-or-phone, sign-in by phone, and the canonical (E.164) form stored whenever the phone parses. A phone that does not parse never blocks a registration: it is saved as typed, compared as typed, and does not count as an identifier on its own (the backend marks it `INVALID`, U25). The extension uses Keycloak-internal SPIs, so every Keycloak upgrade needs a rebuild and a run of `infra/scripts/verify-phone-rules.mjs`.

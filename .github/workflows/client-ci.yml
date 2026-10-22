@@ -27,6 +27,7 @@ on:
       - '.github/workflows/client-ci.yml'
       # AUTH-15: the real-Keycloak e2e runs the committed realm with the theme JAR.
       - 'infra/keycloak/**'
+      - 'infra/keycloak-extensions/**'
       - 'infra/scripts/build-keycloak-theme.sh'
       - 'infra/scripts/run-keycloak-e2e.sh'
   pull_request:
@@ -35,6 +36,7 @@ on:
       - '!client/docs/**'
       - '.github/workflows/client-ci.yml'
       - 'infra/keycloak/**'
+      - 'infra/keycloak-extensions/**'
       - 'infra/scripts/build-keycloak-theme.sh'
       - 'infra/scripts/run-keycloak-e2e.sh'
   workflow_dispatch:

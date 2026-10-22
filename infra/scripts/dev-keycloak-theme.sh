@@ -50,10 +50,10 @@ token="$(curl -fsS -X POST "$url/realms/master/protocol/openid-connect/token" \
   --data-urlencode "username=$admin_user" --data-urlencode "password=$admin_password" |
   node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>console.log(JSON.parse(s).access_token))")"
 
-# Read the realm, change only loginTheme and registrationEmailAsUsername, write it back (a PUT replaces the representation).
+# Read the realm, change only loginTheme, write it back (a PUT replaces the representation).
 current="$(curl -fsS -H "Authorization: Bearer $token" "$url/admin/realms/$realm")"
-updated="$(printf '%s' "$current" | THEME="$theme" node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);r.loginTheme=process.env.THEME;r.registrationEmailAsUsername=true;console.log(JSON.stringify(r))})")"
+updated="$(printf '%s' "$current" | THEME="$theme" node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const r=JSON.parse(s);r.loginTheme=process.env.THEME;console.log(JSON.stringify(r))})")"
 curl -fsS -X PUT -H "Authorization: Bearer $token" -H "Content-Type: application/json" \
   -d "$updated" "$url/admin/realms/$realm" >/dev/null
 
-echo "dev-keycloak-theme: done. Realm '$realm' now uses the '$theme' login theme and email-as-username: $url/realms/$realm/account"
+echo "dev-keycloak-theme: done. Realm '$realm' now uses the '$theme' login theme: $url/realms/$realm/account"

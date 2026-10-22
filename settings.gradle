@@ -33,3 +33,6 @@ include 'modules:email:email-impl'
 
 // Frontend (pnpm/Vite project wrapped by the node-gradle plugin)
 include 'client'
+
+// Keycloak provider JAR (A27): phone rules for the sportconnect realm
+include 'infra:keycloak-extensions'

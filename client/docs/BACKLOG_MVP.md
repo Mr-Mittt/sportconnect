@@ -72,6 +72,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
 | 21 | [ACCOUNT-6](MVP/ACCOUNT-6_PASSWORD_CONFIRM_DIALOGS_FOR_KEYCLOAK_USERS.md) | Change-password and deactivate confirmations for Keycloak users (no local password, so both always fail today); scope set by the backend U24 decision | `TODO` |
 | 22 | [AUTH-17](MVP/AUTH-17_REPLACE_WATERMARKED_EARTH_IMAGE.md) | Replace the watermarked `earth.png` (a "Vecteezy" stock watermark is tiled across the globe) in the auth illustration with a clean original; then regenerate the baselines that contain it | `TODO` |
+| 23 | [AUTH-18](MVP/AUTH-18_REGISTER_AND_LOGIN_PAGES_FOR_PHONE.md) | Register and login pages for a phone number: a phone field and "email or phone" on register (no email required in the browser), the new error keys placed under their fields, the login label "Email or phone number"; en and vi (follow-up of auth A27) | `TODO` |
 
 #### Removed / Deferred
 

@@ -1,7 +1,7 @@
 // AUTH-16: a copy of Keycloakify's stock Register page (11.16.1) with one change: "Back to log in" moves under the
 // create-account button, left, and "Forgot password?" sits on the right. Everything else is the stock page.
 import type { JSX } from "keycloakify/tools/JSX";
-import { useState, useLayoutEffect } from "react";
+import { useState, useLayoutEffect, useMemo } from "react";
 import type { LazyOrNot } from "keycloakify/tools/LazyOrNot";
 import { kcSanitize } from "keycloakify/lib/kcSanitize";
 import { getKcClsx, type KcClsx } from "keycloakify/login/lib/kcClsx";
@@ -32,6 +32,18 @@ export default function Register(props: RegisterProps) {
     // Keycloak sends the reset URL to this page too, but the register context type does not declare it.
     const resetUrl = (url as { loginResetCredentialsUrl?: string }).loginResetCredentialsUrl;
 
+    // A27: the realm no longer uses "email as username" (that setting makes an email mandatory, which rules out a
+    // phone-only account), so Keycloak now lists a `username` attribute on this page. The registration flow fills it
+    // on the server (the email, else the phone), so the page keeps showing no username field. It is hidden and not
+    // required rather than removed: Keycloakify places the password fields after the username attribute, so removing
+    // it would remove them. The context must keep one identity across renders (Keycloakify caches its form state by it).
+    const fieldsContext = useMemo(() => {
+        const { username, ...others } = kcContext.profile.attributesByName;
+        const attributesByName =
+            username === undefined ? others : { username: { ...username, required: false, annotations: { ...username.annotations, inputType: "hidden" } }, ...others };
+        return { ...kcContext, profile: { ...kcContext.profile, attributesByName } };
+    }, [kcContext]);
+
     const [isFormSubmittable, setIsFormSubmittable] = useState(false);
     const [areTermsAccepted, setAreTermsAccepted] = useState(false);
 
@@ -58,7 +70,7 @@ export default function Register(props: RegisterProps) {
         >
             <form id="kc-register-form" className={kcClsx("kcFormClass")} action={url.registrationAction} method="post">
                 <UserProfileFormFields
-                    kcContext={kcContext}
+                    kcContext={fieldsContext}
                     i18n={i18n}
                     kcClsx={kcClsx}
                     onIsFormSubmittableValueChange={setIsFormSubmittable}

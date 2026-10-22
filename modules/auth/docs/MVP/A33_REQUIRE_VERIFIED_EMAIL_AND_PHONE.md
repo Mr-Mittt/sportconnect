@@ -21,3 +21,7 @@ Social sign-ins (the provider vouches for the email), and accounts with no email
 ## Out of scope
 
 Providers (A29); recovery for accounts with no email (A22).
+
+## Delta 2026-10-16 (from A27)
+
+A27 is done. Two facts this ticket builds on: a phone is stored in E.164 when it parses and as typed when it does not (the backend marks the latter `INVALID`, never an identifier), and a phone-only account can now exist (its Keycloak username is the E.164 number). With `verifyEmail: true`, a phone-only account has no email to verify, so the realm rule must not block it: check how Keycloak treats a user with no email under that setting (live, with `infra/scripts/verify-phone-rules.mjs`'s phone-only registration) before switching it on. The Keycloak extension lives in `infra/keycloak-extensions`; a phone verification step would be a new provider there.
