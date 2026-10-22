@@ -13,10 +13,14 @@ interface AuthShellProps {
    * that forgets to pass one.
    */
   tagline?: string;
+  /** AUTH-15: forwarded to `CommunityIllustration`; only the Keycloak theme sets it. */
+  earthSrc?: string;
 }
 
 /**
- * Two-column card shell shared by Login and Register (per
+ * Two-column card shell used by the callback page and, through the Keycloak theme (AUTH-15),
+ * by every Keycloak-hosted page. Keep this file free of app imports (router, i18n, stores).
+ * Originally the shell shared by Login and Register (per
  * design-reference-login.html and AUTH-1's delta: "the left-panel two-column
  * card layout is shared with AUTH-2's Register page"). Illustration + tagline
  * on the left, `children` (the form) on the right.
@@ -24,6 +28,7 @@ interface AuthShellProps {
 export function AuthShell({
   children,
   tagline = 'Your teams, matches, and crew — all in one place.',
+  earthSrc,
 }: AuthShellProps) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4 py-8">
@@ -36,7 +41,7 @@ export function AuthShell({
             SportHub
           </div>
           <div className="flex flex-1 items-center justify-center">
-            <CommunityIllustration />
+            <CommunityIllustration earthSrc={earthSrc} />
           </div>
           <p className="max-w-[320px] text-2xl font-semibold tracking-tight text-text-primary">
             {tagline}

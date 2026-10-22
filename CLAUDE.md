@@ -94,6 +94,9 @@ Deps-only — the server and client still run natively (`./gradlew :server:bootR
 
 Keycloak (identity for the social-login work, :8081, admin/admin) and the Mailpit mail sink (UI :8025) are part of the same `up -d`, so the stack now also needs about 800 MB for Keycloak; start or stop just those two with `docker compose -f infra/docker-compose.dev.yml up -d keycloak mailpit` / `stop keycloak mailpit`.
 On an existing Postgres volume run `infra/scripts/create-keycloak-db.sh` once first; realm reset and the rest: `infra/documentation/MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md`.
+The login pages are the Keycloakify theme in `client/keycloak-theme/` (AUTH-15): `infra/scripts/build-keycloak-theme.sh` builds the JAR into `infra/keycloak/providers/` (needs JDK + Maven; restart Keycloak after), `infra/scripts/dev-keycloak-theme.sh` does the whole local loop (build, restart the Compose Keycloak, set the realm login theme), and `infra/scripts/run-keycloak-e2e.sh` runs the redirect e2e against a throwaway Keycloak with the theme.
+
+**Realm changes (Keycloak).** Every change to the `sportconnect` realm is made through the Keycloak admin API during implementation (a script under `infra/scripts/`, never by hand in the console), and the same change is mirrored in `infra/keycloak/realm/sportconnect-realm.json` in the same change, so a re-deployed realm is always up to date. The realm import is `IGNORE_EXISTING`: the file only seeds a new realm (it holds settings, no users), so an existing realm needs the API call. Rebuilding users after a realm reset is A31 (auth V1).
 
 ### Backend (Gradle)
 ```bash

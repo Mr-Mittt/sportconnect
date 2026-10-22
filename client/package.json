@@ -16,7 +16,10 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "e2e": "playwright test --project=e2e",
-    "test:visual": "playwright test --project=visual-regression"
+    "test:visual": "playwright test --project=visual-regression",
+    "build-theme-storybook": "pnpm --dir keycloak-theme install --frozen-lockfile && pnpm --dir keycloak-theme build-storybook",
+    "test:theme": "playwright test --project=theme",
+    "e2e:keycloak": "playwright test --config=playwright.keycloak.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.1",

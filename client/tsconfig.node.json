@@ -29,6 +29,7 @@
     "vite.config.ts",
     "vitest.config.ts",
     "playwright.config.ts",
+    "playwright.keycloak.config.ts",
     "eslint.config.js",
     ".storybook/**/*.ts",
     "e2e/**/*.ts"

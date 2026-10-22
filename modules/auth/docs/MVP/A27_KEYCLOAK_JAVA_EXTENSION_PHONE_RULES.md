@@ -8,6 +8,8 @@
 
 ## What
 
+> **Delta 2026-10-15 (email as username):** the realm now has `registrationEmailAsUsername: true` (`sportconnect-realm.json`; `dev-keycloak-theme.sh` sets it on an existing dev realm). The register page has no username field and Keycloak stores the email as the username, so `preferred_username` is the email. For phone users this ticket must therefore also decide Keycloak's internal username: Keycloak requires one, so the extension sets it to the E.164 phone for a phone-only user (never shown), and the register and login pages become "email or phone number".
+
 1. **Half-day spike** against Keycloak 26.4 in INFRA-13's Compose: can the user-profile validator SPI enforce unique phone and email-or-phone, does a failing validator make first-broker-login show the "complete your profile" page, and can an authenticator resolve a phone number to a user? Record the answers here. If any cannot be done, stop and record the fallback.
 2. On a go, a new Gradle module (`keycloak-extensions`) producing one provider JAR: the unique-phone validator, the email-or-phone validator, and the phone-login authenticator (E.164 normalisation). The database unique index and check (U23) stay as the backstop.
 3. Document the upgrade cost: SPI APIs can change between Keycloak majors, so each upgrade needs a rebuild and a test.

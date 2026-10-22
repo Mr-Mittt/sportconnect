@@ -74,6 +74,10 @@ Pre-implementation checks (not yet verified): Keycloak can emit the identity pro
 
 Real IT coverage through MockMvc (a locally generated RSA key and a stubbed JWKS for the filter and the gate; a stubbed Keycloak token endpoint for the callback, including the ticket flow, social auto-reactivate and cancel; the new constraints, with the H2 `schema.sql` mirror updated); one Keycloak Testcontainers smoke IT in CI only; a Go test for the JWKS verifier; client e2e for the redirect flow against a real Keycloak in CI (MSW cannot cover a redirect).
 
+## 5b. Update 2026-10-15: email as username
+
+The realm uses Keycloak's "Email as username": no username field on register or login, the sign-in page asks for the email. Keycloak still stores a username internally (it is required), equal to the email. `UserServiceImpl.availableUsername` ignores a `preferred_username` containing `@`, so the email never becomes the public `users.username`. Phone as an identifier waits for A27 (the extension also sets Keycloak's internal username for phone-only users). Existing realms need the flag set through the admin API (`infra/scripts/dev-keycloak-theme.sh` does it).
+
 ## 6. Not changing
 
 Posts, groups, sessions, sports and notifications; `users.is_active` as the account state; the `JwtTokenService` interface; INFRA-12's gate on production.

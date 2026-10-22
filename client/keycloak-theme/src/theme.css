@@ -1,0 +1,128 @@
+/*
+ * AUTH-15: the client's own stylesheet (Tailwind + every design token), plus a source scan limited
+ * to the shared files the theme imports. An unrestricted scan, or a stray build folder in this
+ * directory, would pull in classes from the whole client and double the CSS (A24).
+ */
+@import '../../src/index.css';
+@source '../../src/shared/ui/{button,input,label}.tsx';
+@source '../../src/features/auth/components/{AuthShell,CommunityIllustration}.tsx';
+@source './login';
+
+/*
+ * With Keycloak's default CSS off, the class map in login/classes.ts is the stylesheet for every
+ * stock page. What a utility class cannot express goes here.
+ */
+
+/* Keycloakify renders the required-field asterisk outside the label: keep it on the label's line. */
+.kc-required-mark {
+  margin-inline-start: 0.125rem;
+  color: var(--color-text-danger);
+}
+
+/* Radios and checkboxes: the control and its label on one row, label never wrapping under the circle. */
+.kc-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.kc-choice input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+/* The TOTP setup's numbered instruction list and the OTP credential list. */
+.kc-steps {
+  margin-bottom: 1rem;
+  padding-inline-start: 1.25rem;
+  list-style: decimal;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+.kc-steps > li + li {
+  margin-top: 0.75rem;
+}
+.kc-steps ul {
+  margin-top: 0.375rem;
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+}
+
+/* The recovery-code grid and the long OTP secret key must wrap instead of widening the card. */
+.kc-code {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* A checkbox or radio nested in its label (Keycloak's own markup on several pages): one row. */
+label:has(> input[type='checkbox']),
+label:has(> input[type='radio']) {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* TOTP setup (login-config-totp.ftl): numbered steps, the supported-apps list, the manual-entry steps. */
+#kc-totp-settings,
+#kc-totp-settings ol {
+  margin-bottom: 1rem;
+  padding-inline-start: 1.25rem;
+  list-style: decimal;
+}
+#kc-totp-settings > li + li {
+  margin-top: 0.75rem;
+}
+#kc-totp-settings ul,
+#kc-totp-supported-apps {
+  margin-top: 0.375rem;
+  padding-inline-start: 1.25rem;
+  list-style: disc;
+}
+#kc-totp-secret-key {
+  display: block;
+  margin-block: 0.5rem;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--color-text-primary);
+}
+
+/* PatternFly leftovers: a few stock pages (recovery codes, warnings) hard-code pf-* classes that the
+   default CSS would have styled. Only the ones those pages use are re-created here, from our tokens. */
+.pf-screen-reader {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.pf-c-alert {
+  margin-bottom: 1rem;
+  border: 0.5px solid var(--color-border);
+  border-radius: 0.5rem;
+  background: var(--color-amber-50);
+  padding: 0.75rem;
+  font-size: 13px;
+  color: var(--color-amber-800);
+}
+.pf-c-alert__icon {
+  display: none;
+}
+.pf-c-alert__title {
+  display: block;
+  font-weight: 600;
+}
+.pf-c-alert__description {
+  margin-top: 0.25rem;
+}
+.pf-c-button.pf-m-link {
+  cursor: pointer;
+  background: none;
+  font-size: 13px;
+  color: var(--color-text-accent);
+}
+.pf-c-button.pf-m-link:hover {
+  text-decoration: underline;
+}

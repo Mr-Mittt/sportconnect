@@ -93,6 +93,15 @@ export const authHandlers: HttpHandler[] = [
         headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
       });
     }
+    // AUTH-15: the real-Keycloak e2e (playwright.keycloak.config.ts) starts the mock server with this
+    // flag, because the code that Keycloak really issues is not one of the fixed codes above and no
+    // backend runs there to exchange it. Every other run keeps rejecting unknown codes.
+    if (process.env.MOCK_AUTH_ACCEPT_ANY_CODE === '1' && body.code) {
+      return HttpResponse.json(apiResponse(authResult, 'Login successful'), {
+        status: 200,
+        headers: { 'Set-Cookie': refreshCookie(mockRefreshToken, 604800) },
+      });
+    }
     return HttpResponse.json(apiError('Invalid authorization code', 'AUTH_CODE_INVALID'), { status: 401 });
   }),
 

@@ -1,4 +1,5 @@
-# Client CI — lint, typecheck, unit, e2e (incl. a11y gate), visual regression.
+# Client CI — lint, typecheck, unit, e2e (incl. a11y gate), visual regression, plus (AUTH-15) the
+# Keycloak login theme: its checks in `test`, its real-Keycloak e2e in `keycloak-e2e`.
 # HF-10b: make the visual check a *required* status on PRs touching client/**
 # (GitHub → Settings → Branches → require "client-ci / test").
 #
@@ -24,11 +25,18 @@ on:
       - 'client/**'
       - '!client/docs/**'
       - '.github/workflows/client-ci.yml'
+      # AUTH-15: the real-Keycloak e2e runs the committed realm with the theme JAR.
+      - 'infra/keycloak/**'
+      - 'infra/scripts/build-keycloak-theme.sh'
+      - 'infra/scripts/run-keycloak-e2e.sh'
   pull_request:
     paths:
       - 'client/**'
       - '!client/docs/**'
       - '.github/workflows/client-ci.yml'
+      - 'infra/keycloak/**'
+      - 'infra/scripts/build-keycloak-theme.sh'
+      - 'infra/scripts/run-keycloak-e2e.sh'
   workflow_dispatch:
     inputs:
       update-baselines:
@@ -76,6 +84,25 @@ jobs:
       - run: pnpm e2e
         if: ${{ !inputs.update-baselines }}
 
+      # AUTH-15: the Keycloak login theme (client/keycloak-theme) is its own package. Its lint,
+      # typecheck and unit tests run first (skipped on a baseline-regen dispatch, like the client's
+      # own); its Storybook is built on every run because the theme's visual baselines and the
+      # theme a11y gate both capture it. The theme JAR itself is built in the keycloak-e2e job.
+      - name: Theme lint, typecheck, unit
+        if: ${{ !inputs.update-baselines }}
+        working-directory: client/keycloak-theme
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm lint
+          pnpm exec tsc --noEmit
+          pnpm test
+
+      - run: pnpm build-theme-storybook
+
+      - name: Theme a11y / overflow / Tab order
+        if: ${{ !inputs.update-baselines }}
+        run: pnpm test:theme
+
       - name: Visual regression
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.update-baselines) }}
         run: pnpm test:visual
@@ -97,4 +124,52 @@ jobs:
         with:
           name: playwright-report
           path: client/playwright-report/
+          retention-days: 14
+
+  # AUTH-15: the redirect e2e against a real Keycloak carrying the SportConnect theme. The script
+  # builds the theme JAR (JDK + Maven; ubuntu-latest ships Maven, setup-java pins the JDK), starts a
+  # throwaway Keycloak container with the committed realm import and runs `pnpm e2e:keycloak`.
+  # Skipped on a baseline-regen dispatch. The same script runs locally:
+  # infra/scripts/run-keycloak-e2e.sh
+  keycloak-e2e:
+    if: ${{ !inputs.update-baselines }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # reads packageManager from client/package.json
+        with:
+          package_json_file: client/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            client/pnpm-lock.yaml
+            client/keycloak-theme/pnpm-lock.yaml
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: bash ../infra/scripts/run-keycloak-e2e.sh
+
+      - name: Upload the theme JAR
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycloak-theme-jar
+          path: client/keycloak-theme/dist_keycloak/keycloak-theme-for-kc-all-other-versions.jar
+          retention-days: 14
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-keycloak
+          path: client/playwright-report-keycloak/
           retention-days: 14

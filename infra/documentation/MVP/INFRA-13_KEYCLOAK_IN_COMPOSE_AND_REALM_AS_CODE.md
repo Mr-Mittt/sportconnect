@@ -63,7 +63,7 @@ Keycloak imports with strategy IGNORE_EXISTING: editing the JSON does nothing to
 
 ### Theme and extension builds
 
-`keycloakify build` and the A27 extension need a JDK and **Apache Maven on PATH** (A23: it does not download one). Local machines need Maven installed; the CI jobs that build them are part of AUTH-15 and A27.
+`keycloakify build` and the A27 extension need a JDK and **Apache Maven on PATH** (A23: it does not download one). Local machines need Maven installed; the CI job that builds the theme is **done by AUTH-15** (`client-ci.yml`: the `test` job builds the theme Storybook, the `keycloak-e2e` job builds the JAR with `infra/scripts/build-keycloak-theme.sh` and runs it in a throwaway Keycloak through `infra/scripts/run-keycloak-e2e.sh`); the A27 extension build is still to come.
 
 ## Verification (run locally, 2026-10-14)
 
@@ -74,6 +74,8 @@ Keycloak imports with strategy IGNORE_EXISTING: editing the JSON does nothing to
 - Not exercised: a real email through Mailpit (no flow sends one until A28), and production mode (INFRA-14).
 
 ## Notes for the next tickets
+
+- **AUTH-15 (2026-10-15) added to the realm file:** `"loginTheme": "sportconnect"`. An existing dev realm keeps its old theme (the import is `IGNORE_EXISTING`): set Login theme to `sportconnect` in the admin console (Realm settings > Themes) or re-import with the procedure above. Without the JAR in `providers/`, Keycloak falls back to its stock theme.
 
 - **A26 (2026-10-14) added to the realm file:** the `identity_provider` user-session-note mapper (present only for a brokered login), `locale` and `phone_number` attribute mappers on `sportconnect-web`, and an optional `phoneNumber` user-profile attribute (length only; A27 adds the phone rules). Re-import with the procedure above. The realm keeps Keycloak's default of **not** revoking a refresh token on use.
 

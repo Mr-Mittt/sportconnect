@@ -206,6 +206,18 @@ class UserProvisioningSpec extends Specification {
         0 * userRepository.existsByUsername(_)
     }
 
+    def "a username that is an email address (the realm's email-as-username) is not copied: it is shown to other users"() {
+        when:
+        userService.provisionExternalUser(identity().username("a@example.com").build())
+
+        then:
+        1 * userRepository.findById(sub) >> Optional.empty()
+        1 * userRepository.existsByEmail(_) >> false
+        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
+        1 * userRepository.save({ User u -> u.username == null }) >> { User u -> u }
+        0 * userRepository.existsByUsername(_)
+    }
+
     def "only a full name splits into first and last name; a given and family name win over it"() {
         when:
         userService.provisionExternalUser(identity().firstName(null).lastName(null).fullName("Tran Van Binh").build())

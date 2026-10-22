@@ -2,7 +2,7 @@
 
 **Version:** V1  
 **Module:** `modules/auth/auth-impl`  
-**Last updated:** 2026-10-08  
+**Last updated:** 2026-10-15  
 **Prerequisite:** All MVP tickets in `modules/auth/docs/BACKLOG_MVP.md` must be `DONE` before starting V1.
 
 ---
@@ -22,6 +22,7 @@
 |---|---|---|---|
 | 1 | A1 | Apply Redis for refresh token storage | `TODO` |
 | 2 | [A5](V1/A5_LOGIN_REGISTRATION_RATE_LIMITING.md) | Login/registration rate limiting — moved from MVP 2026-10-08 (not much user in MVP, need more user first) | `TODO` |
+| 3 | [A31](V1/A31_REBUILD_KEYCLOAK_USERS_FROM_APP_DB.md) | Rebuild a Keycloak realm's users from the app DB (same ids, no passwords, "set password" email), after saving federated identity links in an app table; owner request 2026-10-15 | `TODO` |
 
 ---
 

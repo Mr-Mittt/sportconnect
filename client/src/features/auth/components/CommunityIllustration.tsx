@@ -61,14 +61,26 @@ const connectorLines: Array<{ x1: number; y1: number; x2: number; y2: number; co
   { x1: 119, y1: 145, x2: 180, y2: 180, colorVar: 'var(--color-decor-hub)' },
 ];
 
+interface CommunityIllustrationProps {
+  /**
+   * AUTH-15: URL of the earth image. The default is the client's own `/earth.png`; the Keycloak
+   * theme passes an asset URL of its own, because on Keycloak's pages `/earth.png` 404s (they are
+   * served under `/resources/<hash>/login/<theme>/`).
+   */
+  earthSrc?: string;
+}
+
 /**
  * Purely decorative — the Login/Register left-panel illustration from
  * design-reference-login.html: an earth image ringed by orbiting "community"
  * avatar circles (floating animation), connector lines colored by sport ramp,
  * and a central hub icon. `aria-hidden` on the whole tree since none of this
  * conveys information a screen reader user needs.
+ *
+ * Shared with the Keycloak theme (`client/keycloak-theme`): keep this file free of app imports
+ * (router, i18n, stores) — see the ESLint `no-restricted-imports` block in `eslint.config.js`.
  */
-export function CommunityIllustration() {
+export function CommunityIllustration({ earthSrc = '/earth.png' }: CommunityIllustrationProps) {
   return (
     <div className="relative mx-auto h-[340px] w-[360px]" aria-hidden="true">
       <div
@@ -84,7 +96,7 @@ export function CommunityIllustration() {
             'rgba(44, 44, 42, 0.2) 0px 22px 44px, rgba(44, 44, 42, 0.1) -14px -16px 34px inset, rgba(255, 255, 255, 0.75) 10px 10px 24px inset',
         }}
       >
-        <img src="/earth.png" alt="" className="size-full object-cover" />
+        <img src={earthSrc} alt="" className="size-full object-cover" />
       </div>
 
       <svg width="360" height="340" viewBox="0 0 360 340" className="absolute inset-0">
