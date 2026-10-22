@@ -10,8 +10,8 @@
 //   2. the event listener `sc-email-normalizer` (keeps the attribute in step with the email);
 //   3. the flow `sportconnect first broker login`: Keycloak's own first broker login with its "Create User If Unique" step
 //      replaced by `sc-create-user-if-unique-normalized`, bound as the realm's first-broker-login flow (and set on any
-//      identity provider that still names the stock flow), so a Google sign-in as baonguyendangit@gmail.com finds the
-//      password account of bao.nguyen.dangit@gmail.com and goes to the existing-account confirmation.
+//      identity provider that still names the stock flow), so a Google sign-in as jordanleesmith@gmail.com finds the
+//      password account of jordan.lee.smith@gmail.com and goes to the existing-account confirmation.
 //
 // `backfill` is for users created before the listener existed (it reports an existing clash instead of resolving it).
 // `file` reads the whole result from the running Keycloak (run `api` first), like realm-phone-rules.mjs: a realm import

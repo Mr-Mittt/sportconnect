@@ -2,7 +2,7 @@
 
 **Status:** `DONE` (2026-10-18) · **Type:** Enhancement (Security) · **Depends on:** A27 (the provider JAR and realm-script pattern) · **Gates:** A29 (Google must find an existing account by its normalized email)
 
-**Filed:** 2026-10-18, while scoping A29 with the owner: `bao.nguyen.dangit@gmail.com` and `bao.nguyendangit@gmail.com` are the same Gmail mailbox, but Keycloak compares emails as exact lowercase strings, so a Google login would not find the password account and would create a second one (and two dotted variants can both register). Design agreed with the owner: store a normalized copy of the email and run the uniqueness checks on it.
+**Filed:** 2026-10-18, while scoping A29 with the owner: `jordan.lee.smith@gmail.com` and `jordan.leesmith@gmail.com` are the same Gmail mailbox, but Keycloak compares emails as exact lowercase strings, so a Google login would not find the password account and would create a second one (and two dotted variants can both register). Design agreed with the owner: store a normalized copy of the email and run the uniqueness checks on it.
 
 ## What
 

@@ -9,7 +9,7 @@
 ## What (Google only)
 
 - Google as a built-in identity provider in the `sportconnect` realm, set through the admin API script and mirrored in `sportconnect-realm.json` without any secret.
-- Linking policy: auto-link only on a provider-verified email (Google gives `email_verified`), never by phone. The existing-account lookup uses `email_normalized` (**A35**: `bao.nguyen.dangit@gmail.com` and `bao.nguyendangit@gmail.com` are the same Gmail, a match goes to the existing-account confirmation, never a silent link); this ticket only turns Google on and checks it end to end. **Create the provider without a `firstBrokerLoginFlowAlias`** so it uses the realm binding `sportconnect first broker login` (A35 verified this on a stub provider).
+- Linking policy: auto-link only on a provider-verified email (Google gives `email_verified`), never by phone. The existing-account lookup uses `email_normalized` (**A35**: `jordan.lee.smith@gmail.com` and `jordan.leesmith@gmail.com` are the same Gmail, a match goes to the existing-account confirmation, never a silent link); this ticket only turns Google on and checks it end to end. **Create the provider without a `firstBrokerLoginFlowAlias`** so it uses the realm binding `sportconnect first broker login` (A35 verified this on a stub provider).
 - A social login of a deactivated account reactivates it (the A26 rule), checked for Google.
 - Re-check first-broker-login with the A27 validators (`sc-email-or-phone`, `sc-unique-phone`, username filler), which A27 did not exercise with a real provider.
 - Document how the owner creates the Google OAuth client and which redirect URI to register.

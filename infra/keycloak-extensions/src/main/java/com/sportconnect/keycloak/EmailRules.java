@@ -5,7 +5,7 @@ import java.util.Set;
 
 /**
  * A35: the email rule of the realm. Keycloak compares emails as exact lowercase strings, but Gmail delivers
- * {@code bao.nguyen.dangit@gmail.com}, {@code baonguyendangit+x@gmail.com} and {@code baonguyendangit@googlemail.com}
+ * {@code jordan.lee.smith@gmail.com}, {@code jordanleesmith+x@gmail.com} and {@code jordanleesmith@googlemail.com}
  * to one mailbox, so a Google sign-in would not find the password account of the same person.
  *
  * <p>{@link #normalized} is the comparison key stored in the {@code email_normalized} attribute: lowercase for every

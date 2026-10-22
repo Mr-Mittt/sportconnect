@@ -6,17 +6,17 @@ class EmailRulesSpec extends Specification {
 
     def "Gmail spellings of one mailbox share a key"() {
         expect:
-        EmailRules.normalized(typed) == "baonguyendangit@gmail.com"
+        EmailRules.normalized(typed) == "jordanleesmith@gmail.com"
 
         where:
         typed << [
-                "baonguyendangit@gmail.com",
-                "bao.nguyen.dangit@gmail.com",
-                "Bao.Nguyen.Dangit@Gmail.com",
-                "baonguyendangit+shop@gmail.com",
-                "bao.nguyen.dangit+a+b@gmail.com",
-                "baonguyendangit@googlemail.com",
-                "  bao.nguyendangit@GOOGLEMAIL.COM ",
+                "jordanleesmith@gmail.com",
+                "jordan.lee.smith@gmail.com",
+                "Jordan.Lee.Smith@Gmail.com",
+                "jordanleesmith+shop@gmail.com",
+                "jordan.lee.smith+a+b@gmail.com",
+                "jordanleesmith@googlemail.com",
+                "  jordan.leesmith@GOOGLEMAIL.COM ",
         ]
     }
 

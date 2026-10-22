@@ -11,7 +11,7 @@ import org.keycloak.models.UserModel;
  * A35: Keycloak's "Create User If Unique" step of the first broker login, widened with the normalized email. The stock
  * check finds an existing user by the exact username or email; when it finds none, this also looks for a user whose
  * {@code email_normalized} equals the identity provider's email ({@link EmailRules}), so a Google sign-in as
- * {@code baonguyendangit@gmail.com} meets the password account registered as {@code bao.nguyen.dangit@gmail.com}.
+ * {@code jordanleesmith@gmail.com} meets the password account registered as {@code jordan.lee.smith@gmail.com}.
  * A match is reported exactly like the stock one: the flow goes on to "Handle Existing Account", whose confirmation
  * (an emailed link to the existing address, or its password) is what links the accounts, never a silent link.
  */

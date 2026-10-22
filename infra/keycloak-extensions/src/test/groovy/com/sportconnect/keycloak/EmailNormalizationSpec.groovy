@@ -50,12 +50,12 @@ class EmailNormalizationSpec extends Specification {
         def result = new UniqueNormalizedEmailValidator().validate(typed, "email", contextFor(null), ValidatorConfig.EMPTY)
 
         then:
-        1 * users.searchForUserByUserAttributeStream(realm, "email_normalized", "baonguyendangit@gmail.com") >> Stream.of(other)
+        1 * users.searchForUserByUserAttributeStream(realm, "email_normalized", "jordanleesmith@gmail.com") >> Stream.of(other)
         !result.isValid()
         result.errors.first().message == "emailAlreadyUsed"
 
         where:
-        typed << ["bao.nguyen.dangit@gmail.com", "BaoNguyenDangit+x@googlemail.com", ["baonguyendangit@gmail.com"]]
+        typed << ["jordan.lee.smith@gmail.com", "JordanLeeSmith+x@googlemail.com", ["jordanleesmith@gmail.com"]]
     }
 
     def "the user being edited is not a clash with themself"() {
@@ -63,16 +63,16 @@ class EmailNormalizationSpec extends Specification {
         def me = user("me")
 
         when:
-        def result = new UniqueNormalizedEmailValidator().validate("bao.nguyendangit@gmail.com", "email", contextFor(me), ValidatorConfig.EMPTY)
+        def result = new UniqueNormalizedEmailValidator().validate("jordan.leesmith@gmail.com", "email", contextFor(me), ValidatorConfig.EMPTY)
 
         then:
-        1 * users.searchForUserByUserAttributeStream(realm, "email_normalized", "baonguyendangit@gmail.com") >> Stream.of(me)
+        1 * users.searchForUserByUserAttributeStream(realm, "email_normalized", "jordanleesmith@gmail.com") >> Stream.of(me)
         result.isValid()
     }
 
     def "the first-broker-login review step is not validated, so a clash reaches the existing-account confirmation"() {
         when:
-        def result = new UniqueNormalizedEmailValidator().validate("bao.nguyen.dangit@gmail.com", "email",
+        def result = new UniqueNormalizedEmailValidator().validate("jordan.lee.smith@gmail.com", "email",
                 contextFor(null, UserProfileContext.IDP_REVIEW), ValidatorConfig.EMPTY)
 
         then:
@@ -102,15 +102,15 @@ class EmailNormalizationSpec extends Specification {
         EmailNormalizingEventListener.apply(u)
 
         then:
-        setCalls * u.setSingleAttribute("email_normalized", "baonguyendangit@gmail.com")
+        setCalls * u.setSingleAttribute("email_normalized", "jordanleesmith@gmail.com")
         removeCalls * u.removeAttribute("email_normalized")
 
         where:
         email                         | stored                        | setCalls | removeCalls
-        "Bao.Nguyen.Dangit@gmail.com" | null                          | 1        | 0
-        "Bao.Nguyen.Dangit@gmail.com" | "old@gmail.com"               | 1        | 0
-        "Bao.Nguyen.Dangit@gmail.com" | "baonguyendangit@gmail.com"   | 0        | 0
-        null                          | "baonguyendangit@gmail.com"   | 0        | 1
+        "Jordan.Lee.Smith@gmail.com" | null                          | 1        | 0
+        "Jordan.Lee.Smith@gmail.com" | "old@gmail.com"               | 1        | 0
+        "Jordan.Lee.Smith@gmail.com" | "jordanleesmith@gmail.com"   | 0        | 0
+        null                          | "jordanleesmith@gmail.com"   | 0        | 1
         null                          | null                          | 0        | 0
     }
 
@@ -118,14 +118,14 @@ class EmailNormalizationSpec extends Specification {
         given:
         def existing = Mock(UserModel) {
             getId() >> "existing"
-            getEmail() >> "bao.nguyen.dangit@gmail.com"
+            getEmail() >> "jordan.lee.smith@gmail.com"
         }
         def flow = Mock(AuthenticationFlowContext) {
             getRealm() >> realm
             getSession() >> session
         }
         def broker = Mock(BrokeredIdentityContext) {
-            getEmail() >> "baonguyendangit@gmail.com"
+            getEmail() >> "jordanleesmith@gmail.com"
             getUsername() >> "google-sub"
         }
         def serialized = Mock(SerializedBrokeredIdentityContext)
@@ -135,10 +135,10 @@ class EmailNormalizationSpec extends Specification {
         def found = new NormalizedCreateUserIfUniqueAuthenticator().checkExistingUser(flow, "google-sub", serialized, broker)
 
         then:
-        1 * users.searchForUserByUserAttributeStream(realm, "email_normalized", "baonguyendangit@gmail.com") >> Stream.of(existing)
+        1 * users.searchForUserByUserAttributeStream(realm, "email_normalized", "jordanleesmith@gmail.com") >> Stream.of(existing)
         found.existingUserId == "existing"
         found.duplicateAttributeName == "email"
-        found.duplicateAttributeValue == "bao.nguyen.dangit@gmail.com"
+        found.duplicateAttributeValue == "jordan.lee.smith@gmail.com"
     }
 
     def "the broker step creates a new user when nothing matches"() {
