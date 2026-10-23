@@ -360,6 +360,34 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
         assertThat(user.getLastLoginAt()).isNotNull();
     }
 
+    // ---------- A33: the verified flag follows the token ----------
+
+    @Test
+    void anExistingUnverifiedUser_whoseTokenNowSaysVerified_isRecordedAsVerified_atSignInAndAtRefresh() throws Exception {
+        UUID signedIn = existingUserWithId(UUID.randomUUID(), true, "verified-at-signin@example.com");
+        signIn(TestKeycloak.Identity.of(signedIn).email("verified-at-signin@example.com").emailVerified(true))
+                .andExpect(status().isOk());
+        assertThat(userRepository.findById(signedIn).orElseThrow().getIsEmailVerified()).isTrue();
+
+        UUID refreshed = existingUserWithId(UUID.randomUUID(), true, "verified-at-refresh@example.com");
+        String cookie = TestKeycloak.startSession(TestKeycloak.Identity.of(refreshed).email("verified-at-refresh@example.com").emailVerified(true));
+        assertThat(userRepository.findById(refreshed).orElseThrow().getIsEmailVerified()).isFalse();
+        refresh(cookie).andExpect(status().isOk());
+        assertThat(userRepository.findById(refreshed).orElseThrow().getIsEmailVerified()).isTrue();
+    }
+
+    @Test
+    void aTokenThatSaysUnverified_neverTurnsTheFlagOff() throws Exception {
+        UUID sub = existingUserWithId(UUID.randomUUID(), true, "stays@example.com");
+        User user = userRepository.findById(sub).orElseThrow();
+        user.setIsEmailVerified(true);
+        userRepository.save(user);
+
+        signIn(TestKeycloak.Identity.of(sub).email("stays@example.com").emailVerified(false)).andExpect(status().isOk());
+
+        assertThat(userRepository.findById(sub).orElseThrow().getIsEmailVerified()).isTrue();
+    }
+
     // ---------- deactivated: password -> ticket ----------
 
     @Test

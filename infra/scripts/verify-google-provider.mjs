@@ -7,6 +7,16 @@
 //
 //   node infra/scripts/verify-google-provider.mjs
 //
+// A33: the account here is registered with a password and never verified, so the emailed-link proof also removes its
+// password and ends its sessions (checked below, and the password route is then re-armed through the admin API, as the
+// user's "forgot password" would); a verified account keeps its password under the same proof. Needs the extensions JAR
+// with the A33 change loaded.
+//
+// A33: a brand-new account from the provider starts email-verified when the provider says so (the `google-email-verified`
+// mapper, applied to the stub the same way the script applies it to google), one the provider does not vouch for starts
+// unverified, and an existing account the provider is linked to by its PASSWORD becomes verified only when the provider vouches
+// for the mailbox (the mapper itself only imports; the link step does this).
+//
 // Creates a user a29-<run>... and an identity provider a29stub-<run>, deleted at the end (also on failure). Exit code 1
 // if any check fails. Same overrides as verify-email-normalized.mjs (the helpers below are copied from it) plus
 // MAILPIT_URL (default http://localhost:8025).
@@ -14,6 +24,7 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 
 import { ALIAS, LINK_LIFESPAN_KEY, LINK_LIFESPAN_SECONDS } from './realm-google-provider.mjs';
+import { idpMapper as emailVerifiedMapper, MAPPER_NAME as EMAIL_VERIFIED_MAPPER } from './realm-google-email-verified.mjs';
 
 const URL_BASE = process.env.KEYCLOAK_URL ?? 'http://localhost:8081';
 const REALM = process.env.KEYCLOAK_REALM ?? 'sportconnect';
@@ -173,6 +184,13 @@ const formPost = (action, jar, fields) =>
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookieHeader(jar) },
     body: new URLSearchParams(fields),
   });
+const CREDENTIALS_CLIENT = { client_id: 'sportconnect-credentials', client_secret: process.env.KEYCLOAK_CREDENTIALS_CLIENT_SECRET ?? 'dev-credentials-client-secret' };
+/** A33: a live SSO session for the user (a password grant by the backend-only client), returns whether it was opened. */
+const openSession = async (username, password) =>
+  (await fetch(`${OIDC}/token`, { method: 'POST', body: new URLSearchParams({ grant_type: 'password', username, password, ...CREDENTIALS_CLIENT }) })).ok;
+const sessionIdsOf = async (id) => (await (await admin(`/users/${id}/sessions`)).json()).map((session) => session.id);
+const hasPassword = async (id) => (await (await admin(`/users/${id}/credentials`)).json()).some((c) => c.type === 'password');
+const setPassword = (id, value) => admin(`/users/${id}/reset-password`, { method: 'PUT', body: JSON.stringify({ type: 'password', value, temporary: false }) });
 const claimsOf = (jwt) => JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString());
 
 /** Follows redirects (cookies kept) until the app redirect or a page; returns {code} or {html, text, status}. */
@@ -263,6 +281,8 @@ async function main() {
     check('google is a built-in Google provider', idp.providerId === 'google');
     check('google does not trust the email (an existing account is always proven, never silently linked)', idp.trustEmail === false, String(idp.trustEmail));
     check('google names no first-broker-login flow (the realm binding, the A35 flow, applies)', idp.firstBrokerLoginFlowAlias == null || idp.firstBrokerLoginFlowAlias === 'sportconnect first broker login', String(idp.firstBrokerLoginFlowAlias));
+    const googleMappers = await (await admin(`/identity-provider/instances/${ALIAS}/mappers`)).json();
+    check('google has the new-account email-verified mapper (apply-realm-google-email-verified.sh)', googleMappers.some((m) => m.name === EMAIL_VERIFIED_MAPPER && m.identityProviderMapper === 'sc-email-verified-importer' && m.config?.syncMode === 'IMPORT'), JSON.stringify(googleMappers.map((m) => m.name)));
     check('google asks for openid email profile', idp.config?.defaultScope === 'openid email profile', idp.config?.defaultScope);
     check('the secret is not readable back', idp.config?.clientSecret === '**********', 'secret exposed');
     const verifier = crypto.randomBytes(32).toString('base64url');
@@ -273,17 +293,21 @@ async function main() {
   }
 
   // 2. a password account, then a Google-like sign-in with another spelling of the same Gmail
+  let oldSessions = [];
   const registered = `a29.${RUN}.shop@gmail.com`;
   const googleEmail = `a29${RUN}shop@gmail.com`;
   const reg = await register({ email: registered });
   check('a password account is registered', reg.ok, reg.html?.slice(0, 200));
   const account = await userByEmail(registered);
   check('the stub provider is created (trustEmail false)', (await createStub(false)) === 201);
+  check('the email-verified mapper is added to the stub like google', (await admin(`/identity-provider/instances/${IDP}/mappers`, { method: 'POST', body: JSON.stringify(emailVerifiedMapper(IDP)) })).status === 201);
 
   const since = new Date(Date.now() - 2000);
   const first = await brokerSession({ sub: `g-${RUN}`, email: googleEmail, email_verified: true });
   check('page 1 is the account-already-exists confirmation', pageIdOf(first.html ?? '') === 'login-idp-link-confirm', pageIdOf(first.html ?? '') ?? first.text?.slice(0, 200));
   check('page 1 offers the account password and the email way, for the existing address', /"hasPassword":\s*true/.test(first.html ?? '') && /"emailAvailable":\s*true/.test(first.html ?? '') && (first.html ?? '').includes(registered), text(first.html ?? '').slice(0, 200));
+  check('page 1 says the account was never verified (the warning shows)', /"unverified":\s*true/.test(first.html ?? ''), (first.html ?? '').slice(0, 100));
+  check('the squatter-style account has a password and a live session before the proof', (await hasPassword(account.id)) && (await openSession(account.username, PASSWORD)) && (oldSessions = await sessionIdsOf(account.id)).length >= 1);
   check('nothing is linked before the user proves anything', (await (await admin(`/users/${account.id}/federated-identity`)).json()).length === 0);
 
   // 2a. "Verify by email" sends the proof email and shows the email-sent page
@@ -296,6 +320,7 @@ async function main() {
   const mail = await mailTo(registered, since);
   check('the proof email went to the EXISTING account address', mail !== null);
   check('the email names the provider and the 30 minute lifetime', /Google/.test(mail?.Subject ?? '') && /30 minutes/.test(mail?.Text ?? ''), `${mail?.Subject} | ${mail?.Text?.slice(0, 300)}`);
+  check('the email warns that an unverified account loses its current password', /never verified/.test(mail?.Text ?? '') && /password/.test(mail?.Text ?? ''), mail?.Text?.slice(0, 500));
   check('the email text is the SportConnect one, not the stock Keycloak wording', /SportConnect/.test(mail?.Text ?? '') && !/Someone wants to link/.test(mail?.Text ?? ''), mail?.Text?.slice(0, 200));
   check('still nothing linked after the email was only sent', (await (await admin(`/users/${account.id}/federated-identity`)).json()).length === 0);
 
@@ -314,6 +339,10 @@ async function main() {
     const linked = await (await admin(`/users/${account.id}/federated-identity`)).json();
     check('opening the link linked the provider to the existing account', linked.length === 1 && linked[0].identityProvider === IDP, `${done.text?.slice(0, 200)} ${JSON.stringify(linked)}`);
     const users = await usersWhere(`search=a29`);
+    const currentSessions = await sessionIdsOf(account.id);
+    check('A33: the emailed-link proof on an unverified account removed its password', !(await hasPassword(account.id)));
+    check('A33: and ended the sessions the account had (the new one is the sign-in just proven)', oldSessions.every((id) => !currentSessions.includes(id)), `${oldSessions} vs ${currentSessions}`);
+    check('A33: and marked the email verified', (await userByEmail(registered))?.emailVerified === true);
     check('and no second account exists for that mailbox', users.filter((u) => (u.email ?? '').replaceAll('.', '').includes(`a29${RUN}shop`)).length === 1);
   }
 
@@ -339,6 +368,9 @@ async function main() {
     const back = await follow(new URL(restartUrl, URL_BASE).href, second.jar);
     check('Back to log in lands on the login page with the email pre-filled', pageIdOf(back.html ?? '') === 'login' && (back.html ?? '').includes(`"username": "${registered}"`), `${pageIdOf(back.html ?? '')} ${text(back.html ?? '').slice(0, 200)}`);
   }
+
+  // A33: the proof removed the password; the owner would set a new one with "forgot password". Done through the admin API.
+  check('a new password can be set afterwards (the account is not locked out)', (await setPassword(account.id, PASSWORD)).ok);
 
   // 3b. the password way (new visitor, same mailbox): a wrong password stays on the page, the right one links
   const third = await brokerSession({ sub: `g4-${RUN}`, email: googleEmail, email_verified: true });
@@ -369,6 +401,57 @@ async function main() {
   check('an unknown email creates an account and goes in', fresh.code !== undefined && fresh.code !== null, fresh.text?.slice(0, 200));
   const freshUser = await userByEmail(`a29.${RUN}.fresh@outlook.com`);
   check('the new social user has email_normalized and a username (A27 / A35 rules hold for a provider)', Boolean(freshUser?.attributes?.email_normalized?.[0]) && Boolean(freshUser?.username), JSON.stringify(freshUser?.attributes));
+
+  check('A33: a new account from a provider that vouches for the email starts verified', freshUser?.emailVerified === true, String(freshUser?.emailVerified));
+  const unproven = await brokerSession({ sub: `g6-${RUN}`, email: `a33.${RUN}.unproven@outlook.com`, email_verified: false });
+  const unprovenUser = await userByEmail(`a33.${RUN}.unproven@outlook.com`);
+  check('A33: a new account from a provider that does not vouch starts unverified', unproven.code !== undefined && unproven.code !== null && unprovenUser?.emailVerified === false, `${unprovenUser?.emailVerified} ${unproven.text?.slice(0, 120)}`);
+
+  // 4b. A33: linking to an EXISTING unverified account by its password verifies it when the provider vouches for the mailbox
+  const pwlinkMail = `a33.${RUN}.pwlink@example.com`;
+  check('a third password account is registered', (await register({ email: pwlinkMail })).ok);
+  const pwlinkAccount = await userByEmail(pwlinkMail);
+  const pw1 = await brokerSession({ sub: `g7-${RUN}`, email: pwlinkMail, email_verified: true });
+  const pw2 = await formPost(loginActionOf(pw1.html), pw1.jar, { linkMethod: 'password', password: PASSWORD });
+  absorb(pw1.jar, pw2);
+  if (pw2.headers.get('location')) await follow(new URL(pw2.headers.get('location'), URL_BASE).href, pw1.jar);
+  const pwLinked = await (await admin(`/users/${pwlinkAccount.id}/federated-identity`)).json();
+  check('the password proof linked the provider', pwLinked.length === 1, JSON.stringify(pwLinked));
+  check('A33: and marked the account verified (the user proved the account, the provider vouches for the mailbox)', (await userByEmail(pwlinkMail))?.emailVerified === true, String((await userByEmail(pwlinkMail))?.emailVerified));
+  check('A33: and kept its password', await hasPassword(pwlinkAccount.id));
+
+  // 4c. the same proof when the provider does NOT say the email is verified: the account stays unverified
+  const doubtMail = `a33.${RUN}.doubt@example.com`;
+  check('a fourth password account is registered', (await register({ email: doubtMail })).ok);
+  const doubtAccount = await userByEmail(doubtMail);
+  const d1 = await brokerSession({ sub: `g8-${RUN}`, email: doubtMail, email_verified: false });
+  const d2 = await formPost(loginActionOf(d1.html), d1.jar, { linkMethod: 'password', password: PASSWORD });
+  absorb(d1.jar, d2);
+  if (d2.headers.get('location')) await follow(new URL(d2.headers.get('location'), URL_BASE).href, d1.jar);
+  check('the password proof linked the provider again', (await (await admin(`/users/${doubtAccount.id}/federated-identity`)).json()).length === 1);
+  check('A33: and left the account unverified (the provider did not vouch for the mailbox)', (await userByEmail(doubtMail))?.emailVerified === false, String((await userByEmail(doubtMail))?.emailVerified));
+
+  // 5. A33: an account that WAS verified keeps its password when the emailed link proves a Google sign-in
+  const verifiedMail = `a33.${RUN}.verified@example.com`;
+  const regVerified = await register({ email: verifiedMail });
+  check('a second password account is registered', regVerified.ok, regVerified.html?.slice(0, 200));
+  const verifiedAccount = await userByEmail(verifiedMail);
+  await admin(`/users/${verifiedAccount.id}`, { method: 'PUT', body: JSON.stringify({ ...verifiedAccount, emailVerified: true }) });
+  const sinceVerified = new Date(Date.now() - 2000);
+  const v1 = await brokerSession({ sub: `g5-${RUN}`, email: verifiedMail, email_verified: true });
+  check('page 1 does not warn for a verified account', pageIdOf(v1.html ?? '') === 'login-idp-link-confirm' && /"unverified":\s*false/.test(v1.html ?? ''), (v1.html ?? '').slice(0, 100));
+  const v2 = await formPost(loginActionOf(v1.html), v1.jar, { linkMethod: 'email' });
+  absorb(v1.jar, v2);
+  await v2.text();
+  const vMail = await mailTo(verifiedMail, sinceVerified);
+  const vLink = /https?:\/\/\S*action-token\S*/.exec(vMail?.Text ?? '')?.[0];
+  check('the proof email was sent for the verified account', vLink !== undefined);
+  if (vLink) {
+    await follow(vLink.replace('http://localhost:8081', URL_BASE), v1.jar);
+    const vLinked = await (await admin(`/users/${verifiedAccount.id}/federated-identity`)).json();
+    check('the verified account got the provider linked', vLinked.length === 1 && vLinked[0].identityProvider === IDP, JSON.stringify(vLinked));
+    check('A33: and kept its password (it was verified before, so nothing was removed)', await hasPassword(verifiedAccount.id));
+  }
 }
 
 try {
@@ -380,7 +463,8 @@ try {
 } finally {
   stub.close();
   await admin(`/identity-provider/instances/${IDP}`, { method: 'DELETE' });
-  const mine = (await usersWhere('search=a29')).filter((u) => (u.email ?? '').replaceAll('.', '').toLowerCase().includes(`a29${RUN}`));
+  // every account this run made carries the run id in its email (a29... and a33... names), so search by the id, not by one prefix
+  const mine = (await usersWhere(`search=${encodeURIComponent(`*${RUN}*`)}`)).filter((u) => /^a(29|33)/.test(u.email ?? '') && (u.email ?? '').toLowerCase().replaceAll('.', '').includes(RUN));
   for (const user of mine) await admin(`/users/${user.id}`, { method: 'DELETE' });
   console.log(`cleaned up ${mine.length} users`);
 }

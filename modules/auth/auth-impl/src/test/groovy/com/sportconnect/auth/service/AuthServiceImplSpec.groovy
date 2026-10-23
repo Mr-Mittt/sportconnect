@@ -81,6 +81,30 @@ class AuthServiceImplSpec extends Specification {
         0 * keycloak.endSession(_)
     }
 
+    def "callback records a verified email for an existing unverified row, but not for a new one or a deactivated one"() {
+        given:
+        def sub = UUID.randomUUID()
+        def stored = userResponse(sub, active)
+        stored.isEmailVerified = false
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", email_verified: true])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(stored, false)
+        tickets.issue(_, _) >> "ticket"
+
+        when:
+        try {
+            authService.callback("c", "v")
+        } catch (UnauthorizedException ignored) {
+            // a deactivated password user gets a ticket instead of a session
+        }
+
+        then:
+        (active ? 1 : 0) * userService.markEmailVerified(sub)
+
+        where:
+        active << [true, false]
+    }
+
     def "callback sends the welcome email once, only for the sign-in that created the account"() {
         given:
         def sub = UUID.randomUUID()
@@ -472,6 +496,50 @@ class AuthServiceImplSpec extends Specification {
         result.refreshToken == "rotated"
         result.accessToken == ACCESS
         0 * keycloak.endSession(_)
+    }
+
+    def "refresh records a verified email once the new token shows it, and never turns it off"() {
+        given:
+        def sub = UUID.randomUUID()
+        def stored = userResponse(sub, true)
+        stored.isEmailVerified = storedVerified
+        keycloak.refresh("old") >> tokens("rotated")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, claims)
+        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true, ["USER"]))
+        userService.getUserById(sub) >> stored
+
+        when:
+        authService.refreshToken("old")
+
+        then:
+        (marks ? 1 : 0) * userService.markEmailVerified(sub)
+
+        where:
+        storedVerified | claims                     || marks
+        false          | [email_verified: true]     || true
+        false          | [email_verified: false]    || false
+        false          | [:]                        || false
+        true           | [email_verified: true]     || false
+        true           | [email_verified: false]    || false
+    }
+
+    def "a failed write of the verified flag never fails the refresh"() {
+        given:
+        def sub = UUID.randomUUID()
+        def stored = userResponse(sub, true)
+        stored.isEmailVerified = false
+        keycloak.refresh("old") >> tokens("rotated")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email_verified: true])
+        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true, ["USER"]))
+        userService.getUserById(sub) >> stored
+        userService.markEmailVerified(sub) >> { throw new RuntimeException("db down") }
+
+        when:
+        def result = authService.refreshToken("old")
+
+        then:
+        noExceptionThrown()
+        result.accessToken == ACCESS
     }
 
     def "refresh for a deactivated or unprovisioned user ends the session and throws the generic REFRESH_TOKEN_EXPIRED_OR_REVOKED"() {

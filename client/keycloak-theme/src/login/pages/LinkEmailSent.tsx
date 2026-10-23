@@ -32,6 +32,11 @@ export default function LinkEmailSent(props: PageProps<Extract<KcContext, { page
   return (
     <Template {...props} headerNode={msg('linkEmailSentTitle')}>
       <p>{msg('linkEmailSentBody', scLink.email)}</p>
+      {scLink.unverified && (
+        <p role="note" className="mt-2 text-2xs text-text-danger">
+          {msg('linkUnverifiedWarning')}
+        </p>
+      )}
 
       <div className="mt-5 flex flex-col gap-2">
         <form action={url.loginAction} method="post" onSubmit={() => setBusy(true)}>

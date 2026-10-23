@@ -1,6 +1,7 @@
 package com.sportconnect.user.api.service;
 
 import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
+import com.sportconnect.user.api.dto.EmailVerificationResponse;
 import com.sportconnect.user.api.dto.ConfirmationPurpose;
 import com.sportconnect.user.api.dto.ExternalIdentity;
 import com.sportconnect.user.api.dto.ProvisionedUser;
@@ -145,6 +146,26 @@ public interface UserService {
      * @throws com.sportconnect.common.exception.ServiceUnavailableException when the code store is down
      */
     ConfirmationCodeResponse sendConfirmationCode(UUID userId, ConfirmationPurpose purpose);
+
+    /**
+     * A33: asks Keycloak to email the caller its verification link. Verifying is optional (an unverified account works as
+     * normal), so this is a request, never a gate. If Keycloak already holds the email as verified nothing is sent and
+     * {@code users.is_email_verified} is brought in line ({@code alreadyVerified}). Another request within 60 seconds is
+     * refused.
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if the account does not exist or is deactivated
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code VERIFICATION_EMAIL_UNAVAILABLE} when the account has no email
+     * @throws com.sportconnect.common.exception.TooManyRequestsException with {@code VERIFICATION_RESEND_TOO_SOON} ({@code seconds})
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak or the cooldown store is down
+     */
+    EmailVerificationResponse sendEmailVerification(UUID userId);
+
+    /**
+     * A33: records that the user's email is verified ({@code users.is_email_verified = true}). Idempotent, and a no-op
+     * for an unknown or deactivated user. It only ever sets the flag: Keycloak is the source of truth and the flag
+     * is never turned back off here.
+     */
+    void markEmailVerified(UUID userId);
 
 
     /**
