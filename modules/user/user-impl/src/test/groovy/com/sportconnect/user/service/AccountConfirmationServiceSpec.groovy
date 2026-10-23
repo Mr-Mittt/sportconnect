@@ -65,6 +65,8 @@ class AccountConfirmationServiceSpec extends Specification {
         purpose                            | phrase
         ConfirmationPurpose.DEACTIVATE      | "deactivate your SportConnect account"
         ConfirmationPurpose.CHANGE_PASSWORD | "change your SportConnect password"
+        ConfirmationPurpose.CHANGE_EMAIL    | "change the email address of your SportConnect account"
+        ConfirmationPurpose.NEW_EMAIL       | "this email address is yours"
     }
 
     def "sendCode refuses an account with no email and issues nothing"() {
@@ -233,5 +235,136 @@ class AccountConfirmationServiceSpec extends Specification {
         then:
         1 * credentials.isEmailVerified(userId) >> true
         verified
+    }
+
+    // ── U26: the new-address code ────────────────────────────────────────────
+
+    def "sendNewEmailCode checks the daily allowance, binds the code to the address, mails that address in the user's language and counts it"() {
+        given:
+        store.ttl() >> Duration.ofMinutes(15)
+        store.resendInterval() >> Duration.ofSeconds(60)
+
+        when:
+        def result = service.sendNewEmailCode(userId, "new@example.com", Optional.of(language))
+
+        then:
+        1 * store.checkNewEmailCodeAllowed(userId)
+
+        then:
+        1 * store.issue(userId, ConfirmationPurpose.NEW_EMAIL, "new@example.com") >> "042517"
+
+        then:
+        1 * emailSender.send({ EmailMessage m ->
+            m.to == "new@example.com" && m.subject == subject && m.body.contains("042517") && m.body.contains(phrase)
+        })
+
+        then:
+        1 * store.recordNewEmailCodeSent(userId)
+        result.resendAfterSeconds == 60
+        result.expiresInSeconds == 900
+
+        where:
+        language | subject                                | phrase
+        "en"     | "Your SportConnect confirmation code"   | "this email address is yours"
+        "vi"     | "Mã xác nhận SportConnect của bạn"      | "địa chỉ email này là của bạn"
+    }
+
+    def "sendNewEmailCode over the daily allowance issues and mails nothing"() {
+        when:
+        service.sendNewEmailCode(userId, "new@example.com", Optional.empty())
+
+        then:
+        1 * store.checkNewEmailCodeAllowed(userId) >> { throw new TooManyRequestsException("NEW_EMAIL_CODE_LIMIT_REACHED", "later", [seconds: 3600L]) }
+        0 * store.issue(*_)
+        0 * emailSender.send(_)
+        0 * store.recordNewEmailCodeSent(_)
+        def e = thrown(TooManyRequestsException)
+        e.errorCode == "NEW_EMAIL_CODE_LIMIT_REACHED"
+    }
+
+    def "sendNewEmailCode inside the resend interval mails nothing and does not count"() {
+        when:
+        service.sendNewEmailCode(userId, "new@example.com", Optional.empty())
+
+        then:
+        1 * store.issue(userId, ConfirmationPurpose.NEW_EMAIL, "new@example.com") >> { throw new TooManyRequestsException("VERIFICATION_RESEND_TOO_SOON", "wait", [seconds: 30L]) }
+        0 * emailSender.send(_)
+        0 * store.recordNewEmailCodeSent(_)
+        thrown(TooManyRequestsException)
+    }
+
+    def "checkNewEmail checks the code for the NEW_EMAIL purpose and that exact address, without spending it"() {
+        when:
+        service.checkNewEmail(userId, "new@example.com", "123456")
+
+        then:
+        1 * store.check(userId, ConfirmationPurpose.NEW_EMAIL, "new@example.com", "123456")
+        0 * store.verify(*_)
+    }
+
+    def "checkNewEmail passes the store's refusal on"() {
+        when:
+        service.checkNewEmail(userId, "other@example.com", "123456")
+
+        then:
+        1 * store.check(userId, ConfirmationPurpose.NEW_EMAIL, "other@example.com", "123456") >> { throw new BadRequestException("VERIFICATION_CODE_EXPIRED", "x", null) }
+        thrown(BadRequestException)
+    }
+
+    def "check with an emailed code checks it without spending it"() {
+        when:
+        service.check(userId, ConfirmationPurpose.CHANGE_EMAIL, null, "654321")
+
+        then:
+        1 * store.check(userId, ConfirmationPurpose.CHANGE_EMAIL, null, "654321")
+        0 * store.verify(*_)
+    }
+
+    def "check with a password asks Keycloak and never touches a code"() {
+        when:
+        service.check(userId, ConfirmationPurpose.CHANGE_EMAIL, "pw", null)
+
+        then:
+        1 * store.checkPasswordAllowed(userId)
+        1 * credentials.verifyPassword(userId, "pw") >> true
+        1 * store.clearPasswordFailures(userId)
+        0 * store.check(*_)
+        0 * store.verify(*_)
+    }
+
+    def "check still demands exactly one proof"() {
+        when:
+        service.check(userId, ConfirmationPurpose.CHANGE_EMAIL, password, code)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == "CONFIRMATION_REQUIRED"
+        0 * store._
+
+        where:
+        password | code
+        null     | null
+        "pw"     | "123456"
+    }
+
+    def "discardNewEmailCode drops only the NEW_EMAIL code"() {
+        when:
+        service.discardNewEmailCode(userId)
+
+        then:
+        1 * store.discard(userId, ConfirmationPurpose.NEW_EMAIL)
+    }
+
+    def "the Keycloak half and the clean-up are delegated"() {
+        when:
+        def taken = service.isEmailRegisteredElsewhere(userId, "new@example.com")
+        service.replaceEmailInKeycloak(userId, "new@example.com")
+        service.purgeAfterEmailChange(userId)
+
+        then:
+        1 * credentials.isEmailRegistered("new@example.com", userId) >> true
+        1 * credentials.replaceEmail(userId, "new@example.com")
+        1 * store.purgeAfterEmailChange(userId)
+        taken
     }
 }

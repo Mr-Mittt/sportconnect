@@ -1,5 +1,6 @@
 package com.sportconnect.user.api.service;
 
+import com.sportconnect.user.api.dto.ChangeEmailRequest;
 import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
 import com.sportconnect.user.api.dto.EmailVerificationResponse;
 import com.sportconnect.user.api.dto.ConfirmationPurpose;
@@ -273,6 +274,40 @@ public interface UserService {
      * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak or the code store is down
      */
     void changePassword(UUID userId, String currentPassword, String verificationCode, String newPassword);
+
+    /**
+     * U26, step 1 of an email change: checks that {@code newEmail} is free and emails a one-time code (6 digits, valid 15
+     * minutes) to it, to prove the caller can read that mailbox. Nothing is changed. The code works only for that exact
+     * address; a new request replaces the pending code, at most once per 60 seconds and a fixed number per day.
+     *
+     * @return the resend wait and the code's lifetime, in seconds
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if the account does not exist or is deactivated
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code NEW_EMAIL_SAME_AS_CURRENT}
+     * @throws com.sportconnect.common.exception.ConflictException with {@code EMAIL_ALREADY_REGISTERED} when another
+     *         account holds the address (the A35 rule: dots, {@code +tag} and {@code googlemail.com} of a Gmail address count)
+     * @throws com.sportconnect.common.exception.TooManyRequestsException with {@code VERIFICATION_RESEND_TOO_SOON}
+     *         ({@code seconds}) or {@code NEW_EMAIL_CODE_LIMIT_REACHED} ({@code seconds})
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak or the code store is down
+     */
+    ConfirmationCodeResponse sendNewEmailCode(UUID userId, String newEmail);
+
+    /**
+     * U26, step 2: moves the caller's account to {@code request.newEmail}. The caller proves themselves with exactly one of
+     * their current password or the {@link ConfirmationPurpose#CHANGE_EMAIL} code (mailed to the current address), and the
+     * new mailbox with the {@link ConfirmationPurpose#NEW_EMAIL} code. Then Keycloak holds the new address as verified (with
+     * its A35 key, and as the username when that was the old address), every identity provider link (Google) is removed,
+     * a Google picture used as the avatar is cleared, {@code users.email} follows, and every pending code of the caller
+     * is dropped. See {@code KeycloakCredentialService#replaceEmail} for the Keycloak half.
+     *
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if the account does not exist or is deactivated
+     * @throws com.sportconnect.common.exception.BadRequestException with {@code NEW_EMAIL_SAME_AS_CURRENT},
+     *         {@code CONFIRMATION_REQUIRED}, {@code CURRENT_PASSWORD_INCORRECT} or a {@code VERIFICATION_CODE_*} code;
+     *         nothing changes
+     * @throws com.sportconnect.common.exception.ConflictException with {@code EMAIL_ALREADY_REGISTERED}
+     * @throws com.sportconnect.common.exception.TooManyRequestsException with {@code PASSWORD_ATTEMPTS_EXCEEDED}
+     * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak or the code store is down
+     */
+    void changeEmail(UUID userId, ChangeEmailRequest request);
 
     /**
      * Search other active users by name/username, enriched with the caller's friendship status

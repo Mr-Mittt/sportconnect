@@ -69,6 +69,18 @@ class AccountConfirmationService {
      * @throws com.sportconnect.common.exception.ServiceUnavailableException when Keycloak or Redis is down
      */
     void confirm(UUID userId, ConfirmationPurpose purpose, String currentPassword, String verificationCode) {
+        confirm(userId, purpose, currentPassword, verificationCode, true);
+    }
+
+    /**
+     * U26: like {@link #confirm} but a right emailed code is not spent; the caller spends it (or purges everything) once the
+     * whole operation has succeeded.
+     */
+    void check(UUID userId, ConfirmationPurpose purpose, String currentPassword, String verificationCode) {
+        confirm(userId, purpose, currentPassword, verificationCode, false);
+    }
+
+    private void confirm(UUID userId, ConfirmationPurpose purpose, String currentPassword, String verificationCode, boolean consume) {
         boolean hasPassword = currentPassword != null && !currentPassword.isBlank();
         boolean hasCode = verificationCode != null && !verificationCode.isBlank();
         if (hasPassword == hasCode) {
@@ -76,7 +88,11 @@ class AccountConfirmationService {
                     "Confirm with your current password or with the emailed code, not both and not neither", null);
         }
         if (hasCode) {
-            store.verify(userId, purpose, verificationCode);
+            if (consume) {
+                store.verify(userId, purpose, verificationCode);
+            } else {
+                store.check(userId, purpose, null, verificationCode);
+            }
             return;
         }
         store.checkPasswordAllowed(userId);
@@ -112,5 +128,58 @@ class AccountConfirmationService {
             throw e;
         }
         return store.resendInterval().toSeconds();
+    }
+
+    /**
+     * U26: issues a {@link ConfirmationPurpose#NEW_EMAIL} code bound to {@code address} and emails it there, in the user's
+     * language. Capped per user per day on top of the resend interval, because the address is one the caller names.
+     *
+     * @throws com.sportconnect.common.exception.TooManyRequestsException {@code NEW_EMAIL_CODE_LIMIT_REACHED} or
+     *         {@code VERIFICATION_RESEND_TOO_SOON}
+     */
+    ConfirmationCodeResponse sendNewEmailCode(UUID userId, String address, Optional<String> language) {
+        store.checkNewEmailCodeAllowed(userId);
+        String code = store.issue(userId, ConfirmationPurpose.NEW_EMAIL, address);
+        String lang = messages.resolveLanguage(language);
+        emailSender.send(EmailMessage.builder()
+                .to(address)
+                .subject(messages.subject(lang))
+                .body(messages.body(lang, ConfirmationPurpose.NEW_EMAIL, code, store.ttl().toMinutes()))
+                .build());
+        store.recordNewEmailCodeSent(userId);
+        return ConfirmationCodeResponse.builder()
+                .resendAfterSeconds(store.resendInterval().toSeconds())
+                .expiresInSeconds(store.ttl().toSeconds())
+                .build();
+    }
+
+    /**
+     * U26: checks the code mailed to {@code address} without spending it (the change spends every code once Keycloak accepted
+     * it). A code mailed to another address, another purpose or another user never matches.
+     *
+     * @throws BadRequestException a {@code VERIFICATION_CODE_*} code
+     */
+    void checkNewEmail(UUID userId, String address, String code) {
+        store.check(userId, ConfirmationPurpose.NEW_EMAIL, address, code);
+    }
+
+    /** U26: drops the pending new-address code (the address it was mailed for turned out to be taken). */
+    void discardNewEmailCode(UUID userId) {
+        store.discard(userId, ConfirmationPurpose.NEW_EMAIL);
+    }
+
+    /** U26: whether another account holds {@code address} in Keycloak (the A35 rule). */
+    boolean isEmailRegisteredElsewhere(UUID userId, String address) {
+        return credentials.isEmailRegistered(address, userId);
+    }
+
+    /** U26: the Keycloak half of an email change (new email, verified, key, username, unlink); see {@link KeycloakCredentialService#replaceEmail}. */
+    void replaceEmailInKeycloak(UUID userId, String address) {
+        credentials.replaceEmail(userId, address);
+    }
+
+    /** U26: drops the user's pending codes and the verification-mail cooldown once the email has changed. */
+    void purgeAfterEmailChange(UUID userId) {
+        store.purgeAfterEmailChange(userId);
     }
 }

@@ -6,6 +6,7 @@ import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
+import com.sportconnect.user.api.dto.ChangeEmailRequest;
 import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
 import com.sportconnect.user.api.dto.EmailVerificationResponse;
 import com.sportconnect.user.api.dto.ConfirmationPurpose;
@@ -58,6 +59,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -373,7 +375,108 @@ public class UserServiceImpl implements UserService {
     public ConfirmationCodeResponse sendConfirmationCode(UUID userId, ConfirmationPurpose purpose) {
         User user = userRepository.findByIdAndIsActiveTrue(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        if (purpose == ConfirmationPurpose.NEW_EMAIL) {
+            // Mailed to the address being proven, by sendNewEmailCode only; here it would go to the current address.
+            throw new BadRequestException("VALIDATION_FAILED", "This code is requested with the new email address",
+                    Map.of("fields", Map.of("purpose", "must not be NEW_EMAIL")));
+        }
         return accountConfirmation.sendCode(userId, user.getEmail(), purpose, findPreferredLanguageCode(userId));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: the caller is checked active; the address is trimmed and lowercased; the same address as the current one is
+     * refused, then an address another account holds ({@code users} table and Keycloak by the A35 key); only then is the code
+     * bound to that exact address and mailed to it. Not transactional: Redis, Keycloak and the async sender only.
+     */
+    @Override
+    public ConfirmationCodeResponse sendNewEmailCode(UUID userId, String newEmail) {
+        User user = userRepository.findByIdAndIsActiveTrue(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        String address = lowercaseAddress(newEmail);
+        requireNewAddress(user, address);
+        return accountConfirmation.sendNewEmailCode(userId, address, findPreferredLanguageCode(userId));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow, under the user's row lock: active check; same-address check; the caller's proof (password or the
+     * {@code CHANGE_EMAIL} code); the new mailbox's code; the duplicate check again (it may have been taken since the code was
+     * sent); then Keycloak is changed first (the step that can be refused) and the database copy follows, with the Google
+     * avatar cleared. If the database write fails after Keycloak changed, the account holds the new address in Keycloak
+     * only; nothing is rolled back there, and the same change repeated (a new code to the new address) completes it,
+     * because the user's own account is never a duplicate of itself. Pending codes and the cooldown are dropped last.
+     */
+    @Override
+    @Transactional
+    public void changeEmail(UUID userId, ChangeEmailRequest request) {
+        User user = userRepository.findByIdForUpdate(userId)
+                .filter(User::getIsActive)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        String address = lowercaseAddress(request.getNewEmail());
+        if (address.equals(user.getEmail())) {
+            throw new BadRequestException("NEW_EMAIL_SAME_AS_CURRENT", "This is already the email address of the account", null);
+        }
+
+        // Both proofs are checked, not spent: a refusal below must not cost the user a code they typed correctly. Success
+        // spends them all (purgeAfterEmailChange).
+        accountConfirmation.check(userId, ConfirmationPurpose.CHANGE_EMAIL, request.getCurrentPassword(), request.getVerificationCode());
+        accountConfirmation.checkNewEmail(userId, address, request.getNewEmailCode());
+        try {
+            requireNewAddress(user, address);
+            accountConfirmation.replaceEmailInKeycloak(userId, address);
+        } catch (ConflictException e) {
+            // The address is taken (now, or by a race): its code is useless, the user must pick and verify another address.
+            // The caller's own proof stays valid for that second attempt.
+            accountConfirmation.discardNewEmailCode(userId);
+            throw e;
+        }
+
+        user.setEmail(address);
+        user.setIsEmailVerified(true);
+        boolean googleAvatarCleared = isGoogleImageUrl(user.getAvatarUrl());
+        if (googleAvatarCleared) {
+            user.setAvatarUrl(null);
+        }
+        // Unlinked from Google: a later Google sign-in on the new address may use the picture again (A36's once-only flag).
+        user.setGoogleAvatarCheckedAt(null);
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (RuntimeException e) {
+            log.error("Keycloak holds the new email of user {} but the database copy could not be written; repeating the change completes it", userId, e);
+            throw e;
+        }
+        if (googleAvatarCleared) {
+            publishDomainEvent("user.profile_updated", Map.of(
+                    "user_id", userId.toString(),
+                    "full_name", user.getFullName(),
+                    "username", user.getUsername() != null ? user.getUsername() : "",
+                    "avatar_url", ""));
+        }
+        accountConfirmation.purgeAfterEmailChange(userId);
+        accessStateCache.evictAfterCommit(userId);
+        log.info("User {} changed their email address", userId);
+    }
+
+    /** Trimmed and lowercased, the form Keycloak stores and {@code users.email} holds; the bean validation already ran. */
+    private static String lowercaseAddress(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new BadRequestException("VALIDATION_FAILED", "New email is required",
+                    Map.of("fields", Map.of("newEmail", "New email is required")));
+        }
+        return raw.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /** The address must differ from the caller's own and be held by nobody else, in the database or in Keycloak. */
+    private void requireNewAddress(User user, String address) {
+        if (address.equals(user.getEmail())) {
+            throw new BadRequestException("NEW_EMAIL_SAME_AS_CURRENT", "This is already the email address of the account", null);
+        }
+        if (userRepository.existsByEmail(address) || accountConfirmation.isEmailRegisteredElsewhere(user.getId(), address)) {
+            throw new ConflictException("EMAIL_ALREADY_REGISTERED", "This email address is already registered", null);
+        }
     }
 
     /**
