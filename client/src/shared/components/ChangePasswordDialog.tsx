@@ -1,71 +1,44 @@
-import { IconEye, IconEyeOff } from '@tabler/icons-react';
-import { useState, type ComponentProps } from 'react';
+import { useState } from 'react';
+import { isProofFieldError, type ConfirmationProof } from '@/features/profile/confirmationProof';
+import type { CodeSender } from '@/features/profile/useConfirmationCode';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
-import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
+import { ConfirmationProofFields } from './ConfirmationProofFields';
+import { PasswordInput } from './PasswordInput';
+import { useConfirmationProofState } from './useConfirmationProofState';
 
-// Mirrors ChangePasswordRequest's @Size(min = 8) (same minimum RegisterForm / ResetPasswordForm enforce).
+// Mirrors ChangePasswordRequest's @Size(min = 8) (same minimum the Keycloak realm policy enforces).
 const MIN_PASSWORD_LENGTH = 8;
-
-interface PasswordInputProps
-  extends Omit<ComponentProps<typeof Input>, 'type' | 'value' | 'onChange' | 'autoComplete' | 'className'> {
-  value: string;
-  onChange: (value: string) => void;
-  showLabel: string;
-  hideLabel: string;
-}
-
-/** A password field with its own show/hide toggle; every instance reveals independently of the others. */
-function PasswordInput({ value, onChange, showLabel, hideLabel, ...inputProps }: PasswordInputProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  return (
-    <div className="relative">
-      <Input
-        {...inputProps}
-        type={isVisible ? 'text' : 'password'}
-        autoComplete="new-password"
-        className="pr-10"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <button
-        type="button"
-        aria-label={isVisible ? hideLabel : showLabel}
-        onClick={() => setIsVisible((prev) => !prev)}
-        className="absolute top-1/2 right-1 -translate-y-1/2 cursor-pointer p-2 text-text-muted"
-      >
-        {isVisible ? (
-          <IconEyeOff className="size-4" aria-hidden="true" />
-        ) : (
-          <IconEye className="size-4" aria-hidden="true" />
-        )}
-      </button>
-    </div>
-  );
-}
 
 interface ChangePasswordDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Receives both passwords once client validation passes; the parent fires `PUT /users/me/password`. */
-  onSubmit: (payload: { currentPassword: string; newPassword: string }) => void;
+  /** Receives the one proof the user chose and the new password once client validation passes; the parent fires `PUT /users/me/password`. */
+  onSubmit: (payload: { proof: ConfirmationProof; newPassword: string }) => void;
   isSubmitting: boolean;
   /** Localized line for a failed change; the dialog stays open. */
   errorMessage: string | null;
-  /** When true, `errorMessage` is shown on the current-password field instead of as a general line. */
-  isCurrentPasswordError?: boolean;
+  /** The failed request's server code, used to place `errorMessage` (password, code, new password, or general). */
+  errorCode?: string | null;
+  /** False for an account with no email (phone-only): the emailed-code method is disabled. */
+  hasEmail?: boolean;
+  /** The "verify by email" method (from `useConfirmationCode('CHANGE_PASSWORD')`). */
+  codeSender: CodeSender;
+  /** Seconds left of a `PASSWORD_ATTEMPTS_EXCEEDED` lock (counted down by the hook); `0` when none. */
+  passwordLockSeconds?: number;
   /** `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
 
 /**
- * ACCOUNT-3: changes the caller's own password. Current password (verified server-side), new
- * password and a confirm field that is checked on the client only. Validation is custom
- * (`noValidate`, I18N-10) and shown after the first submit attempt. `AppShell` mounts this only
- * while open, so typed passwords are dropped on every close. The current-password field starts
- * empty and read-only until focused, for the same autofill reason as `DeactivateAccountDialog`.
+ * ACCOUNT-3, ACCOUNT-6: changes the caller's own password. The caller proves who they are with the
+ * current password (verified by Keycloak) or a code emailed to the account, chosen by a radio
+ * (`ConfirmationProofFields`), then gives a new password and a confirm field that is checked on the
+ * client only. Validation is custom (`noValidate`, I18N-10) and shown after the first submit
+ * attempt. `AppShell` mounts this only while open, so typed passwords and codes are dropped on every
+ * close.
  */
 export function ChangePasswordDialog({
   isOpen,
@@ -73,19 +46,22 @@ export function ChangePasswordDialog({
   onSubmit,
   isSubmitting,
   errorMessage,
-  isCurrentPasswordError = false,
+  errorCode = null,
+  hasEmail = true,
+  codeSender,
+  passwordLockSeconds = 0,
   i18nOverridePrefix,
 }: ChangePasswordDialogProps) {
   const t = useOverridableText('accountSettings', i18nOverridePrefix);
-  const [currentPassword, setCurrentPassword] = useState('');
+  const state = useConfirmationProofState({ hasEmail, errorCode, passwordLockSeconds });
   const [newPassword, setNewPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [isFieldUnlocked, setIsFieldUnlocked] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   const isTooShort = newPassword.length < MIN_PASSWORD_LENGTH;
   const isMismatch = newPassword !== confirm;
-  const isValid = currentPassword !== '' && !isTooShort && !isMismatch;
+  const isValid = state.isComplete && !isTooShort && !isMismatch;
+  const isNewPasswordError = errorCode === 'NEW_PASSWORD_REJECTED';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -99,30 +75,28 @@ export function ChangePasswordDialog({
               setHasAttemptedSubmit(true);
               return;
             }
-            onSubmit({ currentPassword, newPassword });
+            onSubmit({ proof: state.proof(), newPassword });
           }}
         >
           <p className="mt-1 mb-3 text-2sm text-text-secondary">{t('changePasswordDialog.body')}</p>
 
-          <div className="mb-3">
-            <Label htmlFor="change-password-current">{t('changePasswordDialog.currentLabel')}</Label>
-            <PasswordInput
-              id="change-password-current"
-              value={currentPassword}
-              onChange={setCurrentPassword}
-              showLabel={t('changePasswordDialog.showCurrent')}
-              hideLabel={t('changePasswordDialog.hideCurrent')}
-              readOnly={!isFieldUnlocked}
-              onFocus={() => setIsFieldUnlocked(true)}
-              aria-invalid={isCurrentPasswordError}
-              aria-describedby={isCurrentPasswordError ? 'change-password-current-error' : undefined}
-            />
-            {isCurrentPasswordError && errorMessage !== null && (
-              <p id="change-password-current-error" role="alert" className="mt-1 text-2xs text-text-danger">
-                {errorMessage}
-              </p>
-            )}
-          </div>
+          <ConfirmationProofFields
+            idPrefix="change-password"
+            method={state.method}
+            onMethodChange={state.setMethod}
+            password={state.password}
+            onPasswordChange={state.setPassword}
+            code={state.code}
+            onCodeChange={state.setCode}
+            passwordLabel={t('changePasswordDialog.currentLabel')}
+            passwordToggle={{ show: t('changePasswordDialog.showCurrent'), hide: t('changePasswordDialog.hideCurrent') }}
+            hasEmail={hasEmail}
+            codeSender={codeSender}
+            passwordLockSeconds={state.lockSeconds}
+            errorCode={errorCode}
+            errorMessage={errorMessage}
+            i18nOverridePrefix={i18nOverridePrefix}
+          />
 
           <div className="mb-3">
             <div className="mb-1.5 flex items-baseline justify-between gap-2">
@@ -139,7 +113,14 @@ export function ChangePasswordDialog({
               onChange={setNewPassword}
               showLabel={t('changePasswordDialog.showNew')}
               hideLabel={t('changePasswordDialog.hideNew')}
+              aria-invalid={isNewPasswordError}
+              aria-describedby={isNewPasswordError ? 'change-password-new-error' : undefined}
             />
+            {isNewPasswordError && errorMessage !== null && (
+              <p id="change-password-new-error" role="alert" className="mt-1 text-2xs text-text-danger">
+                {errorMessage}
+              </p>
+            )}
           </div>
 
           <div>
@@ -160,13 +141,13 @@ export function ChangePasswordDialog({
             />
           </div>
 
-          {!isCurrentPasswordError && errorMessage !== null && (
+          {errorMessage !== null && !isProofFieldError(errorCode) && !isNewPasswordError && (
             <p role="alert" className="mt-2 text-2sm text-text-danger">
               {errorMessage}
             </p>
           )}
           <div className="mt-3 flex justify-end gap-2">
-            <Button type="submit" variant="primary" size="sm" disabled={currentPassword === '' || isSubmitting}>
+            <Button type="submit" variant="primary" size="sm" disabled={!state.isComplete || isSubmitting}>
               {isSubmitting ? t('changePasswordDialog.submitting') : t('changePasswordDialog.submit')}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>

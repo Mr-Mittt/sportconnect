@@ -1045,16 +1045,21 @@ The unsaved-changes guard on Account Settings. Related docs: `client/docs/MVP/AC
 | Save from the prompt | Saves the edit (`PUT` body carries the new bio), shows the "saved" toast and closes everything. |
 | Save button (ACCOUNT-3) | Saves, shows the toast, keeps the modal open with the value and Save disabled again; Esc then closes without the prompt. |
 
-### `e2e/flows/account-change-password.spec.ts` (ACCOUNT-3, 4 `test()`s)
+### `e2e/flows/account-change-password.spec.ts` (ACCOUNT-3, ACCOUNT-6, 9 `test()`s)
 
-Changing one's own password from Account Settings. The auth handler mirrors `UserController.changePassword`: `PUT /api/users/me/password` answers 200, 400 `VALIDATION_FAILED` (new password under 8 characters) or 400 `CURRENT_PASSWORD_INCORRECT`. Related docs: `client/docs/MVP/ACCOUNT-3_CHANGE_PASSWORD.md`.
+Changing one's own password from Account Settings. The auth handler mirrors `UserController.changePassword`: `PUT /api/users/me/password` answers 200, 400 `VALIDATION_FAILED` (new password under 8 characters) or, since backend U24 (ACCOUNT-6), takes exactly one proof: `currentPassword` (400 `CURRENT_PASSWORD_INCORRECT`, or the 429 lock for `mockLockedPassword`) or `verificationCode` (`mockVerificationCode`; 400 `VERIFICATION_CODE_INVALID` otherwise); `password1` is the realm policy refusal (400 `NEW_PASSWORD_REJECTED`). `POST /api/users/me/confirmation-code` answers `{ resendAfterSeconds: 60, expiresInSeconds: 900 }`. Related docs: `client/docs/MVP/ACCOUNT-3_CHANGE_PASSWORD.md`, `client/docs/MVP/ACCOUNT-6_PASSWORD_CONFIRM_DIALOGS_FOR_KEYCLOAK_USERS.md`.
 
 | Test | What it checks |
 |---|---|
-| right password | Account settings > Change password opens the dialog; the three fields post `{ currentPassword, newPassword }`; the dialog closes, a "Your password was updated." toast shows and the user stays on `/profile` with Account settings still open. |
+| right password | Account settings > Change password opens the dialog; the fields post `{ currentPassword, newPassword }` (only the chosen proof is sent); the dialog closes, a "Your password was updated." toast shows and the user stays on `/profile` with Account settings still open. |
 | wrong current password | The dialog stays open; "Your current password is incorrect." sits on the current-password field (alert + accessible description). |
 | client validation | A new password under 8 characters, then a mismatched confirm, each show their hint and send no request. |
 | Esc | Esc closes only the dialog; Account settings stays open. |
+| email method (ACCOUNT-6) | "A code sent by email" > Send code posts `{ purpose: 'CHANGE_PASSWORD' }`; the pasted code and the new password post `{ verificationCode, newPassword }`; the dialog closes with the success toast. |
+| wrong code | The code field shows "That code isn’t correct…" (the only alert); the dialog stays open. |
+| policy refusal | `password1` shows the `NEW_PASSWORD_REJECTED` copy on the new-password field. |
+| lock | `mockLockedPassword` (429 with `seconds`) disables "My password", moves to the emailed-code method and keeps "Try again in m:ss" on screen. |
+| shared lock | After the lock in this dialog, Cancel and open Deactivate account: that dialog opens already locked, with the countdown (`passwordLockStore`; the backend allowance is per user, not per action). |
 
 ### `e2e/flows/auth-logout-failed.spec.ts` (AUTH-14, 3 `test()`s)
 
@@ -1066,9 +1071,9 @@ A `503 SERVICE_UNAVAILABLE` on `POST /api/auth/logout` (Keycloak unreachable) ke
 | Try again | Retrying repeats the logout, which now succeeds and ends on the Keycloak page |
 | vi | The dialog copy is Vietnamese |
 
-### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, 5 `test()`s; AUTH-14: ends on the Keycloak page, the "log in again to re-activate" hint is gone)
+### `e2e/flows/account-deactivate.spec.ts` (ACCOUNT-4, ACCOUNT-6, 10 `test()`s; AUTH-14: ends on the Keycloak page, the "log in again to re-activate" hint is gone)
 
-Deactivating one's own account from Account Settings. The auth handler (`e2e/mocks/handlers/auth.ts`) mirrors backend U22: `POST /api/users/me/deactivate` answers 200 for `mockPassword`, 400 `CURRENT_PASSWORD_INCORRECT` for any other, 400 `VALIDATION_FAILED` for blank. Related docs: `client/docs/MVP/ACCOUNT-4_DEACTIVATE_ACCOUNT.md`.
+Deactivating one's own account from Account Settings. The auth handler (`e2e/mocks/handlers/auth.ts`) mirrors backend U22 and U24: `POST /api/users/me/deactivate` takes exactly one proof, `currentPassword` (200 for `mockPassword`, 400 `CURRENT_PASSWORD_INCORRECT` for any other, the 429 lock for `mockLockedPassword`) or `verificationCode` (200 for `mockVerificationCode`, 400 `VERIFICATION_CODE_INVALID`, 400 `VERIFICATION_CODE_EXPIRED` for `mockExpiredCode`); neither or both is 400 `CONFIRMATION_REQUIRED`. Related docs: `client/docs/MVP/ACCOUNT-4_DEACTIVATE_ACCOUNT.md`.
 
 | Test | What it checks |
 |---|---|
@@ -1076,6 +1081,11 @@ Deactivating one's own account from Account Settings. The auth handler (`e2e/moc
 | wrong password | The dialog stays open with "Your current password is incorrect."; the URL does not change. |
 | stacks over settings | The dialog opens over Account settings; Cancel returns to it with an unsaved Bio edit intact and nothing is sent. |
 | Esc | Esc closes only the confirmation; Account settings stays open. |
+| email method (ACCOUNT-6) | "A code sent by email" > Send code posts `{ purpose: 'DEACTIVATE' }`; "Resend in m:ss" is disabled; the pasted `123 456` posts `{ verificationCode: '123456' }` and the user lands on the Keycloak page. |
+| wrong code | The code field shows the error and keeps the typed value. |
+| expired code | `VERIFICATION_CODE_EXPIRED` copy is shown and the code input is emptied. |
+| wrong password | The error offers "Use an emailed code instead"; one click switches the radio and shows Send code. |
+| lock | The 429 disables "My password", checks the email method and shows Send code. |
 | deactivate with unsaved edits | An unsaved Bio edit does not trap the sign-out: the user lands on `/login` and the "Unsaved changes" prompt never appears (ACCOUNT-5). |
 
 ### `e2e/flows/user-errors.spec.ts` (CLIENT-ERR-3, 4 `test()`s)

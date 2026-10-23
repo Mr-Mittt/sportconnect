@@ -2,6 +2,8 @@
 
 **Status:** `TODO` (postponed by the owner) · **Type:** Feature · **Depends on:** A29 (Google, sets the pattern), the owner's Facebook and Zalo apps · **Gates:** the Facebook and Zalo buttons working for real in the client theme (AUTH-15 already renders them)
 
+**Moved from:** `BACKLOG_MVP.md` (2026-10-20), owner decision, phone accounts are a later topic: phone-only sign-up and recovery wait for the phone-OTP delivery decision (see `documentation/md/NEXT_TOPICS.md`, "Phone account"), and nothing in the MVP login depends on them.
+
 **Filed:** 2026-10-18, split from A29 at the owner's request: the Facebook and Zalo app permissions are hard to get, so Google ships first.
 
 ## What

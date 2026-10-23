@@ -1,4 +1,9 @@
-import { mockPassword, seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import {
+  mockLockedPassword,
+  mockPassword,
+  mockVerificationCode,
+  seedAuthenticatedSession,
+} from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -63,6 +68,78 @@ test('a too-short or unconfirmed new password is stopped on the client without a
   await expect(dialog.getByText('The two passwords don’t match.')).toBeVisible();
 
   expect(calls).toBe(0);
+});
+
+/*
+ * ACCOUNT-6 / backend U24: the emailed-code method of the same dialog, the lock, and the Keycloak
+ * policy refusal of the new password (the mock refuses 'password1').
+ */
+test('Verify by email changes the password with the emailed code', async ({ page }) => {
+  const dialog = await openChangePasswordDialog(page);
+  await dialog.getByRole('radio', { name: 'A code sent by email' }).check();
+
+  const sendRequest = page.waitForRequest('**/api/users/me/confirmation-code');
+  await dialog.getByRole('button', { name: 'Send code' }).click();
+  expect((await sendRequest).postDataJSON()).toEqual({ purpose: 'CHANGE_PASSWORD' });
+
+  await dialog.getByLabel('Verification code').fill(mockVerificationCode);
+  await dialog.getByLabel('New password', { exact: true }).fill('brand-new-password');
+  await dialog.getByLabel('Confirm new password', { exact: true }).fill('brand-new-password');
+  const request = page.waitForRequest('**/api/users/me/password');
+  await dialog.getByRole('button', { name: 'Change password' }).click();
+
+  expect((await request).postDataJSON()).toEqual({ verificationCode: mockVerificationCode, newPassword: 'brand-new-password' });
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Your password was updated.')).toBeVisible();
+});
+
+test('a wrong code is shown on the code field and nothing is changed', async ({ page }) => {
+  const dialog = await openChangePasswordDialog(page);
+  await dialog.getByRole('radio', { name: 'A code sent by email' }).check();
+  await dialog.getByRole('button', { name: 'Send code' }).click();
+  await dialog.getByLabel('Verification code').fill('111111');
+  await dialog.getByLabel('New password', { exact: true }).fill('brand-new-password');
+  await dialog.getByLabel('Confirm new password', { exact: true }).fill('brand-new-password');
+  await dialog.getByRole('button', { name: 'Change password' }).click();
+
+  await expect(dialog.getByRole('alert')).toHaveText('That code isn’t correct. Check it and try again.');
+  await expect(dialog).toBeVisible();
+});
+
+test('a new password the realm policy refuses is shown on the new-password field', async ({ page }) => {
+  const dialog = await openChangePasswordDialog(page);
+  await fill(dialog, mockPassword, 'password1', 'password1');
+  await dialog.getByRole('button', { name: 'Change password' }).click();
+
+  await expect(dialog.getByLabel('New password', { exact: true })).toHaveAccessibleDescription(
+    'That new password doesn’t meet the password rules. Choose a different one.',
+  );
+  await expect(dialog).toBeVisible();
+});
+
+test('too many wrong passwords lock the password method and move to the code', async ({ page }) => {
+  const dialog = await openChangePasswordDialog(page);
+  await fill(dialog, mockLockedPassword, 'brand-new-password', 'brand-new-password');
+  await dialog.getByRole('button', { name: 'Change password' }).click();
+
+  await expect(dialog.getByRole('radio', { name: 'My password' })).toBeDisabled();
+  await expect(dialog.getByRole('radio', { name: 'A code sent by email' })).toBeChecked();
+  await expect(dialog.getByText(/Try again in 1[34]:\d\d, or use an emailed code\./)).toBeVisible();
+});
+
+test('the password lock is shared: deactivate opens already locked after change password hit it', async ({ page }) => {
+  const dialog = await openChangePasswordDialog(page);
+  await fill(dialog, mockLockedPassword, 'brand-new-password', 'brand-new-password');
+  await dialog.getByRole('button', { name: 'Change password' }).click();
+  await expect(dialog.getByRole('radio', { name: 'My password' })).toBeDisabled();
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('dialog', { name: 'Account settings' }).getByRole('button', { name: 'Deactivate account' }).click();
+
+  const deactivate = page.getByRole('dialog', { name: 'Deactivate your account?' });
+  await expect(deactivate.getByRole('radio', { name: 'My password' })).toBeDisabled();
+  await expect(deactivate.getByRole('radio', { name: 'A code sent by email' })).toBeChecked();
+  await expect(deactivate.getByText(/Try again in 1[34]:\d\d, or use an emailed code\./)).toBeVisible();
 });
 
 test('Esc closes only the dialog, leaving Account settings open', async ({ page }) => {

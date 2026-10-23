@@ -5,16 +5,52 @@ import {
   mockAccessToken,
   mockAdminRefreshToken,
   mockAdminUser,
+  mockExpiredCode,
+  mockLockedPassword,
   mockPassword,
   mockReactivationTicket,
   mockRefreshToken,
   mockUser,
+  mockVerificationCode,
 } from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
 import { sessionIdFromRequest } from '../sessionStore.ts';
 
 function apiResponse<T>(data: T, message = 'Success'): ApiResponse<T> {
   return { success: true, message, data, timestamp: new Date().toISOString() };
+}
+
+/**
+ * ACCOUNT-6 / backend U24: `AccountConfirmationService.confirm` for the two endpoints below. Exactly
+ * one proof (neither or both is 400 CONFIRMATION_REQUIRED), then the password (400
+ * CURRENT_PASSWORD_INCORRECT, or the 429 lock with the seconds left) or the emailed code (400
+ * VERIFICATION_CODE_INVALID / VERIFICATION_CODE_EXPIRED). Returns the error response, or `null` when the proof is right.
+ */
+function rejectProof(body: { currentPassword?: string; verificationCode?: string }): Response | null {
+  const hasPassword = !!body.currentPassword?.trim();
+  const hasCode = !!body.verificationCode?.trim();
+  if (hasPassword === hasCode) {
+    return HttpResponse.json(apiError('Confirm with your password or an emailed code', 'CONFIRMATION_REQUIRED'), { status: 400 });
+  }
+  if (hasPassword) {
+    if (body.currentPassword === mockLockedPassword) {
+      return HttpResponse.json(
+        apiError('Too many wrong passwords; try again later', 'PASSWORD_ATTEMPTS_EXCEEDED', { seconds: 840 }),
+        { status: 429 },
+      );
+    }
+    if (body.currentPassword !== mockPassword) {
+      return HttpResponse.json(apiError('Current password is incorrect', 'CURRENT_PASSWORD_INCORRECT'), { status: 400 });
+    }
+    return null;
+  }
+  if (body.verificationCode === mockExpiredCode) {
+    return HttpResponse.json(apiError('The code has expired', 'VERIFICATION_CODE_EXPIRED'), { status: 400 });
+  }
+  if (body.verificationCode !== mockVerificationCode) {
+    return HttpResponse.json(apiError('The code is not correct', 'VERIFICATION_CODE_INVALID'), { status: 400 });
+  }
+  return null;
 }
 
 function apiError(message: string, errorCode?: string, errorParams?: Record<string, unknown>): ApiResponse<null> {
@@ -121,36 +157,41 @@ export const authHandlers: HttpHandler[] = [
   // AUTH-14 / backend A26: declining always answers 200, known ticket or not.
   http.post('/api/auth/reactivate/cancel', () => HttpResponse.json(apiResponse(null, 'Reactivation cancelled'))),
 
-  // ACCOUNT-4 / backend U22: self-deactivation. The right password answers 200; anything else is the
-  // 400 CURRENT_PASSWORD_INCORRECT the real service throws. (Stateless like the rest of this file: the
-  // mock account is not actually marked inactive.)
+  // ACCOUNT-6 / backend U24: POST /api/users/me/confirmation-code emails a 6-digit code bound to the
+  // purpose; the mock answers the real numbers (60 s until a resend, 15 minutes valid) and sends nothing.
+  http.post('/api/users/me/confirmation-code', async ({ request }) => {
+    const body = (await request.json()) as { purpose?: string };
+    if (body.purpose !== 'DEACTIVATE' && body.purpose !== 'CHANGE_PASSWORD') {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { purpose: 'must not be null' } }), {
+        status: 400,
+      });
+    }
+    return HttpResponse.json(apiResponse({ resendAfterSeconds: 60, expiresInSeconds: 900 }, 'Verification code sent'));
+  }),
+
+  // ACCOUNT-4 / backend U22, ACCOUNT-6 / U24: self-deactivation with exactly one proof (see rejectProof).
+  // (Stateless like the rest of this file: the mock account is not actually marked inactive.)
   http.post('/api/users/me/deactivate', async ({ request }) => {
-    const body = (await request.json()) as { currentPassword?: string };
-    if (!body.currentPassword?.trim()) {
-      return HttpResponse.json(
-        apiError('Validation failed', 'VALIDATION_FAILED', { fields: { currentPassword: 'Current password is required' } }),
-        { status: 400 },
-      );
-    }
-    if (body.currentPassword !== mockPassword) {
-      return HttpResponse.json(apiError('Current password is incorrect', 'CURRENT_PASSWORD_INCORRECT'), { status: 400 });
-    }
+    const rejected = rejectProof((await request.json()) as { currentPassword?: string; verificationCode?: string });
+    if (rejected) return rejected;
     return HttpResponse.json(apiResponse(null, 'Account deactivated successfully'));
   }),
 
-  // ACCOUNT-3: PUT /api/users/me/password mirrors UserController.changePassword — @NotBlank current,
-  // @Size(min = 8) new (400 VALIDATION_FAILED with per-field errors), then 400 CURRENT_PASSWORD_INCORRECT.
+  // ACCOUNT-3 / ACCOUNT-6: PUT /api/users/me/password mirrors UserController.changePassword — @Size(min = 8)
+  // new password (400 VALIDATION_FAILED with per-field errors), then the one proof (see rejectProof).
+  // 'password1' stands for a password Keycloak's policy refuses: 400 NEW_PASSWORD_REJECTED.
   http.put('/api/users/me/password', async ({ request }) => {
-    const body = (await request.json()) as { currentPassword?: string; newPassword?: string };
-    const fields: Record<string, string> = {};
-    if (!body.currentPassword?.trim()) fields.currentPassword = 'Current password is required';
-    if (!body.newPassword?.trim()) fields.newPassword = 'New password is required';
-    else if (body.newPassword.length < 8) fields.newPassword = 'Password must be at least 8 characters';
-    if (Object.keys(fields).length > 0) {
-      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields }), { status: 400 });
+    const body = (await request.json()) as { currentPassword?: string; verificationCode?: string; newPassword?: string };
+    if (!body.newPassword?.trim() || body.newPassword.length < 8) {
+      const message = body.newPassword?.trim() ? 'Password must be at least 8 characters' : 'New password is required';
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED', { fields: { newPassword: message } }), {
+        status: 400,
+      });
     }
-    if (body.currentPassword !== mockPassword) {
-      return HttpResponse.json(apiError('Current password is incorrect', 'CURRENT_PASSWORD_INCORRECT'), { status: 400 });
+    const rejected = rejectProof(body);
+    if (rejected) return rejected;
+    if (body.newPassword === 'password1') {
+      return HttpResponse.json(apiError('The new password was rejected', 'NEW_PASSWORD_REJECTED'), { status: 400 });
     }
     return HttpResponse.json(apiResponse(null, 'Password changed successfully'));
   }),

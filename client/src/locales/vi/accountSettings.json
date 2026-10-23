@@ -36,6 +36,24 @@
     "submitting": "Đang vô hiệu hóa…",
     "cancel": "Hủy"
   },
+  "confirm": {
+    "methodLabel": "Bạn muốn xác nhận bằng cách nào?",
+    "method": {
+      "password": "Mật khẩu của tôi",
+      "email": "Mã gửi qua email"
+    },
+    "noEmail": "Tài khoản của bạn chưa có email nên không thể gửi mã.",
+    "sendCode": "Gửi mã",
+    "sending": "Đang gửi…",
+    "resend": "Gửi lại mã",
+    "resendIn": "Gửi lại sau {{time}}",
+    "codeLabel": "Mã xác minh",
+    "codeSent": "Chúng tôi đã gửi mã gồm 6 chữ số tới email của bạn. Mã có hiệu lực trong {{minutes}} phút.",
+    "passwordHint": "Bạn đăng nhập bằng Google, hoặc không chắc về mật khẩu?",
+    "useCodeInstead": "Dùng mã gửi qua email",
+    "passwordLocked": "Bạn đã nhập sai mật khẩu quá nhiều lần. Hãy thử lại sau {{time}} hoặc dùng mã gửi qua email.",
+    "passwordLockedNoEmail": "Bạn đã nhập sai mật khẩu quá nhiều lần. Hãy thử lại sau {{time}}."
+  },
   "unsaved": {
     "title": "Thay đổi chưa lưu",
     "message": "Bạn có thay đổi chưa lưu trong cài đặt tài khoản. Hủy bỏ chúng, hay lưu trước khi đóng?",
@@ -49,7 +67,7 @@
   },
   "changePasswordDialog": {
     "title": "Đổi mật khẩu của bạn",
-    "body": "Nhập mật khẩu hiện tại, sau đó chọn mật khẩu mới có ít nhất 8 ký tự.",
+    "body": "Hãy xác nhận đây là bạn, sau đó chọn mật khẩu mới có ít nhất 8 ký tự.",
     "currentLabel": "Mật khẩu hiện tại",
     "newLabel": "Mật khẩu mới",
     "confirmLabel": "Xác nhận mật khẩu mới",
