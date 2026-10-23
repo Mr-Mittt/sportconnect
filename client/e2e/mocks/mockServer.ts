@@ -172,6 +172,7 @@ const OVERRIDE_NAMES: ReadonlySet<keyof SessionOverrides> = new Set([
   'sessionsEmpty',
   'historyVolume',
   'discoverVolume',
+  'emailUnverified',
 ]);
 
 /**

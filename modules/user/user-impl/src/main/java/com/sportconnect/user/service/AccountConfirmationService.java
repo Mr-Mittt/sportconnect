@@ -173,6 +173,11 @@ class AccountConfirmationService {
         return credentials.isEmailRegistered(address, userId);
     }
 
+    /** ACCOUNT-7: whether two addresses are the same mailbox by the A35 rule (a pure comparison, no Keycloak call). */
+    boolean isSameMailbox(String first, String second) {
+        return credentials.isSameMailbox(first, second);
+    }
+
     /** U26: the Keycloak half of an email change (new email, verified, key, username, unlink); see {@link KeycloakCredentialService#replaceEmail}. */
     void replaceEmailInKeycloak(UUID userId, String address) {
         credentials.replaceEmail(userId, address);

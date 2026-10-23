@@ -52,11 +52,11 @@
     "reconnecting": "Đang kết nối lại…"
   },
   "codes": {
-    "EMAIL_ALREADY_REGISTERED": "Đã có tài khoản dùng email này.",
+    "EMAIL_ALREADY_REGISTERED": "Đã có tài khoản dùng email này. Hãy dùng địa chỉ khác.",
     "ACCOUNT_DEACTIVATED": "Tài khoản này đã bị vô hiệu hóa. Hãy đăng nhập lại để kích hoạt lại.",
     "AUTH_CODE_INVALID": "Liên kết đăng nhập đã hết hạn hoặc đã được dùng. Vui lòng đăng nhập lại.",
     "REACTIVATION_TICKET_INVALID": "Yêu cầu kích hoạt lại đã hết hạn. Hãy đăng nhập lại để tiếp tục.",
-    "SERVICE_UNAVAILABLE": "Dịch vụ đăng nhập hiện chưa kết nối được. Vui lòng thử lại sau ít phút.",
+    "SERVICE_UNAVAILABLE": "Dịch vụ hiện chưa khả dụng. Vui lòng thử lại sau.",
     "VALIDATION_FAILED": "Một số thông tin bạn nhập chưa hợp lệ. Vui lòng kiểm tra lại biểu mẫu rồi thử lại.",
     "USER_PROFILE_NOT_OWNED": "Bạn chỉ có thể chỉnh sửa hồ sơ của chính mình.",
     "HEIGHT_OUT_OF_RANGE": "Chiều cao phải từ {{min}} đến {{max}} cm.",
@@ -78,6 +78,8 @@
     "VERIFICATION_RESEND_TOO_SOON": "Mã vừa được gửi. Bạn có thể yêu cầu mã khác sau {{seconds}} giây.",
     "PASSWORD_ATTEMPTS_EXCEEDED": "Bạn đã nhập sai mật khẩu quá nhiều lần. Hãy thử lại sau {{seconds}} giây hoặc dùng mã gửi qua email.",
     "NEW_PASSWORD_REJECTED": "Mật khẩu mới chưa đáp ứng quy tắc mật khẩu. Hãy chọn mật khẩu khác.",
+    "NEW_EMAIL_SAME_AS_CURRENT": "Đó đã là địa chỉ email của bạn.",
+    "NEW_EMAIL_CODE_LIMIT_REACHED": "Hôm nay bạn đã yêu cầu quá nhiều mã. Vui lòng thử lại vào ngày mai.",
     "SEARCH_KEYWORD_TOO_SHORT": "Nhập ít nhất {{min}} ký tự để tìm kiếm.",
     "FRIEND_REQUEST_SELF": "Bạn không thể gửi lời mời kết bạn cho chính mình.",
     "USER_NOT_FOUND": "Người này hiện không còn khả dụng.",

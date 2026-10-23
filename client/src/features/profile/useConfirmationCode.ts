@@ -5,7 +5,7 @@ import { getApiError, getErrorMessage } from '@/shared/lib/apiError';
 import { useCountdown } from '@/shared/lib/useCountdown';
 import type { ApiResponse } from '@/shared/types/api';
 
-export type ConfirmationPurpose = 'DEACTIVATE' | 'CHANGE_PASSWORD';
+export type ConfirmationPurpose = 'DEACTIVATE' | 'CHANGE_PASSWORD' | 'CHANGE_EMAIL';
 
 /** Mirrors the backend's `ConfirmationCodeResponse`. */
 interface ConfirmationCodeResponse {

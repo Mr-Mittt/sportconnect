@@ -57,6 +57,17 @@ export const mockPassword = 'password123';
 export const mockVerificationCode = '123456';
 export const mockExpiredCode = '999999';
 export const mockLockedPassword = 'locked-out-password';
+// ACCOUNT-7 / backend U26: new addresses the email-change handlers treat specially. `mockTakenEmail` is
+// refused when the code is requested (409), `mockRaceEmail` only when the change is submitted (taken in the
+// meantime, 409 and the server drops its new-address code), `mockSameAsCurrentEmail` is the account's own
+// address in other letter case (400), `mockCodeLimitEmail` is the 429 daily limit, `mockTooSoonEmail` the
+// 429 resend lock, `mockDownEmail` a 503 on the request and, once verified, on the submit.
+export const mockTakenEmail = 'taken@example.com';
+export const mockRaceEmail = 'race@example.com';
+export const mockSameAsCurrentEmail = 'JORDAN@example.com';
+export const mockCodeLimitEmail = 'limit@example.com';
+export const mockTooSoonEmail = 'toosoon@example.com';
+export const mockDownEmail = 'down@example.com';
 // AUTH-14: the one-time ticket the auth handler returns for a deactivated password user
 // (`deactivated-code` on /auth/callback) and accepts on /auth/reactivate.
 export const mockReactivationTicket = 'mock-reactivation-ticket';
@@ -974,6 +985,14 @@ export async function seedAuthenticatedSession(page: Page, targetPath = '/'): Pr
     (url) => url.pathname + url.search === targetPath || (targetPath === '/' && url.pathname === '/'),
     { timeout: 10000 },
   );
+}
+
+/**
+ * ACCOUNT-7: the next `GET /users/me` of this session answers an unverified email (the fixture account is
+ * verified). Same `override/*` shape as `seedEmptyFeedOnNextLoad`. Call before `seedAuthenticatedSession`.
+ */
+export async function seedUnverifiedEmailOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/emailUnverified');
 }
 
 /**

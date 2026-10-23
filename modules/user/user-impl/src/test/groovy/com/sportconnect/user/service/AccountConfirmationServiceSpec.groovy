@@ -358,13 +358,16 @@ class AccountConfirmationServiceSpec extends Specification {
     def "the Keycloak half and the clean-up are delegated"() {
         when:
         def taken = service.isEmailRegisteredElsewhere(userId, "new@example.com")
+        def same = service.isSameMailbox("a.b@gmail.com", "ab@gmail.com")
         service.replaceEmailInKeycloak(userId, "new@example.com")
         service.purgeAfterEmailChange(userId)
 
         then:
         1 * credentials.isEmailRegistered("new@example.com", userId) >> true
+        1 * credentials.isSameMailbox("a.b@gmail.com", "ab@gmail.com") >> true
         1 * credentials.replaceEmail(userId, "new@example.com")
         1 * store.purgeAfterEmailChange(userId)
         taken
+        same
     }
 }

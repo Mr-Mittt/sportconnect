@@ -43,6 +43,21 @@ describe('authStore', () => {
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
+  it('patchUser changes only the given fields and keeps the token', () => {
+    useAuthStore.getState().setSession(testUser, 'access-token-123');
+
+    useAuthStore.getState().patchUser({ email: 'new@example.com', avatarUrl: null });
+
+    expect(useAuthStore.getState().user).toEqual({ ...testUser, email: 'new@example.com' });
+    expect(useAuthStore.getState().accessToken).toBe('access-token-123');
+  });
+
+  it('patchUser without a session does nothing', () => {
+    useAuthStore.getState().patchUser({ email: 'new@example.com' });
+
+    expect(useAuthStore.getState().user).toBeNull();
+  });
+
   it('starts with isBootstrapping true', () => {
     expect(useAuthStore.getState().isBootstrapping).toBe(true);
   });

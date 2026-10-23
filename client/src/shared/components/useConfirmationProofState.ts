@@ -41,5 +41,11 @@ export function useConfirmationProofState(input: {
       ? { method: 'password', currentPassword: password }
       : { method: 'email', verificationCode: digitsOf(code) };
 
-  return { method, setMethod, password, setPassword, code, setCode, lockSeconds, isComplete, proof };
+  /** ACCOUNT-7: empties whatever the user typed as proof (a new-address resend starts the proof from scratch). */
+  const clearInputs = () => {
+    setPassword('');
+    setCode('');
+  };
+
+  return { method, setMethod, password, setPassword, code, setCode, lockSeconds, isComplete, proof, clearInputs };
 }

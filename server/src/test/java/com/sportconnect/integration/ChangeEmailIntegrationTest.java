@@ -210,6 +210,27 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
     }
 
     @Test
+    void step1_aRespellingOfTheAccountsOwnGmailAddress_is400_sameAsCurrent_andNothingIsSent() throws Exception {
+        User user = register("u26.resp@gmail.com", PASSWORD);
+
+        for (String respelling : new String[] {"u26resp@gmail.com", "u26.resp+news@gmail.com", "U26.Resp@googlemail.com", "u2.6r.esp@gmail.com"}) {
+            requestNewEmailCode(user, respelling)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("NEW_EMAIL_SAME_AS_CURRENT"));
+        }
+
+        Mockito.verify(emailSender, Mockito.never()).send(Mockito.any());
+        assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isFalse();
+    }
+
+    @Test
+    void step1_otherProvidersKeepDotsSignificant_soADottedRespellingThereIsADifferentMailbox() throws Exception {
+        User user = register("u26.dots@example.com", PASSWORD);
+
+        requestNewEmailCode(user, "u26dots@example.com").andExpect(status().isOk());
+    }
+
+    @Test
     void step1_theAccountsOwnAddress_is400_sameAsCurrent() throws Exception {
         User user = register("u26-d@example.com", PASSWORD);
 
@@ -477,7 +498,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
         changeEmail(user, body("u26-r-new@example.com", wrong, "currentPassword", PASSWORD))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         assertUntouched(user, "u26-r@example.com", false, 0);
     }
 
@@ -515,7 +537,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
                     .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
         }
         changeEmail(user, body("u26-u-new@example.com", wrong, "currentPassword", PASSWORD))
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_ATTEMPTS_EXCEEDED"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_ATTEMPTS_EXCEEDED"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         changeEmail(user, body("u26-u-new@example.com", code, "currentPassword", PASSWORD))
                 .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"));
         assertUntouched(user, "u26-u@example.com", false, 0);
@@ -533,6 +556,21 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("EMAIL_ALREADY_REGISTERED"));
         assertUntouched(user, "u26-v@example.com", false, 1);
+    }
+
+    @Test
+    void refusal_aRespellingOfTheAccountsOwnGmailAddress_is400_andNoProofIsSpent_andGoogleStaysLinked() throws Exception {
+        User user = register("u26.resp2@gmail.com", PASSWORD);
+        TestKeycloak.linkIdentity(user.getId(), "google");
+        String own = issueOwnCode(user);
+
+        changeEmail(user, body("u26resp2+x@googlemail.com", "123456", "verificationCode", own))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("NEW_EMAIL_SAME_AS_CURRENT"));
+
+        // nothing changed, the Google link is still there, and the proof code was not consumed
+        assertUntouched(user, "u26.resp2@gmail.com", false, 1);
+        assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isTrue();
     }
 
     @Test
@@ -602,12 +640,14 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
         changeEmail(user, body("u26-aa-new@example.com", wrong, "verificationCode", own))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         // the new-address code expires (Redis drops it)
         redis.delete("user:confirm:code:NEW_EMAIL:" + user.getId());
         changeEmail(user, body("u26-aa-new@example.com", code, "verificationCode", own))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_EXPIRED"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("NEW_EMAIL"));
         assertUntouched(user, "u26-aa@example.com", false, 0);
         assertThat(redis.hasKey("user:confirm:code:CHANGE_EMAIL:" + user.getId())).isTrue();
 
@@ -627,7 +667,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
         changeEmail(user, body("u26-ab-new@example.com", code, "verificationCode", wrongOwn))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"));
+                .andExpect(jsonPath("$.errorCode").value("VERIFICATION_CODE_INVALID"))
+                .andExpect(jsonPath("$.errorParams.purpose").value("CHANGE_EMAIL"));
         assertThat(redis.hasKey("user:confirm:code:NEW_EMAIL:" + user.getId())).isTrue();
 
         changeEmail(user, body("u26-ab-new@example.com", code, "verificationCode", own)).andExpect(status().isOk());

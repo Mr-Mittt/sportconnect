@@ -51,7 +51,7 @@ test.describe('callback errors', () => {
     );
     await signIn(page, 'user', { stayOnCallback: true });
 
-    await expect(page.getByRole('alert')).toContainText('The sign-in service isn’t reachable right now.');
+    await expect(page.getByRole('alert')).toContainText('This service isn’t available right now.');
   });
 
   test('a state that does not match, or a Keycloak error, is refused without calling the backend', async ({ page }) => {
