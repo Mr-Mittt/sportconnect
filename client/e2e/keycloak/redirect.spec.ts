@@ -128,7 +128,9 @@ test('/register opens the themed create-account form and registering returns to 
   await expect(page.locator('#username')).toHaveCount(0);
   // The email comes first, then the password fields, then the names and the rest.
   expect(
-    await page.locator('#kc-register-form input:not([type=hidden])').evaluateAll((els) => els.map((e) => e.id).slice(0, 3)),
+    await page.evaluate<string[]>(
+      "Array.from(document.querySelectorAll('#kc-register-form input:not([type=hidden])')).map((e) => e.id).slice(0, 3)",
+    ),
   ).toEqual(['email', 'password', 'password-confirm']);
   await page.locator('#email').fill(registered.email);
   await page.locator('#firstName').fill('E2E');

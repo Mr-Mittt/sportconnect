@@ -43,6 +43,19 @@ for (const width of breakpoints) {
     await expect(settings).toHaveScreenshot(`account-settings-default-${width}.png`, { animations: 'disabled' });
   });
 
+  // AUTH-19: the modal's content scrolls inside a 72vh box, so the default shot stops in the Contact section and
+  // never shows the email row ACCOUNT-7 added. Scroll the Email section to the top of the scroll area and shoot again.
+  test(`account settings modal — email row @ ${width}px`, async ({ page }) => {
+    const settings = await openAccountSettings(page, width);
+    await settings.getByRole('heading', { name: 'Email', exact: true }).evaluate((el) =>
+      // The e2e tsconfig has no DOM lib, so the element is typed by hand.
+      (el as unknown as { scrollIntoView(options: { block: string }): void }).scrollIntoView({ block: 'start' }),
+    );
+    await settle(page);
+
+    await expect(settings).toHaveScreenshot(`account-settings-email-${width}.png`, { animations: 'disabled' });
+  });
+
   test(`account settings — change password dialog @ ${width}px`, async ({ page }) => {
     const settings = await openAccountSettings(page, width);
     await settings.getByRole('button', { name: 'Change password' }).click();

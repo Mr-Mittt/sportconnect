@@ -91,9 +91,12 @@ test('register: every field and the submit button are reachable by Tab', async (
     await page.keyboard.press('Tab');
     reached.add(await page.evaluate<string>('document.activeElement?.id ?? ""'));
   }
-  for (const field of ['username', 'password', 'password-confirm', 'email', 'firstName', 'lastName']) {
+  for (const field of ['password', 'password-confirm', 'email', 'firstName', 'lastName']) {
     expect(reached, `Tab should reach #${field}`).toContain(field);
   }
+  // A27: the registration page shows no username field (the flow fills it on the server), so no Tab stop is a username.
+  // AUTH-19: this test used to expect `#username` and had been failing since A27.
+  expect(reached, 'the page must not offer a username field').not.toContain('username');
 });
 
 test('register: the show-password buttons draw an eye and reveal the password', async ({ page }) => {
@@ -104,7 +107,11 @@ test('register: the show-password buttons draw an eye and reveal the password', 
   // The stock glyph font is not shipped: the icon is a CSS mask, so it needs a size and a mask image.
   const eye = page.locator('.kc-eye').first();
   expect((await eye.boundingBox())?.width).toBeGreaterThan(8);
-  expect(await eye.evaluate((el) => getComputedStyle(el).maskImage || getComputedStyle(el).webkitMaskImage)).not.toBe('none');
+  expect(
+    await page.evaluate<string>(
+      "(() => { const s = getComputedStyle(document.querySelector('.kc-eye')); return s.maskImage || s.webkitMaskImage; })()",
+    ),
+  ).not.toBe('none');
   await page.locator('#password').fill('secret-123');
   await buttons.first().click();
   await expect(page.locator('#password')).toHaveAttribute('type', 'text');

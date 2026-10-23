@@ -25,6 +25,7 @@ module's own implementation work).
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [NTF-6](MVP/NTF-6_DISCONNECT_OPEN_SOCKETS_ON_DEACTIVATION.md) | Low priority: close a user's already-open STOMP sockets when their account is deactivated (A28 added the CONNECT-time active check; an open socket stays until the client reconnects) | `TODO` |
+| 2 | [NTF-7](MVP/NTF-7_FLAKY_SESSION_EVENTS_CONSUMER_IT.md) | Find and fix the flaky `SessionEventsConsumerIntegrationTest` (failed in CI on the A29 PR, green on re-run; second occurrence) | `TODO` |
 
 ---
 
