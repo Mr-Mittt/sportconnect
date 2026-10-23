@@ -53,6 +53,18 @@ for (const width of breakpoints) {
     await page.setViewportSize({ width, height: 900 });
     const dialog = await openPostModal(page, 4);
     await expect(dialog.getByText('No comments yet. Be the first to comment!')).toBeVisible();
+    // AUTH-19: nothing inside the empty modal takes focus, so Radix focuses the dialog box itself. Since AUTH-14 the
+    // session is seeded through full-page redirects (no pointer input in the final document), so Chrome matches
+    // :focus-visible on that box and draws its outline round the whole dialog; the old form login left a mouse-focused
+    // button behind and so never did. A blur alone was not enough (the 1280 shot on Linux CI still had the outline), and a click
+    // alone does nothing while the box is already focused. So blur, then click an empty spot of the dialog, which
+    // focuses the box by pointer (never focus-visible); fail here, not in a screenshot diff, if the outline would still be drawn.
+    await page.evaluate('document.activeElement?.blur()');
+    await dialog.click({ position: { x: 40, y: 380 } });
+    await expect
+      // The e2e tsconfig has no DOM lib, so the element is typed by hand.
+      .poll(() => dialog.evaluate((el) => (el as unknown as { matches(selector: string): boolean }).matches(':focus-visible')))
+      .toBe(false);
     await page.evaluate('document.fonts.ready');
 
     await expect(dialog).toHaveScreenshot(`post-modal-empty-${width}.png`);

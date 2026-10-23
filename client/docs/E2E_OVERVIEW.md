@@ -1501,9 +1501,9 @@ Real Keycloak 26.4 with the committed realm and the SportConnect theme JAR; the 
 
 Walks every story in the built theme Storybook's `index.json` (17 today, so a new theme story is covered automatically). Per story: at 375 / 768 / 1280 px no horizontal overflow and axe reports zero critical/serious violations, plus the same checks in Vietnamese at 375 px (17 × 4 = 68). Plus: login Tab order (language links, username, forgot-password link, password, show-password, submit, the three providers) and register (every field reachable by Tab). It replaces the `/login`, `/register`, `/forgot-password` and `/reset-password` rows AUTH-14 removed from `a11y.spec.ts`. First run found a real issue: Keycloakify's stock OTP, recovery-code and logout-confirm pages hard-code `tabindex > 0`; `Template` now strips it.
 
-### `e2e/visual/auth-theme.spec.ts` (AUTH-15, `visual-regression` project, 57 test instances)
+### `e2e/visual/auth-theme.spec.ts` (AUTH-15, `visual-regression` project, 81 test instances)
 
-One baseline per theme story per breakpoint in English (17 × 3 = 51) plus login and register in Vietnamese (2 × 3 = 6), named `auth-theme-<story>-<width>.png` / `auth-theme-<story>-vi-<width>.png`, captured from the static theme Storybook. Generated only by the `update-baselines` dispatch (Linux); the spec fails loudly, never skips, when the theme Storybook is not built.
+One baseline per theme story per breakpoint in English (25 × 3 = 75 today) plus login and register in Vietnamese (2 × 3 = 6), named `auth-theme-<story>-<width>.png` / `auth-theme-<story>-vi-<width>.png`, captured from the static theme Storybook. All 81 are Linux-rendered and committed (created by AUTH-19, 2026-10-22); a new theme story adds 3 files to the next dispatch. Generated only by the `update-baselines` dispatch (Linux); the spec fails loudly, never skips, when the theme Storybook is not built.
 ## 7. Adding a new spec — checklist
 
 - Import `{ test, expect }` from `../mocks/test.ts`, not `@playwright/test` directly, if the spec needs
@@ -1525,12 +1525,13 @@ The 21 AUTH-13 baselines (`auth-login-*`, `auth-register-*`, `auth-forgot-passwo
 
 ### `e2e/visual/account-settings.spec.ts` (AUTH-13 scope change, `visual-regression` project)
 
-3 breakpoints × 3 states = **9 test instances**, opened the same way as `account-settings-unsaved.spec.ts` (avatar menu → "Account settings"). Element-scoped shots, as the sport status confirm dialogs.
+3 breakpoints × 4 states = **12 test instances** (the 4th, `email row`, added by AUTH-19), opened the same way as `account-settings-unsaved.spec.ts` (avatar menu → "Account settings"). Element-scoped shots, as the sport status confirm dialogs.
 
 | State | Setup | Baseline |
 |---|---|---|
 | account settings modal — default | open the modal; wait for the Language select to be pre-filled (async detection — without this the shot flaked by 10 px) and for network idle | `account-settings-default-{width}.png` |
+| account settings modal — email row (AUTH-19) | as `default`, then the `Email` heading is scrolled to the top of the modal's scroll area (the modal scrolls inside a 72vh box, so `default` stops in the Contact section and never shows the email row ACCOUNT-7 added); shows the email, the Verified badge, Change email, the password and deactivate sections and the footer | `account-settings-email-{width}.png` |
 | change password dialog | "Change password" in the modal; shoots the stacked `Change your password` dialog, empty | `account-settings-change-password-{width}.png` |
 | deactivate dialog | "Deactivate account" in the modal; shoots the stacked `Deactivate your account?` dialog, empty | `account-settings-deactivate-{width}.png` |
 
-All 9 baselines are Linux-rendered and committed (current as of AUTH-13). Error / validation states and the unsaved-changes prompt are out of scope. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
+All 12 baselines are Linux-rendered and committed and current (the 6 ACCOUNT-6 dialog ones were regenerated and the 3 `email row` ones created by AUTH-19, 2026-10-22; `default` is unchanged since AUTH-13). Error / validation states and the unsaved-changes prompt are out of scope. Related docs: `client/docs/MVP/AUTH-13_AUTH_SCREENS_VISUAL_REGRESSION.md`.
