@@ -27,6 +27,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A stand-in for Keycloak, for integration tests: a locally generated RSA key, a tiny HTTP server that serves its JWKS
@@ -48,6 +50,14 @@ public final class TestKeycloak {
     public static final String AUDIENCE = "sportconnect-api";
     public static final String CLIENT_ID = "sportconnect-web";
     public static final String REDIRECT_URI = "http://localhost:5173/auth/callback";
+    /** U24: the backend-only confidential client (password check + service account) and its secret. */
+    public static final String CREDENTIALS_CLIENT_ID = "sportconnect-credentials";
+    public static final String CREDENTIALS_CLIENT_SECRET = "it-credentials-secret";
+    private static final String SERVICE_TOKEN = "service-account-token";
+    private static final int MIN_PASSWORD_LENGTH = 8;
+    /** A value the stand-in realm policy refuses besides the length rule (stands for a blocklist/not-recently-used rule). */
+    public static final String POLICY_REJECTED_PASSWORD = "password1";
+    private static final Pattern PASSWORD_VALUE = Pattern.compile("\"value\"\\s*:\\s*\"([^\"]*)\"");
 
     private static final RSAKey SIGNING_KEY;
     private static final RSAKey OTHER_KEY;
@@ -58,11 +68,16 @@ public final class TestKeycloak {
     private static final Map<String, Pending> CODES = new ConcurrentHashMap<>();
     private static final Map<String, Session> SESSIONS_BY_REFRESH_TOKEN = new ConcurrentHashMap<>();
     private static final Map<UUID, String> LATEST_REFRESH_TOKEN = new ConcurrentHashMap<>();
+    /** U24: the Keycloak users a test registered: username and password (a user with no entry has no password). */
+    private static final Map<UUID, String> USERNAMES = new ConcurrentHashMap<>();
+    private static final Map<UUID, String> PASSWORDS = new ConcurrentHashMap<>();
+    private static final AtomicBoolean ADMIN_UP = new AtomicBoolean(true);
 
     public static final String ISSUER;
     public static final String JWK_SET_URI;
     public static final String TOKEN_URI;
     public static final String LOGOUT_URI;
+    public static final String ADMIN_URI;
 
     static {
         try {
@@ -83,6 +98,7 @@ public final class TestKeycloak {
             });
             SERVER.createContext("/token", TestKeycloak::handleToken);
             SERVER.createContext("/logout", TestKeycloak::handleLogout);
+            SERVER.createContext("/admin/users", TestKeycloak::handleAdminUsers);
             SERVER.setExecutor(null);
             SERVER.start();
             String base = "http://127.0.0.1:" + SERVER.getAddress().getPort();
@@ -90,6 +106,7 @@ public final class TestKeycloak {
             JWK_SET_URI = base + "/jwks";
             TOKEN_URI = base + "/token";
             LOGOUT_URI = base + "/logout";
+            ADMIN_URI = base + "/admin";
         } catch (JOSEException | IOException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -115,6 +132,28 @@ public final class TestKeycloak {
     /** While {@code false}, the token and end-session endpoints answer 503, as a Keycloak that is down would. */
     public static void tokenEndpointAvailable(boolean available) {
         TOKEN_UP.set(available);
+    }
+
+    // ---------- U24: passwords live in Keycloak ----------
+
+    /** Registers a Keycloak user with a password ({@code null} password: a social-only user). */
+    public static void registerUser(UUID userId, String username, String password) {
+        USERNAMES.put(userId, username);
+        if (password == null) {
+            PASSWORDS.remove(userId);
+        } else {
+            PASSWORDS.put(userId, password);
+        }
+    }
+
+    /** The user's current Keycloak password, or null. */
+    public static String passwordOf(UUID userId) {
+        return PASSWORDS.get(userId);
+    }
+
+    /** While {@code false}, the admin endpoints answer 503 (the password grant keeps working). */
+    public static void adminAvailable(boolean available) {
+        ADMIN_UP.set(available);
     }
 
     // ---------- A26: the token side ----------
@@ -298,6 +337,10 @@ public final class TestKeycloak {
             return;
         }
         Map<String, String> form = readForm(exchange);
+        if (CREDENTIALS_CLIENT_ID.equals(form.get("client_id"))) {
+            handleCredentialsToken(exchange, form);
+            return;
+        }
         if (!CLIENT_ID.equals(form.get("client_id"))) {
             respond(exchange, 401, "{\"error\":\"unauthorized_client\"}");
             return;
@@ -333,6 +376,72 @@ public final class TestKeycloak {
                 + "\",\"refresh_token\":\"" + session.newRefreshToken()
                 + "\",\"expires_in\":300,\"refresh_expires_in\":86400,\"token_type\":\"Bearer\"}";
         respond(exchange, 200, json);
+    }
+
+    /** U24: the credentials client's two grants: client credentials (the service account) and the password check. */
+    private static void handleCredentialsToken(HttpExchange exchange, Map<String, String> form) throws IOException {
+        if (!CREDENTIALS_CLIENT_SECRET.equals(form.get("client_secret"))) {
+            respond(exchange, 401, "{\"error\":\"invalid_client\"}");
+            return;
+        }
+        switch (form.getOrDefault("grant_type", "")) {
+            case "client_credentials" ->
+                    respond(exchange, 200, "{\"access_token\":\"" + SERVICE_TOKEN + "\",\"expires_in\":60,\"token_type\":\"Bearer\"}");
+            case "password" -> {
+                boolean ok = USERNAMES.entrySet().stream()
+                        .anyMatch(e -> e.getValue().equals(form.get("username"))
+                                && form.get("password") != null
+                                && form.get("password").equals(PASSWORDS.get(e.getKey())));
+                if (ok) {
+                    respond(exchange, 200, "{\"access_token\":\"discarded\",\"refresh_token\":\"discarded\",\"expires_in\":60,\"token_type\":\"Bearer\"}");
+                } else {
+                    respond(exchange, 401, "{\"error\":\"invalid_grant\",\"error_description\":\"Invalid user credentials\"}");
+                }
+            }
+            default -> respond(exchange, 400, "{\"error\":\"unsupported_grant_type\"}");
+        }
+    }
+
+    /** U24: GET /admin/users/{id} (the username) and PUT /admin/users/{id}/reset-password, for the service account only. */
+    private static void handleAdminUsers(HttpExchange exchange) throws IOException {
+        String auth = exchange.getRequestHeaders().getFirst("Authorization");
+        if (!ADMIN_UP.get()) {
+            respond(exchange, 503, "{}");
+            return;
+        }
+        if (!("Bearer " + SERVICE_TOKEN).equals(auth)) {
+            respond(exchange, 401, "{}");
+            return;
+        }
+        String[] parts = exchange.getRequestURI().getPath().substring("/admin/users/".length()).split("/");
+        UUID userId;
+        try {
+            userId = UUID.fromString(parts[0]);
+        } catch (IllegalArgumentException e) {
+            respond(exchange, 404, "{}");
+            return;
+        }
+        if (!USERNAMES.containsKey(userId)) {
+            respond(exchange, 404, "{\"error\":\"User not found\"}");
+            return;
+        }
+        if (parts.length == 1 && "GET".equals(exchange.getRequestMethod())) {
+            respond(exchange, 200, "{\"id\":\"" + userId + "\",\"username\":\"" + USERNAMES.get(userId) + "\"}");
+            return;
+        }
+        if (parts.length == 2 && "reset-password".equals(parts[1]) && "PUT".equals(exchange.getRequestMethod())) {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            Matcher value = PASSWORD_VALUE.matcher(body);
+            if (!value.find() || value.group(1).length() < MIN_PASSWORD_LENGTH || POLICY_REJECTED_PASSWORD.equals(value.group(1))) {
+                respond(exchange, 400, "{\"error\":\"invalidPasswordMinLengthMessage\"}");
+                return;
+            }
+            PASSWORDS.put(userId, value.group(1));
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+            return;
+        }
+        respond(exchange, 404, "{}");
     }
 
     private static void handleLogout(HttpExchange exchange) throws IOException {

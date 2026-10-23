@@ -77,7 +77,6 @@ class SportActiveGateIntegrationTest extends BaseIT {
 
         userId = userRepository.save(User.builder()
                 .email("a7-gate@example.com")
-                .passwordHash("hash")
                 .firstName("Gate")
                 .lastName("Tester")
                 .username("a7gate")

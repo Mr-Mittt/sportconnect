@@ -50,7 +50,6 @@ class PostControllerIntegrationTest extends RedisBaseIT {
         User user = new User();
         user.setUsername("testuser_" + System.currentTimeMillis());
         user.setEmail("test" + System.currentTimeMillis() + "@example.com");
-        user.setPasswordHash("password");
         user.setFirstName("Test");
         user.setLastName("User");
         user.setIsEmailVerified(false);

@@ -1,10 +1,13 @@
 package com.sportconnect.user.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sportconnect.auth.api.service.KeycloakCredentialService;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
+import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
+import com.sportconnect.user.api.dto.ConfirmationPurpose;
 import com.sportconnect.user.api.dto.ExternalIdentity;
 import com.sportconnect.user.api.dto.ProvisionedUser;
 import com.sportconnect.user.api.dto.UserAccessState;
@@ -35,7 +38,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -71,7 +73,9 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final PasswordEncoder passwordEncoder;
+    // U24: the password lives in Keycloak; confirming the caller and setting the new password go through these
+    private final AccountConfirmationService accountConfirmation;
+    private final KeycloakCredentialService keycloakCredentials;
     private final UserFriendService userFriendService;
     private final UserSportProfileService userSportProfileService;
     private final StringRedisTemplate stringRedisTemplate;
@@ -88,7 +92,8 @@ public class UserServiceImpl implements UserService {
     public UserServiceImpl(
             UserRepository userRepository,
             RoleRepository roleRepository,
-            PasswordEncoder passwordEncoder,
+            AccountConfirmationService accountConfirmation,
+            KeycloakCredentialService keycloakCredentials,
             UserFriendService userFriendService,
             UserSportProfileService userSportProfileService,
             StringRedisTemplate stringRedisTemplate,
@@ -103,7 +108,8 @@ public class UserServiceImpl implements UserService {
         this.userPreferenceRepository = userPreferenceRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
-        this.passwordEncoder = passwordEncoder;
+        this.accountConfirmation = accountConfirmation;
+        this.keycloakCredentials = keycloakCredentials;
         this.userFriendService = userFriendService;
         this.userSportProfileService = userSportProfileService;
         this.stringRedisTemplate = stringRedisTemplate;
@@ -340,22 +346,33 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * U22: the caller deactivates their own account. Same row lock as {@link #deleteUser}; a deactivated caller gets the same not-found as {@link #changePassword}, and a wrong
-     * password leaves everything untouched.
+     * U22, U24: the caller deactivates their own account. Same row lock as {@link #deleteUser}; a deactivated caller gets
+     * the same not-found as {@link #changePassword}. The caller is confirmed first (current password asked of Keycloak, or
+     * the emailed code), and a failed confirmation leaves everything untouched. The lock is held across that check, which
+     * can take a Keycloak round trip; it blocks only this one user's row.
      */
     @Override
     @Transactional
-    public void deactivateOwnAccount(UUID userId, String currentPassword) {
+    public void deactivateOwnAccount(UUID userId, String currentPassword, String verificationCode) {
         User user = userRepository.findByIdForUpdate(userId)
                 .filter(User::getIsActive)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
-            throw new BadRequestException("CURRENT_PASSWORD_INCORRECT", "Current password is incorrect", null);
-        }
+        accountConfirmation.confirm(userId, ConfirmationPurpose.DEACTIVATE, currentPassword, verificationCode);
 
         deactivate(user);
         log.info("User deactivated their own account: {}", userId);
+    }
+
+    /**
+     * U24: emails the caller a confirmation code for {@code purpose}, in their language (stored preference, else their
+     * country's, else English). Not transactional: it writes only to Redis and hands the email to the async sender.
+     */
+    @Override
+    public ConfirmationCodeResponse sendConfirmationCode(UUID userId, ConfirmationPurpose purpose) {
+        User user = userRepository.findByIdAndIsActiveTrue(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+        return accountConfirmation.sendCode(userId, user.getEmail(), purpose, findPreferredLanguageCode(userId));
     }
 
     /**
@@ -748,18 +765,19 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
     }
 
+    /**
+     * U24: confirms the caller (current password asked of Keycloak, or the emailed code), then sets the new password in
+     * Keycloak through its admin API. Nothing is stored here: the backend keeps no password. Not transactional, there is
+     * no database write.
+     */
     @Override
-    @Transactional
-    public void changePassword(UUID userId, String currentPassword, String newPassword) {
-        User user = userRepository.findByIdAndIsActiveTrue(userId)
+    public void changePassword(UUID userId, String currentPassword, String verificationCode, String newPassword) {
+        userRepository.findByIdAndIsActiveTrue(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
-            throw new BadRequestException("CURRENT_PASSWORD_INCORRECT", "Current password is incorrect", null);
-        }
+        accountConfirmation.confirm(userId, ConfirmationPurpose.CHANGE_PASSWORD, currentPassword, verificationCode);
 
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
+        keycloakCredentials.setPassword(userId, newPassword);
         log.info("Changed password for user: {}", userId);
     }
 

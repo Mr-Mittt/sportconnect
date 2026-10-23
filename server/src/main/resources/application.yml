@@ -115,6 +115,12 @@ app:
     redirect-uri: ${KEYCLOAK_REDIRECT_URI:http://localhost:5173/auth/callback}
     token-uri: ${KEYCLOAK_TOKEN_URI:http://localhost:8081/realms/sportconnect/protocol/openid-connect/token}
     logout-uri: ${KEYCLOAK_LOGOUT_URI:http://localhost:8081/realms/sportconnect/protocol/openid-connect/logout}
+    # U24: the confidential client behind "confirm my current password" (password grant, tokens discarded) and "set my new
+    # password" (its service account, manage-users only). Backend only. The dev secret is the one apply-realm-credentials-client.sh
+    # sets (dev-only, like admin/admin); production has no default.
+    admin-uri: ${KEYCLOAK_ADMIN_URI:http://localhost:8081/admin/realms/sportconnect}
+    credentials-client-id: sportconnect-credentials
+    credentials-client-secret: ${KEYCLOAK_CREDENTIALS_CLIENT_SECRET:dev-credentials-client-secret}
 
   auth:
     reactivation-ticket-ttl: 5m # A26: how long a deactivated password user has to confirm re-activation

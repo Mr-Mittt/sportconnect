@@ -6,6 +6,11 @@ dependencies {
     // Module dependencies
     implementation project(':modules:user:user-api')
     implementation project(':modules:common')
+    // U24: the password lives in Keycloak; confirming it and setting a new one go through auth-api (interface only).
+    // auth-api depends solely on common, so no cycle with auth-impl -> user-api.
+    implementation project(':modules:auth:auth-api')
+    // U24: the confirmation-code email; this module writes the text, email-impl delivers it.
+    implementation project(':modules:email:email-api')
     // U15: toPublicUserInfo() reads the target user's active sport ids via UserSportProfileService
     // — sport-api only (interface + DTOs); sport-api depends solely on :modules:common, so no cycle.
     implementation project(':modules:sport:sport-api')
@@ -32,9 +37,6 @@ dependencies {
     // U23: phone numbers are parsed and stored as E.164 (default region VN, so 0901234567 and +84901234567 are one number)
     implementation 'com.googlecode.libphonenumber:libphonenumber:8.13.40'
 
-    // Password encoder (for password verification)
-    implementation 'org.springframework.security:spring-security-crypto'
-    
     // Hibernate Spatial for PostGIS
     implementation 'org.hibernate.orm:hibernate-spatial:6.4.0.Final'
     

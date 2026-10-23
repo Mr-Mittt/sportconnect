@@ -58,10 +58,10 @@ class SportErrorCodesIntegrationTest extends BaseIT {
     void setUp() {
         clearAll();
         ownerId = userRepository.save(User.builder()
-                .email("a25-owner@example.com").passwordHash("hash").firstName("A25").lastName("Owner")
+                .email("a25-owner@example.com").firstName("A25").lastName("Owner")
                 .username("a25owner").isActive(true).build()).getId();
         otherUserId = userRepository.save(User.builder()
-                .email("a25-other@example.com").passwordHash("hash").firstName("A25").lastName("Other")
+                .email("a25-other@example.com").firstName("A25").lastName("Other")
                 .username("a25other").isActive(true).build()).getId();
         sportId = sportRepository.save(Sport.builder()
                 .name("A25 Badminton").isActive(true)

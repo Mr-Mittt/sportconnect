@@ -2,6 +2,8 @@ package com.sportconnect.user.controller;
 
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.user.api.dto.ChangePasswordRequest;
+import com.sportconnect.user.api.dto.ConfirmationCodeRequest;
+import com.sportconnect.user.api.dto.ConfirmationCodeResponse;
 import com.sportconnect.user.api.dto.DeactivateAccountRequest;
 import com.sportconnect.user.api.dto.UpdateProfileRequest;
 import com.sportconnect.user.api.dto.UserInfoResponse;
@@ -124,35 +126,58 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
     }
 
-    @Operation(summary = "Change the caller's password")
+    @Operation(summary = "Change the caller's password", description = "U24. Confirms the caller with exactly one proof (currentPassword, checked by Keycloak, or verificationCode, emailed by POST /me/confirmation-code with purpose CHANGE_PASSWORD), then sets the new password in Keycloak.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Password changed"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or current password is incorrect"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, neither/both proofs (CONFIRMATION_REQUIRED), CURRENT_PASSWORD_INCORRECT, VERIFICATION_CODE_INVALID / _EXPIRED / _ATTEMPTS_EXCEEDED, or NEW_PASSWORD_REJECTED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or deactivated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Too many wrong passwords (PASSWORD_ATTEMPTS_EXCEEDED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the code store is unavailable")
     })
     @PutMapping("/me/password")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> changePassword(
             @AuthenticationPrincipal String callerIdStr,
             @Valid @RequestBody ChangePasswordRequest request) {
-        userService.changePassword(UUID.fromString(callerIdStr), request.getCurrentPassword(), request.getNewPassword());
+        userService.changePassword(UUID.fromString(callerIdStr), request.getCurrentPassword(), request.getVerificationCode(), request.getNewPassword());
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully", null));
     }
 
-    @Operation(summary = "Deactivate the caller's own account", description = "U22. Re-confirms the caller's password, soft-deletes the account (isActive=false) and revokes every session. The account can be brought back through POST /api/auth/reactivate (A9).")
+    @Operation(summary = "Deactivate the caller's own account", description = "U22, U24. Confirms the caller with exactly one proof (currentPassword, checked by Keycloak, or verificationCode, emailed by POST /me/confirmation-code with purpose DEACTIVATE), then soft-deletes the account (isActive=false); the A25 gate refuses the caller from the next request. The account can be brought back by signing in again (A26 re-activation).")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account deactivated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or the password is incorrect (errorCode CURRENT_PASSWORD_INCORRECT)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Neither/both proofs (CONFIRMATION_REQUIRED), CURRENT_PASSWORD_INCORRECT, or VERIFICATION_CODE_INVALID / _EXPIRED / _ATTEMPTS_EXCEEDED"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or already deactivated")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or already deactivated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Too many wrong passwords (PASSWORD_ATTEMPTS_EXCEEDED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Keycloak or the code store is unavailable")
     })
     @PostMapping("/me/deactivate")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Void>> deactivateOwnAccount(
             @AuthenticationPrincipal String callerIdStr,
             @Valid @RequestBody DeactivateAccountRequest request) {
-        userService.deactivateOwnAccount(UUID.fromString(callerIdStr), request.getCurrentPassword());
+        userService.deactivateOwnAccount(UUID.fromString(callerIdStr), request.getCurrentPassword(), request.getVerificationCode());
         return ResponseEntity.ok(ApiResponse.success("Account deactivated successfully", null));
+    }
+
+    @Operation(summary = "Email the caller a confirmation code", description = "U24. Emails a one-time code (6 digits, valid 15 minutes) that confirms the given purpose in place of the current password. Another code can be requested after 60 seconds.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Code emailed; the body says how long to wait and how long it lasts"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or the account has no email (VERIFICATION_EMAIL_UNAVAILABLE)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Account not found or deactivated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "A code was sent less than 60 seconds ago (VERIFICATION_RESEND_TOO_SOON, errorParams.seconds)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "The code store is unavailable")
+    })
+    @PostMapping("/me/confirmation-code")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<ConfirmationCodeResponse>> sendConfirmationCode(
+            @AuthenticationPrincipal String callerIdStr,
+            @Valid @RequestBody ConfirmationCodeRequest request) {
+        ConfirmationCodeResponse response = userService.sendConfirmationCode(UUID.fromString(callerIdStr), request.getPurpose());
+        return ResponseEntity.ok(ApiResponse.success("Confirmation code sent", response));
     }
 
     @Operation(summary = "Delete a user", description = "Admin-only. Soft delete (isActive=false).")

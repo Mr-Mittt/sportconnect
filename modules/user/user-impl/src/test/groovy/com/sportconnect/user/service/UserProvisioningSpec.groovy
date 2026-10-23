@@ -17,7 +17,7 @@ import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.redis.core.StringRedisTemplate
-import org.springframework.security.crypto.password.PasswordEncoder
+import com.sportconnect.auth.api.service.KeycloakCredentialService
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -26,7 +26,8 @@ class UserProvisioningSpec extends Specification {
 
     UserRepository userRepository = Mock()
     RoleRepository roleRepository = Mock()
-    PasswordEncoder passwordEncoder = Mock()
+    AccountConfirmationService accountConfirmation = Mock()
+    KeycloakCredentialService keycloakCredentials = Mock()
     UserFriendService userFriendService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
@@ -36,7 +37,7 @@ class UserProvisioningSpec extends Specification {
     UserProvisioningLock provisioningLock = Mock()
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, passwordEncoder, userFriendService,
+    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, accountConfirmation, keycloakCredentials, userFriendService,
             userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService,
             userPreferenceRepository, accessStateCache, provisioningLock)
 
@@ -63,7 +64,7 @@ class UserProvisioningSpec extends Specification {
         1 * userRepository.existsByUsername("auser") >> false
         1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u ->
-            u.id == sub && u.email == "a@example.com" && u.isEmailVerified && u.isActive && u.passwordHash == null &&
+            u.id == sub && u.email == "a@example.com" && u.isEmailVerified && u.isActive &&
                     u.username == "auser" && u.firstName == "A" && u.lastName == "User" &&
                     u.roles*.name == ["USER"] && u.isNew()
         }) >> { User u -> u }

@@ -8,6 +8,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Body of {@code PUT /api/users/me/password}: exactly one proof (the current password, checked by Keycloak, or the code
+ * emailed for {@code CHANGE_PASSWORD}, U24) plus the new password.
+ */
 @Getter
 @Setter
 @Builder
@@ -15,8 +19,9 @@ import lombok.Setter;
 @AllArgsConstructor
 public class ChangePasswordRequest {
 
-    @NotBlank(message = "Current password is required")
     private String currentPassword;
+
+    private String verificationCode;
 
     @NotBlank(message = "New password is required")
     @Size(min = 8, message = "Password must be at least 8 characters")

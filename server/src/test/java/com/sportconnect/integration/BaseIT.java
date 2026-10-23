@@ -50,6 +50,9 @@ public abstract class BaseIT {
         registry.add("app.keycloak.token-uri", () -> TestKeycloak.TOKEN_URI);
         registry.add("app.keycloak.logout-uri", () -> TestKeycloak.LOGOUT_URI);
         registry.add("app.keycloak.redirect-uri", () -> TestKeycloak.REDIRECT_URI);
+        // U24: the password check and the password set go to the same stand-in.
+        registry.add("app.keycloak.admin-uri", () -> TestKeycloak.ADMIN_URI);
+        registry.add("app.keycloak.credentials-client-secret", () -> TestKeycloak.CREDENTIALS_CLIENT_SECRET);
     }
 
     /** The {@code Authorization} header value for a valid Keycloak-style token of {@code userId} (A25). */
@@ -75,7 +78,6 @@ public abstract class BaseIT {
         }
         return baseUsers.save(User.builder()
                 .email("it-" + UUID.randomUUID() + "@example.com")
-                .passwordHash("hash")
                 .firstName("It")
                 .lastName("Tester")
                 .username("ittester" + System.nanoTime())

@@ -71,7 +71,7 @@ class ProfileGenderIntegrationTest extends BaseIT {
 
     private UUID saveUser(String label, String gender) {
         return userRepository.save(User.builder()
-                .email(label + "@example.com").passwordHash("hash")
+                .email(label + "@example.com")
                 .firstName("Gen").lastName(label).username(label)
                 .gender(gender).isActive(true).build()).getId();
     }

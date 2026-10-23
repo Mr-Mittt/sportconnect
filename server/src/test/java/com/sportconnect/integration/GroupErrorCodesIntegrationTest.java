@@ -147,7 +147,7 @@ class GroupErrorCodesIntegrationTest extends RedisBaseIT {
     private UUID saveUser(String name) {
         return userRepository.save(User.builder()
                 .email("a11-" + name + "_" + System.nanoTime() + "@example.com")
-                .passwordHash("hash").firstName("A11").lastName(name)
+                .firstName("A11").lastName(name)
                 .username("a11" + name + System.nanoTime()).isActive(true).build()).getId();
     }
 

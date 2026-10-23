@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS roles (
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     email VARCHAR(255) UNIQUE,
-    password_hash VARCHAR(255),
     first_name VARCHAR(100),
     last_name VARCHAR(100),
     username VARCHAR(50) UNIQUE,

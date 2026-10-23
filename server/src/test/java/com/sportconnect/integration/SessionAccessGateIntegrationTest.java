@@ -87,7 +87,6 @@ class SessionAccessGateIntegrationTest extends BaseIT {
         User user = new User();
         user.setUsername(label + "_" + UUID.randomUUID());
         user.setEmail(label + "_" + System.nanoTime() + "@example.com");
-        user.setPasswordHash("password");
         user.setFirstName(label);
         user.setLastName("User");
         user.setIsEmailVerified(false);
