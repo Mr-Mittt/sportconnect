@@ -8,25 +8,41 @@ import {
   type Icon,
 } from '@tabler/icons-react';
 
+type AvatarKind = 'person' | 'group';
+
+/**
+ * AUTH-17 (owner): a person circle is smaller than a group circle. Both are placed by their *centre*
+ * (`cx`, `cy`), so a size change never moves the point the connector lines end on.
+ */
+const AVATAR_KINDS: Record<AvatarKind, { circle: number; iconSize: number; icon: Icon }> = {
+  person: { circle: 32, iconSize: 18, icon: IconUser },
+  group: { circle: 44, iconSize: 24, icon: IconUsers },
+};
+
 interface FloatingAvatar {
-  left: number;
-  top: number;
-  icon: Icon;
-  size: number;
+  cx: number;
+  cy: number;
+  kind: AvatarKind;
   delaySeconds: number;
 }
 
 const floatingAvatars: FloatingAvatar[] = [
-  { left: 90, top: 28, icon: IconUser, size: 20, delaySeconds: 0 },
-  { left: 230, top: 28, icon: IconUsers, size: 22, delaySeconds: 0.4 },
-  { left: 310, top: 165, icon: IconUser, size: 20, delaySeconds: 0.8 },
-  { left: 240, top: 287, icon: IconUser, size: 20, delaySeconds: 1.2 },
-  { left: 10, top: 165, icon: IconUsers, size: 22, delaySeconds: 1.6 },
-  { left: 80, top: 287, icon: IconUser, size: 20, delaySeconds: 2 },
-  { left: 221, top: 125, icon: IconUsers, size: 22, delaySeconds: 2.4 },
-  { left: 160, top: 232, icon: IconUser, size: 20, delaySeconds: 2.8 },
-  { left: 99, top: 125, icon: IconUser, size: 20, delaySeconds: 3.2 },
+  { cx: 110, cy: 48, kind: 'person', delaySeconds: 0 },
+  { cx: 250, cy: 48, kind: 'group', delaySeconds: 0.4 },
+  { cx: 330, cy: 185, kind: 'person', delaySeconds: 0.8 },
+  { cx: 260, cy: 307, kind: 'person', delaySeconds: 1.2 },
+  { cx: 30, cy: 185, kind: 'group', delaySeconds: 1.6 },
+  { cx: 100, cy: 307, kind: 'person', delaySeconds: 2 },
+  { cx: 241, cy: 145, kind: 'group', delaySeconds: 2.4 },
+  { cx: 180, cy: 252, kind: 'person', delaySeconds: 2.8 },
+  { cx: 119, cy: 145, kind: 'person', delaySeconds: 3.2 },
 ];
+
+/**
+ * The globe is centred on (180, 180), the point the hub, the connector lines and the ring of people are drawn
+ * around (AUTH-17: it used to sit at (174, 166), 6 px left and 14 px above all of them).
+ */
+const GLOBE = { size: 304, left: 28, top: 28 };
 
 interface AccentIcon {
   left: number;
@@ -84,12 +100,13 @@ export function CommunityIllustration({ earthSrc = '/earth.png' }: CommunityIllu
   return (
     <div className="relative mx-auto h-[340px] w-[360px]" aria-hidden="true">
       <div
+        data-illustration="globe"
         className="absolute overflow-hidden rounded-full"
         style={{
-          left: 22,
-          top: 14,
-          width: 304,
-          height: 304,
+          left: GLOBE.left,
+          top: GLOBE.top,
+          width: GLOBE.size,
+          height: GLOBE.size,
           background:
             'radial-gradient(circle at 36% 30%, #ffffff 0%, #f5f4f0 42%, #e7e6de 74%, #d4d3cb 100%)',
           boxShadow:
@@ -116,6 +133,7 @@ export function CommunityIllustration({ earthSrc = '/earth.png' }: CommunityIllu
       </svg>
 
       <div
+        data-illustration="hub"
         className="absolute flex items-center justify-center"
         style={{ left: 148, top: 148, width: 64, height: 64 }}
       >
@@ -138,25 +156,30 @@ export function CommunityIllustration({ earthSrc = '/earth.png' }: CommunityIllu
         </div>
       ))}
 
-      {floatingAvatars.map(({ left, top, icon: AvatarIcon, size, delaySeconds }, i) => (
-        <div
-          key={i}
-          className="animate-float-avatar absolute flex items-center justify-center rounded-full"
-          style={{
-            left,
-            top,
-            width: 40,
-            height: 40,
-            background:
-              'radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%)',
-            boxShadow:
-              'rgba(44, 44, 42, 0.22) 0px 8px 15px, rgba(0, 0, 0, 0.08) 0px -3px 6px inset, rgba(255, 255, 255, 0.9) 0px 2px 4px inset',
-            animationDelay: `${delaySeconds}s`,
-          }}
-        >
-          <AvatarIcon size={size} className="text-text-secondary" />
-        </div>
-      ))}
+      {floatingAvatars.map(({ cx, cy, kind, delaySeconds }, i) => {
+        const { circle, iconSize, icon: AvatarIcon } = AVATAR_KINDS[kind];
+        return (
+          <div
+            key={i}
+            data-illustration="avatar"
+            data-kind={kind}
+            className="animate-float-avatar absolute flex items-center justify-center rounded-full"
+            style={{
+              left: cx - circle / 2,
+              top: cy - circle / 2,
+              width: circle,
+              height: circle,
+              background:
+                'radial-gradient(circle at 34% 28%, #ffffff 0%, #f2f1ec 55%, #d9d8d1 100%)',
+              boxShadow:
+                'rgba(44, 44, 42, 0.22) 0px 8px 15px, rgba(0, 0, 0, 0.08) 0px -3px 6px inset, rgba(255, 255, 255, 0.9) 0px 2px 4px inset',
+              animationDelay: `${delaySeconds}s`,
+            }}
+          >
+            <AvatarIcon size={iconSize} className="text-text-secondary" />
+          </div>
+        );
+      })}
     </div>
   );
 }
