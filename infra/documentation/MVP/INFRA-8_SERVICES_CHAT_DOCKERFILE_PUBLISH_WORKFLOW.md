@@ -7,6 +7,14 @@
 see `services/chat/CLAUDE.md`) but nothing builds or publishes it — there's no CI workflow for this
 module at all yet, unlike `server-ci.yml` (INFRA-1).
 
+**Delta 2026-10-26 (found during INFRA-12):** the Dockerfile above **does not build**. It starts from
+`golang:1.22-alpine`, but `services/chat/go.mod` requires `go 1.25.0`, so `go mod download` fails with
+`go.mod requires go >= 1.25.0 (running go 1.22.12)`. This ticket must bump the base image (and keep it
+tied to `go.mod`, e.g. build it in CI so a toolchain bump can't drift again); INFRA-12 measured the stack
+with `golang:1.25-alpine` instead. Also note for whoever runs the image: with the server's `dev` profile
+the shared secret is the committed dev value, not the `INTERNAL_SERVICE_SECRET` env var, so a container
+started with its own secret gets 403 on `/internal/sync/**`.
+
 **What ships:**
 - A CI workflow (new `chat-ci.yml`, or a job appended to an existing one — decide in Phase 1)
   triggered on changes under `services/chat/**`: `go build ./...`, `go vet ./...`, `go test ./...`

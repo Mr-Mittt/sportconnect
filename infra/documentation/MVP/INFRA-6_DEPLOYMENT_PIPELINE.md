@@ -23,3 +23,13 @@ scripts in `infra/scripts/`:
 - Done when: a full merge-to-master run deploys server + client and both are reachable; record
   as conditional if the required-reviewer GitHub setting can't be verified without a real PR
   merge (same HF-12/INFRA-1 pattern)
+
+## Delta 2026-10-27 (INFRA-12): hosting is Oracle, deploy is pull-based
+
+The AWS parts above (OIDC role, SSM, EC2) no longer apply: hosting moved to Oracle Cloud (sandbox on `VM.Standard.E3.Flex`, x86; Always Free A1 had no capacity, A1 is revisited when it does). Oracle has no GitHub-OIDC equivalent that we have set up, so the decision (owner, 2026-10-27) is **pull-based deploys through GHCR**:
+
+- CI builds and pushes images to GHCR and moves a `prod` tag only from a protected workflow (the `production` Environment approval gate stays).
+- The box runs a small job (systemd timer or Watchtower) that pulls a new `prod` image and restarts that container. No inbound deploy path, no SSH key in GitHub.
+- The box needs one read-only GHCR token, kept in a root-owned `chmod 600` file on the box (see INFRA-14 for secrets).
+- Open for this ticket: Liquibase migrations on deploy (who runs them, before or inside the restart), rollback (move the tag back), how a deploy is made visible, and the chat/client deploys.
+- Alternatives considered and rejected for now: SSH deploy key in a GitHub Environment secret (stored long-lived key, port 22 open to GitHub), self-hosted runner on the box (repo code runs on the production machine).

@@ -1,0 +1,39 @@
+# INFRA-12 sandbox: a Compose override for infra/docker-compose.dev.yml, copied from the Oracle box on 2026-10-26.
+# Runbook: infra/documentation/MVP/INFRA-12_ORACLE_SANDBOX_RUNBOOK.md
+#
+#   docker compose -f infra/docker-compose.dev.yml -f infra/oracle/kc-prod.override.yml up -d
+#
+# 1. Keycloak runs in production mode (`start`, not `start-dev`) behind Caddy, with the public hostname.
+# 2. Every backing service is published on the box's loopback only. Docker's own NAT ignores Ubuntu's INPUT firewall
+#    rules, so this binding (not iptables) is what keeps Postgres, Redis, RabbitMQ and Mailpit off the internet.
+# 3. KC_HOSTNAME_ADMIN lets the admin console work through an SSH tunnel on local port 18081 (the master realm also
+#    needs its frontendUrl, see scripts/set-master-frontend-url.sh).
+#
+# Still the dev defaults and NOT production-grade (loopback-only, but INFRA-14 must replace them): the Postgres password
+# `sa`, RabbitMQ guest/guest, Redis without a password.
+services:
+  keycloak:
+    command: ["start", "--import-realm"]
+    environment:
+      KC_HOSTNAME: https://auth.yoursport.vn
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_ADMIN: http://localhost:18081
+    ports: !override
+      - "127.0.0.1:8081:8080"
+  postgres:
+    ports: !override
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports: !override
+      - "127.0.0.1:6379:6379"
+  rabbitmq:
+    ports: !override
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+      - "127.0.0.1:8613:61613"
+  mailpit:
+    ports: !override
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
