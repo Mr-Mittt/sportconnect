@@ -2,7 +2,7 @@
 
 One list of every TCP port SportConnect uses on a developer machine, in CI, and as a container port. **Before a new service, container, dev server or test harness picks a port, check this file, pick a free one, and add it here in the same change.** Two services on one default is silent until someone runs both: the chat service's default `:8081` was Keycloak's port for weeks after INFRA-13 added Keycloak, and `/api/chat` in dev quietly reached Keycloak (CHAT-19).
 
-Last verified: 2026-10-16 (CHAT-17/19).
+Last verified: 2026-10-16 (CHAT-17/19); the Oracle sandbox rows were added 2026-10-26 (INFRA-12).
 
 ## Dev machine (host ports)
 
@@ -25,6 +25,7 @@ Last verified: 2026-10-16 (CHAT-17/19).
 | 8613 | RabbitMQ STOMP (host side of container 61613) | `infra/docker-compose.dev.yml` | deliberately not 61613, see below |
 | 9876 | Playwright mock backend (MSW-style server) | `client/e2e/mocks/mockServerConfig.ts` (`MOCK_SERVER_PORT`) | |
 | 15672 | RabbitMQ management UI (guest/guest) | `infra/docker-compose.dev.yml` | |
+| 18081 | Local end of the SSH tunnel to the Oracle sandbox's Keycloak (`ssh -L 18081:127.0.0.1:8081 ubuntu@<box>`) | `infra/oracle/kc-prod.override.yml` (`KC_HOSTNAME_ADMIN`), `infra/oracle/scripts/set-master-frontend-url.sh` | admin console at `http://localhost:18081/admin/`; the number is baked into the sandbox realm (master `frontendUrl`), so change all three together. Not the dev Compose Keycloak (8081) |
 
 Free and meant for the next service: **8091 to 8099** (take the next one in order and add the row).
 
@@ -34,6 +35,9 @@ Free and meant for the next service: **8091 to 8099** (take the next one in orde
 |---|---|---|---|
 | 8090 | Chat container | `services/chat/Dockerfile` (`EXPOSE`) | must match `CHAT_HTTP_ADDR`; INFRA-7 routes `/api/chat/**` to it |
 | 8080 | Spring container | the server image | |
+| 80, 443 | Caddy on the Oracle sandbox (INFRA-12): HTTPS for `yoursport.vn` and `auth.yoursport.vn`, 80 redirects | `infra/oracle/Caddyfile`, `infra/oracle/scripts/run-containers.sh` | the only public ports besides SSH (22); also open in the VCN security list and in Ubuntu's iptables (`box-prepare.sh`) |
+| 8081 | Keycloak on the Oracle sandbox, published on `127.0.0.1` only (container 8080) | `infra/oracle/kc-prod.override.yml` | Caddy reaches it by container name; reached from outside only through the SSH tunnel (local port 18081, above) |
+| 5432, 6379, 5672, 15672, 8613, 1025, 8025 | the backing services on the Oracle sandbox, published on `127.0.0.1` only | `infra/oracle/kc-prod.override.yml` | same numbers as the dev table; loopback binding is what keeps them off the internet (Docker NAT ignores Ubuntu's INPUT rules) |
 
 Production reverse-proxy and Keycloak production ports are decided by INFRA-3/INFRA-14; record them here when they exist.
 

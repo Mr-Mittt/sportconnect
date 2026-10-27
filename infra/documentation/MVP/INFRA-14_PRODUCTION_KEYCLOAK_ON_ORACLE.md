@@ -39,3 +39,12 @@ The production realm runs from the committed import, Keycloak survives a restart
 ## Production notes added 2026-10-16 (A27)
 
 Ship `sportconnect-keycloak-extensions.jar` in the Keycloak image next to the theme JAR: the realm file will not import without it (flows, validators and the listener name its providers). The extension uses Keycloak-internal SPIs and is pinned to the 26.4 line (`keycloakVersion` in `infra/keycloak-extensions/build.gradle` moves with the image tag). Run `node infra/scripts/verify-phone-rules.mjs` against a production-like stack once (it creates and deletes its own `a27-*` users).
+
+## Delta 2026-10-27 (INFRA-12): secrets approach, and what the sandbox left undone
+
+Decision (owner, 2026-10-27), in two steps:
+
+1. **Now (with INFRA-3..6):** app secrets live on the box only, in root-owned `chmod 600` env files under `/etc/sportconnect/` (`server.env`, `chat.env`, `keycloak.env`, `postgres.env`, GHCR token), read by Compose through `env_file`. CI never holds them (deploys are pull-based, INFRA-6). Add a `SECRETS.md` inventory (name, purpose, location, how to rotate; no values) and keep an encrypted copy of the values in the owner's password manager.
+2. **In this ticket:** move them to **OCI Vault** with an instance principal (dynamic group + IAM policy), a fetch script that writes a tmpfs env file before the containers start, rotation by new secret version. The Vault free allowance was **not confirmed**; check it before committing to it. Fallback if it is billed or too fiddly: SOPS + age.
+
+What the INFRA-12 sandbox left at dev grade, to be fixed here: Postgres password `sa` and one superuser shared by the app, chat and Keycloak; RabbitMQ `guest/guest`; Redis without a password; the Brevo SMTP key and the Keycloak admin password were pasted in a chat and must be rotated; the production redirect URIs, credentials-client secret, SMTP settings and the master realm `frontendUrl` were applied to the live realm through the admin API only (scripts in `infra/oracle/scripts/set-*.sh`, not in `sportconnect-realm.json`); no backups of the database, Keycloak or the Caddy certificates (`caddy_data`); registration is open. Reference material: `infra/oracle/`, `INFRA-12_ORACLE_SANDBOX_RUNBOOK.md`.
