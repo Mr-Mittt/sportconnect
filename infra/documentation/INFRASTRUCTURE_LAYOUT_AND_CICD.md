@@ -33,6 +33,10 @@ For this project's scale, GitHub Actions covers the entire build-and-deploy pipe
   integration tests need real infrastructure.
 - **Artifacts/registry** — build the Boot jar or Docker image in the workflow, push to **GHCR**
   (free with the repo, same credentials). No Nexus/Artifactory to operate.
+  **Server image and versioning (INFRA-4):** `server/Dockerfile` (build context = repo root), `.github/workflows/server-image.yml`,
+  logic in `infra/scripts/{server-image-plan,server-version,prune-ghcr-versions}.sh`. One monolith version in the root `gradle.properties`;
+  a release is a merged PR that raised it (`server-version.sh bump`), which pushes `:X.Y.Z` and `:latest` and creates the tag `server-vX.Y.Z`; every other
+  server-affecting merge pushes `:sha-<short>` and `:edge`. `client` and `chat` reuse the scheme with their own versions and tag prefixes (INFRA-5, INFRA-8).
 - **CD** — GitHub Environments (`dev`/`staging`/`production`) with per-environment secrets and
   **required-reviewer approval gates** for prod; **OIDC federation** to AWS/GCP/Azure would give deploy
   jobs short-lived cloud credentials, but hosting is Oracle (2026-10-27) with a **pull-based** deploy through GHCR instead (INFRA-6), so GitHub holds no cloud credentials; triggers on tag/release/

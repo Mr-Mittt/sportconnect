@@ -32,3 +32,7 @@ Hosting is Oracle Cloud (`INFRA-3_HOSTING_DECISION.md`). The S3 bucket, CloudFro
 - The Keycloak URL is **baked in at build time**: `VITE_KEYCLOAK_URL=https://auth.yoursport.vn pnpm build` (default is `http://localhost:8081`). The CI build must set it.
 - Open for this ticket (pull-based deploy, INFRA-6): how the build gets onto the box. Preferred: a small image on GHCR that contains the build (served by the Caddy container), pulled like the other images; alternative: CI copies the build over SSH, which the pull-based decision rejects.
 - Measured: the build is 1.8 MB (one 1.66 MB JS chunk, 468 kB gzipped). Latency from Vietnam was inconclusive (INFRA-12 point 9); Cloudflare in front of Caddy is the CDN option if it matters.
+
+## Delta 2026-10-28 (INFRA-4): versioning scheme to reuse
+
+INFRA-4 built the versioning scheme for the server image; the client follows the same shape (`infra/scripts/server-image-plan.sh`, `server-version.sh` and `prune-ghcr-versions.sh` are the templates). The client has its own version (in `client/package.json` or a file of its own, decided here), separate from the monolith's, and tags `client-vX.Y.Z`. A release is a merged PR that raised the version with a bump tool; an ordinary master merge pushes `:sha-<short>` and `:edge`, stamped `<version>+<short sha>`; retention keeps every release plus the newest 10 `sha-*` builds.

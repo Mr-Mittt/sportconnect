@@ -30,7 +30,7 @@ green run exists" pattern.
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [INFRA-12](MVP/INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md) | Spike: can the whole stack (and Keycloak) run on Oracle Cloud Always Free? Gates INFRA-3..6 — see the amendment in the hosting decision (2026-10-13) | `IN PROGRESS` |
-| 2 | [INFRA-4](MVP/INFRA-4_SERVER_DOCKERFILE_GHCR_PUBLISH_WORKFLOW.md) | Server Dockerfile + GHCR publish workflow | `TODO` |
+| 2 | [INFRA-15](MVP/INFRA-15_VERIFY_SERVER_IMAGE_WORKFLOW_ON_GITHUB.md) | Verify the server-image workflow on GitHub after INFRA-4 merges (first push, release dispatch and tag, tag fallback, retention, package visibility) | `TODO` |
 | 3 | [INFRA-5](MVP/INFRA-5_CLIENT_STATIC_BUILD_S3_CLOUDFRONT_DEPLOY.md) | Client static build served by Caddy (no S3/CloudFront; see the Delta 2026-10-27) | `TODO` |
 | 4 | [INFRA-6](MVP/INFRA-6_DEPLOYMENT_PIPELINE.md) | Deployment pipeline: pull-based through GHCR (see the Delta 2026-10-27) | `TODO` |
 | 5 | [INFRA-7](MVP/INFRA-7_REVERSE_PROXY_PATH_ROUTING_FOR_SERVICES_CHAT.md) | Reverse-proxy path-routing for `services/chat` | `TODO` |
@@ -46,10 +46,11 @@ green run exists" pattern.
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [INFRA-13](MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md) | Keycloak 26 in the dev Compose stack with the realm as a committed import (5-min access token, audience mapper, optional email/names, en/vi, no secrets), Mailpit mail sink, idempotent `keycloak_dev` bootstrap script | `DONE` |
-| 2 | [INFRA-1](MVP/INFRA-1_BACKEND_CI_WORKFLOW.md) | Backend CI workflow (`server-ci.yml`) | `DONE` |
-| 3 | [INFRA-2](MVP/INFRA-2_DEV_DOCKER_COMPOSE.md) | Dev environment docker-compose | `DONE` |
-| 4 | [INFRA-3](MVP/INFRA-3_HOSTING_DECISION.md) | Oracle foundation: the production VM built from the runbook and serving `yoursport.vn`, nightly backups to Object Storage (the AWS plan was superseded 2026-10-27); resources in `INFRA-3_ORACLE_RESOURCES.md` | `DONE` |
+| 1 | [INFRA-4](MVP/INFRA-4_SERVER_DOCKERFILE_GHCR_PUBLISH_WORKFLOW.md) | Server Dockerfile + GHCR publish workflow with versioning: `server/Dockerfile`, one monolith version in `gradle.properties`, `server-version.sh` and `server-image.yml` (merging a version bump releases `X.Y.Z`/`latest`, any other merge pushes `sha-`/`edge`), retention; the GitHub-side checks are INFRA-15 | `DONE` |
+| 2 | [INFRA-13](MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md) | Keycloak 26 in the dev Compose stack with the realm as a committed import (5-min access token, audience mapper, optional email/names, en/vi, no secrets), Mailpit mail sink, idempotent `keycloak_dev` bootstrap script | `DONE` |
+| 3 | [INFRA-1](MVP/INFRA-1_BACKEND_CI_WORKFLOW.md) | Backend CI workflow (`server-ci.yml`) | `DONE` |
+| 4 | [INFRA-2](MVP/INFRA-2_DEV_DOCKER_COMPOSE.md) | Dev environment docker-compose | `DONE` |
+| 5 | [INFRA-3](MVP/INFRA-3_HOSTING_DECISION.md) | Oracle foundation: the production VM built from the runbook and serving `yoursport.vn`, nightly backups to Object Storage (the AWS plan was superseded 2026-10-27); resources in `INFRA-3_ORACLE_RESOURCES.md` | `DONE` |
 
 ---
 

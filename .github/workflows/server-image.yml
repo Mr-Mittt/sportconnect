@@ -1,0 +1,129 @@
+# Server image — builds server/Dockerfile and publishes it to GHCR (INFRA-4).
+#
+#   pull request   -> checks the version and builds the image, pushes nothing (a broken Dockerfile fails before merge)
+#   push to master -> ordinary build: pushes :sha-<short> and :edge, jar stamped <version>+<short sha>
+#                     RELEASE, when `version` in gradle.properties has no tag server-v<version> yet (and is not the
+#                     0.0.0 placeholder): also pushes :X.Y.Z and :latest, then creates the git tag server-vX.Y.Z
+#   manual run     -> no inputs; the same as a push to master. It is the "run again" for a release whose image push
+#                     failed (the tag is created last, so no tag exists and the re-run releases).
+#
+# A release is therefore a merged PR that raised the version (infra/scripts/server-version.sh bump), nothing else to click.
+# What gets built and tagged is decided in infra/scripts/server-image-plan.sh (tried locally). Publishing needs no cloud
+# credentials: the workflow's own GITHUB_TOKEN. Tests are server-ci.yml's job and run in parallel on the same push; this
+# workflow does not wait for them, so merge a version bump only when server-ci is green.
+#
+# Verified only on GitHub after merge (INFRA-15): the push to GHCR, the release and tag creation, the retention step.
+
+name: server-image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'modules/**'
+      - '!modules/**/docs/**'
+      - 'server/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'infra/keycloak-extensions/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'infra/scripts/server-image-plan.sh'
+      - 'infra/scripts/server-version.sh'
+      - '.github/workflows/server-image.yml'
+  pull_request:
+    paths:
+      - 'modules/**'
+      - '!modules/**/docs/**'
+      - 'server/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - 'infra/keycloak-extensions/**'
+      - 'gradle/**'
+      - 'gradlew'
+      - 'infra/scripts/server-image-plan.sh'
+      - 'infra/scripts/server-version.sh'
+      - '.github/workflows/server-image.yml'
+  workflow_dispatch:
+
+# Runs on master queue behind each other and are never cancelled half-way (a newer pending run replaces an older pending
+# one, which is safe: the release rule is "is there a tag yet", so the newer run still releases). Pull-request runs are replaced.
+concurrency:
+  group: server-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write   # create the server-vX.Y.Z git tag on a release
+  packages: write   # push to ghcr.io and prune old builds
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release decision and the version check read the server-v* tags
+
+      - name: Check the version
+        run: infra/scripts/server-version.sh check
+
+      - name: Plan (version and tags)
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          OWNER: ${{ github.repository_owner }}
+        run: infra/scripts/server-image-plan.sh
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.plan.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/amd64   # arm64 is added when the Always Free A1 box exists (INFRA-12)
+          push: ${{ steps.plan.outputs.push == 'true' }}
+          tags: ${{ steps.plan.outputs.tags }}
+          provenance: false   # one plain manifest per tag, so retention can reason about versions
+          build-args: |
+            VERSION=${{ steps.plan.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.plan.outputs.build_date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Tag the release
+        if: steps.plan.outputs.create_git_tag == 'true'
+        run: |
+          git tag "server-v${{ steps.plan.outputs.version }}" "${{ github.sha }}"
+          git push origin "server-v${{ steps.plan.outputs.version }}"
+
+      - name: Retention (keep every release, latest, edge and the newest 10 sha builds)
+        if: steps.plan.outputs.push == 'true'
+        continue-on-error: true   # a refused delete must never fail a publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: infra/scripts/prune-ghcr-versions.sh "${{ github.repository_owner }}" sportconnect-server 10 --delete
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### server-image"
+            echo "version \`${{ steps.plan.outputs.version }}\`, release: ${{ steps.plan.outputs.release }}, pushed: ${{ steps.plan.outputs.push }}"
+            echo '```'
+            echo "${{ steps.plan.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
