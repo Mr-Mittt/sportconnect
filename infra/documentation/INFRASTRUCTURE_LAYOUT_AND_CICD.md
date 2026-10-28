@@ -36,7 +36,8 @@ For this project's scale, GitHub Actions covers the entire build-and-deploy pipe
   **Server image and versioning (INFRA-4):** `server/Dockerfile` (build context = repo root), `.github/workflows/server-image.yml`,
   logic in `infra/scripts/{server-image-plan,server-version,prune-ghcr-versions}.sh`. One monolith version in the root `gradle.properties`;
   a release is a merged PR that raised it (`server-version.sh bump`), which pushes `:X.Y.Z` and `:latest` and creates the tag `server-vX.Y.Z`; every other
-  server-affecting merge pushes `:sha-<short>` and `:edge`. `client` and `chat` reuse the scheme with their own versions and tag prefixes (INFRA-5, INFRA-8).
+  server-affecting merge pushes `:sha-<short>` and `:edge`. `chat` reuses the scheme with its own version and tag prefix (INFRA-8).
+  **Client image (INFRA-5):** `client/Dockerfile` (context = `client/`; a data-only image holding the static build, no web server; running it copies the files into `/srv`), `.github/workflows/client-image.yml`, `infra/scripts/{client-image-plan,client-version}.sh` (retention reuses `prune-ghcr-versions.sh`). The client's own version is `version` in `client/package.json`, tags `client-vX.Y.Z`, package `ghcr.io/mr-mittt/sportconnect-client`; same release and retention rules as the server. `VITE_KEYCLOAK_URL=https://auth.yoursport.vn` is baked in at build time.
 - **CD** — GitHub Environments (`dev`/`staging`/`production`) with per-environment secrets and
   **required-reviewer approval gates** for prod; **OIDC federation** to AWS/GCP/Azure would give deploy
   jobs short-lived cloud credentials, but hosting is Oracle (2026-10-27) with a **pull-based** deploy through GHCR instead (INFRA-6), so GitHub holds no cloud credentials; triggers on tag/release/

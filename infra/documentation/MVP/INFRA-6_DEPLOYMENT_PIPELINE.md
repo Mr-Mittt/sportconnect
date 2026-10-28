@@ -41,3 +41,9 @@ The AWS parts above (OIDC role, SSM, EC2) no longer apply: hosting moved to Orac
 - "Which version is running?": `docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`, or the startup log line (`Starting SportConnectApplication v<version>`). `/actuator/info` carries version, commit and time too, but it needs a login and Caddy does not proxy `/actuator`. If a smoke test or a monitoring check wants it without a token, permitting `/actuator/info` in `SecurityConfig` is a one-line change plus an integration test; do it when there is a consumer.
 - A release is not gated on `server-ci`: the dispatch builds whatever master's head is. Gate the deploy on a green `server-ci` run for that commit here.
 - `infra/oracle/server.Dockerfile` and `run-containers.sh` (which build from a jar on the box) stay until this ticket replaces them with the pull.
+
+## Delta 2026-10-28 (INFRA-5): what the client image gives this ticket
+
+- Image: `ghcr.io/mr-mittt/sportconnect-client`, same tags as the server image (`X.Y.Z`, `latest`, `edge`, `sha-<short>`; releases tagged `client-vX.Y.Z`). Private, so the same read-only GHCR token pulls it. The Keycloak URL is baked in as `https://auth.yoursport.vn`, so one image is for one environment.
+- It holds the built files only. Contract: running it replaces the contents of `/srv` with the build, so deploy the client by running it as a one-shot step into a named volume that the Caddy container mounts read-only on `/srv` (today `run-containers.sh` mounts `~/web/dist` there). Pin `X.Y.Z` (or a `sha-` tag while testing); rolling back is running the previous tag. Caddy needs no restart: it reads the files per request.
+- Same note as the server's: a release is not gated on `client-ci`; gate the deploy on a green run for that commit.

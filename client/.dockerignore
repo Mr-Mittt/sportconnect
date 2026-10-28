@@ -1,0 +1,14 @@
+# Context of `docker build client` (INFRA-5): what `pnpm build` reads. `tsc -b` also typechecks the Playwright configs, which
+# import e2e/mocks, so e2e stays in the context (it never reaches the final image).
+node_modules
+dist
+.gradle
+build
+docs
+keycloak-theme
+design-reference
+playwright-report
+playwright-report-keycloak
+test-results
+.storybook
+storybook-static

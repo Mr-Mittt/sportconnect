@@ -140,7 +140,7 @@ Postgres password `sa` (one superuser shared by the app, chat and Keycloak), Rab
 
 Terminate the instance and tick "permanently delete the boot volume"; remove any reserved public IP; revoke the Brevo key if the whole deployment is ending; delete DNS records only if the domain should stop pointing at Oracle. Update the dynamic group rule if another box takes over.
 
-## 15. The server image and releases (INFRA-4)
+## 15. The server and client images and releases (INFRA-4, INFRA-5)
 
 The server image is built from `server/Dockerfile` and published to `ghcr.io/mr-mittt/sportconnect-server` by `.github/workflows/server-image.yml`. **The box does not use it yet**: it still builds from a jar with `infra/oracle/scripts/run-containers.sh` until INFRA-6 (pull-based deploy) switches it. What exists today:
 
@@ -152,9 +152,19 @@ The server image is built from `server/Dockerfile` and published to `ghcr.io/mr-
 - **Pulling a private image on the box** needs a read-only GHCR token in a root-owned file; set up in INFRA-6 (not run yet).
 - **Retention:** every release and `latest`/`edge` are kept, plus the newest 10 `sha-*` builds; older ones are deleted by the workflow. (Not run yet; whether the workflow's token may delete versions of a user-owned package is unverified.)
 
+### The client image (INFRA-5)
+
+Same scheme as the server, with its own version and package: `client/Dockerfile` -> `ghcr.io/mr-mittt/sportconnect-client`, built by `.github/workflows/client-image.yml`. **The box does not use it yet** (INFRA-6); today the client is still built on a computer and copied (section 3).
+
+- **Version:** `version` in `client/package.json` (`0.0.0` is the placeholder). Tags `client-vX.Y.Z`. Never edit it by hand: `/release client` (or `/release`, which bumps the server and the client together) or `infra/scripts/client-version.sh bump [minor|patch|major|X.Y.Z]`.
+- **Release:** merge the bump PR (when `client-ci` is green). `client-image` pushes `:X.Y.Z`, `:latest`, `:edge`, `:sha-<short>` and creates the tag last; other client merges push `:sha-<short>` and `:edge`. A failed release is re-run with Actions, client-image, "Run workflow" on `master`. Retention is the server's (every release, `latest`, `edge`, newest 10 `sha-*`).
+- **The image holds the files only.** `docker run --rm -v web:/srv ghcr.io/mr-mittt/sportconnect-client:<tag>` replaces the contents of the volume `web`; Caddy mounts that volume on `/srv` read-only and picks the new files up without a restart. The Keycloak URL is baked in (`https://auth.yoursport.vn`), so one image is for one environment; to build one by hand: `docker build -f client/Dockerfile --build-arg VITE_KEYCLOAK_URL=<url> client`.
+- (Not run yet: the first push, release, tag and retention on GitHub, INFRA-15; the pull and the volume step on the box, INFRA-6.)
+
 ## Change history
 
 | Date | Ticket | Change |
 |---|---|---|
 | 2026-10-28 | INFRA-3 | Guide created from the INFRA-12 runbook and the INFRA-3 rebuild (two runs, restore, backups, Brevo, admin password script). |
 | 2026-10-28 | INFRA-4 | Added section 15: the server image, the version scheme and how to cut a release (a bump PR; merging it releases; the `/release` command does the bump, commit and push). The box does not pull it yet (INFRA-6); the GHCR push, release dispatch and retention are not run yet. |
+| 2026-10-28 | INFRA-5 | Added the client image to section 15: `client/Dockerfile`, the client's own version in `client/package.json` and how to release it (`/release client`). The box does not pull it yet (INFRA-6); the GHCR push, release and retention are not run yet (INFRA-15). |
