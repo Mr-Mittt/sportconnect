@@ -33,3 +33,11 @@ The AWS parts above (OIDC role, SSM, EC2) no longer apply: hosting moved to Orac
 - The box needs one read-only GHCR token, kept in a root-owned `chmod 600` file on the box (see INFRA-14 for secrets).
 - Open for this ticket: Liquibase migrations on deploy (who runs them, before or inside the restart), rollback (move the tag back), how a deploy is made visible, and the chat/client deploys.
 - Alternatives considered and rejected for now: SSH deploy key in a GitHub Environment secret (stored long-lived key, port 22 open to GitHub), self-hosted runner on the box (repo code runs on the production machine).
+
+## Delta 2026-10-28 (INFRA-4): what the server image gives this ticket
+
+- Image: `ghcr.io/mr-mittt/sportconnect-server`. Tags: `X.Y.Z` (a release: the merge of a PR that bumped `gradle.properties` with `server-version.sh`), `latest` (newest release), `edge` (newest master build), `sha-<short>`. Deploy a pinned `X.Y.Z` (or a `sha-` tag while testing); rolling back is pinning the previous one. The package is private, so the box needs the read-only GHCR token.
+- The image runs the `prod` profile as a non-root user with a `HEALTHCHECK` on `/actuator/health`; it expects the env file `infra/oracle/server.env.example` describes, and (until real SMTP credentials exist) `MANAGEMENT_HEALTH_MAIL_ENABLED=false` or the health check reports DOWN.
+- "Which version is running?": `docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}'`, or the startup log line (`Starting SportConnectApplication v<version>`). `/actuator/info` carries version, commit and time too, but it needs a login and Caddy does not proxy `/actuator`. If a smoke test or a monitoring check wants it without a token, permitting `/actuator/info` in `SecurityConfig` is a one-line change plus an integration test; do it when there is a consumer.
+- A release is not gated on `server-ci`: the dispatch builds whatever master's head is. Gate the deploy on a green `server-ci` run for that commit here.
+- `infra/oracle/server.Dockerfile` and `run-containers.sh` (which build from a jar on the box) stay until this ticket replaces them with the pull.

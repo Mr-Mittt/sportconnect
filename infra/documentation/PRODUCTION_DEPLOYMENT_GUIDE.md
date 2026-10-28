@@ -140,8 +140,21 @@ Postgres password `sa` (one superuser shared by the app, chat and Keycloak), Rab
 
 Terminate the instance and tick "permanently delete the boot volume"; remove any reserved public IP; revoke the Brevo key if the whole deployment is ending; delete DNS records only if the domain should stop pointing at Oracle. Update the dynamic group rule if another box takes over.
 
+## 15. The server image and releases (INFRA-4)
+
+The server image is built from `server/Dockerfile` and published to `ghcr.io/mr-mittt/sportconnect-server` by `.github/workflows/server-image.yml`. **The box does not use it yet**: it still builds from a jar with `infra/oracle/scripts/run-containers.sh` until INFRA-6 (pull-based deploy) switches it. What exists today:
+
+- **Version:** one monolith version, `version` in the root `gradle.properties` (`0.0.0` is the placeholder before the first release). Never edit it by hand.
+- **Every server-affecting merge to `master`** is an ordinary build: it pushes `:sha-<short>` and `:edge`, with the jar stamped `<version>+<short sha>`.
+- **Cut a release:** `/release` in Claude Code does the steps below (branch, bump, commit, push; `/release patch`, `/release server 1.0.0`; no argument = minor for every versioned component) and hands over the PR link. By hand: `git switch -c chore/server-<X.Y.Z> master`, `infra/scripts/server-version.sh bump` (raises the minor version; `patch`, `major` or an explicit `X.Y.Z` also work, and it refuses a repeat, a downgrade or anything not above the latest `server-v*` tag), commit `chore(release): server X.Y.Z`, open the PR, merge it when `server-ci` is green. On the merge the workflow sees that the tag `server-vX.Y.Z` does not exist, pushes `:X.Y.Z` and `:latest` (plus `:edge` and `:sha-<short>`) and creates the tag last. Nothing to click in GitHub. Every release, a patch included, is a bump PR. (Not run yet: first release after INFRA-4 merges, INFRA-15.)
+- **A release whose push failed:** no tag was created, so Actions, server-image, "Run workflow" on `master` (no inputs) releases it.
+- **Which version is an image or container?** `docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' <image-or-container>`, or the first log line (`Starting SportConnectApplication v<version>`). `0.1.0` is the release; `0.1.0+abc1234` is a later master build.
+- **Pulling a private image on the box** needs a read-only GHCR token in a root-owned file; set up in INFRA-6 (not run yet).
+- **Retention:** every release and `latest`/`edge` are kept, plus the newest 10 `sha-*` builds; older ones are deleted by the workflow. (Not run yet; whether the workflow's token may delete versions of a user-owned package is unverified.)
+
 ## Change history
 
 | Date | Ticket | Change |
 |---|---|---|
 | 2026-10-28 | INFRA-3 | Guide created from the INFRA-12 runbook and the INFRA-3 rebuild (two runs, restore, backups, Brevo, admin password script). |
+| 2026-10-28 | INFRA-4 | Added section 15: the server image, the version scheme and how to cut a release (a bump PR; merging it releases; the `/release` command does the bump, commit and push). The box does not pull it yet (INFRA-6); the GHCR push, release dispatch and retention are not run yet. |

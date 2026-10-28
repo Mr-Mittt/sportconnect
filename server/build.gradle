@@ -6,7 +6,6 @@ plugins {
 }
 
 group = 'com.sportconnect'
-version = '0.0.1-SNAPSHOT'
 
 java {
     sourceCompatibility = '21'
@@ -142,4 +141,14 @@ bootJar {
 bootRun {
     args = []
     systemProperties = System.properties
+}
+
+// INFRA-4: writes META-INF/build-info.properties (version, time, commit) into the jar, which Spring reads for the startup
+// log line, /actuator/info and Swagger's API version. -PgitSha is passed by the Docker build / CI; a plain local build says "unknown".
+springBoot {
+    buildInfo {
+        properties {
+            additional = [commit: providers.gradleProperty('gitSha').getOrElse('unknown')]
+        }
+    }
 }

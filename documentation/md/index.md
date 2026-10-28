@@ -36,7 +36,7 @@ This is the backend service for the Fullstack Application, built with Spring Boo
 
 # Or build and run the JAR
 ./gradlew build
-java -jar build/libs/server-0.0.1-SNAPSHOT.jar
+java -jar build/libs/server.jar
 ```
 
 The server will start on `http://localhost:8080`.

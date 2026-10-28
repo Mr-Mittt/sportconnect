@@ -8,7 +8,9 @@ import io.swagger.v3.oas.models.security.OAuthFlows;
 import io.swagger.v3.oas.models.security.Scopes;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -36,14 +38,18 @@ public class OpenApiConfig {
     @Value("${app.keycloak.issuer-uri}")
     private String issuerUri;
 
+    /**
+     * Builds the Swagger definition. The API version shown in Swagger UI is the build's version (INFRA-4); a run from an
+     * IDE or a test context has no {@code build-info.properties}, so it falls back to {@code "dev"}.
+     */
     @Bean
-    public OpenAPI customOpenAPI() {
+    public OpenAPI customOpenAPI(ObjectProvider<BuildProperties> buildProperties) {
         return new OpenAPI()
                 .info(new Info()
                         .title("SportConnect API")
                         .description("Social sports community platform — auth, user profiles, sports, "
                                 + "social feed, and groups.")
-                        .version("0.0.1-SNAPSHOT"))
+                        .version(buildProperties.stream().findFirst().map(BuildProperties::getVersion).orElse("dev")))
                 .components(new Components()
                         .addSecuritySchemes(OAUTH2_SCHEME_NAME, new SecurityScheme()
                                 .type(SecurityScheme.Type.OAUTH2)

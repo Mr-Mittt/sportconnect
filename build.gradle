@@ -5,7 +5,6 @@ plugins {
 }
 
 group = 'com.sportconnect'
-version = '0.0.1-SNAPSHOT'
 
 subprojects {
     // The client is a pnpm/Vite project (see client/build.gradle) — none of
@@ -17,7 +16,6 @@ subprojects {
     apply plugin: 'java'
     
     group = 'com.sportconnect'
-    version = '0.0.1-SNAPSHOT'
     
     java {
         toolchain {

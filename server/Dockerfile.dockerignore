@@ -1,0 +1,18 @@
+# Applies to `docker build -f server/Dockerfile <repo root>` only (BuildKit reads <Dockerfile>.dockerignore).
+# Allow-list: everything is excluded, then the build inputs the Dockerfile COPYs are let back in.
+*
+!gradlew
+!settings.gradle
+!build.gradle
+!gradle.properties
+!gradle
+!client/build.gradle
+!infra/keycloak-extensions/build.gradle
+!modules
+!server
+
+# Never part of an image, even inside the allowed folders
+**/build
+**/.gradle
+**/node_modules
+**/docs

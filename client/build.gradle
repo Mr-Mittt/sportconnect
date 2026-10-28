@@ -4,7 +4,6 @@ plugins {
 }
 
 group = 'com.sportconnect'
-version = '0.0.1-SNAPSHOT'
 
 // Gradle downloads its own Node/pnpm (pinned below) so CI builds are
 // reproducible regardless of what's installed on the machine. Local
