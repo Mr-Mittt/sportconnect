@@ -1,0 +1,15 @@
+[Unit]
+Description=SportConnect nightly backup (databases and Caddy certificates to OCI Object Storage)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=docker
+# BACKUP_BUCKET and the other settings; no secrets (the box authenticates to Object Storage with its instance principal)
+EnvironmentFile=/etc/sportconnect/backup.env
+# pipx installs the OCI CLI under ~/.local/bin
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=HOME=/home/ubuntu
+ExecStart=/home/ubuntu/sportconnect/infra/oracle/scripts/backup-postgres.sh

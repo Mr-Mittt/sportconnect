@@ -24,3 +24,7 @@ the second layer, not the only one — see the explicit call-out in `SYNC_DESIGN
   app).
 - Done when: that external-reachability check is performed and documented, not just assumed from
   the security-group rule existing.
+
+## Delta 2026-10-27 (INFRA-3 / INFRA-12): isolation on Oracle
+
+There is no EC2 security group; the equivalents are the VCN security list (only 22, 80, 443 ingress) and Ubuntu's iptables, plus Docker: the server (8080) and chat (8090) are **not published** to the host and Caddy does not proxy `/internal`, `/actuator` or Swagger (verified from outside on the sandbox: they fall through to the client's `index.html`). The backing services are published on `127.0.0.1` only (Docker's NAT ignores Ubuntu's INPUT rules, so the loopback binding is the real protection). Remaining for this ticket: an automated check that `/internal/**` is unreachable from outside, and deciding whether the `/internal` secret check stays as a second layer.

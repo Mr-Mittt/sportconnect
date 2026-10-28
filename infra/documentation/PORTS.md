@@ -11,7 +11,7 @@ Last verified: 2026-10-16 (CHAT-17/19); the Oracle sandbox rows were added 2026-
 | 5173 | Vite dev server (`pnpm dev`) | `client` (Vite default) | proxies `/api` → 8080, `/api/chat` → 8090 |
 | 5174 | Vite dev server for Playwright `e2e` / `visual-regression` | `client/playwright.config.ts` | `--strictPort`; MSW-style mock backend, never the real one |
 | 5175 | Vite dev server for the real-Keycloak e2e | `client/playwright.keycloak.config.ts` | allowed as a redirect origin by `redirect.spec.ts` |
-| 5432 | Postgres + PostGIS (`sportconnect_dev`, `sportconnect_chat_dev`, `keycloak`) | `infra/docker-compose.dev.yml` | |
+| 5432 | Postgres + PostGIS (`sportconnect_dev`, `sportconnect_chat_dev`, `keycloak_dev`) | `infra/docker-compose.dev.yml` | |
 | 5672 | RabbitMQ AMQP | `infra/docker-compose.dev.yml` | |
 | 6006 | Storybook (client) | `client/package.json` | |
 | 6007 | Storybook for the Keycloak theme; also the static server Playwright serves its build from | `client/keycloak-theme/package.json`, `client/playwright.config.ts` | |

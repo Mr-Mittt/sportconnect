@@ -92,6 +92,7 @@ docker compose -f infra/docker-compose.dev.yml down
 ```
 **Redis keys:** every key the repo reads or writes (owner, TTL, cache or state, what an outage does) is listed in `documentation/md/REDIS_KEYS.md`. Add the row in the same change that adds a key.
 **Ports:** every port the repo uses (dev, test harnesses, containers) is listed in `infra/documentation/PORTS.md`. Check it before a new service, container or dev server picks a port, and add the new row in the same change.
+**Production deployment guide:** the step-by-step for building and running the Oracle production box (console, DNS, Keycloak, SMTP, backups, restore, checks) is `infra/documentation/PRODUCTION_DEPLOYMENT_GUIDE.md`. Any infra ticket that changes how the box is built, configured, deployed, backed up or restored updates that guide (and its change-history table) in the same change.
 
 Deps-only — the server and client still run natively (`./gradlew :server:bootRun`, `pnpm dev`) for a fast edit-reload loop. Details: `infra/documentation/MVP/INFRA-2_DEV_DOCKER_COMPOSE.md`.
 

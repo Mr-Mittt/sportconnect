@@ -23,3 +23,7 @@ IT: the startup check rejects the defaults under the prod profile and accepts co
 ## Out of scope
 
 HTML templates, marketing mail, the secrets plumbing (**INFRA-11**).
+
+## Delta 2026-10-27 (INFRA-12 / INFRA-3): hosting is Oracle, provider chosen is Brevo
+
+The AWS foundation this ticket depended on is gone: hosting is Oracle Cloud (`infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`; Oracle blocks outbound port 25), so the Amazon SES recommendation above no longer applies. INFRA-12 chose **Brevo** (free plan, about 300 mails a day, SMTP relay `smtp-relay.brevo.com:587` with STARTTLS) for both Keycloak's mail and the server's `MAIL_*`; the domain `yoursport.vn` has Brevo's verification TXT, DMARC (`p=none`) and two DKIM CNAMEs, and a message reached an inbox. Still open for this ticket: SPF (none published), the DMARC policy beyond `p=none`, bounce/complaint handling, the daily cap, and rotating the SMTP key that was pasted in a chat. Depends on INFRA-3 (Oracle) and INFRA-11.

@@ -21,3 +21,7 @@ when INFRA-3 was written.
   container, a real request to `/api/auth/**` still reaches the server container, and a real
   WebSocket connection through the proxy stays open and receives a pushed message (not just that
   the HTTP upgrade handshake succeeds).
+
+## Delta 2026-10-27 (INFRA-3 / INFRA-12): the routing exists in the sandbox Caddyfile
+
+Hosting is Oracle Cloud with Caddy as the proxy. `infra/oracle/Caddyfile` already routes `/api/chat/*` (prefix stripped) to `sc-chat:8090`, `/api/*`, `/ws*` and `/images/*` to the server, and the static client for everything else; verified from outside: `/api/chat/healthz` 200. This ticket shrinks to adopting that file as the production proxy config and covering what was **not** verified: the **WebSocket upgrade** through Caddy for chat (`/api/chat/ws`) and for the STOMP socket (`/ws`), and the chat service's origin/CORS settings behind the public host.
