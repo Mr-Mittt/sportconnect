@@ -16,4 +16,14 @@ Run in this order after INFRA-4 merges; record each result (or the failure and i
 8. **Swagger.** Open Swagger UI on a run of the pulled image and confirm the API version shown is the build version, not `dev`.
 9. **Paperwork.** Replace the "(not run yet)" notes in `PRODUCTION_DEPLOYMENT_GUIDE.md` §15 and its change history, and the conditional in INFRA-4's summary.
 
-**Out of scope:** the box pulling the image (INFRA-6); arm64; gating a release on `server-ci`.
+## Added 2026-10-28 (INFRA-5): the client image
+
+INFRA-5 added `client-image.yml` (package `ghcr.io/mr-mittt/sportconnect-client`, tags `client-vX.Y.Z`, version in `client/package.json`, `0.0.0` placeholder). It was verified locally only (version and plan scripts against a scratch repo, `actionlint`, a real image build, served by Caddy). Repeat steps 1 and 3 to 7 above for the client, once INFRA-5 is on `master`; they differ only in the names:
+
+- **C1. The merge run** of INFRA-5 (the version is `0.0.0`): an ordinary build, `:sha-<short>` and `:edge` pushed to `sportconnect-client`, no tag. Check the package, its visibility (private) and its link to the repository.
+- **C2. Run the image.** Pull `:edge`, run it into an empty volume (`docker run --rm -v web:/srv <image>`), serve the volume with `caddy:2-alpine` and the Caddyfile: `/` and an unknown path return `index.html`, the bundle contains `https://auth.yoursport.vn` and not `localhost:8081`, the labels show the version and revision.
+- **C3. A pull-request run** touching `client/src`: builds without pushing. A PR touching only `client/docs/**`, `client/e2e/**` or `client/keycloak-theme/**` must not start the workflow.
+- **C4. The bad-version check, C5. the first release** (`/release client` bumps `0.0.0` to `0.1.0`; expect `:0.1.0`, `:latest`, the tag `client-v0.1.0` created last; a bare `/release` must bump the server and the client on one branch), **C6. the re-run and the master-only refusal, C7. retention** (the prune step for `sportconnect-client`).
+- **C8. Paperwork:** replace the "(not run yet)" notes for the client in `PRODUCTION_DEPLOYMENT_GUIDE.md` §15 and its change history.
+
+**Out of scope:** the box pulling the images (INFRA-6); arm64; gating a release on `server-ci`.

@@ -1,0 +1,119 @@
+# Client image — builds client/Dockerfile (the static build) and publishes it to GHCR (INFRA-5).
+# Same shape as server-image.yml; read its header for the release rules:
+#
+#   pull request   -> checks the version and builds the image, pushes nothing
+#   push to master -> ordinary build: pushes :sha-<short> and :edge
+#                     RELEASE, when `version` in client/package.json has no tag client-v<version> yet (and is not the
+#                     0.0.0 placeholder): also pushes :X.Y.Z and :latest, then creates the git tag client-vX.Y.Z
+#   manual run     -> no inputs; the same as a push to master (the "run again" for a release whose push failed)
+#
+# A release is a merged PR that raised the version (infra/scripts/client-version.sh bump, or /release client).
+# What gets built and tagged is decided in infra/scripts/client-image-plan.sh. The Keycloak URL is baked into the bundle
+# at build time (production: https://auth.yoursport.vn). Tests are client-ci.yml's job and run in parallel; this workflow
+# does not wait for them, so merge a version bump only when client-ci is green.
+#
+# (client/e2e is deliberately not excluded from the path filter: `tsc -b` in the build typechecks the Playwright configs that import it.)
+# Verified only on GitHub after merge (INFRA-15, section "the client image").
+
+name: client-image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'client/**'
+      - '!client/docs/**'
+      - '!client/keycloak-theme/**'
+      - '!client/design-reference/**'
+      - 'infra/scripts/client-image-plan.sh'
+      - 'infra/scripts/client-version.sh'
+      - '.github/workflows/client-image.yml'
+  pull_request:
+    paths:
+      - 'client/**'
+      - '!client/docs/**'
+      - '!client/keycloak-theme/**'
+      - '!client/design-reference/**'
+      - 'infra/scripts/client-image-plan.sh'
+      - 'infra/scripts/client-version.sh'
+      - '.github/workflows/client-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: client-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write   # create the client-vX.Y.Z git tag on a release
+  packages: write   # push to ghcr.io and prune old builds
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release decision and the version check read the client-v* tags
+
+      - name: Check the version
+        run: infra/scripts/client-version.sh check
+
+      - name: Plan (version and tags)
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          OWNER: ${{ github.repository_owner }}
+        run: infra/scripts/client-image-plan.sh
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.plan.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and push)
+        uses: docker/build-push-action@v6
+        with:
+          context: client
+          file: client/Dockerfile
+          platforms: linux/amd64   # static files, so one platform is enough for the box; arm64 is added with the A1 box (INFRA-12)
+          push: ${{ steps.plan.outputs.push == 'true' }}
+          tags: ${{ steps.plan.outputs.tags }}
+          provenance: false   # one plain manifest per tag, so retention can reason about versions
+          build-args: |
+            VITE_KEYCLOAK_URL=https://auth.yoursport.vn
+            VERSION=${{ steps.plan.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.plan.outputs.build_date }}
+          cache-from: type=gha,scope=client-image
+          cache-to: type=gha,mode=max,scope=client-image
+
+      - name: Tag the release
+        if: steps.plan.outputs.create_git_tag == 'true'
+        run: |
+          git tag "client-v${{ steps.plan.outputs.version }}" "${{ github.sha }}"
+          git push origin "client-v${{ steps.plan.outputs.version }}"
+
+      - name: Retention (keep every release, latest, edge and the newest 10 sha builds)
+        if: steps.plan.outputs.push == 'true'
+        continue-on-error: true   # a refused delete must never fail a publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: infra/scripts/prune-ghcr-versions.sh "${{ github.repository_owner }}" sportconnect-client 10 --delete
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### client-image"
+            echo "version \`${{ steps.plan.outputs.version }}\`, release: ${{ steps.plan.outputs.release }}, pushed: ${{ steps.plan.outputs.push }}"
+            echo '```'
+            echo "${{ steps.plan.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
