@@ -30,16 +30,15 @@ green run exists" pattern.
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [INFRA-12](MVP/INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md) | Spike: can the whole stack (and Keycloak) run on Oracle Cloud Always Free? Gates INFRA-3..6 — see the amendment in the hosting decision (2026-10-13) | `IN PROGRESS` |
-| 2 | [INFRA-3](MVP/INFRA-3_HOSTING_DECISION.md) | AWS foundation (EC2 + RDS + S3/CloudFront + OIDC role) | `TODO` |
-| 3 | [INFRA-4](MVP/INFRA-4_SERVER_DOCKERFILE_GHCR_PUBLISH_WORKFLOW.md) | Server Dockerfile + GHCR publish workflow | `TODO` |
-| 4 | [INFRA-5](MVP/INFRA-5_CLIENT_STATIC_BUILD_S3_CLOUDFRONT_DEPLOY.md) | Client static build + S3/CloudFront deploy | `TODO` |
-| 5 | [INFRA-6](MVP/INFRA-6_DEPLOYMENT_PIPELINE.md) | Deployment pipeline (`deploy.yml`) | `TODO` |
-| 6 | [INFRA-7](MVP/INFRA-7_REVERSE_PROXY_PATH_ROUTING_FOR_SERVICES_CHAT.md) | Reverse-proxy path-routing for `services/chat` | `TODO` |
-| 7 | [INFRA-8](MVP/INFRA-8_SERVICES_CHAT_DOCKERFILE_PUBLISH_WORKFLOW.md) | `services/chat` Dockerfile publish workflow | `TODO` |
-| 8 | [INFRA-9](MVP/INFRA-9_INTERNAL_NETWORK_ISOLATION.md) | `/internal/**` network isolation | `TODO` |
-| 9 | [INFRA-10](MVP/INFRA-10_SWAGGER_AND_OAUTH_TOKEN_EXPOSURE_IN_DEPLOYED_ENVIRONMENTS.md) | Swagger UI, `/api-docs` and `oauth-token` are public in every profile — decide what a deployed environment exposes; found during auth A7 | `TODO` |
-| 10 | [INFRA-11](MVP/INFRA-11_EMAIL_CONFIGURATION_IN_DEPLOYED_ENVIRONMENTS.md) | Email configuration (`MAIL_*`, `EMAIL_FROM`, link URLs) per environment; nothing sets them today | `TODO` |
-| 11 | [INFRA-14](MVP/INFRA-14_PRODUCTION_KEYCLOAK_ON_ORACLE.md) | Production Keycloak on Oracle Always Free (production mode, theme and extension JARs, backups, real provider secrets); waits for INFRA-12 and INFRA-13 | `TODO` |
+| 2 | [INFRA-4](MVP/INFRA-4_SERVER_DOCKERFILE_GHCR_PUBLISH_WORKFLOW.md) | Server Dockerfile + GHCR publish workflow | `TODO` |
+| 3 | [INFRA-5](MVP/INFRA-5_CLIENT_STATIC_BUILD_S3_CLOUDFRONT_DEPLOY.md) | Client static build served by Caddy (no S3/CloudFront; see the Delta 2026-10-27) | `TODO` |
+| 4 | [INFRA-6](MVP/INFRA-6_DEPLOYMENT_PIPELINE.md) | Deployment pipeline: pull-based through GHCR (see the Delta 2026-10-27) | `TODO` |
+| 5 | [INFRA-7](MVP/INFRA-7_REVERSE_PROXY_PATH_ROUTING_FOR_SERVICES_CHAT.md) | Reverse-proxy path-routing for `services/chat` | `TODO` |
+| 6 | [INFRA-8](MVP/INFRA-8_SERVICES_CHAT_DOCKERFILE_PUBLISH_WORKFLOW.md) | `services/chat` Dockerfile publish workflow | `TODO` |
+| 7 | [INFRA-9](MVP/INFRA-9_INTERNAL_NETWORK_ISOLATION.md) | `/internal/**` network isolation | `TODO` |
+| 8 | [INFRA-10](MVP/INFRA-10_SWAGGER_AND_OAUTH_TOKEN_EXPOSURE_IN_DEPLOYED_ENVIRONMENTS.md) | Swagger UI, `/api-docs` and `oauth-token` are public in every profile — decide what a deployed environment exposes; found during auth A7 | `TODO` |
+| 9 | [INFRA-11](MVP/INFRA-11_EMAIL_CONFIGURATION_IN_DEPLOYED_ENVIRONMENTS.md) | Email configuration (`MAIL_*`, `EMAIL_FROM`, link URLs) per environment; nothing sets them today | `TODO` |
+| 10 | [INFRA-14](MVP/INFRA-14_PRODUCTION_KEYCLOAK_ON_ORACLE.md) | Production Keycloak on Oracle Always Free (production mode, theme and extension JARs, backups, real provider secrets); waits for INFRA-12 and INFRA-13 | `TODO` |
 
 ---
 
@@ -50,22 +49,23 @@ green run exists" pattern.
 | 1 | [INFRA-13](MVP/INFRA-13_KEYCLOAK_IN_COMPOSE_AND_REALM_AS_CODE.md) | Keycloak 26 in the dev Compose stack with the realm as a committed import (5-min access token, audience mapper, optional email/names, en/vi, no secrets), Mailpit mail sink, idempotent `keycloak_dev` bootstrap script | `DONE` |
 | 2 | [INFRA-1](MVP/INFRA-1_BACKEND_CI_WORKFLOW.md) | Backend CI workflow (`server-ci.yml`) | `DONE` |
 | 3 | [INFRA-2](MVP/INFRA-2_DEV_DOCKER_COMPOSE.md) | Dev environment docker-compose | `DONE` |
+| 4 | [INFRA-3](MVP/INFRA-3_HOSTING_DECISION.md) | Oracle foundation: the production VM built from the runbook and serving `yoursport.vn`, nightly backups to Object Storage (the AWS plan was superseded 2026-10-27); resources in `INFRA-3_ORACLE_RESOURCES.md` | `DONE` |
 
 ---
 
 **Dependencies:**
 ```
 INFRA-1 ∥ INFRA-2 (independent)
-INFRA-12 → none; gates INFRA-3..6 (hosting amendment 2026-10-13). On a "go", INFRA-3..6 are rewritten for
-           Oracle before they are picked up; on a "no-go" they proceed as written.
-INFRA-3 → hosting decision made (see INFRA-3_HOSTING_DECISION.md); also wants INFRA-1 done
+INFRA-12 → decided 2026-10-27: GO on Oracle x86 (A1 later). INFRA-3..6 are rewritten for Oracle (Deltas on
+           INFRA-4/5/6/7/8/9/14 and INFRA-3's own body); INFRA-12 closes when INFRA-3's decision is merged.
+INFRA-3 → hosting decision made (Oracle, see INFRA-3_HOSTING_DECISION.md); also wants INFRA-1 done
           (deploying untested builds is pointless)
-INFRA-4 → INFRA-3 (needs the GHCR/OIDC pieces the foundation sets up)
-INFRA-5 → INFRA-3 (needs the S3/CloudFront resources)
+INFRA-4 → INFRA-3 (needs the VM and the GHCR pull token the foundation sets up)
+INFRA-5 → INFRA-3 (needs the VM and its Caddy)
 INFRA-6 → INFRA-3, INFRA-4, INFRA-5 (orchestrates all three)
-INFRA-7 → INFRA-3 (needs the EC2 + Nginx/Caddy foundation already provisioned there)
-INFRA-8 → INFRA-3 (same GHCR/OIDC pieces INFRA-4 needs, mirrored for services/chat's own image)
-INFRA-9 → INFRA-3 at minimum (EC2 security group); may additionally depend on INFRA-7 if
+INFRA-7 → INFRA-3 (needs the VM + Caddy foundation already provisioned there)
+INFRA-8 → INFRA-3 (same GHCR pieces INFRA-4 needs, mirrored for services/chat's own image)
+INFRA-9 → INFRA-3 at minimum (VCN security list); may additionally depend on INFRA-7 if
            implemented via the reverse proxy rather than (or in addition to) the security group —
            see INFRA-9's ticket body
 INFRA-6's orchestration should be revisited once INFRA-7/8/9 exist, to also restart the chat
@@ -79,8 +79,9 @@ chat directly, no Docker image is needed to `go run` it, and there's no network 
 on a single dev machine). They only matter once `services/chat` needs to actually run in
 production.
 
-The hosting decision that unblocked this split is recorded in
-`infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`: AWS free tier, single EC2 instance (Docker +
-Nginx/Caddy + self-hosted Redis) + RDS PostgreSQL/PostGIS + S3/CloudFront for the client, GHCR
-for images, OIDC for deploy credentials. Only `production` is deployed to AWS for now — `dev`/
-`staging` stay local-only via `docker-compose.dev.yml` (INFRA-2).
+The hosting decision is recorded in `infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`: since
+2026-10-27 **Oracle Cloud, one x86 VM** running Docker Compose (Caddy, server, chat, Postgres+PostGIS,
+Redis, RabbitMQ, Keycloak), GHCR for images, pull-based deploys, nightly backups to Object Storage;
+Always Free A1 (arm64) is reconsidered when capacity appears. The original AWS decision (2026-07-08)
+is superseded. Only `production` is hosted — `dev`/`staging` stay local-only via
+`docker-compose.dev.yml` (INFRA-2).

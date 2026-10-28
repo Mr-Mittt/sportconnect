@@ -25,3 +25,10 @@ path-routes `/images/**` to the EC2 origin (mirrors INFRA-7's reverse-proxy path
 just client-origin-side instead of server-side). Decide which at pickup; either closes this gap.
 Not blocking SPORT-4's own client-side ship — that ticket's scope is explicitly client-only,
 dev-verified, with this production gap called out rather than silently assumed fixed.
+
+## Delta 2026-10-27 (INFRA-3 / INFRA-12): no S3/CloudFront, Caddy serves the build
+
+Hosting is Oracle Cloud (`INFRA-3_HOSTING_DECISION.md`). The S3 bucket, CloudFront distribution and cache invalidation are gone; the sandbox already serves the client from the VM's Caddy (`infra/oracle/Caddyfile`, build in `/srv`, SPA fallback to `index.html`).
+- The Keycloak URL is **baked in at build time**: `VITE_KEYCLOAK_URL=https://auth.yoursport.vn pnpm build` (default is `http://localhost:8081`). The CI build must set it.
+- Open for this ticket (pull-based deploy, INFRA-6): how the build gets onto the box. Preferred: a small image on GHCR that contains the build (served by the Caddy container), pulled like the other images; alternative: CI copies the build over SSH, which the pull-based decision rejects.
+- Measured: the build is 1.8 MB (one 1.66 MB JS chunk, 468 kB gzipped). Latency from Vietnam was inconclusive (INFRA-12 point 9); Cloudflare in front of Caddy is the CDN option if it matters.

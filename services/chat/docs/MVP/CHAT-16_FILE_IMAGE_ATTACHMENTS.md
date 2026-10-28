@@ -47,3 +47,7 @@ Any actual implementation, schema migration, or upload-flow design — needs its
 pass at pickup.
 
 ---
+
+## Delta 2026-10-27 (INFRA-12 / INFRA-3): storage is Oracle, not S3
+
+Hosting is Oracle Cloud (`infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`), so the "already-provisioned RDS/EC2/S3" assumptions above are void. The storage candidates are now **OCI Object Storage** (S3-compatible API, 20 GB free in the Always Free allowance as the spike read it, unconfirmed on a paid tenancy; the backup bucket INFRA-3 creates is a separate private bucket and must not be reused for user content) or files on the VM's disk behind Caddy (`/images`, covered by the nightly backup only if the directory is added to it). Decide at pickup, with a presigned-URL or small multipart design.

@@ -34,8 +34,8 @@ For this project's scale, GitHub Actions covers the entire build-and-deploy pipe
 - **Artifacts/registry** — build the Boot jar or Docker image in the workflow, push to **GHCR**
   (free with the repo, same credentials). No Nexus/Artifactory to operate.
 - **CD** — GitHub Environments (`dev`/`staging`/`production`) with per-environment secrets and
-  **required-reviewer approval gates** for prod; **OIDC federation** to AWS/GCP/Azure so deploy
-  jobs get short-lived cloud credentials (no long-lived secrets stored); triggers on tag/release/
+  **required-reviewer approval gates** for prod; **OIDC federation** to AWS/GCP/Azure would give deploy
+  jobs short-lived cloud credentials, but hosting is Oracle (2026-10-27) with a **pull-based** deploy through GHCR instead (INFRA-6), so GitHub holds no cloud credentials; triggers on tag/release/
   merge/`workflow_dispatch`; rollback = re-run an older tag's workflow.
 - **Cost** — private-repo free tier is 2,000 min/month; ample here. Escape hatch if ever needed:
   a self-hosted runner (also the answer for deploy targets inside a private network) — still no
@@ -55,7 +55,7 @@ Terraform/compose) is what eventually populates `infra/` for real.
 | PR template | ✅ `.github/PULL_REQUEST_TEMPLATE.md` (HF-10b) |
 | Backend CI | ✅ `server-ci.yml` exists (INFRA-1, 2026-07-08) and **green on its first run** (PR #4) — no baseline-bootstrap step needed, unlike `client-ci`. No service containers: all integration tests run against H2, and `BaseIT`'s Testcontainers-managed Redis (A8) self-provisions via the Docker daemon already on `ubuntu-latest` runners |
 | Dev environment compose | ✅ `infra/docker-compose.dev.yml` (INFRA-2, 2026-07-08) — deps-only (Postgres+PostGIS, Redis); verified end-to-end via a full `./gradlew :server:bootRun` against it, not just `docker compose up` |
-| Deployment workflow / hosting | ✅ Hosting decision made (2026-07-08, `INFRA-3_HOSTING_DECISION.md`) — AWS free tier, single EC2 + RDS, split into INFRA-3..6; none implemented yet |
+| Deployment workflow / hosting | ✅ Hosting decision amended 2026-10-27 (`INFRA-3_HOSTING_DECISION.md`): **Oracle Cloud, one x86 VM** running Docker Compose (the 2026-07-08 AWS choice is superseded), pull-based deploy through GHCR, split into INFRA-3..6. The INFRA-12 sandbox runs the stack today (`infra/oracle/`); the production build-out is INFRA-3 (in progress); no deploy workflow exists yet |
 
 ## 3b. Known deployment-relevant fix: JDBC session timezone (2026-09-23)
 
@@ -67,7 +67,7 @@ directly. Fixed at the JVM level (`TimeZone.setDefault(UTC)` in `SportConnectApp
 URL-parameter approach doesn't work against this driver:
 `documentation/md/JDBC_SESSION_TIMEZONE_FIX.md`.
 
-**Relevant to INFRA-3..6 (the AWS EC2/RDS work, not yet built):** this fix is host-independent —
+**Relevant to INFRA-3..6 (the Oracle VM work):** this fix is host-independent —
 once implemented, the app's own DB session timezone is UTC regardless of the deployment
 container/VM's OS timezone, so standing up the real deployment target does not need a separate
 "ensure the host OS is UTC" step. Nothing further to do here; noted so it isn't rediscovered from
@@ -76,8 +76,8 @@ scratch during that work.
 ## 4. Tickets
 
 Tracked in `infra/documentation/BACKLOG_MVP.md` (pick up via `/workon infra mvp`):
-**INFRA-1** backend CI workflow · **INFRA-2** dev docker-compose · **INFRA-3** AWS foundation
-(EC2 + RDS + S3/CloudFront + OIDC role) · **INFRA-4** server Dockerfile + GHCR publish ·
-**INFRA-5** client static build + S3/CloudFront deploy · **INFRA-6** `deploy.yml` orchestration.
+**INFRA-1** backend CI workflow · **INFRA-2** dev docker-compose · **INFRA-3** Oracle foundation
+(the production VM built from the runbook, nightly backups) · **INFRA-4** server Dockerfile + GHCR publish ·
+**INFRA-5** client static build served by Caddy · **INFRA-6** pull-based deploy through GHCR.
 Hosting decision recorded in `infra/documentation/MVP/INFRA-3_HOSTING_DECISION.md`. The client-ci
 bootstrap remains client backlog **HF-12**.

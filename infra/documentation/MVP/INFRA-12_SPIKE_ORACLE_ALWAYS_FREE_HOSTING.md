@@ -79,7 +79,7 @@ Also proven on the sandbox: Keycloak in production mode behind Caddy, Google sig
 **Risks accepted with this decision:** no backups yet; authenticated load unmeasured; one box, no redundancy; dev-grade passwords on the backing services (loopback-only); a monthly bill after the trial; latency unproven.
 
 **To close this ticket (Done when):**
-- [ ] `INFRA-3_HOSTING_DECISION.md`: mark the Oracle amendment *Agreed* (x86 now, A1 later) and update its alternatives table.
-- [ ] File the rewrite of INFRA-3, INFRA-4, INFRA-5 and INFRA-6 for Oracle as real backlog entries, and re-check INFRA-7, INFRA-8, INFRA-9 (INFRA-6 and INFRA-14 already carry Deltas from 2026-10-27).
+- [x] (done on branch `docs/infra-3-oracle-hosting-decision`, pending merge) `INFRA-3_HOSTING_DECISION.md`: mark the Oracle amendment *Agreed* (x86 now, A1 later) and update its alternatives table.
+- [x] (done on the same branch: INFRA-3 body rewritten, Deltas in INFRA-4/5/6/7/9/14, email E2, chat CHAT-16) File the rewrite of INFRA-3, INFRA-4, INFRA-5 and INFRA-6 for Oracle as real backlog entries, and re-check INFRA-7, INFRA-8, INFRA-9 (INFRA-6 and INFRA-14 already carry Deltas from 2026-10-27).
 - [ ] Revoke/replace the Brevo SMTP key and rotate the Keycloak admin password (both were pasted in chat).
 - [ ] Terminate the sandbox and its boot volume when it is no longer needed, or turn it into the real INFRA-3 box on purpose.

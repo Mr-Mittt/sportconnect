@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the SportConnect backup every night
+
+[Timer]
+# The box clock is UTC: 19:00 UTC is 02:00 in Vietnam, the quietest hour
+OnCalendar=*-*-* 19:00:00
+# a short random delay, and catch up at boot if the box was off at 19:00
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target

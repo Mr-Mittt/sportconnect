@@ -1,135 +1,98 @@
-# Hosting decision — AWS free tier, single EC2 + RDS
+# Hosting decision — Oracle Cloud, one x86 instance (Always Free A1 later)
 
-**Date:** 2026-07-08
-**Status:** Agreed (discussion between repo owner + Claude, unblocking INFRA-3)
-**Amended:** 2026-10-13 — Oracle Always Free proposed as the replacement host, **pending the INFRA-12 spike** (see the amendment below). The AWS decision stands until that spike says go.
-**Supersedes:** the "blocked on a hosting decision" note on INFRA-3 in `BACKLOG_MVP.md`
+**Date:** 2026-07-08 (first decision: AWS) · **Amended 2026-10-27:** Oracle Cloud, after the INFRA-12 spike
+**Status:** Agreed (repo owner + Claude). The AWS shape of 2026-07-08 is superseded; its record is kept below.
+**Evidence:** `INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md` (findings and decision), `INFRA-12_ORACLE_INSTANCE_SETUP_LOG.md` (every step), `INFRA-12_ORACLE_SANDBOX_RUNBOOK.md` (how to rebuild)
 
 ---
 
 ## Decision
 
-**Provider:** AWS, free-tier-first (this is a solo/learning project — cost avoidance drives every
-choice below, not scalability).
+**Provider:** Oracle Cloud Infrastructure, region `ap-melbourne-1` (the account's home region, one availability domain).
 
-**Runtime shape:** one EC2 instance running Docker directly (no ECS/Fargate, no Kubernetes):
+**Runtime shape:** one VM running Docker Compose (no managed database, no Kubernetes). **x86 now** (`VM.Standard.E3.Flex`, 2 OCPU / 12 GB, Ubuntu 24.04). The Always Free Ampere A1 (arm64) shape is the preferred home but had **no host capacity** during the spike, so it is reconsidered when capacity appears: the scripts and runbook make that a rebuild plus the same load test.
 
 | Component | Where it runs |
 |---|---|
-| Spring Boot server (image from GHCR) | Docker container on the EC2 instance |
-| Redis | Docker container on the same EC2 instance (self-hosted, not ElastiCache) |
-| Nginx or Caddy | Reverse proxy on the EC2 instance — TLS via Let's Encrypt, replaces an ALB |
-| PostgreSQL + PostGIS | **RDS PostgreSQL** (managed) — PostGIS extension is supported on RDS |
-| Client static build | **S3 + CloudFront** — build artifact from `client/`, not served off the EC2 box |
-| Container registry | **GHCR** (already free/unlimited for this repo) — no ECR |
-| Deploy credentials | **GitHub OIDC → AWS IAM role** — no long-lived AWS keys in repo secrets |
+| Caddy | Container on the VM, ports 80/443, automatic Let's Encrypt, serves the static client and proxies `/api`, `/api/chat`, `/ws`, `/images`; Keycloak on its own host name with the admin paths blocked |
+| Spring Boot server (`prod` profile), chat (Go) | Containers on the VM (images from GHCR once INFRA-4/8 exist) |
+| PostgreSQL + PostGIS, Redis, RabbitMQ | Containers on the VM, published on `127.0.0.1` only |
+| Keycloak (production mode) | Container on the VM (INFRA-14 hardens it) |
+| Client static build | Served by Caddy from the VM (no CDN for now; Cloudflare in front is an option if latency needs it) |
+| Container registry | **GHCR** |
+| Deploy | **Pull-based**: the VM pulls new images from GHCR (INFRA-6), no inbound deploy path and no cloud credentials in GitHub |
+| Email | Brevo free plan over SMTP (Oracle blocks outbound port 25) |
+| Backups | Nightly `pg_dump` of the three databases and an archive of the Caddy certificates to an Object Storage bucket, 7 days kept (this ticket) |
+| Secrets | Root-owned files on the VM now; OCI Vault in INFRA-14 |
 
-**Environments:** only **production** is deployed to AWS for now. `dev` and `staging` stay
-local-only via `infra/docker-compose.dev.yml` (INFRA-2) — standing up multiple AWS environments
-would immediately blow the free tier (see below), and there's no team/QA need for a hosted
-staging environment yet. The `dev`/`staging`/`production` GitHub Environments concept from
-`INFRASTRUCTURE_LAYOUT_AND_CICD.md` §2 is deferred to just `production` until that changes.
+**Environments:** only **production** is hosted. `dev` and `staging` stay local via `infra/docker-compose.dev.yml` (INFRA-2).
 
-## Why this shape (what free tier actually covers)
+## Cost and known limits
 
-AWS Free Tier (12 months from account creation, new account):
+- The x86 shape is **paid**. It runs on the trial credit until about **2026-11-25**, then bills: roughly **$50 a month** at 2 OCPU / 12 GB (list-price estimate from memory, to be confirmed). Set a budget alert. Always Free A1 (up to 4 OCPU / 24 GB) costs nothing when it can be had; the tenancy's A1 core limit is 16, so capacity is the only blocker.
+- Single VM: no redundancy, no managed database. Backups are ours (this ticket).
+- Measured on the sandbox (x86, 2 OCPU): idle stack about 1.5 GiB of containers; 400 concurrent read-only users answered with CPU, not memory, as the limit. Authenticated traffic, Discover/feed load and ARM are not measured (see the INFRA-12 decision).
+- Idle reclamation applies to Always Free instances only (relevant when A1 is used).
 
-- **EC2** — 750 hrs/mo t2/t3.micro (1 vCPU, 1GB RAM). Enough for one instance running the server
-  + Redis containers full-time.
-- **RDS PostgreSQL** — 750 hrs/mo db.t3.micro, 20GB, single-AZ. PostGIS extension installable.
-  750 hrs/mo ≈ one instance running continuously — **not** enough for three separate RDS
-  instances (dev/staging/prod), which is the main reason multi-environment AWS hosting is out of
-  scope for now.
-- **S3** — 5GB storage; **CloudFront** — 1TB egress + 10M requests/mo. Comfortably covers the
-  client static build at this traffic level.
+## Explicit exclusions
 
-## Explicit exclusions (things that would silently cost money)
+No managed Kubernetes, no managed database service, no load balancer, no second VM, no multi-region. Revisit only if real traffic demands it.
 
-- **ALB** — not free (~$16+/mo minimum). Using Nginx/Caddy on the EC2 box for TLS instead.
-- **ElastiCache** — free-tier availability for Redis has been inconsistent/mostly withdrawn.
-  Self-hosting Redis as a container avoids this entirely.
-- **NAT Gateway** — not free (~$32+/mo). Avoided by not requiring the DB to route through one.
-- **ECS Fargate compute** — never free regardless of tier. If containers are orchestrated at all,
-  it's plain `docker run`/compose on the EC2 instance, not Fargate.
-- **Multi-AZ RDS, autoscaling, k8s** — all out of scope; revisit only if real traffic demands it.
+## Superseded: the AWS decision (2026-07-08)
 
-## Known limit
-
-The 12-month free tier is a **per-account clock starting at account creation**, not indefinite.
-After it lapses, this same shape reverts to standard pricing (roughly $15–20/mo for the EC2 +
-RDS pair). Revisit the hosting decision before/at that point rather than being surprised by a
-bill — no action needed now, just noting it so it isn't forgotten.
+AWS free tier, one EC2 instance (Docker + Nginx/Caddy + self-hosted Redis) with RDS PostgreSQL/PostGIS, the client on S3 + CloudFront, GitHub OIDC to an IAM role for deploys. It was dropped because the 1 GB free-tier EC2 box cannot hold RabbitMQ, the chat service and Keycloak (needed for social login), and its free tier lapses after 12 months (about $15–20 a month for the EC2 + RDS pair after that, before adding anything). Nothing was ever provisioned on AWS.
 
 ## Alternatives considered (and passed on)
 
-Surveyed after the AWS decision, to record why they weren't picked instead — so this doesn't get
-re-litigated from scratch later:
-
 | Option | Why not |
 |---|---|
-| **Oracle Cloud "Always Free"** | The closest AWS equivalent — permanently free ARM compute (2 OCPUs/12GB RAM on Oracle's page as read 2026-10-13; earlier notes said 4/24) generous enough to self-host the server, Postgres+PostGIS, and Redis together, no 12-month clock. Real blocker: ARM capacity is frequently unavailable for new signups ("out of host capacity" errors) since the free pool is a limited, oversubscribed physical allocation, not elastic cloud capacity. Worth revisiting if AWS's 12-month clock becomes a real cost concern. |
-| **Azure** | Same shape as AWS (12-month free VM), plus a free Postgres Flexible Server SKU — but three separate free-tier clocks to track across services instead of one. No clear advantage over AWS. |
-| **Google Cloud** | Cloud Run compute is genuinely always-free, but Cloud SQL (managed Postgres) has **no free tier at all** — billed from day one. The database is the one piece this app can't skip, so GCP doesn't actually solve the problem. |
-| **Render** | Free web service + free Postgres, but the free Postgres is **auto-deleted after 30 days** — fine for a demo, not for anything meant to stay up. |
-| **Supabase (DB) + Vercel (client)** | Supabase ships PostGIS enabled by default on its free tier — best-in-class free Postgres+PostGIS fit — and Vercel's free static hosting is excellent. Neither hosts a long-running JVM process, though, so this only solves 2 of 3 pieces; would still need a separate compute host. |
-| **Fly.io / Railway** | Both commonly recommended, both no longer offer a real free tier: Fly.io ended no-card free allowances for new orgs in 2024 (now requires a payment method); Railway retired its unlimited free plan in 2023 (one-time trial credit only, then usage-based). |
-| **Self-host on a personal laptop** | Genuinely $0 and technically workable (Cloudflare Tunnel solves the CGNAT/no-public-IP problem most home ISPs create), but the risk profile is different in kind, not degree: a compromised laptop has your actual files on it (vs. a disposable cloud VM), uptime depends on the machine never sleeping/rebooting, and there's no failover. Reasonable for a dedicated spare machine hosting a low-stakes demo; not something to point real users' trust at. |
+| **AWS free tier (single EC2 + RDS)** | The 2026-07-08 choice, superseded above. 1 GB RAM is too small for the whole stack; 12-month clock. |
+| **Oracle Always Free A1 (arm64)** | The preferred home (free, 4 OCPU / 24 GB allowed), but "out of host capacity" in the region's only availability domain during INFRA-12. Reconsidered when capacity appears. |
+| **Azure** | Same shape as AWS (12-month free VM) with several separate free-tier clocks. No advantage. |
+| **Google Cloud** | Cloud Run is free but Cloud SQL (managed Postgres) has no free tier; the database is the one piece this app cannot skip. |
+| **Render** | The free Postgres is auto-deleted after 30 days. |
+| **Supabase (DB) + Vercel (client)** | Excellent free Postgres+PostGIS and static hosting, but nothing hosts a long-running JVM, so it solves only two of three pieces. |
+| **Fly.io / Railway** | No real free tier any more. |
+| **Self-host on a personal laptop** | Free, but a different risk profile: uptime depends on the machine, and a compromised laptop holds personal files. |
 
-## Amendment 2026-10-13 — Oracle Always Free is the leading candidate (proposed, gated on INFRA-12)
+## What this changes
 
-**Status:** Proposed. Not yet a decision. INFRA-3..6 must not be picked up until INFRA-12 resolves this.
+INFRA-3 (this file's ticket, below) is rewritten for Oracle, and INFRA-4..9 and INFRA-14 carry Deltas for it:
 
-**Why reopen:** the 1 GB EC2 box holds only the server and Redis. It cannot also hold RabbitMQ (already in the dev compose), the chat service's needs, or Keycloak (a possible answer to the social-login and session-revocation work: auth A15/A18/A19/A20). The owner has created an Oracle Cloud Always Free account, and the original objection above (ARM capacity) is now testable rather than assumed.
-
-**What Oracle's Always Free page lists (read 2026-10-13):**
-
-| Resource | Limit |
-|---|---|
-| Ampere A1 (Arm) | 2 OCPU and 12 GB total (1,500 OCPU-hours and 9,000 GB-hours a month) |
-| AMD micro VMs | up to 2, 1/8 OCPU and 1 GB each (too small to use) |
-| Block and boot storage | 200 GB, 5 backups |
-| Egress | 10 TB a month |
-| Object Storage | 20 GB (expired-trial / always-free state) |
-| Idle reclamation | instance may be reclaimed after 7 days with CPU, network and (A1) memory all under 20% |
-| Outbound port 25 | blocked by default |
-
-**Estimated fit (estimates, to be measured by INFRA-12):** server ~0.7–0.9 GB, chat ~0.1 GB, Postgres+PostGIS ~0.7–1.2 GB, Redis ~0.1 GB, RabbitMQ ~0.15–0.4 GB, Keycloak ~1–1.5 GB, Caddy and OS ~0.5 GB: about 3.5–5 GB of 12 GB.
-
-**Open risks the spike must answer:** A1 capacity in the home region; `postgis/postgis` and our images on arm64 (multi-arch builds); single VM with no managed database (backups are ours); reclamation rules; no GitHub-OIDC-to-cloud-role equivalent (deploy-credential design); client delivery without CloudFront; blocked port 25.
-
-**If INFRA-12 says go:** this amendment becomes the decision, the table at the top is replaced, and INFRA-3..6 are rewritten against Oracle. **If no-go:** this section is kept as the record of why, and the AWS shape above stands.
-
-## What this unblocks
-
-INFRA-3 (as originally scoped, "deployment pipeline") is split into four tickets on
-`BACKLOG_MVP.md` following the artifact-scoped vs. environment-scoped placement rule from
-`INFRASTRUCTURE_LAYOUT_AND_CICD.md` §1:
-
-- **INFRA-3** — AWS foundation (EC2 + RDS + S3/CloudFront + IAM OIDC role), environment-scoped,
-  provisioning docs/scripts in `infra/`
-- **INFRA-4** — server Dockerfile + GHCR publish workflow, artifact-scoped in `server/`
-- **INFRA-5** — client static build + S3/CloudFront deploy, artifact-scoped in `client/`
-- **INFRA-6** — `deploy.yml` orchestration workflow tying the above together (pull image onto
-  EC2, run Liquibase migrations, restart container, invalidate CloudFront cache), in
-  `.github/workflows/` with logic in `infra/scripts/`
+- **INFRA-3** — Oracle foundation: the production box built from the runbook, nightly backups (this ticket)
+- **INFRA-4** — server Dockerfile + GHCR publish workflow (an x86 image now; arm64 when A1 comes)
+- **INFRA-5** — client static build served by Caddy (no S3/CloudFront)
+- **INFRA-6** — pull-based deploy through GHCR (not OIDC/SSM)
+- **INFRA-7/8/9** — chat routing (already done in the sandbox Caddyfile), chat image publish, `/internal` isolation (security list + Caddy instead of a security group)
+- **INFRA-14** — production Keycloak, the secrets store (OCI Vault), the dev-grade leftovers
 
 ---
 
-**Status:** `TODO` · **Type:** Infrastructure (cloud provisioning) · **Dependency:** INFRA-1 ·
-**Spec:** `INFRA-3_HOSTING_DECISION.md`
+**Status:** `DONE` (2026-10-28) · **Type:** Infrastructure (cloud provisioning) · **Dependency:** INFRA-12 (decided: go on Oracle x86)
+**Spec:** this file
 
-Provision the AWS resources the deploy pipeline needs, for a single `production` environment:
+## INFRA-3 · Oracle foundation
 
-- EC2 instance (t2/t3.micro, free tier), Docker installed, security group allowing 80/443 (and
-  22 or SSM for deploy access — prefer AWS Systems Manager Session Manager over open SSH)
-- RDS PostgreSQL instance (db.t3.micro, free tier) with the PostGIS extension enabled; verify
-  reachability from the EC2 instance's security group only (no public DB access)
-- S3 bucket + CloudFront distribution for the client static build
-- IAM role trusting GitHub's OIDC provider, scoped to only what the deploy workflow needs
-  (push to the S3 bucket, invalidate the CloudFront distribution, deploy to the EC2 instance —
-  not broad admin access)
-- Nginx or Caddy config on the EC2 instance for TLS termination (Let's Encrypt) — no ALB
-- Document exact resource names/regions/IDs in `infra/documentation/` (not secrets — those go in
-  GitHub Environment secrets) so INFRA-4/5/6 have concrete values to target
-- Done when: resources exist and are reachable, OIDC role can be assumed from a test GitHub
-  Actions run, documented in `infra/documentation/`
+Scope agreed with the owner on 2026-10-27 (the AWS body of this ticket is superseded).
+
+**In scope**
+- This decision document: Oracle *Agreed*, the alternatives table, the layout doc and the backlog index updated.
+- The production box, built **fresh from the runbook** (`INFRA-12_ORACLE_SANDBOX_RUNBOOK.md` and `infra/oracle/`), which has never been run end to end: VCN and security list (22/80/443), the instance, DNS (`yoursport.vn`, `www`, `auth`), firewall, Docker, Caddy with Let's Encrypt, the production-style Compose stack. The runbook and scripts are fixed wherever the rebuild shows them wrong. Then the INFRA-12 sandbox instance and its boot volume are retired.
+- **Backups:** `infra/oracle/scripts/backup-postgres.sh` (nightly `pg_dump -Fc` of `sportconnect_dev`, `sportconnect_chat_dev` and `keycloak_dev`, plus a tar of the `caddy_data` volume, to an Object Storage bucket by instance principal), `restore-test.sh` (restores the newest set into scratch databases and checks a key table in each), a systemd timer at 19:00 UTC (02:00 in Vietnam), and `install-backup.sh`. **Retention: 7 nightly sets, kept 7 days by a bucket lifecycle rule** (owner's decision). Database names stay unchanged (renaming belongs to INFRA-14). Not encrypted by us beyond Oracle's encryption at rest (INFRA-14).
+- Exact resource names, region and OCIDs (no secrets) recorded in `infra/documentation/`, so INFRA-4..9 have concrete targets.
+- `infra/documentation/PORTS.md` and `INFRASTRUCTURE_LAYOUT_AND_CICD.md` updated for the Oracle shape.
+- Deltas filed in INFRA-4, 5, 7, 9, and in `modules/email` E2 and `services/chat` CHAT-16, which named AWS.
+
+**Out of scope**
+- Image build and publish (INFRA-4, INFRA-8), the client deploy (INFRA-5), the deploy pipeline and pull-based updater (INFRA-6), chat path routing (INFRA-7), `/internal` isolation (INFRA-9), Keycloak production hardening and the secrets store (INFRA-14).
+- A1 / arm64, any redundancy or second box.
+
+**Owner's console work** (the box authenticates with its instance principal, so there is no key to store): the Object Storage bucket (private) with a 7-day lifecycle rule that deletes objects older than 7 days; a dynamic group matching the instance; an IAM policy letting that group manage objects in that bucket. The steps are in the runbook.
+
+**Constraints and risks:** paid after the trial credit (budget alert); single box; secrets in root-owned files until INFRA-14; the rebuild briefly runs two paid instances on the trial credit.
+
+**Progress:** `INFRA-3_ORACLE_REBUILD_LOG.md` (step by step, with real results).
+
+**Known, parked (2026-10-28, owner's call):** the first fresh box built for this ticket refused the SSH key (`Permission denied (publickey)`) hours after a working first session, and the Oracle Cloud Agent "Run command" stayed `Accepted` and never ran; the cause is unknown (rebuild log, row 15). It is not investigated now. If a box ever refuses a key that worked before, look at it then: the instance console history and boot log first, and whether `authorized_keys` changed. It has not happened on the box now in production.
+
+**Done when:** a fresh box built from the runbook serves `https://yoursport.vn` and `https://auth.yoursport.vn`; a backup has been uploaded to the bucket and restored into scratch databases from the bucket; the 7-day lifecycle rule is in place; this decision is resolved (it is); the sandbox is retired; the Deltas above are filed.
