@@ -70,6 +70,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 |---|---|---|---|
 | 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
+| 3 | [AUTH-20](MVP/AUTH-20_E2E_FLAKE_COMPLETE_PROFILE_DIALOG_IN_OWN_REDIRECT_TESTS.md) | Fix the e2e flake where the "Complete your profile" dialog hides the page in tests that build their own Keycloak redirect (2026-10-28) — `/register` test fails 3 of 15 locally and in CI after the INFRA-4 merge; `locale.spec.ts` likely the same; also investigate the Home Feed Escape-popover flake | `TODO` |
 
 #### Removed / Deferred
 
