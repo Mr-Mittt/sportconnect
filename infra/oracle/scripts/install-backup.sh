@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# INFRA-3: install the nightly backup on the box. Run ON THE BOX as `ubuntu` (uses sudo), after run-containers.sh:
+# INFRA-3: install the nightly backup on the box. Run ON THE BOX as `ubuntu` (uses sudo), after start-stack.sh:
 #
 #   bash ~/sportconnect/infra/oracle/scripts/install-backup.sh
 #
