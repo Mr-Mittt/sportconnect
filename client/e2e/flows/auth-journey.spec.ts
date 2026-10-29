@@ -1,4 +1,10 @@
-import { KEYCLOAK_AUTH_URL, keycloakCode, keycloakRedirectBack, signIn } from '../mocks/keycloakStub.ts';
+import {
+  KEYCLOAK_AUTH_URL,
+  keycloakCode,
+  keycloakRedirectBack,
+  signIn,
+  skipCompleteProfileDialog,
+} from '../mocks/keycloakStub.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -42,6 +48,9 @@ test('Auth journey — sign in, log out, sign in again', async ({ page }) => {
 });
 
 test('Auth journey — /register asks Keycloak for the create-account step', async ({ page }) => {
+  // AUTH-20: this test builds its own redirect instead of calling signIn(), so it has to keep the
+  // "Complete your profile" dialog from hiding the Home Feed heading itself.
+  await skipCompleteProfileDialog(page);
   let requestedUrl = '';
   const handler = keycloakRedirectBack(keycloakCode.user);
   await page.route(KEYCLOAK_AUTH_URL, (route) => {

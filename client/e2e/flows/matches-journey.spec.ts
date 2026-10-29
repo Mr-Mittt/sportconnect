@@ -92,8 +92,10 @@ test('Matches journey', async ({ page }) => {
     // sport switcher defaults to the caller's first sport profile (mockSportProfiles: Badminton,
     // then Pickleball). "Sunday pickup run" (mockSession, Pickleball) is NOT visible yet — only
     // Badminton-sport sessions render until the caller switches pills.
-    await expect(page.getByRole('button', { name: 'All' })).not.toBeVisible();
+    // AUTH-20: wait for the pills first (an absence check before they load passes for nothing), and match
+    // 'All' exactly: a role name is a case-insensitive substring match, and "Pickleball" contains "all".
     await expect(page.getByRole('button', { name: 'Badminton' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'All', exact: true })).not.toBeVisible();
     await expect(page.getByText('Friday 5-a-side')).toBeVisible();
     await expect(
       page.getByRole('region', { name: 'Discover sessions' }).getByText('Weekend 5-a-side'),
