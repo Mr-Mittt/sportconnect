@@ -1,7 +1,7 @@
 # INFRA-12 sandbox reverse proxy (Caddy), copied from the Oracle box on 2026-10-26.
 # Runbook: infra/documentation/MVP/INFRA-12_ORACLE_SANDBOX_RUNBOOK.md
 #
-# Caddy gets and renews the Let's Encrypt certificates itself (keep /data in a volume, see run-containers.sh).
+# Caddy gets and renews the Let's Encrypt certificates itself (keep /data in a volume, see start-stack.sh).
 # Container names (sc-server, sc-chat, keycloak) resolve on the Compose network `sportconnect-dev_default`.
 
 # The realm only allows https://yoursport.vn as a sign-in redirect, so www goes to the apex.

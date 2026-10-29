@@ -40,3 +40,20 @@ INFRA-8 added `chat-image.yml` (package `ghcr.io/mr-mittt/sportconnect-chat`, ta
 - **CH9. The Go version step.** In a real run the "Go version from go.mod" step prints `1.25` and the build uses it; at the next Go bump in `go.mod`, confirm the image builds without touching the Dockerfile.
 
 **Out of scope:** the box pulling the image (INFRA-6); arm64; gating a release on `chat-ci`.
+
+## Added 2026-10-29 (INFRA-6): promote and deploy
+
+Run after INFRA-6 merges; record each result in this file. Steps 1 to 6 are GitHub, 7 to 10 are the box (see `PRODUCTION_DEPLOYMENT_GUIDE.md` section 16).
+
+1. **The Environment.** Create `production` with the owner as required reviewer, deployment branches limited to `master`. If **Required reviewers** is missing (private repository on a free plan), stop and decide the fallback before going on.
+2. **The first promote.** Actions, promote, from `master`: `server`, `0.1.0` (release it first if `prod` should be a real release). The first job's summary must read `nothing deployed yet -> 0.1.0`, with the commit and a CI line; the second job is named `Retag server none -> 0.1.0` and waits for approval; after Approve, `docker buildx imagetools inspect ghcr.io/mr-mittt/sportconnect-server:prod` shows the digest of `:0.1.0`. Repeat for `client` and `chat`.
+3. **Real labels.** The summary shows real version and commit values (not `?`): proves the `sed` over the real image config (`promote-check.sh`, and the same function on the box).
+4. **No change.** Promote the same version again: the summary says `prod` already points there and the approval job is skipped.
+5. **Refusals.** A version that does not exist; `edge`; a run started from a branch other than `master`; a version older than the one on `prod` (needs two releases; expect "OLDER ... blocked until INFRA-17"); a failed CI run (only if one exists; otherwise note it).
+6. **CI lookup on real data.** For a server release (its commit only changes `gradle.properties`), the summary names an earlier `server-ci` run on an ancestor commit, with a link; for a client and a chat release likewise. Note any case where it says "no result found".
+7. **Install and login on the box.** `sportconnect-deploy` installed with `install -m 0755`; `docker login ghcr.io` with the `read:packages` token on stdin; `sportconnect-deploy --plan` prints the three `prod` versions (this proves the registry reads from the box).
+8. **First deploy over the sandbox containers.** `sportconnect-deploy` replaces the locally built `sc-server` / `sc-chat` (shown as `unknown (local build)`) and fills `~/web/dist`; the site, login, a chat message and Swagger exclusion (section 10 of the guide) still work. Check on the real images that `--read-only` plus the tmpfs and the log volume start cleanly (`docker logs`, `docker inspect`), and that the log file lines are written to the volume. If a hardened flag breaks startup, drop it and write down which and why.
+9. **Failure path for real.** Make one component fail on purpose (for example a wrong value in a copy of `chat.env`, or promote a build that does not start), run the command and check that everything the run changed is put back and the report reads right; then fix and deploy again.
+10. **Up to date.** Run it again: "everything is up to date", nothing restarted. Check `~/web/deploy.log`.
+
+Also from this PR (it touches `server/Dockerfile`): server step 3 (the PR run skips the GHCR login) and step 5 (the merge run stamps `0.1.0+<sha7>`), then `/release server patch` for `0.1.1`. After CHAT-22 is released: seed `schema_migrations` once (guide section 16) and deploy chat again.

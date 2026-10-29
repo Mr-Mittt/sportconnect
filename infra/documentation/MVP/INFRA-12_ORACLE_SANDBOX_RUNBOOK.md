@@ -4,6 +4,8 @@
 
 How to rebuild, on a fresh Oracle Cloud instance, what INFRA-12 set up by hand on 2026-10-26: the whole stack behind HTTPS on `yoursport.vn`, with Keycloak, Google sign-in and real email. The history, with every command, result and failure, is `INFRA-12_ORACLE_INSTANCE_SETUP_LOG.md`; the findings and the go/no-go are in `INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md`. The files are in `infra/oracle/`.
 
+**Changed by INFRA-6 (2026-10-29):** `scripts/run-containers.sh` is now `scripts/start-stack.sh` (dependencies and Caddy only), `server.Dockerfile` is deleted, and the server, chat and client files are deployed by `sportconnect-deploy` from GHCR (guide section 16). The steps and the table below describe the sandbox as it was built; follow `PRODUCTION_DEPLOYMENT_GUIDE.md` for a box.
+
 **Status of this runbook.** It is written from what was done, not from a second run. `box-prepare.sh` and `run-containers.sh` were only syntax-checked. The four `set-*.sh` Keycloak scripts are the cleaned-up forms of commands that ran on the box. Treat the first rebuild as a test and fix this file where it is wrong.
 
 **What it is not.** A sandbox on a credit-funded x86 shape (`VM.Standard.E3.Flex`, 2 OCPU, 12 GB), not the Always Free A1 test (A1 was out of capacity). Not production: see "Still dev-grade" below. Not a replacement for INFRA-3 to INFRA-6, INFRA-14.

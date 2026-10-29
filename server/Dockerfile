@@ -34,6 +34,7 @@ ARG VERSION=0.0.0-local
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
 LABEL org.opencontainers.image.title="sportconnect-server" \
+      org.opencontainers.image.description="SportConnect backend (Spring Boot): REST API, WebSocket and the Keycloak sign-in callback" \
       org.opencontainers.image.source="https://github.com/Mr-Mittt/sportconnect" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${GIT_SHA}" \
