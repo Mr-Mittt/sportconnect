@@ -107,4 +107,5 @@ jobs:
         env:
           IMAGE: ${{ needs.check.outputs.image }}
           NEW_DIGEST: ${{ needs.check.outputs.new_digest }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: infra/scripts/promote-apply.sh
