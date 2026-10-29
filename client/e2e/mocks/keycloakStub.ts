@@ -49,6 +49,23 @@ export function keycloakRedirectBack(code: string) {
 }
 
 /**
+ * AUTH-16: the mock profile has no country, so the "complete your profile" dialog opens over the page as
+ * soon as the profile loads. A Radix dialog hides everything behind it from the accessibility tree, so a
+ * spec's role-based assertions race the profile request. This seeds the session as "skipped" before the
+ * app loads. `signIn()` does it for you; a spec that builds its own Keycloak redirect (`page.route` with
+ * `keycloakRedirectBack`) and never calls `signIn()` must call it itself, before `page.goto` (AUTH-20).
+ */
+export async function skipCompleteProfileDialog(page: Page): Promise<void> {
+  await page.addInitScript((id) => {
+    try {
+      sessionStorage.setItem('complete-profile-storage', JSON.stringify({ state: { skippedFor: id }, version: 0 }));
+    } catch {
+      // sessionStorage unavailable: the spec will see the dialog, which is the safe failure
+    }
+  }, MOCK_PROFILE_ID);
+}
+
+/**
  * Signs in through the real client redirect flow. Visits `path` (default `/login`; pass a protected
  * path to exercise `ProtectedRoute`'s return-to), lets the Keycloak stub send the browser back with
  * the code for `as`, and resolves once the app has settled somewhere other than the sign-in plumbing
@@ -71,17 +88,8 @@ export async function signIn(
     sentToKeycloak();
     return redirectBack(route);
   };
-  // AUTH-16: the mock profile has no country, so the "complete your profile" dialog would open over every
-  // page of every spec. It is skipped for the session unless a spec asks to see it.
-  if (options.completeProfileDialog !== 'show') {
-    await page.addInitScript((id) => {
-      try {
-        sessionStorage.setItem('complete-profile-storage', JSON.stringify({ state: { skippedFor: id }, version: 0 }));
-      } catch {
-        // sessionStorage unavailable: the spec will see the dialog, which is the safe failure
-      }
-    }, MOCK_PROFILE_ID);
-  }
+  // It is skipped for the session unless a spec asks to see it.
+  if (options.completeProfileDialog !== 'show') await skipCompleteProfileDialog(page);
   await page.route(KEYCLOAK_AUTH_URL, handler);
   try {
     await page.goto(options.path ?? '/login');

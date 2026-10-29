@@ -1469,7 +1469,7 @@ byte-identical.
 
 ### `e2e/flows/complete-profile.spec.ts` (AUTH-16, 5 `test()`s)
 
-The "complete your profile" dialog. The mock profile (`mockMyProfile`) has no country, like a first-time social user, so these specs sign in with `signIn(page, 'user', { completeProfileDialog: 'show' })`; every other spec gets the dialog skipped for the session by `signIn` itself (it seeds `complete-profile-storage` for the mock user), otherwise it would cover every page. Reference data (Vietnam with two regions, Singapore with none) and the profile save are the stateful MSW handlers. After a save the app may switch to the saved language (Vietnam pre-fills Vietnamese), so the checks that follow use the nameless `dialog` role.
+The "complete your profile" dialog. The mock profile (`mockMyProfile`) has no country, like a first-time social user, so these specs sign in with `signIn(page, 'user', { completeProfileDialog: 'show' })`; every other spec gets the dialog skipped for the session by `signIn` itself (it calls `skipCompleteProfileDialog`, which seeds `complete-profile-storage` for the mock user), otherwise it would cover every page; a spec that builds its own Keycloak redirect instead of calling `signIn` must call `skipCompleteProfileDialog(page)` itself before `page.goto` (AUTH-20: `/register` and the stored-locale test). Reference data (Vietnam with two regions, Singapore with none) and the profile save are the stateful MSW handlers. After a save the app may switch to the saved language (Vietnam pre-fills Vietnamese), so the checks that follow use the nameless `dialog` role.
 
 | Test | What it checks |
 |---|---|

@@ -1,4 +1,10 @@
-import { KEYCLOAK_AUTH_URL, keycloakCode, keycloakRedirectBack, signIn } from '../mocks/keycloakStub.ts';
+import {
+  KEYCLOAK_AUTH_URL,
+  keycloakCode,
+  keycloakRedirectBack,
+  signIn,
+  skipCompleteProfileDialog,
+} from '../mocks/keycloakStub.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /**
@@ -51,6 +57,8 @@ test('Accept-Language follows a locale stored before the app loads', async ({ pa
 
   // AUTH-14: /login is a redirect to Keycloak now, so the translated page is Keycloak's; the client's
   // part is asking for the user's language (`ui_locales`) and sending Accept-Language on its own API calls.
+  // AUTH-20: own redirect, no signIn(), so the "Complete your profile" dialog must be skipped here too.
+  await skipCompleteProfileDialog(page);
   let authRequestUrl = '';
   await page.route(KEYCLOAK_AUTH_URL, (route) => {
     authRequestUrl = route.request().url();
