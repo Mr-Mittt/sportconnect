@@ -1,7 +1,7 @@
 You are cutting a release: raising the version of one or more components, committing the bump on a new branch and pushing it, so that merging the PR releases. Arguments:
 $ARGUMENTS (format: `[component] [minor|patch|major|X.Y.Z]`, both optional — e.g. "", "patch", "server", "server patch", "server 1.0.0").
 
-This is the whole flow of `infra/documentation/PRODUCTION_DEPLOYMENT_GUIDE.md` § 15, done for the user. Invoking `/release` **is** the request to commit and push the bump branch, so there is no confirmation gate. It never merges, never touches `master`, and never creates a tag: the PR is merged by the user, and `.github/workflows/server-image.yml` / `client-image.yml` release and tag on that merge.
+This is the whole flow of `infra/documentation/PRODUCTION_DEPLOYMENT_GUIDE.md` § 15, done for the user. Invoking `/release` **is** the request to commit and push the bump branch, so there is no confirmation gate. It never merges, never touches `master`, and never creates a tag: the PR is merged by the user, and `.github/workflows/server-image.yml` / `client-image.yml` / `chat-image.yml` release and tag on that merge.
 
 ## Components
 
@@ -9,9 +9,9 @@ This is the whole flow of `infra/documentation/PRODUCTION_DEPLOYMENT_GUIDE.md` �
 |---|---|---|---|
 | `server` | `infra/scripts/server-version.sh bump <arg>` (edits the root `gradle.properties`) | `server-v` | versioned (INFRA-4) |
 | `client` | `infra/scripts/client-version.sh bump <arg>` (edits `client/package.json`) | `client-v` | versioned (INFRA-5) |
-| `chat` | — | `chat-v` | **not versioned yet** (INFRA-8) |
+| `chat` | `infra/scripts/chat-version.sh bump <arg>` (edits `services/chat/VERSION`) | `chat-v` | versioned (INFRA-8) |
 
-When INFRA-8 lands, add the chat service's tool and file to this table (its ticket says so) — nothing else in this command changes.
+All three components are versioned. A component added later gets a row here and nothing else in this command changes.
 
 ---
 
@@ -19,7 +19,7 @@ When INFRA-8 lands, add the chat service's tool and file to this table (its tick
 
 - The first word, if it is a component name (`server`, `client`, `chat`, or `all`), selects the component(s); otherwise the selection is **all components**.
 - The remaining word (or the only word) is the bump: `minor` (the default when nothing is given), `patch`, `major`, or an explicit `X.Y.Z`. Anything else: stop and show the format.
-- **No component given (= all):** release every component whose State is *versioned*, and say in one line which were skipped as not versioned yet. Today that is the server and the client (chat is skipped).
+- **No component given (= all):** release every component whose State is *versioned*, and say in one line which were skipped as not versioned yet. Today that is the server, the client and the chat service (all three).
 - **A component named explicitly that is not versioned yet:** stop and say so (INFRA-5 / INFRA-8), changing nothing.
 - **An explicit `X.Y.Z` with more than one component selected:** stop — a version number belongs to one component; ask for `/release <component> X.Y.Z`.
 
@@ -36,7 +36,7 @@ For each selected component run its version tool with the bump from Step 1 (no b
 ## Step 4 — Branch, commit, push
 
 1. Branch: `git switch -c chore/release-<component>-<X.Y.Z>` (several components: `chore/release-<comp1>-<ver1>-<comp2>-<ver2>`).
-2. Stage the changed version files **by name** (`gradle.properties` for the server, `client/package.json` for the client) — never `git add -A`.
+2. Stage the changed version files **by name** (`gradle.properties` for the server, `client/package.json` for the client, `services/chat/VERSION` for chat) — never `git add -A`.
 3. Commit: `chore(release): <component> <X.Y.Z>` (several: `chore(release): server 0.2.0, client 0.1.0`), ending with the `Co-Authored-By` attribution line given in the session's attribution reminder.
 4. `git push -u origin <branch>`.
 

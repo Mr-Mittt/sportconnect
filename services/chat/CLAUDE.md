@@ -105,6 +105,8 @@ migrate -path migrations -database "${CHAT_DATABASE_URL}?sslmode=disable" up
 migrate -path migrations -database "${CHAT_DATABASE_URL}?sslmode=disable" down 1
 ```
 
+**Container image (INFRA-8):** `services/chat/Dockerfile` (context = this directory) builds a distroless `nonroot` image; `.github/workflows/chat-image.yml` publishes it to `ghcr.io/mr-mittt/sportconnect-chat`. The service's version is `VERSION` here (never edit it by hand: `/release chat`, or `infra/scripts/chat-version.sh bump`); the build stamps it into `main.version`. The Go version of the build image comes from `go.mod` in CI; keep the Dockerfile's `GO_VERSION` default equal to the `go` line when that changes. The image has no shell and no health check of its own: probe `GET /healthz`.
+
 **Before committing:** always run `go build ./...`, `go vet ./...`, and `go test ./...` — this
 service was originally scaffolded in an environment without a Go toolchain available, so the first
 person to touch it with `go` installed should treat a clean run of all three as a prerequisite, not

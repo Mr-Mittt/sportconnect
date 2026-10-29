@@ -1,0 +1,5 @@
+# INFRA-8: keep the build context to what `go build ./cmd/chat` needs (go.mod, go.sum, cmd, internal).
+.git
+docs
+*.md
+migrations

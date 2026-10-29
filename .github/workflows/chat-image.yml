@@ -1,0 +1,123 @@
+# Chat image — builds services/chat/Dockerfile and publishes it to GHCR (INFRA-8).
+# Same shape as server-image.yml and client-image.yml; read server-image.yml's header for the release rules:
+#
+#   pull request   -> checks the version and builds the image, pushes nothing
+#   push to master -> ordinary build: pushes :sha-<short> and :edge
+#                     RELEASE, when services/chat/VERSION has no tag chat-v<version> yet (and is not the 0.0.0
+#                     placeholder): also pushes :X.Y.Z and :latest, then creates the git tag chat-vX.Y.Z
+#   manual run     -> no inputs; the same as a push to master (the "run again" for a release whose push failed)
+#
+# A release is a merged PR that raised the version (infra/scripts/chat-version.sh bump, or /release chat).
+# What gets built and tagged is decided in infra/scripts/chat-image-plan.sh. The Go version of the build image is read from
+# the `go` line of services/chat/go.mod, so a Go bump there reaches the image without editing the Dockerfile. Tests are
+# chat-ci.yml's job and run in parallel; this workflow does not wait for them, so merge a version bump only when chat-ci
+# is green.
+#
+# Verified only on GitHub after merge (INFRA-15, section "the chat image").
+
+name: chat-image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'services/chat/**'
+      - '!services/chat/**/docs/**'
+      - 'infra/scripts/chat-image-plan.sh'
+      - 'infra/scripts/chat-version.sh'
+      - '.github/workflows/chat-image.yml'
+  pull_request:
+    paths:
+      - 'services/chat/**'
+      - '!services/chat/**/docs/**'
+      - 'infra/scripts/chat-image-plan.sh'
+      - 'infra/scripts/chat-version.sh'
+      - '.github/workflows/chat-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: chat-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write   # create the chat-vX.Y.Z git tag on a release
+  packages: write   # push to ghcr.io and prune old builds
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release decision and the version check read the chat-v* tags
+
+      - name: Check the version
+        run: infra/scripts/chat-version.sh check
+
+      - name: Plan (version and tags)
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          OWNER: ${{ github.repository_owner }}
+        run: infra/scripts/chat-image-plan.sh
+
+      - name: Go version from go.mod
+        id: go
+        run: |
+          # "go 1.25.0" -> 1.25: the golang image tag has no patch part
+          v="$(awk '/^go /{split($2,p,"."); print p[1] "." p[2]; exit}' services/chat/go.mod)"
+          [ -n "$v" ] || { echo "no go line in services/chat/go.mod" >&2; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.plan.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and push)
+        uses: docker/build-push-action@v6
+        with:
+          context: services/chat
+          file: services/chat/Dockerfile
+          platforms: linux/amd64   # the box is x86; arm64 is added with the A1 box (INFRA-12)
+          push: ${{ steps.plan.outputs.push == 'true' }}
+          tags: ${{ steps.plan.outputs.tags }}
+          provenance: false   # one plain manifest per tag, so retention can reason about versions
+          build-args: |
+            GO_VERSION=${{ steps.go.outputs.version }}
+            VERSION=${{ steps.plan.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.plan.outputs.build_date }}
+          cache-from: type=gha,scope=chat-image
+          cache-to: type=gha,mode=max,scope=chat-image
+
+      - name: Tag the release
+        if: steps.plan.outputs.create_git_tag == 'true'
+        run: |
+          git tag "chat-v${{ steps.plan.outputs.version }}" "${{ github.sha }}"
+          git push origin "chat-v${{ steps.plan.outputs.version }}"
+
+      - name: Retention (keep every release, latest, edge and the newest 10 sha builds)
+        if: steps.plan.outputs.push == 'true'
+        continue-on-error: true   # a refused delete must never fail a publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: infra/scripts/prune-ghcr-versions.sh "${{ github.repository_owner }}" sportconnect-chat 10 --delete
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### chat-image"
+            echo "version \`${{ steps.plan.outputs.version }}\`, release: ${{ steps.plan.outputs.release }}, pushed: ${{ steps.plan.outputs.push }}"
+            echo '```'
+            echo "${{ steps.plan.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

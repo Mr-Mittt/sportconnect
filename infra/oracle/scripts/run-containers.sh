@@ -11,8 +11,8 @@
 #   ~/web/{Caddyfile,kc-prod.override.yml,server.env,chat.env,dist/}   copies of infra/oracle files (env files filled in) and the client build
 #
 # The server and chat images here are MEASURING TOOLS, not the INFRA-4 / INFRA-8 deliverables: the server image is a
-# throwaway Dockerfile (server.Dockerfile), the chat image patches the Go version in services/chat/Dockerfile (committed one
-# is stale: Go 1.22 image, go.mod needs 1.25; INFRA-8 Delta).
+# throwaway Dockerfile (server.Dockerfile), the chat image is the committed services/chat/Dockerfile (INFRA-8 fixed its stale Go
+# version; the Go-tag sed in step 1 now matches nothing and is harmless).
 set -euo pipefail
 
 NET=sportconnect-dev_default

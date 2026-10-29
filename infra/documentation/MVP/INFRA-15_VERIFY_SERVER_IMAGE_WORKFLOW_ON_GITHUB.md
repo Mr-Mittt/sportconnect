@@ -27,3 +27,16 @@ INFRA-5 added `client-image.yml` (package `ghcr.io/mr-mittt/sportconnect-client`
 - **C8. Paperwork:** replace the "(not run yet)" notes for the client in `PRODUCTION_DEPLOYMENT_GUIDE.md` §15 and its change history.
 
 **Out of scope:** the box pulling the images (INFRA-6); arm64; gating a release on `server-ci`.
+
+## Added 2026-10-29 (INFRA-8): the chat image
+
+INFRA-8 added `chat-image.yml` (package `ghcr.io/mr-mittt/sportconnect-chat`, tags `chat-vX.Y.Z`, version in `services/chat/VERSION`, `0.0.0` placeholder). It was verified locally only (version and plan scripts against a scratch repo, `actionlint`, real image builds, a boot together with the server image). Repeat steps 1 and 3 to 7 above for chat, once INFRA-8 is on `master`; they differ only in the names:
+
+- **CH1. The merge run** of INFRA-8 (the version is `0.0.0`): an ordinary build, `:sha-<short>` and `:edge` pushed to `sportconnect-chat`, no tag. Check the package, its visibility (private) and its link to the repository.
+- **CH2. Pull and run.** Pull `:edge`: the labels show version `0.0.0+<sha7>`, the revision, the source, the title and the chat description; `docker top` shows UID 65532. Boot it as INFRA-8 did locally: the environment of `infra/oracle/chat.env.example`, Postgres with the four chat migrations applied, a server it can reach (the first start asks the monolith to sync and exits if it is not ready), and `MONOLITH_BASE_URL`/`INTERNAL_SERVICE_SECRET` matching. Expect the log line `chat service listening` with the version, and 200 from `/healthz`.
+- **CH3. A pull-request run** touching `services/chat/**` (not only docs): the job runs the version check and builds without pushing and without a GHCR login. A PR touching only `services/chat/docs/**` must not start the workflow (`chat-ci` uses the same filter).
+- **CH4. The bad-version check, CH5. the first release** (`/release chat` bumps `0.0.0` to `0.1.0`; expect `:0.1.0`, `:latest`, the tag `chat-v0.1.0` created last; a bare `/release` must now bump the server, the client and chat on one branch), **CH6. the re-run and the master-only refusal, CH7. retention** (the prune step for `sportconnect-chat`).
+- **CH8. Paperwork:** replace the "(not run yet)" notes for chat in `PRODUCTION_DEPLOYMENT_GUIDE.md` section 15 and its change history.
+- **CH9. The Go version step.** In a real run the "Go version from go.mod" step prints `1.25` and the build uses it; at the next Go bump in `go.mod`, confirm the image builds without touching the Dockerfile.
+
+**Out of scope:** the box pulling the image (INFRA-6); arm64; gating a release on `chat-ci`.

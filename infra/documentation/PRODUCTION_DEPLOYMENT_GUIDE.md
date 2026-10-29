@@ -140,7 +140,7 @@ Postgres password `sa` (one superuser shared by the app, chat and Keycloak), Rab
 
 Terminate the instance and tick "permanently delete the boot volume"; remove any reserved public IP; revoke the Brevo key if the whole deployment is ending; delete DNS records only if the domain should stop pointing at Oracle. Update the dynamic group rule if another box takes over.
 
-## 15. The server and client images and releases (INFRA-4, INFRA-5)
+## 15. The server, client and chat images and releases (INFRA-4, INFRA-5, INFRA-8)
 
 The server image is built from `server/Dockerfile` and published to `ghcr.io/mr-mittt/sportconnect-server` by `.github/workflows/server-image.yml`. **The box does not use it yet**: it still builds from a jar with `infra/oracle/scripts/run-containers.sh` until INFRA-6 (pull-based deploy) switches it. What exists today:
 
@@ -156,10 +156,21 @@ The server image is built from `server/Dockerfile` and published to `ghcr.io/mr-
 
 Same scheme as the server, with its own version and package: `client/Dockerfile` -> `ghcr.io/mr-mittt/sportconnect-client`, built by `.github/workflows/client-image.yml`. **The box does not use it yet** (INFRA-6); today the client is still built on a computer and copied (section 3).
 
-- **Version:** `version` in `client/package.json` (`0.0.0` is the placeholder). Tags `client-vX.Y.Z`. Never edit it by hand: `/release client` (or `/release`, which bumps the server and the client together) or `infra/scripts/client-version.sh bump [minor|patch|major|X.Y.Z]`.
+- **Version:** `version` in `client/package.json` (`0.0.0` is the placeholder). Tags `client-vX.Y.Z`. Never edit it by hand: `/release client` (or `/release`, which bumps the server, the client and chat together) or `infra/scripts/client-version.sh bump [minor|patch|major|X.Y.Z]`.
 - **Release:** merge the bump PR (when `client-ci` is green). `client-image` pushes `:X.Y.Z`, `:latest`, `:edge`, `:sha-<short>` and creates the tag last; other client merges push `:sha-<short>` and `:edge`. A failed release is re-run with Actions, client-image, "Run workflow" on `master`. Retention is the server's (every release, `latest`, `edge`, newest 10 `sha-*`).
 - **The image holds the files only.** `docker run --rm -v web:/srv ghcr.io/mr-mittt/sportconnect-client:<tag>` replaces the contents of the volume `web`; Caddy mounts that volume on `/srv` read-only and picks the new files up without a restart. The Keycloak URL is baked in (`https://auth.yoursport.vn`), so one image is for one environment; to build one by hand: `docker build -f client/Dockerfile --build-arg VITE_KEYCLOAK_URL=<url> client`.
 - (Not run yet: the first push, release, tag and retention on GitHub, INFRA-15; the pull and the volume step on the box, INFRA-6.)
+
+### The chat image (INFRA-8)
+
+Same scheme as the server and the client, with its own version and package: `services/chat/Dockerfile` -> `ghcr.io/mr-mittt/sportconnect-chat`, built by `.github/workflows/chat-image.yml`. **The box does not use it yet** (INFRA-6); today `run-containers.sh` builds the committed Dockerfile on the box.
+
+- **Version:** `services/chat/VERSION` (`0.0.0` is the placeholder). Tags `chat-vX.Y.Z`. Never edit it by hand: `/release chat` (or `/release`, which bumps all three) or `infra/scripts/chat-version.sh bump [minor|patch|major|X.Y.Z]`.
+- **Release:** merge the bump PR (when `chat-ci` is green). `chat-image` pushes `:X.Y.Z`, `:latest`, `:edge`, `:sha-<short>` and creates the tag last; other chat merges push `:sha-<short>` and `:edge`. A failed release is re-run with Actions, chat-image, "Run workflow" on `master`. Retention is the server's (every release, `latest`, `edge`, newest 10 `sha-*`).
+- **The image:** a static Go binary on `distroless/static-debian12:nonroot` (UID 65532, port 8090, 5 MB), environment as in `infra/oracle/chat.env.example`. It has no shell, so no in-image health check; `GET /healthz` answers 200 and is probed from outside. The first start asks the server to sync, so start the server first.
+- **Which version is running?** The `org.opencontainers.image.version` label, or the `version` field of the `chat service listening` log line.
+- **The Go version of the build** is read from `go.mod` by the workflow; the Dockerfile's `GO_VERSION` default only serves a plain local `docker build` and should equal the `go` line of `go.mod`.
+- (Not run yet: the first push, release, tag and retention on GitHub, INFRA-15; the pull and start on the box, INFRA-6.)
 
 ## Change history
 
@@ -168,3 +179,4 @@ Same scheme as the server, with its own version and package: `client/Dockerfile`
 | 2026-10-28 | INFRA-3 | Guide created from the INFRA-12 runbook and the INFRA-3 rebuild (two runs, restore, backups, Brevo, admin password script). |
 | 2026-10-28 | INFRA-4 | Added section 15: the server image, the version scheme and how to cut a release (a bump PR; merging it releases; the `/release` command does the bump, commit and push). The box does not pull it yet (INFRA-6); the GHCR push, release dispatch and retention are not run yet. |
 | 2026-10-28 | INFRA-5 | Added the client image to section 15: `client/Dockerfile`, the client's own version in `client/package.json` and how to release it (`/release client`). The box does not pull it yet (INFRA-6); the GHCR push, release and retention are not run yet (INFRA-15). |
+| 2026-10-29 | INFRA-8 | Added the chat image to section 15: `services/chat/Dockerfile` fixed (Go version from `go.mod`, distroless `nonroot`), the chat version in `services/chat/VERSION` and how to release it (`/release chat`). The box does not pull it yet (INFRA-6); the GHCR push, release and retention are not run yet (INFRA-15). |

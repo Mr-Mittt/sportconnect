@@ -26,6 +26,10 @@ import (
 	"github.com/Mr-Mittt/sportconnect/services/chat/internal/ws"
 )
 
+// version is the build's version, set by the image build with -ldflags "-X main.version=<version>" (INFRA-8); a plain
+// `go run` or `go build` reports "dev".
+var version = "dev"
+
 func main() {
 	logger := platform.NewLogger()
 
@@ -107,7 +111,7 @@ func main() {
 		_ = server.Shutdown(shutdownCtx)
 	}()
 
-	logger.Info("chat service listening", "addr", cfg.HTTPAddr)
+	logger.Info("chat service listening", "addr", cfg.HTTPAddr, "version", version)
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("server failed", "error", err)
 		os.Exit(1)
