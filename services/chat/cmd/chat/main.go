@@ -42,6 +42,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// The image brings its own schema (CHAT-22): applied before the pool opens and before anything reads the database,
+	// so the sync_state check below sees the freshly created (or already current) tables.
+	if cfg.MigrateOnStart {
+		if err := db.Migrate(cfg.DatabaseURL, logger); err != nil {
+			logger.Error("failed to migrate chat database", "error", err)
+			os.Exit(1)
+		}
+	}
+
 	pool, err := db.NewPool(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("failed to connect to chat database", "error", err)

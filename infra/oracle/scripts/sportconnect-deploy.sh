@@ -14,7 +14,8 @@
 # Login (once, a classic PAT with only read:packages, read from stdin so it never lands in a command line or history):
 #   docker login ghcr.io -u <github user> --password-stdin
 #
-# The migrations of the server run inside it at start-up (Liquibase); chat's will too (CHAT-22). A container put back
+# The migrations of the server run inside it at start-up (Liquibase); chat's do too (CHAT-22, embedded in the chat binary;
+# the first start on a box whose chat database was built by hand rebuilds that database). A container put back
 # after a failure does not undo a migration the new version already ran (INFRA-17).
 # NOT run on the box yet (INFRA-6 conditional). The decisions are tested locally against a throwaway registry.
 set -uo pipefail

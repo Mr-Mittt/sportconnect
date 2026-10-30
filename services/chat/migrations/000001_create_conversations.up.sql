@@ -5,6 +5,13 @@
 -- external_group_id/dm_key use zero-value semantics ("not applicable" for
 -- the other Type), not NULL-checked pointer scanning, on the Go side — see
 -- internal/conversation/conversation.go's Conversation struct comment.
+-- CHAT-22: the schema is applied by the service at startup. A database that already has these tables but no
+-- schema_migrations record (the Oracle box, built by hand with psql) is rebuilt from scratch on its first start, so it
+-- ends up with exactly the shape the four migrations define; its chat data is lost (test data, accepted). On an empty
+-- database these drops do nothing, and a database already recorded at version 1 or later never runs this file again.
+DROP TABLE IF EXISTS chat_messages, conversation_participants, conversations, group_members_cache, friendships_cache,
+    user_profiles_cache, sync_state CASCADE;
+
 CREATE TABLE conversations (
     id BIGSERIAL PRIMARY KEY,
     type TEXT NOT NULL CHECK (type IN ('GROUP', 'DIRECT')),

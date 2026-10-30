@@ -49,7 +49,6 @@ CHAT-15, CHAT-16 only from the original four. `BACKLOG_V1.md` is no longer empty
 | 3 | [CHAT-12](MVP/CHAT-12_QA_ACCEPTANCE_CHECKLIST.md) | QA / acceptance checklist (chat) | `TODO` |
 | 4 | [CHAT-20](MVP/CHAT-20_RESILIENT_CONVERSATION_CREATION.md) | Resilient conversation creation: no spurious 500 on a first-open race, failures logged in detail, and a chat box that never shows "could not create" (retry on first send / revisit) | `TODO` |
 | 5 | [CHAT-21](MVP/CHAT-21_TRIM_THE_DOMAIN_EVENTS_STREAM.md) | Trim the `sportconnect:domain-events` Redis stream: it is never trimmed, so it grows without bound; cap it without losing events chat has not applied yet | `TODO` |
-| 6 | [CHAT-22](MVP/CHAT-22_APPLY_MIGRATIONS_AT_STARTUP_EMBEDDED_IN_THE_IMAGE.md) | Apply the schema migrations at startup, embedded in the binary (`go:embed` + the golang-migrate library, same `schema_migrations` table as the CLI), so the chat image brings its own schema; INFRA-6 depends on it | `TODO` |
 
 ---
 
@@ -57,17 +56,18 @@ CHAT-15, CHAT-16 only from the original four. `BACKLOG_V1.md` is no longer empty
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [CHAT-19](MVP/CHAT-19_DEV_PORT_CLASH_WITH_KEYCLOAK.md) | Chat service default port :8081 clashes with the dev Keycloak (and the Vite chat proxy default) | `DONE` |
-| 2 | [CHAT-18](MVP/CHAT-18_UNKNOWN_CONVERSATION_RETURNS_500.md) | An unknown conversation id answers 500 instead of 403/404 (found during CHAT-17) | `DONE` |
-| 3 | [CHAT-17](MVP/CHAT-17_JWKS_TOKEN_VERIFIER.md) | Verify Keycloak RS256 tokens by JWKS instead of the shared HMAC secret; reads only `sub`; the accepted answer to A20 for chat | `DONE` |
-| 4 | [CHAT-13](MVP/CHAT-13_EDIT_DELETE_MESSAGES.md) | Editing and deleting messages | `DONE` |
-| 5 | [CHAT-15](MVP/CHAT-15_TYPING_INDICATORS.md) | Typing indicators | `DONE` |
-| 6 | [CHAT-10](MVP/CHAT-10_E2E_MSW_HANDLERS.md) | E2E + MSW handlers for chat | `DONE` |
-| 7 | [CHAT-5](MVP/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md) | Repository/cache integration tests (DB-backed) | `DONE` |
-| 8 | [CHAT-6](MVP/CHAT-6_WEBSOCKET_SYNC_RESILIENCE_TESTS.md) | WebSocket broadcast + sync resilience tests | `DONE` |
-| 9 | [CHAT-7](MVP/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md) | Chat API client + data hooks scaffold (client) | `DONE` |
-| 10 | [CHAT-8](MVP/CHAT-8_WIRE_GROUP_CHAT_TAB.md) | Wire `GroupChatTab` to the real chat service | `DONE` |
-| 11 | [CHAT-9](MVP/CHAT-9_WIRE_FRIEND_CHAT_PANEL.md) | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `DONE` |
+| 1 | [CHAT-22](MVP/CHAT-22_APPLY_MIGRATIONS_AT_STARTUP_EMBEDDED_IN_THE_IMAGE.md) | Apply the schema migrations at startup, embedded in the binary (`go:embed` + the golang-migrate library, same `schema_migrations` table as the CLI), so the chat image brings its own schema; INFRA-6 depends on it | `DONE` |
+| 2 | [CHAT-19](MVP/CHAT-19_DEV_PORT_CLASH_WITH_KEYCLOAK.md) | Chat service default port :8081 clashes with the dev Keycloak (and the Vite chat proxy default) | `DONE` |
+| 3 | [CHAT-18](MVP/CHAT-18_UNKNOWN_CONVERSATION_RETURNS_500.md) | An unknown conversation id answers 500 instead of 403/404 (found during CHAT-17) | `DONE` |
+| 4 | [CHAT-17](MVP/CHAT-17_JWKS_TOKEN_VERIFIER.md) | Verify Keycloak RS256 tokens by JWKS instead of the shared HMAC secret; reads only `sub`; the accepted answer to A20 for chat | `DONE` |
+| 5 | [CHAT-13](MVP/CHAT-13_EDIT_DELETE_MESSAGES.md) | Editing and deleting messages | `DONE` |
+| 6 | [CHAT-15](MVP/CHAT-15_TYPING_INDICATORS.md) | Typing indicators | `DONE` |
+| 7 | [CHAT-10](MVP/CHAT-10_E2E_MSW_HANDLERS.md) | E2E + MSW handlers for chat | `DONE` |
+| 8 | [CHAT-5](MVP/CHAT-5_REPOSITORY_CACHE_INTEGRATION_TESTS.md) | Repository/cache integration tests (DB-backed) | `DONE` |
+| 9 | [CHAT-6](MVP/CHAT-6_WEBSOCKET_SYNC_RESILIENCE_TESTS.md) | WebSocket broadcast + sync resilience tests | `DONE` |
+| 10 | [CHAT-7](MVP/CHAT-7_CHAT_API_CLIENT_AND_DATA_HOOKS_SCAFFOLD.md) | Chat API client + data hooks scaffold (client) | `DONE` |
+| 11 | [CHAT-8](MVP/CHAT-8_WIRE_GROUP_CHAT_TAB.md) | Wire `GroupChatTab` to the real chat service | `DONE` |
+| 12 | [CHAT-9](MVP/CHAT-9_WIRE_FRIEND_CHAT_PANEL.md) | Wire `FriendChatPanel` to the real chat service (1:1 DMs) | `DONE` |
 
 ---
 

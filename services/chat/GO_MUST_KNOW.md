@@ -112,8 +112,10 @@ service requires you to have.
    `server/src/main/resources/application-dev.yml` bakes in for local runs of the monolith — you
    don't need to export anything on that side either, as long as it's running under the default
    "dev" Spring profile.
-4. **Apply database migrations.** This needs the separate `golang-migrate` CLI — it's a different
-   tool from the `go` command itself, and isn't something `go build` installs for you:
+4. **Database migrations.** Nothing to do: the service applies them itself when it starts (step 5), so a
+   fresh database gets its schema from `go run ./cmd/chat`. You only need the separate `golang-migrate`
+   CLI to roll back (`down 1`) — it's a different tool from the `go` command itself, and isn't something
+   `go build` installs for you:
    ```bash
    # install once, anywhere:
    go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
@@ -121,7 +123,7 @@ service requires you to have.
    # then, from services/chat/ (the ?sslmode=disable is only needed for migrate's own
    # driver, which defaults to requiring SSL — the service itself doesn't need this
    # in CHAT_DATABASE_URL, see README.md's Configuration section):
-   migrate -path migrations -database "${CHAT_DATABASE_URL}?sslmode=disable" up
+   migrate -path migrations -database "${CHAT_DATABASE_URL}?sslmode=disable" down 1
    ```
    `go install` places the resulting binary in `$(go env GOPATH)/bin`. If `migrate` isn't found
    afterward, that directory isn't on your `PATH` yet — run `go env GOPATH` to see exactly where it

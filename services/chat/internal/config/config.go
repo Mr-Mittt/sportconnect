@@ -44,6 +44,10 @@ type Config struct {
 	// CORSAllowedOrigin mirrors Spring's SecurityConfig CORS allow-list — the
 	// chat service needs its own, since the client talks to it directly.
 	CORSAllowedOrigin string
+
+	// MigrateOnStart makes the service apply its embedded schema migrations before it listens (CHAT-22). On by default;
+	// CHAT_MIGRATE_ON_START=false (or 0) turns it off for a database whose schema is managed elsewhere.
+	MigrateOnStart bool
 }
 
 // Load reads configuration from the environment. Required values with no safe
@@ -73,6 +77,12 @@ func Load() (Config, error) {
 		MonolithBaseURL:   getEnv("MONOLITH_BASE_URL", "http://localhost:8080"),
 		CORSAllowedOrigin: getEnv("CHAT_CORS_ALLOWED_ORIGIN", "http://localhost:5173"),
 		KeycloakIssuerURI: getEnv("KEYCLOAK_ISSUER_URI", "http://localhost:8081/realms/sportconnect"),
+	}
+	switch getEnv("CHAT_MIGRATE_ON_START", "true") {
+	case "false", "0":
+		cfg.MigrateOnStart = false
+	default:
+		cfg.MigrateOnStart = true
 	}
 	cfg.KeycloakJWKSURI = getEnv("KEYCLOAK_JWK_SET_URI", cfg.KeycloakIssuerURI+"/protocol/openid-connect/certs")
 
