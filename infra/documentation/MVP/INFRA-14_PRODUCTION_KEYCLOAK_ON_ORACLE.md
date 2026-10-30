@@ -48,3 +48,13 @@ Decision (owner, 2026-10-27), in two steps:
 2. **In this ticket:** move them to **OCI Vault** with an instance principal (dynamic group + IAM policy), a fetch script that writes a tmpfs env file before the containers start, rotation by new secret version. The Vault free allowance was **not confirmed**; check it before committing to it. Fallback if it is billed or too fiddly: SOPS + age.
 
 What the INFRA-12 sandbox left at dev grade, to be fixed here: Postgres password `sa` and one superuser shared by the app, chat and Keycloak; RabbitMQ `guest/guest`; Redis without a password; the Brevo SMTP key and the Keycloak admin password were pasted in a chat and must be rotated; the production redirect URIs, credentials-client secret, SMTP settings and the master realm `frontendUrl` were applied to the live realm through the admin API only (scripts in `infra/oracle/scripts/set-*.sh`, not in `sportconnect-realm.json`); no backups of the database, Keycloak or the Caddy certificates (`caddy_data`); registration is open. Reference material: `infra/oracle/`, `INFRA-12_ORACLE_SANDBOX_RUNBOOK.md`.
+
+## Delta 2026-10-30 (INFRA-6 box checks): the GHCR token is a Docker login, not an env file
+
+The "GHCR token" named in the 2026-10-27 delta above is, as built by INFRA-6, a **`docker login ghcr.io`** done once by hand on the box with a classic token that has only `read:packages` (guide section 16, "Once: the box"). It lives in `~/.docker/config.json` (mode 600), is read by `sportconnect-deploy` (`docker buildx imagetools inspect`, `docker pull`), and is not read by any container or `env_file`. The env files are in `~/web`, not `/etc/sportconnect/` as step 1 of that delta planned.
+
+For this ticket, when the secrets move to OCI Vault (or SOPS + age):
+- Include this token. The fetch step has to end in a `docker login` (stdin, no command line), so it runs before `sportconnect-deploy` and again after a rotation; it is not a tmpfs env file like the others.
+- The classic token has an expiry. Until it is automated, an expired token makes `sportconnect-deploy` fail on the registry read or the pull; add its expiry date to `SECRETS.md` and say how to rotate it (new token, same login command).
+- Alternative that removes the token: make the three GHCR packages public (they hold no secrets, the env files stay on the box). That exposes the compiled server, chat and client, so it is a decision for the owner, not assumed here.
+- Until then the manual login stays; no `set-ghcr-login.sh` is planned (owner decision, 2026-10-30): it would be thrown away when this ticket lands.

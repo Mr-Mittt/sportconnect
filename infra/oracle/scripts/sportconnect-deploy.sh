@@ -17,7 +17,9 @@
 # The migrations of the server run inside it at start-up (Liquibase); chat's do too (CHAT-22, embedded in the chat binary;
 # the first start on a box whose chat database was built by hand rebuilds that database). A container put back
 # after a failure does not undo a migration the new version already ran (INFRA-17).
-# NOT run on the box yet (INFRA-6 conditional). The decisions are tested locally against a throwaway registry.
+# Run on the box on 2026-10-30 (INFRA-6, INFRA-15): plan, pull, the first deploy over the sandbox containers, the hardened
+# flags on the real images and the up-to-date run. Not run on the box yet: the failure path and the restore (tested only
+# locally against a throwaway registry).
 set -uo pipefail
 
 # Everything below can be overridden from the environment; the defaults are the production box.
