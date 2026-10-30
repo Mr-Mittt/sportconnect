@@ -28,7 +28,7 @@ Related files: the reference files and scripts are in `infra/oracle/`; the resou
 **Per box**
 5. **Create the instance.** Compute → Instances → Create. Shape `VM.Standard.E3.Flex`, 2 OCPU / 12 GB (Always Free A1 was out of capacity; revisit under INFRA-12). **Pick the image after the shape and read that it says Ubuntu 24.04** (it reset to 20.04 once). Subnet: the public one, **public IPv4 on**. Boot volume 96 to 100 GB. Upload or generate the SSH key and **keep the private key outside the repo**. After creation, note the public IP.
 6. **Point the dynamic group at it.** Instance details → copy the OCID. Edit `sportconnect-box` → matching rule `ALL {instance.id = '<instance OCID>'}`. **A rebuilt box has a new OCID, so this step repeats every time.**
-7. First contact: `ssh -i <key> ubuntu@<ip>`, accept the host key, `cat /etc/os-release` must say 24.04 and `uname -m` x86_64.
+7. First contact: `ssh -i <key> ubuntu@<ip>`, accept the host key, `cat /etc/os-release` must say 24.04 and `uname -m` x86_64. Tip: put the address and key in an SSH alias in `~/.ssh/config` on your computer (`Host sc-box`, `HostName <ip>`, `User ubuntu`, `IdentityFile <key>`, `IdentitiesOnly yes`; the file must be named exactly `config`, no `.txt`), then `ssh sc-box`, `scp file sc-box:~/` and `ssh -L … sc-box` all work without the key and address. The file stays on your computer; nothing of it is committed.
 
 ## 2. DNS (iNET)
 
@@ -218,6 +218,30 @@ Deploy server? [y/N]
 - The first run on a box that still has the sandbox's locally built `sc-server` and `sc-chat` shows their version as `unknown (local build)` and replaces them; the old ones are the restore target for that run.
 - **Chat's schema:** the chat image carries its migrations and applies them when it starts (CHAT-22), like the server's Liquibase. The box's chat database was built by hand with `psql`, so it has the tables but no `schema_migrations` record: the **first start of the first chat image that has CHAT-22 rebuilds it**. Migration `000001` drops the chat tables (messages, conversations, participants, the sync caches, `sync_state`) and creates them again, so the box's chat history is lost (it is test data, accepted); the cold-start bootstrap refills the caches from the server. Nothing to seed. A brand new box has no chat tables, so nothing is dropped. Afterwards check: `docker exec sportconnect-dev-postgres-1 psql -U postgres -d sportconnect_chat_dev -c "select * from schema_migrations" -c "\d chat_messages"` shows `4 | f` and the columns `edited_at` and `deleted_at`. `CHAT_MIGRATE_ON_START=false` in `chat.env` turns the migration off. A failed migration makes the container exit, the health probe fails and the deploy puts the previous container back; the database stays marked dirty until fixed by hand. (Run on the box 2026-10-30: `schema_migrations` `4 | f`, `edited_at` and `deleted_at` present, the log shows `migrations applied` version 4.)
 
+### After a deploy: the checks (run on 2026-10-30, INFRA-15)
+
+Before the first deploy (both read-only):
+
+1. **The box can read the registry.** `docker buildx imagetools inspect ghcr.io/mr-mittt/sportconnect-chat:prod --format '{{.Manifest.Digest}}'` prints the digest that the promote's "Move prod" log ended with. A "denied" or "unauthorized" means the login (step 2 above) or the token's `read:packages` is wrong.
+2. **The plan.** `sportconnect-deploy --plan` lists the three components. On a box with the sandbox's own builds the running column shows `unknown (local build)` or the base image's label (the sandbox server showed `26.04`, the Ubuntu release label of its base image); every row says `DEPLOY`.
+
+After the deploy, on the box:
+
+3. **Containers.** `docker ps --format '{{.Names}} {{.Image}} {{.Status}}' | grep -E 'sc-(server|chat)'`: `sc-server` is `Up … (healthy)`, `sc-chat` is `Up` (the chat image has no health check of its own). The image column equals the first 12 characters of the digest that was promoted (it did on 2026-10-30).
+4. **Hardened flags on the real images.** `docker inspect sc-server sc-chat --format '{{.Name}} {{.HostConfig.CapDrop}} {{.HostConfig.SecurityOpt}} {{.HostConfig.ReadonlyRootfs}}'` prints `[ALL] [no-new-privileges] true` for both, and both are running.
+5. **Chat schema.** `docker exec sportconnect-dev-postgres-1 psql -U postgres -d sportconnect_chat_dev -c "select * from schema_migrations" -c "\d chat_messages"`: `4 | f`, and the columns `edited_at` and `deleted_at`.
+6. **Chat log.** `docker logs sc-chat 2>&1 | head -8`: `migrations applied` (`schema is up to date` on a later start) with version 4, then `chat service listening` with the promoted version, and no `ERROR` line.
+7. **Deploy log.** `tail -20 ~/web/deploy.log`: a `START` line and an `OK` line for the run, no restore.
+8. **Up to date.** `sportconnect-deploy --plan` again: all rows `unchanged` with real versions, and "everything is up to date".
+
+From your computer:
+
+9. **The outside checks of section 10**, then sign in with a test user and send a chat message.
+
+Not covered by a recorded run yet: the failure path. To test it on a release that has something to deploy, break one value in a copy of the component's env file, run `sportconnect-deploy`, and check that everything the run changed is put back and the report reads right.
+
+**Updating the command later.** To change only the script, no bundle is needed: `scp` the one file to the box, `sudo install -m 0755 ~/sportconnect-deploy.sh /usr/local/bin/sportconnect-deploy`, then `sportconnect-deploy --version` must equal `sha256sum infra/oracle/scripts/sportconnect-deploy.sh` on your computer. Check the repo file has LF line endings first (`file`).
+
 ## Change history
 
 | Date | Ticket | Change |
@@ -230,3 +254,4 @@ Deploy server? [y/N]
 | 2026-10-29 | INFRA-6 (fix) | `infra/scripts/promote-apply.sh` copies the manifest through the registry API instead of `docker buildx imagetools create`: the first real promote (server `0.1.0`) failed its digest check because `create` wrapped the image in a new manifest list (`:prod` became `777a3f...`, not `e2d088...`). Tested against a throwaway registry (single-platform image, manifest list, missing digest); the GHCR token step and the rerun of the promote are not run yet. |
 | 2026-10-30 | CHAT-22 | Chat's schema is applied by the chat service at start-up (migrations embedded in the binary). Replaced the "seed `schema_migrations` once" step in section 16: the first start on the existing box rebuilds the chat database through `000001`'s drops (data lost, accepted), with a check afterwards. Verified locally on a throwaway database with the real image; the first start on the box is not run yet. |
 | 2026-10-30 | INFRA-6 (box) | First run on the box: `sportconnect-deploy` installed (checksum matched), GHCR login, `--plan`, the first deploy over the sandbox containers (53 s, no restore), hardened flags confirmed on the real server and chat images, the up-to-date run, the site checks of section 10 and a chat message. Added the token-expiry note to the login step. Still not run: the deliberate-failure restore on the box. |
+| 2026-10-30 | INFRA-6 (checks) | Section 16: added "After a deploy: the checks" (registry read, plan, containers, hardened flags, chat schema, logs, deploy log, up to date, outside checks), how to update only the deploy command, and an SSH alias tip in the first-contact step. |
