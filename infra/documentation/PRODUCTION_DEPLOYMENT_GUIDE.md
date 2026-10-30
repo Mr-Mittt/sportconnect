@@ -28,7 +28,7 @@ Related files: the reference files and scripts are in `infra/oracle/`; the resou
 **Per box**
 5. **Create the instance.** Compute → Instances → Create. Shape `VM.Standard.E3.Flex`, 2 OCPU / 12 GB (Always Free A1 was out of capacity; revisit under INFRA-12). **Pick the image after the shape and read that it says Ubuntu 24.04** (it reset to 20.04 once). Subnet: the public one, **public IPv4 on**. Boot volume 96 to 100 GB. Upload or generate the SSH key and **keep the private key outside the repo**. After creation, note the public IP.
 6. **Point the dynamic group at it.** Instance details → copy the OCID. Edit `sportconnect-box` → matching rule `ALL {instance.id = '<instance OCID>'}`. **A rebuilt box has a new OCID, so this step repeats every time.**
-7. First contact: `ssh -i <key> ubuntu@<ip>`, accept the host key, `cat /etc/os-release` must say 24.04 and `uname -m` x86_64.
+7. First contact: `ssh -i <key> ubuntu@<ip>`, accept the host key, `cat /etc/os-release` must say 24.04 and `uname -m` x86_64. Tip: put the address and key in an SSH alias in `~/.ssh/config` on your computer (`Host sc-box`, `HostName <ip>`, `User ubuntu`, `IdentityFile <key>`, `IdentitiesOnly yes`; the file must be named exactly `config`, no `.txt`), then `ssh sc-box`, `scp file sc-box:~/` and `ssh -L … sc-box` all work without the key and address. The file stays on your computer; nothing of it is committed.
 
 ## 2. DNS (iNET)
 
@@ -140,14 +140,14 @@ Terminate the instance and tick "permanently delete the boot volume"; remove any
 
 ## 15. The server, client and chat images and releases (INFRA-4, INFRA-5, INFRA-8)
 
-The server image is built from `server/Dockerfile` and published to `ghcr.io/mr-mittt/sportconnect-server` by `.github/workflows/server-image.yml`. The box deploys it with `sportconnect-deploy` (section 16, INFRA-6, not run yet). What exists:
+The server image is built from `server/Dockerfile` and published to `ghcr.io/mr-mittt/sportconnect-server` by `.github/workflows/server-image.yml`. The box deploys it with `sportconnect-deploy` (section 16, INFRA-6; first deploy on 2026-10-30). What exists:
 
 - **Version:** one monolith version, `version` in the root `gradle.properties` (`0.0.0` is the placeholder before the first release). Never edit it by hand.
 - **Every server-affecting merge to `master`** is an ordinary build: it pushes `:sha-<short>` and `:edge`, with the jar stamped `<version>+<short sha>`.
 - **Cut a release:** `/release` in Claude Code does the steps below (branch, bump, commit, push; `/release patch`, `/release server 1.0.0`; no argument = minor for every versioned component) and hands over the PR link. By hand: `git switch -c chore/server-<X.Y.Z> master`, `infra/scripts/server-version.sh bump` (raises the minor version; `patch`, `major` or an explicit `X.Y.Z` also work, and it refuses a repeat, a downgrade or anything not above the latest `server-v*` tag), commit `chore(release): server X.Y.Z`, open the PR, merge it when `server-ci` is green. On the merge the workflow sees that the tag `server-vX.Y.Z` does not exist, pushes `:X.Y.Z` and `:latest` (plus `:edge` and `:sha-<short>`) and creates the tag last. Nothing to click in GitHub. Every release, a patch included, is a bump PR. (Not run yet: first release after INFRA-4 merges, INFRA-15.)
 - **A release whose push failed:** no tag was created, so Actions, server-image, "Run workflow" on `master` (no inputs) releases it.
 - **Which version is an image or container?** `docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' <image-or-container>`, or the first log line (`Starting SportConnectApplication v<version>`). `0.1.0` is the release; `0.1.0+abc1234` is a later master build.
-- **Pulling a private image on the box** needs a classic token with only `read:packages`; the login is described in section 16 (not run yet).
+- **Pulling a private image on the box** needs a classic token with only `read:packages`; the login is described in section 16 (done on the box on 2026-10-30).
 - **Retention:** every release and `latest`/`edge` are kept, plus the newest 10 `sha-*` builds; older ones are deleted by the workflow. (Not run yet; whether the workflow's token may delete versions of a user-owned package is unverified.)
 
 ### The client image (INFRA-5)
@@ -157,7 +157,7 @@ Same scheme as the server, with its own version and package: `client/Dockerfile`
 - **Version:** `version` in `client/package.json` (`0.0.0` is the placeholder). Tags `client-vX.Y.Z`. Never edit it by hand: `/release client` (or `/release`, which bumps the server, the client and chat together) or `infra/scripts/client-version.sh bump [minor|patch|major|X.Y.Z]`.
 - **Release:** merge the bump PR (when `client-ci` is green). `client-image` pushes `:X.Y.Z`, `:latest`, `:edge`, `:sha-<short>` and creates the tag last; other client merges push `:sha-<short>` and `:edge`. A failed release is re-run with Actions, client-image, "Run workflow" on `master`. Retention is the server's (every release, `latest`, `edge`, newest 10 `sha-*`).
 - **The image holds the files only.** `docker run --rm -v ~/web/dist:/srv ghcr.io/mr-mittt/sportconnect-client@<digest>` replaces the contents of `~/web/dist`; Caddy has that folder mounted on `/srv` read-only and picks the new files up without a restart or a re-mount (`sportconnect-deploy` does this step). The Keycloak URL is baked in (`https://auth.yoursport.vn`), so one image is for one environment; to build one by hand: `docker build -f client/Dockerfile --build-arg VITE_KEYCLOAK_URL=<url> client`.
-- (Not run yet: the first push, release, tag and retention on GitHub, INFRA-15; the pull and the file step on the box, INFRA-6.)
+- (Not run yet: the first push, release, tag and retention on GitHub, INFRA-15; the pull and the file step on the box ran on 2026-10-30, INFRA-6.)
 
 ### The chat image (INFRA-8)
 
@@ -168,11 +168,11 @@ Same scheme as the server and the client, with its own version and package: `ser
 - **The image:** a static Go binary on `distroless/static-debian12:nonroot` (UID 65532, port 8090, 5 MB), environment as in `infra/oracle/chat.env.example`. It has no shell, so no in-image health check; `GET /healthz` answers 200 and is probed from outside. The first start asks the server to sync, so start the server first.
 - **Which version is running?** The `org.opencontainers.image.version` label, or the `version` field of the `chat service listening` log line.
 - **The Go version of the build** is read from `go.mod` by the workflow; the Dockerfile's `GO_VERSION` default only serves a plain local `docker build` and should equal the `go` line of `go.mod`.
-- (Not run yet: the first push, release, tag and retention on GitHub, INFRA-15; the pull and start on the box, INFRA-6; the chat image applies its own migrations at start-up since CHAT-22, first start on the box not run yet.)
+- (Not run yet: the first push, release, tag and retention on GitHub, INFRA-15; the pull and start on the box ran on 2026-10-30, INFRA-6, including the first start of the chat image that migrates itself, CHAT-22.)
 
 ## 16. Promoting and deploying (INFRA-6)
 
-The box runs what the `prod` tag of each image points at. Two steps, both by hand, nothing automatic: **promote** (GitHub: point `prod` at a release) and **deploy** (the box: pull what `prod` points at and restart). Everything below is **not run yet**; the decisions are tested locally (a throwaway registry and stand-in containers) and the GitHub and box parts are the conditionals in INFRA-15.
+The box runs what the `prod` tag of each image points at. Two steps, both by hand, nothing automatic: **promote** (GitHub: point `prod` at a release) and **deploy** (the box: pull what `prod` points at and restart). Run for real on 2026-10-30 (INFRA-15): the promote of the three components, the GHCR login, the first deploy over the sandbox containers, the hardened flags on the real images and the up-to-date run. **Not run yet:** the failure path on the box (a deliberate failure and the restore; it needs a second version to deploy, so it waits for the next release) and the Caddy probe failing case. The decisions behind it were tested locally with a throwaway registry and stand-in containers.
 
 ### Once: GitHub
 
@@ -193,7 +193,7 @@ To run CI again for a release whose result is missing or expired: Actions, the C
 ### Once: the box
 
 1. Copy the repo files (section 3, step 3), including `infra/oracle/scripts/sportconnect-deploy.sh`, check with `file` that the scripts have LF line endings (CRLF breaks them on Linux), and install the command: `sudo install -m 0755 ~/sportconnect/infra/oracle/scripts/sportconnect-deploy.sh /usr/local/bin/sportconnect-deploy`. Re-run it after every change to the script; `sportconnect-deploy --version` prints the checksum of the installed copy (compare with `sha256sum` of the repo file).
-2. Log in to GHCR as `ubuntu` with a classic token that has **only `read:packages`**, read from stdin so it never lands in a command line or history: `read -rs T; printf '%s' "$T" | docker login ghcr.io -u <github user> --password-stdin; unset T`. The login is kept in `~/.docker/config.json` (mode 600).
+2. Log in to GHCR as `ubuntu` with a classic token that has **only `read:packages`**, read from stdin so it never lands in a command line or history: `read -rs T; printf '%s' "$T" | docker login ghcr.io -u <github user> --password-stdin; unset T`. The login is kept in `~/.docker/config.json` (mode 600). A classic token has an expiry: when it passes, `sportconnect-deploy` fails on the registry read or the pull; make a new token and run the same login line again (INFRA-14 moves this into the secrets store).
 3. `~/web/server.env`, `~/web/chat.env` (section 4) and the folder `~/web/dist` exist, and the stack is started (`start-stack.sh`, section 5). The command checks all of this and says what is missing.
 
 ### Deploy (the box)
@@ -216,7 +216,31 @@ Deploy server? [y/N]
 - **One run at a time** (a lock file in `~/web`). Every run is appended to `~/web/deploy.log`.
 - The server runs its Liquibase migrations at start-up. A container put back after a failure does **not** undo a migration the new version already ran; write migrations so the previous release still works (add first, remove a release later) and see INFRA-17.
 - The first run on a box that still has the sandbox's locally built `sc-server` and `sc-chat` shows their version as `unknown (local build)` and replaces them; the old ones are the restore target for that run.
-- **Chat's schema:** the chat image carries its migrations and applies them when it starts (CHAT-22), like the server's Liquibase. The box's chat database was built by hand with `psql`, so it has the tables but no `schema_migrations` record: the **first start of the first chat image that has CHAT-22 rebuilds it**. Migration `000001` drops the chat tables (messages, conversations, participants, the sync caches, `sync_state`) and creates them again, so the box's chat history is lost (it is test data, accepted); the cold-start bootstrap refills the caches from the server. Nothing to seed. A brand new box has no chat tables, so nothing is dropped. Afterwards check: `docker exec sportconnect-dev-postgres-1 psql -U postgres -d sportconnect_chat_dev -c "select * from schema_migrations" -c "\d chat_messages"` shows `4 | f` and the columns `edited_at` and `deleted_at`. `CHAT_MIGRATE_ON_START=false` in `chat.env` turns the migration off. A failed migration makes the container exit, the health probe fails and the deploy puts the previous container back; the database stays marked dirty until fixed by hand. (Not run on the box yet.)
+- **Chat's schema:** the chat image carries its migrations and applies them when it starts (CHAT-22), like the server's Liquibase. The box's chat database was built by hand with `psql`, so it has the tables but no `schema_migrations` record: the **first start of the first chat image that has CHAT-22 rebuilds it**. Migration `000001` drops the chat tables (messages, conversations, participants, the sync caches, `sync_state`) and creates them again, so the box's chat history is lost (it is test data, accepted); the cold-start bootstrap refills the caches from the server. Nothing to seed. A brand new box has no chat tables, so nothing is dropped. Afterwards check: `docker exec sportconnect-dev-postgres-1 psql -U postgres -d sportconnect_chat_dev -c "select * from schema_migrations" -c "\d chat_messages"` shows `4 | f` and the columns `edited_at` and `deleted_at`. `CHAT_MIGRATE_ON_START=false` in `chat.env` turns the migration off. A failed migration makes the container exit, the health probe fails and the deploy puts the previous container back; the database stays marked dirty until fixed by hand. (Run on the box 2026-10-30: `schema_migrations` `4 | f`, `edited_at` and `deleted_at` present, the log shows `migrations applied` version 4.)
+
+### After a deploy: the checks (run on 2026-10-30, INFRA-15)
+
+Before the first deploy (both read-only):
+
+1. **The box can read the registry.** `docker buildx imagetools inspect ghcr.io/mr-mittt/sportconnect-chat:prod --format '{{.Manifest.Digest}}'` prints the digest that the promote's "Move prod" log ended with. A "denied" or "unauthorized" means the login (step 2 above) or the token's `read:packages` is wrong.
+2. **The plan.** `sportconnect-deploy --plan` lists the three components. On a box with the sandbox's own builds the running column shows `unknown (local build)` or the base image's label (the sandbox server showed `26.04`, the Ubuntu release label of its base image); every row says `DEPLOY`.
+
+After the deploy, on the box:
+
+3. **Containers.** `docker ps --format '{{.Names}} {{.Image}} {{.Status}}' | grep -E 'sc-(server|chat)'`: `sc-server` is `Up … (healthy)`, `sc-chat` is `Up` (the chat image has no health check of its own). The image column equals the first 12 characters of the digest that was promoted (it did on 2026-10-30).
+4. **Hardened flags on the real images.** `docker inspect sc-server sc-chat --format '{{.Name}} {{.HostConfig.CapDrop}} {{.HostConfig.SecurityOpt}} {{.HostConfig.ReadonlyRootfs}}'` prints `[ALL] [no-new-privileges] true` for both, and both are running.
+5. **Chat schema.** `docker exec sportconnect-dev-postgres-1 psql -U postgres -d sportconnect_chat_dev -c "select * from schema_migrations" -c "\d chat_messages"`: `4 | f`, and the columns `edited_at` and `deleted_at`.
+6. **Chat log.** `docker logs sc-chat 2>&1 | head -8`: `migrations applied` (`schema is up to date` on a later start) with version 4, then `chat service listening` with the promoted version, and no `ERROR` line.
+7. **Deploy log.** `tail -20 ~/web/deploy.log`: a `START` line and an `OK` line for the run, no restore.
+8. **Up to date.** `sportconnect-deploy --plan` again: all rows `unchanged` with real versions, and "everything is up to date".
+
+From your computer:
+
+9. **The outside checks of section 10**, then sign in with a test user and send a chat message.
+
+Not covered by a recorded run yet: the failure path. To test it on a release that has something to deploy, break one value in a copy of the component's env file, run `sportconnect-deploy`, and check that everything the run changed is put back and the report reads right.
+
+**Updating the command later.** To change only the script, no bundle is needed: `scp` the one file to the box, `sudo install -m 0755 ~/sportconnect-deploy.sh /usr/local/bin/sportconnect-deploy`, then `sportconnect-deploy --version` must equal `sha256sum infra/oracle/scripts/sportconnect-deploy.sh` on your computer. Check the repo file has LF line endings first (`file`).
 
 ## Change history
 
@@ -229,3 +253,5 @@ Deploy server? [y/N]
 | 2026-10-29 | INFRA-6 | Added section 16: promote (GitHub workflow with the `production` Environment approval) and deploy (`sportconnect-deploy` on the box: plan, pull, server then chat then client, health probes, restore-everything on failure, log). Sections 3 and 5 no longer build or copy artifacts; `run-containers.sh` became `start-stack.sh` (dependencies and Caddy only) and `server.Dockerfile` was deleted. The Environment, the first promote, the GHCR login and the first deploy over the sandbox containers are not run yet (INFRA-15). |
 | 2026-10-29 | INFRA-6 (fix) | `infra/scripts/promote-apply.sh` copies the manifest through the registry API instead of `docker buildx imagetools create`: the first real promote (server `0.1.0`) failed its digest check because `create` wrapped the image in a new manifest list (`:prod` became `777a3f...`, not `e2d088...`). Tested against a throwaway registry (single-platform image, manifest list, missing digest); the GHCR token step and the rerun of the promote are not run yet. |
 | 2026-10-30 | CHAT-22 | Chat's schema is applied by the chat service at start-up (migrations embedded in the binary). Replaced the "seed `schema_migrations` once" step in section 16: the first start on the existing box rebuilds the chat database through `000001`'s drops (data lost, accepted), with a check afterwards. Verified locally on a throwaway database with the real image; the first start on the box is not run yet. |
+| 2026-10-30 | INFRA-6 (box) | First run on the box: `sportconnect-deploy` installed (checksum matched), GHCR login, `--plan`, the first deploy over the sandbox containers (53 s, no restore), hardened flags confirmed on the real server and chat images, the up-to-date run, the site checks of section 10 and a chat message. Added the token-expiry note to the login step. Still not run: the deliberate-failure restore on the box. |
+| 2026-10-30 | INFRA-6 (checks) | Section 16: added "After a deploy: the checks" (registry read, plan, containers, hardened flags, chat schema, logs, deploy log, up to date, outside checks), how to update only the deploy command, and an SSH alias tip in the first-contact step. |
