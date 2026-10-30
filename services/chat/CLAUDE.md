@@ -34,7 +34,7 @@ are scoped in detail yet, each still needs its own Phase 1/2/3 pass at pickup).
 | Language | Go 1.22+ | Cheap goroutine-per-connection concurrency, fits the 1GB production box far better than a second JVM would |
 | HTTP routing | stdlib `net/http` (Go 1.22+ `ServeMux` method+pattern routes) | Route surface is small; add a router dependency only if this genuinely stops being true |
 | Postgres driver | `github.com/jackc/pgx/v5` (`pgxpool`) | Actively maintained, native pooling — kept deliberately small (`MaxConns`) since this shares the production box with Spring's own connection pool |
-| Migrations | `github.com/golang-migrate/migrate/v4` | Closest Go analogue to Liquibase — plain numbered SQL, no ORM-driven schema magic |
+| Migrations | `github.com/golang-migrate/migrate/v4` | Closest Go analogue to Liquibase — plain numbered SQL, no ORM-driven schema magic. Used as a **library** (CHAT-22): the SQL is embedded in the binary (`go:embed`) and applied at startup, so an image brings its own schema; the CLI is only needed for `down 1` |
 | WebSocket | `github.com/coder/websocket` | Modern, `context`-native API; the older `nhooyr.io/websocket` is deprecated in favor of this fork |
 | JWT | `github.com/golang-jwt/jwt/v5` | Verifies the RS256 access tokens Keycloak issues, against the realm JWKS (CHAT-17); the JWKS fetch and key cache are stdlib code in `internal/auth`, no JWKS library |
 | Redis client | `github.com/redis/go-redis/v9` | Native Streams API (`XAdd`/`XReadGroup`/`XAck`) for the cross-service sync |
@@ -62,9 +62,10 @@ internal/
   message/             # domain: chat_messages — send, paginated history
   ws/                  # pure transport: WebSocket connection registry + per-conversation fan-out
   api/                 # HTTP handlers + routing, request/response DTOs
-  db/                   # pgxpool wrapper
+  db/                   # pgxpool wrapper + Migrate (applies the embedded migrations at startup, CHAT-22)
   platform/             # logging, error types, request-id — depends on nothing else in this service
-migrations/             # golang-migrate SQL, numbered 000001, 000002, ...
+migrations/             # golang-migrate SQL, numbered 000001, 000002, ...; embed.go carries them into the binary
+                        # (go:embed cannot reach outside its package directory, so this is the one Go file outside internal/)
 docs/
   SYNC_DESIGN.md        # the event schema + stream contract in detail
 ```
@@ -95,7 +96,11 @@ go build ./...
 go test ./...
 go vet ./...
 
-# migrations (from services/chat/), requires golang-migrate installed:
+# migrations: the service applies them itself at startup (CHAT_MIGRATE_ON_START, default on), so `go run ./cmd/chat`
+# creates the schema on a fresh database. 000001 drops the chat tables first, so a database that has them but no
+# schema_migrations record is rebuilt on its first start (its data is lost). The CLI is only needed for `down 1` (`up` still
+# works, CI uses it):
+# (from services/chat/), requires golang-migrate installed:
 # note the appended ?sslmode=disable — migrate's driver (lib/pq) defaults to
 # sslmode=require and fails against a local Postgres with no SSL configured,
 # unlike pgx (what the service itself uses), which defaults to "prefer" and
@@ -124,6 +129,7 @@ a formality.
 | `MONOLITH_BASE_URL` | — | Only used for the cold-start bootstrap pull, never per-request |
 | `CHAT_HTTP_ADDR` | — | Defaults to `:8090` (`:8081` is the dev Keycloak, CHAT-19) |
 | `CHAT_CORS_ALLOWED_ORIGIN` | — | Defaults to `http://localhost:5173` (Vite dev) |
+| `CHAT_MIGRATE_ON_START` | — | Defaults to `true`: apply the embedded schema migrations before listening (CHAT-22). `false` or `0` skips it, for a database whose schema is managed elsewhere |
 
 No dev default for the one remaining secret (`INTERNAL_SERVICE_SECRET`) — a missing secret fails
 startup loudly, matching the same posture the monolith already takes for its own JWT secret in prod.

@@ -42,9 +42,9 @@ internal/
                          owns the local cache tables conversation/message read from
   ws/                   WebSocket connection registry + per-conversation broadcast (pure transport)
   api/                  HTTP routes, request parsing, response shaping — thin glue over the above
-  db/                   Postgres connection pool setup
+  db/                   Postgres connection pool setup + the startup migration runner
   platform/             Logging + shared error type, used by everything else
-migrations/             Database schema, applied with the golang-migrate tool
+migrations/             Database schema (golang-migrate SQL), embedded in the binary and applied at startup
 docs/
   SYNC_DESIGN.md         Full detail on how this service and the monolith stay in sync
 CLAUDE.md                Conventions for working in this codebase (style, testing, dependencies)
@@ -75,6 +75,7 @@ only involved when a JWT was issued (elsewhere, earlier) and during the sync mec
 | Library | Used for |
 |---|---|
 | `github.com/jackc/pgx/v5` | Postgres driver + connection pool |
+| `github.com/golang-migrate/migrate/v4` | Applies the embedded schema migrations at startup (CHAT-22) |
 | `github.com/golang-jwt/jwt/v5` | Verifying the monolith's JWTs |
 | `github.com/redis/go-redis/v9` | Reading the sync event stream from Redis |
 | `github.com/coder/websocket` | WebSocket connections for real-time delivery |
@@ -110,6 +111,7 @@ file at all) it's silently a no-op.
 | `MONOLITH_BASE_URL` | No | `http://localhost:8080` | Only used for the one-time bootstrap pull (§6.3) |
 | `CHAT_HTTP_ADDR` | No | `:8090` | Where this service listens (not `:8081`, which is the dev Keycloak) |
 | `CHAT_CORS_ALLOWED_ORIGIN` | No | `http://localhost:5173` | The Vite dev server's origin |
+| `CHAT_MIGRATE_ON_START` | No | `true` | Apply the embedded schema migrations before listening; `false` or `0` skips it (CHAT-22) |
 
 ---
 
@@ -136,14 +138,17 @@ The monolith (`./gradlew :server:bootRun`) and the client (`cd client && pnpm de
 way they always have — this service is a fourth thing running alongside them, not a replacement for
 any of them. See root `CLAUDE.md`'s dev workflow for the other three.
 
-**Applying migrations** (needs the [`golang-migrate`](https://github.com/golang-migrate/migrate)
-CLI installed separately — it is not part of `go build`):
+**Migrations** are applied by the service itself: `go run ./cmd/chat` creates or updates the schema before it
+listens (CHAT-22; `CHAT_MIGRATE_ON_START=false` turns that off). The first migration drops the chat tables before
+creating them, so a database that has them but no `schema_migrations` record is rebuilt on its first start and its
+data is lost; a database already recorded at version 1 or later is never touched by that. Only the `down` direction
+still needs the [`golang-migrate`](https://github.com/golang-migrate/migrate) CLI, installed separately:
 
 ```bash
-migrate -path migrations -database "${CHAT_DATABASE_URL}?sslmode=disable" up
+migrate -path migrations -database "${CHAT_DATABASE_URL}?sslmode=disable" down 1
 ```
 
-The `?sslmode=disable` suffix is only needed for `migrate` itself — its driver defaults to
+The `?sslmode=disable` suffix is only needed for the `migrate` CLI itself — its driver defaults to
 requiring SSL and fails against a local Postgres with none configured. The service's own
 `CHAT_DATABASE_URL` (in `.env`) doesn't need it: `pgx` (what the service uses) defaults to
 `sslmode=prefer` and falls back to plaintext automatically.
@@ -477,6 +482,9 @@ real automated regression coverage — this is no longer scaffold-only. Current 
 per `CLAUDE.md`'s README maintenance convention (check `docs/BACKLOG_MVP.md` for the authoritative,
 up-to-the-day ticket state if this drifts):
 
+- **Schema at startup:** `CHAT-22` (`DONE`) embeds `migrations/*.sql` in the binary and applies them before the
+  service listens (golang-migrate as a library, same `schema_migrations` table as the CLI, advisory lock), so the
+  image brings its own schema. Tests: `internal/db/migrate_integration_test.go`.
 - **Backend test coverage:** `CHAT-5` (`DONE`) added DB-backed integration tests for
   `internal/conversation`, `internal/message`, and `internal/sync`'s cache store — previously only
   pure-validation unit tests existed. `CHAT-6` (`DONE`) added WebSocket broadcast fan-out coverage
