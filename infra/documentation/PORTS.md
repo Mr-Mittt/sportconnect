@@ -35,7 +35,7 @@ Free and meant for the next service: **8091 to 8099** (take the next one in orde
 |---|---|---|---|
 | 8090 | Chat container | `services/chat/Dockerfile` (`EXPOSE`) | must match `CHAT_HTTP_ADDR`; INFRA-7 routes `/api/chat/**` to it |
 | 8080 | Spring container | the server image | |
-| 80, 443 | Caddy on the Oracle sandbox (INFRA-12): HTTPS for `yoursport.vn` and `auth.yoursport.vn`, 80 redirects | `infra/oracle/Caddyfile`, `infra/oracle/scripts/start-stack.sh` | the only public ports besides SSH (22); also open in the VCN security list and in Ubuntu's iptables (`box-prepare.sh`) |
+| 80, 443 | Caddy on the Oracle box (INFRA-12, INFRA-7): HTTPS for `yoursport.vn` and `auth.yoursport.vn`, 80 redirects | `infra/oracle/Caddyfile`, `infra/oracle/scripts/start-stack.sh` | the only public ports besides SSH (22); also open in the VCN security list and in Ubuntu's iptables (`box-prepare.sh`) |
 | 8081 | Keycloak on the Oracle sandbox, published on `127.0.0.1` only (container 8080) | `infra/oracle/kc-prod.override.yml` | Caddy reaches it by container name; reached from outside only through the SSH tunnel (local port 18081, above) |
 | 5432, 6379, 5672, 15672, 8613, 1025, 8025 | the backing services on the Oracle sandbox, published on `127.0.0.1` only | `infra/oracle/kc-prod.override.yml` | same numbers as the dev table; loopback binding is what keeps them off the internet (Docker NAT ignores Ubuntu's INPUT rules) |
 
