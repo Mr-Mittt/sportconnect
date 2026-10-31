@@ -1,5 +1,12 @@
-# INFRA-12 sandbox reverse proxy (Caddy), copied from the Oracle box on 2026-10-26.
-# Runbook: infra/documentation/MVP/INFRA-12_ORACLE_SANDBOX_RUNBOOK.md
+# Production reverse proxy (Caddy) for the Oracle box (INFRA-7). Started in INFRA-12 and copied from the box on 2026-10-26.
+# Guide: infra/documentation/PRODUCTION_DEPLOYMENT_GUIDE.md (sections 5 and 10); the proxy and WebSocket checks are in
+# "Proxy and WebSockets (INFRA-7)". Runbook of the spike: infra/documentation/MVP/INFRA-12_ORACLE_SANDBOX_RUNBOOK.md
+#
+# Two WebSockets pass through here, and Caddy's reverse_proxy upgrades them with no extra header config:
+#   - chat:  /api/chat/conversations/{id}/ws  (prefix stripped, to sc-chat). The browser cannot set headers on a WebSocket,
+#            so the access token is in the URL as ?token=. NEVER add a `log` directive that records the query string
+#            (or the request URI) for this site: it would write live access tokens to disk.
+#   - STOMP: /ws  (to sc-server). The token travels in the STOMP CONNECT frame, not in the URL.
 #
 # Caddy gets and renews the Let's Encrypt certificates itself (keep /data in a volume, see start-stack.sh).
 # Container names (sc-server, sc-chat, keycloak) resolve on the Compose network `sportconnect-dev_default`.

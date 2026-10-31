@@ -114,6 +114,19 @@ From your computer, with real DNS:
 
 Also: a trusted Let's Encrypt certificate on all three names; the login page shows the Google button; sign in with a password and with Google; a password-reset email arrives.
 
+### Proxy and WebSockets (INFRA-7)
+
+`infra/oracle/Caddyfile` is the production proxy config (`start-stack.sh` mounts the copy in `~/web`). Caddy upgrades WebSockets by itself; there is nothing to add per route. Two sockets pass through it:
+
+- **Chat:** `wss://yoursport.vn/api/chat/conversations/{id}/ws?token=…` (prefix stripped, to `sc-chat:8090`). The origin must equal `CHAT_CORS_ALLOWED_ORIGIN` in `chat.env`. **The token is in the URL, so never add a `log` directive to the Caddyfile that records the URI or query string**, it would write live access tokens to disk. There is none today.
+- **STOMP (notifications):** `wss://yoursport.vn/ws` (to `sc-server:8080`). The token is in the STOMP CONNECT frame. Origins come from `CORS_ORIGINS` in `server.env`; the messages go through RabbitMQ's STOMP relay (`STOMP_RELAY_HOST=rabbitmq`, port 61613, plugin `rabbitmq_stomp`).
+
+Checks (run on 2026-10-30, INFRA-7), from your computer:
+
+1. The upgrade handshake, no sign-in needed: `curl -s -o /dev/null -D - --max-time 5 -H Connection:Upgrade -H Upgrade:websocket -H Sec-WebSocket-Version:13 -H Sec-WebSocket-Key:dGhlIHNhbXBsZSBub25jZQ== -H "Origin: https://yoursport.vn" https://yoursport.vn/ws` prints `101 Switching Protocols`; the same with `Origin: https://evil.example` prints `403`; the same against `/api/chat/conversations/1/ws` without a token prints `401` (that is the chat service answering, so the route and the prefix strip work).
+2. Live, with two signed-in users in one conversation (DevTools, Network, filter WS): the chat row stays `101` and a message from the other user shows up with no refresh; the `/ws` row shows `CONNECTED`, the subscription and a pushed notification that raises the bell with no refresh; leave it idle for 2 minutes and send one more message.
+3. On the box, read-only: the Caddyfile without comment lines is the repo's (`grep -v '^[[:space:]]*#' ~/web/Caddyfile | tr -d '\r' | sha256sum` equals the same command on the repo file), the two origin lines in the env files read `https://yoursport.vn`, `rabbitmq-plugins list -E -m` in the RabbitMQ container lists `rabbitmq_stomp`, and `grep -n -i '^[[:space:]]*log' ~/web/Caddyfile` finds nothing.
+
 ## 11. The admin console
 
 The public host blocks `/admin` and the master realm. `ssh -L 18081:127.0.0.1:8081 -i <key> ubuntu@<ip>` (leave it open), then `http://localhost:18081/admin/master/console/`, user `admin`. This needs `KC_HOSTNAME_ADMIN` (in `kc-prod.override.yml`) and step 6.6; admin scripts must log in through the tunnel (or `kcadm` inside the container), never through the public host.
@@ -255,3 +268,4 @@ Not covered by a recorded run yet: the failure path. To test it on a release tha
 | 2026-10-30 | CHAT-22 | Chat's schema is applied by the chat service at start-up (migrations embedded in the binary). Replaced the "seed `schema_migrations` once" step in section 16: the first start on the existing box rebuilds the chat database through `000001`'s drops (data lost, accepted), with a check afterwards. Verified locally on a throwaway database with the real image; the first start on the box is not run yet. |
 | 2026-10-30 | INFRA-6 (box) | First run on the box: `sportconnect-deploy` installed (checksum matched), GHCR login, `--plan`, the first deploy over the sandbox containers (53 s, no restore), hardened flags confirmed on the real server and chat images, the up-to-date run, the site checks of section 10 and a chat message. Added the token-expiry note to the login step. Still not run: the deliberate-failure restore on the box. |
 | 2026-10-30 | INFRA-6 (checks) | Section 16: added "After a deploy: the checks" (registry read, plan, containers, hardened flags, chat schema, logs, deploy log, up to date, outside checks), how to update only the deploy command, and an SSH alias tip in the first-contact step. |
+| 2026-10-30 | INFRA-7 | Section 10: added "Proxy and WebSockets" (the two sockets through Caddy, the no-access-log rule for the `?token=` chat socket, and the checks). `infra/oracle/Caddyfile` is now documented as the production proxy config (comments only, no directive changed, nothing reloaded on the box). |
