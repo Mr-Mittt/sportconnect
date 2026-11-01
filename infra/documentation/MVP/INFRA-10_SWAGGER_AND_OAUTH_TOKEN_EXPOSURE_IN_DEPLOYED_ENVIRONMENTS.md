@@ -22,3 +22,5 @@ question) and handed the environment decision here.
 - Done when: the deployed profile's behaviour for these four paths is decided, applied, and verified
   from *outside* (an external request to `/swagger-ui.html` and `/api/auth/oauth-token` against the
   deployed domain), not assumed from config.
+
+**Note (INFRA-9, 2026-11-01):** if the decision is to block these paths at the proxy, the Caddyfile change procedure now exists (guide section 10, "Changing the Caddyfile and the isolation check"), and `infra/scripts/verify-internal-isolation.sh` already expects `/swagger-ui.html`, `/api-docs` and `/v3/api-docs` to return the client page; change those expectations in the same ticket if they should become 404.

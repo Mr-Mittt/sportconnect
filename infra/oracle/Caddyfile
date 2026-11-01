@@ -19,6 +19,13 @@ www.yoursport.vn {
 yoursport.vn {
 	encode gzip zstd
 
+	# Service-to-service only (chat's cold-start bootstrap reads /internal/sync/** over the Compose network, never through
+	# this proxy). Refused here, first and explicitly, so it stays unreachable from the internet even if a later rule below
+	# is broadened (INFRA-9). The app still checks its shared secret as a second layer. Caddy matches paths without regard
+	# to case and removes dot segments before matching, so /INTERNAL/ and /api/../internal/ land here too.
+	handle /internal/* {
+		respond 404
+	}
 	# chat has no /api/chat prefix of its own (same rewrite as the Vite dev proxy in client/vite.config.ts)
 	handle /api/chat/* {
 		uri strip_prefix /api/chat
