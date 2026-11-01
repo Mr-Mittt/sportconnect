@@ -32,6 +32,15 @@ spring:
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
 
+# INFRA-10: a deployed server does not serve its own API catalogue. The Swagger UI and the OpenAPI document are off here
+# (dev keeps them, see application.yml); SecurityConfig then names no Swagger path as public, so an anonymous request to
+# one gets the same 401 as any unknown path. The Caddy proxy already refuses to forward them from the internet.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 # Production Server
 server:
   port: ${SERVER_PORT:8080}
