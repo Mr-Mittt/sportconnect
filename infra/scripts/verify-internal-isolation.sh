@@ -51,7 +51,7 @@ if [ "$EXPECT_INTERNAL_CODE" = "404" ]; then
 fi
 
 echo "== $HOST: paths the proxy must not forward fall through to the client"
-for p in /actuator/health /actuator/info /swagger-ui.html /api-docs /v3/api-docs; do
+for p in /actuator/health /actuator/info /swagger-ui.html /swagger-ui/index.html /api-docs /api-docs/swagger-config /v3/api-docs; do
   probe "not exposed" GET "$p" 200 spa
 done
 
