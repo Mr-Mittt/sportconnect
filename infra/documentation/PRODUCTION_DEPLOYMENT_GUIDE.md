@@ -110,7 +110,8 @@ From your computer, with real DNS:
 | `https://auth.yoursport.vn/` | 302 to `/login` |
 | `https://auth.yoursport.vn/realms/sportconnect/.well-known/openid-configuration` | 200 |
 | `https://auth.yoursport.vn/admin/` and `/realms/master/…` | **403** |
-| `/actuator/health`, `/internal/x`, `/swagger-ui.html` on the main host | the client's `index.html` (not exposed) |
+| `/actuator/health`, `/swagger-ui.html` on the main host | the client's `index.html` (not exposed) |
+| `/internal/x` (and any `/internal/**`) on the main host | **404** from Caddy (INFRA-9) |
 
 Also: a trusted Let's Encrypt certificate on all three names; the login page shows the Google button; sign in with a password and with Google; a password-reset email arrives.
 
@@ -126,6 +127,23 @@ Checks (run on 2026-10-30, INFRA-7), from your computer:
 1. The upgrade handshake, no sign-in needed: `curl -s -o /dev/null -D - --max-time 5 -H Connection:Upgrade -H Upgrade:websocket -H Sec-WebSocket-Version:13 -H Sec-WebSocket-Key:dGhlIHNhbXBsZSBub25jZQ== -H "Origin: https://yoursport.vn" https://yoursport.vn/ws` prints `101 Switching Protocols`; the same with `Origin: https://evil.example` prints `403`; the same against `/api/chat/conversations/1/ws` without a token prints `401` (that is the chat service answering, so the route and the prefix strip work).
 2. Live, with two signed-in users in one conversation (DevTools, Network, filter WS): the chat row stays `101` and a message from the other user shows up with no refresh; the `/ws` row shows `CONNECTED`, the subscription and a pushed notification that raises the bell with no refresh; leave it idle for 2 minutes and send one more message.
 3. On the box, read-only: the Caddyfile without comment lines is the repo's (`grep -v '^[[:space:]]*#' ~/web/Caddyfile | tr -d '\r' | sha256sum` equals the same command on the repo file), the two origin lines in the env files read `https://yoursport.vn`, `rabbitmq-plugins list -E -m` in the RabbitMQ container lists `rabbitmq_stomp`, and `grep -n -i '^[[:space:]]*log' ~/web/Caddyfile` finds nothing.
+
+### Changing the Caddyfile and the isolation check (INFRA-9)
+
+`infra/oracle/Caddyfile` has a rule that refuses `/internal/*` with a 404 before any other rule. It protects the server's service-to-service endpoints (chat's cold-start bootstrap reads them over the Compose network, never through Caddy); the application's shared secret stays as a second layer. Do not move that block below another rule.
+
+**Changing the Caddyfile on the box.** `~/web/Caddyfile` is bind-mounted as a single file into `sc-caddy`, so it must be written **in place** (same inode); `mv`, an editor that replaces the file, or `scp` straight onto it can leave the container reading the old file.
+
+1. On your computer, from the repo root (the working copy may be CRLF): `tr -d '\r' < infra/oracle/Caddyfile > /tmp/Caddyfile.new && scp /tmp/Caddyfile.new sc-box:~/web/Caddyfile.new`
+2. On the box, validate the new file without touching the live one: `docker run --rm -v ~/web/Caddyfile.new:/etc/caddy/Caddyfile:ro caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -1` must print `Valid configuration`.
+3. Keep the old file and write the new one in place: `cp ~/web/Caddyfile ~/web/Caddyfile.prev && cat ~/web/Caddyfile.new > ~/web/Caddyfile`
+4. Reload without downtime: `docker exec sc-caddy caddy reload --config /etc/caddy/Caddyfile` (it prints nothing on success; a rejected config leaves the old one serving). Certificates are untouched.
+5. Compare: `grep -v '^[[:space:]]*#' ~/web/Caddyfile | tr -d '\r' | sha256sum` must equal the same command on the repo file (after INFRA-9: `7cd9ff420cae9e2564c3ccf15ae494fc9934bf60193c0998cbd22da794c93c3c`).
+6. Run the isolation check below, then `rm ~/web/Caddyfile.new` (and `/tmp/Caddyfile.new` on your computer). Keep `Caddyfile.prev`.
+
+Rollback: `cat ~/web/Caddyfile.prev > ~/web/Caddyfile`, then step 4. If a reload seems to do nothing, recreate `sc-caddy` by rerunning `start-stack.sh` (the certificates in the `caddy_data` volume are kept). The `caddy:2-alpine` used for the validate may be a different Caddy version from the one in `sc-caddy`; the directives used here are stable across Caddy 2.
+
+**Isolation check (from your computer, not the box):** `bash infra/scripts/verify-internal-isolation.sh` (host defaults to `yoursport.vn`). It must end with `all checks passed`: every `/internal/**` variant (three sync endpoints, case, `/api/../`, `/ws/../`, `/images/../`, a POST) answers 404; `/actuator/*`, Swagger and `api-docs` return the client page; `/api/internal/…` gives the application's 401; the auth host's `/internal` gives 404; and ports 8080, 8090, 8081, 5432, 6379, 5672, 15672, 61613, 25 and 8025 are closed or filtered on the public address. It sends no secret. `EXPECT_INTERNAL_CODE=200` checks a Caddyfile from before INFRA-9; `CHECK_PORTS=0` skips the port checks.
 
 ## 11. The admin console
 
@@ -269,3 +287,4 @@ Not covered by a recorded run yet: the failure path. To test it on a release tha
 | 2026-10-30 | INFRA-6 (box) | First run on the box: `sportconnect-deploy` installed (checksum matched), GHCR login, `--plan`, the first deploy over the sandbox containers (53 s, no restore), hardened flags confirmed on the real server and chat images, the up-to-date run, the site checks of section 10 and a chat message. Added the token-expiry note to the login step. Still not run: the deliberate-failure restore on the box. |
 | 2026-10-30 | INFRA-6 (checks) | Section 16: added "After a deploy: the checks" (registry read, plan, containers, hardened flags, chat schema, logs, deploy log, up to date, outside checks), how to update only the deploy command, and an SSH alias tip in the first-contact step. |
 | 2026-10-30 | INFRA-7 | Section 10: added "Proxy and WebSockets" (the two sockets through Caddy, the no-access-log rule for the `?token=` chat socket, and the checks). `infra/oracle/Caddyfile` is now documented as the production proxy config (comments only, no directive changed, nothing reloaded on the box). |
+| 2026-11-01 | INFRA-9 | Section 10: the Caddyfile now refuses `/internal/*` with a 404 (first rule), the table row for `/internal/x` changed from the client page to 404, and new "Changing the Caddyfile and the isolation check" (scp, validate, in-place write, reload, hash, rollback, cleanup) with `infra/scripts/verify-internal-isolation.sh`. First run on the box: the box steps on the owner's word (output not pasted); the isolation check passed 25 of 25 from a computer. |
