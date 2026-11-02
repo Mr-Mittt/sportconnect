@@ -137,3 +137,21 @@ First release of all three images with both platforms (PR #396, log row 16): **B
 ## Deploys of the multi-arch release (2026-11-02, log rows 17 to 19)
 
 `sportconnect-deploy` ran on both boxes with the same promoted versions (server `0.1.2`, chat `0.2.1`, client `0.1.1`): A1 (arm64) in 1 m 07 s, x86 (amd64, live) in 45 s, both healthy with no restarts. One tag per version served each box its own architecture. The outside requests against A1 (by `curl --resolve`, DNS untouched) matched the live site on all 12, and the live site still answers the same after its deploy. **Not yet proven:** a real sign-in and chat message through A1, the mail contributor's absence (INFRA-11) on a box, and the INFRA-6 check 9 failure path.
+
+## Point 4 on A1 (2026-11-02, log row 20)
+
+Same test, same method as the x86 sandbox (k6 on the box, through Caddy and TLS, read-only and anonymous, up to 400 users with no pauses), on the A1 box: **2 vCPU** (one Ampere core each, no hyperthreads) against the sandbox's 4 vCPU.
+
+| Endpoint | | Requests | Req/s | median | p95 | p99 | max | Failed |
+|---|---|---|---|---|---|---|---|---|
+| `GET /api/reference/countries` (server + Postgres) | x86, 4 vCPU | 426,306 | 1,550 | 38 ms | 330 ms | 654 ms | 2.16 s | 0 |
+| | **A1, 2 vCPU** | 243,033 | **884** | 68 ms | 567 ms | 888 ms | 2.32 s | 0 (0.00%) |
+| `GET /` (Caddy, static `index.html`) | x86, 4 vCPU | 1,346,150 | 4,895 | 12 ms | 118 ms | 204 ms | 706 ms | 0 |
+| | **A1, 2 vCPU** | 725,863 | **2,639** | 29 ms | 175 ms | 235 ms | 561 ms | 0 (0.00%) |
+| `GET /api/chat/healthz` (Caddy to chat) | x86, 4 vCPU | 750,493 | 2,729 | 10 ms | 190 ms | 878 ms | 3.67 s | 146 (0.01%) |
+| | **A1, 2 vCPU** | 466,033 | **1,695** | 28 ms | 324 ms | 890 ms | 3.32 s | 37 (0.008%) |
+
+- **Throughput is 54 to 62% of the x86 box with half the vCPUs**, so per vCPU the A1 box did about 14% more on the API, 8% more on static files and 24% more on chat. Medians and p95 are higher (CPU-bound, 400 users with no think time), the tails (p99, max) are close.
+- **CPU was the limit again.** Peaks of the 10-second samples: Caddy 151% and server 136% of the 200% available (the k6 generators took 43 to 79% on top, as on x86), Postgres 21%, chat 29%, Keycloak 2%. Memory was never the limit: server 906 MiB at most (944 on x86), Caddy 119 MiB, Keycloak 551 MiB, and the host never went below 9.2 GiB available of 11.9. Server, chat and Caddy had no restart. Sampled 1-minute load average peaked at about 50 on 2 vCPUs.
+- **Failures:** none on the API and static endpoints; 37 of 466,033 chat requests failed (0.008%), against 146 of 750,493 on x86. Their cause was not looked at on either box (status codes were not recorded).
+- **Reading it:** 400 users with no pauses is far more traffic than 400 real users, and 884 requests a second on a database-backed endpoint is a lot of real users. **Not covered, as before:** sign-in, feed, Discover, WebSocket, RabbitMQ and Keycloak token traffic, and the generator shares the box's CPU. The honest conclusion for the MVP: the A1 box handles the measured read load comfortably; authenticated paths remain unmeasured (INFRA-20).
