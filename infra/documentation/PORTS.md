@@ -48,3 +48,4 @@ Production reverse-proxy and Keycloak production ports are decided by INFRA-3/IN
 3. **One default, one place.** The port lives in the service's config default; every other file (Vite proxy, Dockerfile `EXPOSE`, README, CORS lists) follows it. When a default changes, `git grep` the old number.
 4. **Test harness ports are real ports too:** give each Playwright project and mock server its own and use `--strictPort`, otherwise a stray process makes the runner poll the wrong server (documented in `client/playwright.config.ts`).
 5. **Add the row in the same change** that introduces the port, and update the CORS origin lists (`server/.../application-dev.yml`, Keycloak web origins) when it is a browser-facing origin.
+

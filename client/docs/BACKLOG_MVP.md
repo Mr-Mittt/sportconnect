@@ -468,3 +468,4 @@ FRIEND-2 (filed 2026-08-26 at PROFILE-0 pickup — user decision) — **DONE 202
 | ~~Chat module (new `modules/social/chat-impl`, never existed beyond a docs folder, since deleted)~~ | ARCHIVED (2026-07-26) — see `documentation/md/archive/chat/` — fresh chat re-plan pending | ~~CHAT-2, CHAT-4~~ | `N/A` |
 
 ---
+
