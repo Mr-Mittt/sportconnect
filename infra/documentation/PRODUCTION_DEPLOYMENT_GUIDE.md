@@ -284,6 +284,45 @@ Not covered by a recorded run yet: the failure path. To test it on a release tha
 
 **Updating the command later.** To change only the script, no bundle is needed: `scp` the one file to the box, `sudo install -m 0755 ~/sportconnect-deploy.sh /usr/local/bin/sportconnect-deploy`, then `sportconnect-deploy --version` must equal `sha256sum infra/oracle/scripts/sportconnect-deploy.sh` on your computer. Check the repo file has LF line endings first (`file`).
 
+## 17. Moving production to another box: the cutover (INFRA-12)
+
+Written 2026-11-02 for the move from the x86 box (`sc-box`, amd64) to the A1 box (`sc-a1`, arm64); **none of it has been run yet** except where a step says so. It is the same for any other box: "old" is the box serving now, "new" is the box that takes over. Everything that can be done before the switch is in the preparation list, so the window in which users cannot write is short.
+
+**Preparation (days before; nothing here affects users)**
+
+1. The new box is built (sections 1 to 5, 9 and 16) and has run the rehearsal. For the A1 box this is done: the stack runs, the same three versions are deployed on both boxes, 12 of 12 requests match the live site through `curl --resolve` (section 10), the load test passed (INFRA-12 ticket, "Point 4 on A1"). `sportconnect-deploy --plan` on both boxes must say "unchanged" for every component.
+2. **Lower the DNS TTL** of the three records at iNET (section 2) to 300 seconds at least one old-TTL period before the day, so the switch spreads in minutes. (The current TTL has not been looked up; write it down here: ____.)
+3. **Decide the time** (the window below is a few minutes, not timed yet) and tell the users if there are any beyond the owner.
+4. The GHCR login, the dynamic group (both OCIDs in the rule, section 1 step 6), the OCI CLI (section 8 item 5) and `~/web/server.env`/`chat.env` exist on the new box. `restore-from-bucket.sh` is on it (`~/sportconnect/infra/oracle/scripts/`; strip CR if it came from Windows, section 3).
+5. Keep a way back: the old box stays as it is until the soak period ends (step 14).
+
+**The window (users cannot write between steps 1 and 9)**
+
+1. **Old box: stop the writers.** `docker stop sc-server sc-chat sportconnect-dev-keycloak-1`. The site now answers errors on the API and the sign-in.
+2. **Old box: the final backup.** `sudo systemctl start sportconnect-backup`, then `journalctl -u sportconnect-backup -n 30 --no-pager`. Note the set stamp `S` (for example `20261102T143000Z`) and check that four objects are under it (three dumps and `caddy_data`).
+3. **Old box: switch its own timer off at once**, `sudo systemctl disable --now sportconnect-backup.timer`, or its 02:00 backup (of stopped, unchanging databases) would later become the "newest set" and a restore would pick it. Section 8 item 5 is the same rule for a rehearsal box.
+4. **New box: restore the set.** `EXPECT_SET=S bash ~/sportconnect/infra/oracle/scripts/restore-from-bucket.sh`. It refuses if the newest set is not `S`, stops server, chat and Keycloak, replaces the three databases, starts Keycloak and the others, and removes the downloaded dumps. (`RESTORE_CADDY=1` also restores the certificates; the new box already has its own, so leave it off unless it has none.)
+5. **New box: the post-restore Keycloak scripts** (section 9 step 4; the restore brings the old box's admin password and settings; the secret files on the new box are copies of the old ones, so these should confirm, not change): `set-credentials-client-secret.sh` (must print "read-back matches the new secret"), `set-master-frontend-url.sh`; check the admin console login with `~/.kc-admin-pw` through the tunnel, the web client's redirect URI, the Google provider and the SMTP settings are still the production values. `set-admin-pw.sh` is only needed if the admin login fails.
+6. **New box: check before anyone sees it.** `sportconnect-deploy --plan` (all unchanged), `/actuator/health` from the Compose network, the 12 requests with `curl --resolve` against the new IP, and a sign-in of the owner's account in a browser (a temporary hosts-file line for the test only; remove it afterwards).
+7. **iNET: switch DNS.** A `yoursport.vn` and A `auth.yoursport.vn` to the new box's public IP; `www` stays a CNAME to `yoursport.vn`. Check `nslookup yoursport.vn 8.8.8.8` and `nslookup yoursport.vn ns1.inet.vn`.
+8. **Wait for the TTL**, then check from outside **without** `--resolve` (section 10, the 12 requests and `verify-internal-isolation.sh`) and look at the new box's access: requests must arrive on it. Until a resolver has the new record it still reaches the old box, which answers errors on the API (its Caddy is still up); that is the visible cost of this plan.
+9. **The window ends** when the owner has signed in with a password and with Google, sent a chat message (live push), and received a password-reset email. Then the old box needs no more action; leave it stopped as in steps 1 and 3.
+
+**After the switch**
+
+10. **New box: the backup.** `bash ~/sportconnect/infra/oracle/scripts/install-backup.sh` (set `BACKUP_BUCKET=sportconnect-backups` in `/etc/sportconnect/backup.env`), `sudo systemctl start sportconnect-backup`, four objects under a new stamp, `restore-test.sh`. Only now does the new box write backups.
+11. **Mail:** both boxes shared one Brevo key. This is the moment to rotate it (create a new key, `set-smtp.sh` for Keycloak, the new key in `~/web/server.env` and `~/.brevo-smtp-key` on the new box, restart the server, revoke the old key); the owner decided to rotate at the end, not before.
+12. **DNS TTL** back to its normal value.
+13. **Watch** the first 24 hours: `docker ps`, `deploy.log`, the 02:00 backup of the new box appears in the bucket, `docker stats`.
+14. **Soak, then retire the old box (owner's choice of length).** Stop the instance in the console first (compute stops billing on a paid shape; the boot volume still does), later terminate it with the boot volume (section 14), take its OCID out of the dynamic group, and update `INFRA-3_ORACLE_RESOURCES.md`, the rebuild logs and this guide.
+
+**Rolling back**
+
+- **Before step 7 (DNS not switched):** nothing was written on the new box that users could see. On the old box `docker start sportconnect-dev-keycloak-1`, wait for the realm, then `docker start sc-server sc-chat`, and re-enable its timer (`sudo systemctl enable --now sportconnect-backup.timer`).
+- **After step 7:** the new box has real writes. Stop its writers, take a backup on it (`sudo systemctl start sportconnect-backup`, note the stamp), run `EXPECT_SET=<that stamp> bash restore-from-bucket.sh` on the old box, start its containers, switch DNS back, and re-enable the old timer while disabling the new one. Do this only inside the soak period.
+
+**Not measured yet:** the length of the window (the rehearsal restore took a few minutes with Keycloak's 36-second start; the final backup and the DNS wait are not timed), whether users reach the new box within the TTL, and the rollback after the switch.
+
 ## Change history
 
 | Date | Ticket | Change |
@@ -310,3 +349,4 @@ Not covered by a recorded run yet: the failure path. To test it on a release tha
 | 2026-11-02 | INFRA-12 | Section 15: the first multi-arch releases (server `0.1.2`, client `0.1.1`, chat `0.2.1`, PR #396) built and pushed both platforms; times recorded. Deploying them to the boxes is not run yet. |
 | 2026-11-02 | INFRA-12 | First `sportconnect-deploy` on arm64 (A1 box): server `0.1.2`, chat `0.2.1`, client `0.1.1` in 1 m 07 s, all healthy; Caddy started with the restored certificates; section 10 gets the `curl --resolve` way to check a box before DNS moves (12 of 12 requests identical to the live site). |
 | 2026-11-02 | INFRA-12 | The same release deployed on the live x86 box by the owner (45 s, amd64, healthy); the outside checks and the isolation check passed afterwards. Both boxes run server `0.1.2`, chat `0.2.1`, client `0.1.1`. |
+| 2026-11-02 | INFRA-12 | New section 17, the cutover from one box to another (preparation, the window, after the switch, rolling back), and the new script `infra/oracle/scripts/restore-from-bucket.sh` (the row 13 restore as a file, with `EXPECT_SET`). **Not run yet**; the final-backup and DNS steps are written, not timed. |
