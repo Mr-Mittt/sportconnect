@@ -23,6 +23,8 @@ services:
     ports: !override
       - "127.0.0.1:8081:8080"
   postgres:
+    # INFRA-12: the official postgis/postgis image has no arm64 build; this one (infra/postgis, PostGIS 3.6) has both
+    image: ghcr.io/mr-mittt/sportconnect-postgis:16-3.6
     ports: !override
       - "127.0.0.1:5432:5432"
   redis:

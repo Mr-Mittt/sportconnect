@@ -1,0 +1,106 @@
+# PostGIS image — builds infra/postgis/Dockerfile and publishes it to GHCR (INFRA-12).
+#
+# The official postgis/postgis image has no arm64 build and the production box is arm64 (the Always Free A1), so the box
+# runs this image: Postgres 16 plus the PGDG PostGIS package, built for linux/amd64 and linux/arm64 into one tag.
+#
+#   pull request   -> builds the image for amd64 (native), pushes nothing
+#   push to master -> builds both platforms and pushes ghcr.io/<owner>/sportconnect-postgis:16-<postgis minor>
+#                     (the minor is read from `ARG POSTGIS_VERSION` in the Dockerfile, so the tag follows a deliberate bump)
+#   manual run     -> input `platforms` (default both); pushes from master only
+#
+# It runs only when infra/postgis/** or this file changes, which is rare, so unlike the three application images an
+# ordinary merge that touches it does build (there is no release or version bump for it, and the box follows the tag).
+# Re-running it also picks up PGDG patch releases of the same minor and base-image security updates.
+#
+# Verified only on GitHub after merge (INFRA-12 conditional): the first push, the multi-arch manifest, the pull on the box.
+
+name: postgis-image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'infra/postgis/**'
+      - '.github/workflows/postgis-image.yml'
+  pull_request:
+    paths:
+      - 'infra/postgis/**'
+      - '.github/workflows/postgis-image.yml'
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'CPU architectures to build (default both)'
+        type: choice
+        default: linux/amd64,linux/arm64
+        options:
+          - linux/amd64,linux/arm64
+          - linux/arm64
+          - linux/amd64
+
+concurrency:
+  group: postgis-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  packages: write   # push to ghcr.io
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Plan (tag)
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          minor="$(sed -n 's/^ARG POSTGIS_VERSION=\(.*\)$/\1/p' infra/postgis/Dockerfile | head -n 1 | tr -d '\r')"
+          [[ "$minor" =~ ^[0-9]+\.[0-9]+$ ]] || { echo "ARG POSTGIS_VERSION '$minor' is not X.Y" >&2; exit 1; }
+          push=false
+          if [ "$EVENT_NAME" != pull_request ]; then
+            [ "$REF" = "refs/heads/master" ] || { echo "images come from master only (this run is on $REF)" >&2; exit 1; }
+            push=true
+          fi
+          image="ghcr.io/$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')/sportconnect-postgis"
+          {
+            echo "push=$push"
+            echo "postgis=$minor"
+            echo "tag=$image:16-$minor"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.plan.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and push)
+        uses: docker/build-push-action@v6
+        with:
+          context: infra/postgis
+          file: infra/postgis/Dockerfile
+          platforms: ${{ inputs.platforms || (github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}   # pull request: amd64 (native); otherwise both
+          push: ${{ steps.plan.outputs.push == 'true' }}
+          tags: ${{ steps.plan.outputs.tag }}
+          provenance: false   # one plain manifest per tag, like the application images
+          cache-from: type=gha,scope=postgis-image
+          cache-to: type=gha,mode=max,scope=postgis-image
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### postgis-image"
+            echo "PostGIS \`${{ steps.plan.outputs.postgis }}\`, pushed: ${{ steps.plan.outputs.push }}, platforms: \`${{ inputs.platforms || (github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}\`"
+            echo '```'
+            echo "${{ steps.plan.outputs.tag }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

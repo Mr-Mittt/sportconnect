@@ -2,10 +2,11 @@
 # Same shape as server-image.yml and client-image.yml; read server-image.yml's header for the release rules:
 #
 #   pull request   -> checks the version and builds the image, pushes nothing
-#   push to master -> ordinary build: pushes :sha-<short> and :edge
+#   push to master -> ordinary merge: builds and pushes nothing (INFRA-12: a release is the only deployable image)
 #                     RELEASE, when services/chat/VERSION has no tag chat-v<version> yet (and is not the 0.0.0
 #                     placeholder): also pushes :X.Y.Z and :latest, then creates the git tag chat-vX.Y.Z
-#   manual run     -> no inputs; the same as a push to master (the "run again" for a release whose push failed)
+#   manual run     -> input `platforms` (default both architectures); builds only when the version has no tag yet, so it is the same
+#                     as a push to master (the "run again" for a release whose push failed)
 #
 # A release is a merged PR that raised the version (infra/scripts/chat-version.sh bump, or /release chat).
 # What gets built and tagged is decided in infra/scripts/chat-image-plan.sh. The Go version of the build image is read from
@@ -34,6 +35,15 @@ on:
       - 'infra/scripts/chat-version.sh'
       - '.github/workflows/chat-image.yml'
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'CPU architectures to build (default both: a release serves the A1 box and an x86 box from one tag)'
+        type: choice
+        default: linux/amd64,linux/arm64
+        options:
+          - linux/amd64,linux/arm64
+          - linux/arm64
+          - linux/amd64
 
 concurrency:
   group: chat-image-${{ github.ref }}
@@ -72,6 +82,7 @@ jobs:
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v3
+        if: steps.plan.outputs.build == 'true'
 
       - name: Log in to GHCR
         if: steps.plan.outputs.push == 'true'
@@ -82,11 +93,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build (and push)
+        if: steps.plan.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: services/chat
           file: services/chat/Dockerfile
-          platforms: linux/amd64   # the box is x86; arm64 is added with the A1 box (INFRA-12)
+          platforms: ${{ inputs.platforms || (github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}   # release: both (the A1 box is arm64, an x86 box stays possible); pull request: amd64 (native, fast check); a manual run picks
           push: ${{ steps.plan.outputs.push == 'true' }}
           tags: ${{ steps.plan.outputs.tags }}
           provenance: false   # one plain manifest per tag, so retention can reason about versions
@@ -116,6 +128,7 @@ jobs:
         run: |
           {
             echo "### chat-image"
+            echo "built: ${{ steps.plan.outputs.build }}, platforms: \`${{ inputs.platforms || (github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}\`"
             echo "version \`${{ steps.plan.outputs.version }}\`, release: ${{ steps.plan.outputs.release }}, pushed: ${{ steps.plan.outputs.push }}"
             echo '```'
             echo "${{ steps.plan.outputs.tags }}"
