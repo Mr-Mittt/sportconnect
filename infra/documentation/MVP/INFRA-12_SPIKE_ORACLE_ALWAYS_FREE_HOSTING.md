@@ -1,4 +1,6 @@
-# INFRA-12 · Spike: can the whole stack run on Oracle Cloud Always Free (and Keycloak with it)?
+# INFRA-12 · Oracle hosting spike and the move to the Always Free A1 box (arm64): multi-arch images, the A1 rebuild, cutover
+
+*Renamed 2026-11-02 (was: "Spike: can the whole stack run on Oracle Cloud Always Free (and Keycloak with it)?"). The spike answered GO on 2026-10-27; since A1 capacity appeared the ticket also carries the move to the A1 box (see the scope change at the end). The file name keeps the old wording so existing links work.*
 
 **Status:** `IN PROGRESS` · **Type:** Infrastructure (spike / hosting decision) · **Dependency:** none · **Gates:** INFRA-3..6 (and INFRA-7/8/9, which assume the AWS EC2 box)
 
@@ -83,3 +85,34 @@ Also proven on the sandbox: Keycloak in production mode behind Caddy, Google sig
 - [x] (done on the same branch: INFRA-3 body rewritten, Deltas in INFRA-4/5/6/7/9/14, email E2, chat CHAT-16) File the rewrite of INFRA-3, INFRA-4, INFRA-5 and INFRA-6 for Oracle as real backlog entries, and re-check INFRA-7, INFRA-8, INFRA-9 (INFRA-6 and INFRA-14 already carry Deltas from 2026-10-27).
 - [ ] Revoke/replace the Brevo SMTP key and rotate the Keycloak admin password (both were pasted in chat).
 - [ ] Terminate the sandbox and its boot volume when it is no longer needed, or turn it into the real INFRA-3 box on purpose.
+
+## Scope change (2026-11-02): A1 capacity is available, so the ticket now includes the move
+
+**Why:** the owner created a `VM.Standard.A1.Flex` box (Ampere Altra 3.0 GHz, **2 OCPU / 12 GB**) and asked to plan the move to it. Oracle's Always Free page (read 2026-11-02, via search) now lists **2 OCPU / 12 GB** of A1 in total, and community posts report the allowance was cut from 4 / 24 around 2026-08-18; the 4 OCPU / 24 GB in the 2026-10-27 Limits note is unverified and must not be relied on. An OCPU on A1 is one core without hyperthreading, so 2 OCPU is 2 vCPUs (the x86 box has 4).
+
+**Now in scope:** spike points 1 to 3 on the A1 box (capacity: done by the owner; arm64 PostGIS, Keycloak, RabbitMQ, Redis, Caddy; multi-arch server, chat and client images), point 4 re-run on A1 (idle and load), the move itself by the rebuild-with-data sequence of `PRODUCTION_DEPLOYMENT_GUIDE.md` section 9, and retiring the paid x86 box. The approved plan is the next section.
+
+**Still out of scope:** idle reclamation (moot once the box is on Pay-As-You-Go or the load is above the thresholds; to be noted, not measured), the latency and Cloudflare test, authenticated load tests beyond what the re-run of point 4 covers (to be filed as a follow-up).
+
+## Plan for the move (approved 2026-11-02)
+
+Rules decided with the owner: keep `linux/amd64` as a reference and a way back; **one multi-arch tag** (each box pulls the build for its own CPU, so `promote.yml` and `sportconnect-deploy` need no per-architecture names); an **ordinary merge to master builds and pushes nothing**; a **release builds both** `linux/amd64` and `linux/arm64`; a pull request builds amd64 only (native, nothing pushed); a manual run takes a `platforms` choice. The repo is private (2,000 free Actions minutes a month), which is why the emulated arm64 build runs only for releases.
+
+- [x] **A. Images.** The three `*-image-plan.sh` print `build`; the three `*-image.yml` build only when told to and take `platforms`; guide section 15 and its history row. Tried locally: the plan scripts (pull request, ordinary merge, release by push and by dispatch, a branch refused). **Conditionals (GitHub only, INFRA-15 style):** the `platforms` dropdown, the workflow YAML itself (no `actionlint` here), the real arm64 build and its time under QEMU for each image, a first multi-arch release and its Promote, and that `sportconnect-deploy` reads the version and digest from a multi-arch tag (`docker buildx imagetools inspect` on an index; to be tried on a public multi-arch image first).
+- [ ] **B. Build the A1 box, no cutover.** The owner gives the A1 IP, an `ssh` alias and the OCID. Runbook up to the stack start (`box-prepare.sh`, bundle, secrets, GHCR login, `start-stack.sh`); record which images do not start on arm64 (PostGIS `16-3.4` first; Keycloak, RabbitMQ, Redis, Caddy), Liquibase on arm64, start-up times; restore the newest bucket set (the first full restore from the bucket); check the stack from the box and from outside with a hosts-file override, DNS untouched.
+- [ ] **C. Measure (point 4 on A1).** Idle memory and CPU, then the same read-only load test as on x86 so the two compare. The A1 box has 2 vCPUs against the x86 box's 4 (an OCPU on A1 is one core, no hyperthreads); say so in the result.
+- [ ] **D. Cutover (owner steps).** A last backup from the old box; DNS for `yoursport.vn`, `www` and `auth`; after the Keycloak restore re-run `set-admin-pw.sh`, `set-credentials-client-secret.sh`, `set-master-frontend-url.sh` and check the Google provider, SMTP and the web redirect URI; the dynamic-group rule and bucket policy for the new instance OCID; the checks of guide section 10 from outside.
+- [ ] **E. The x86 box.** Keep it stopped for a soak period the owner chooses, then terminate it with its boot volume (or terminate at once; the rebuild from the bucket and the multi-arch images is documented). Update `INFRA-3_ORACLE_RESOURCES.md`, the guide and its history, the rebuild log, and the "sandbox" wording in `PORTS.md` rows 39 and 40.
+- [ ] **F. Close.** Findings and a final decision written here; the unclosed spike points (latency and the Cloudflare test, authenticated load, idle reclamation) are filed as INFRA-20 (done 2026-11-02); move INFRA-12 to Done.
+
+**Risks.** Oracle reportedly cut the Always Free A1 allowance to 2 OCPU / 12 GB around 2026-08-18 and some instances were disabled: keep the x86 box and nightly backups until the A1 box has soaked, and do not resize or terminate the A1 box (capacity can vanish). A cutover needs a short write freeze. Secrets stay on the boxes only.
+
+**Done when (added 2026-11-02):** the production site runs on the A1 box with the guide's section 10 checks passing from outside; a restore from the bucket onto a fresh box has been run for real; the x86 box is stopped or terminated by the owner's choice; the load numbers for A1 sit beside the x86 ones; the follow-up ticket for the unclosed points exists (INFRA-20, filed).
+
+## Findings 2026-11-02 (from the registries, before the A1 box is built)
+
+Read with `docker buildx imagetools inspect` from the owner's PC; nothing was run on arm64 yet.
+
+- **Point 2 (arm64 images), what the box uses:** `redis:7-alpine`, `rabbitmq:3-management-alpine`, `caddy:2` and `quay.io/keycloak/keycloak:26.4` list `linux/arm64`. **`postgis/postgis:16-3.4` does not: it is a single amd64 image, and `16-3.5`, `16-3.6` and `16-master` list amd64 only too.** The database cannot start on the A1 box with the image the dev Compose file and the box use today.
+- **Options for PostGIS on arm64 (owner decides, nothing changed yet):** (a) `imresamu/postgis:16-3.4` and `16-3.4-bookworm` list amd64 and arm64 (a community build, a third-party Docker Hub account on the data path, so a trust decision); (b) our own small image: `postgres:16` plus the Debian `postgresql-16-postgis-3` package (both architectures), built and published by the existing workflows, so the supply chain is ours; (c) wait for the official image. Whichever is chosen must be the same major PostGIS version as the data (3.4) or the dump restores into a different extension version: check `SELECT postgis_full_version()` on the x86 box first.
+- **Deploy script on a multi-arch tag:** `ref_info` (the function in `sportconnect-deploy.sh` and `promote-check.sh`) was run on `quay.io/keycloak/keycloak:26.4`, a multi-arch image: it returned the index digest, the version label (`26.4.7`) and the revision label. So the digest and label reads work on a manifest list; no change to the scripts. Still to prove on one of our own images after the first multi-arch release.

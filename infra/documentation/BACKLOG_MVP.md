@@ -29,13 +29,14 @@ green run exists" pattern.
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [INFRA-12](MVP/INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md) | Spike: can the whole stack (and Keycloak) run on Oracle Cloud Always Free? Gates INFRA-3..6 — see the amendment in the hosting decision (2026-10-13) | `IN PROGRESS` |
+| 1 | [INFRA-12](MVP/INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md) | Oracle hosting spike and the move to the Always Free A1 box (arm64): the spike's GO was decided 2026-10-27 (x86 for now); since A1 capacity appeared (2 OCPU / 12 GB) this ticket also covers multi-arch image builds (a release builds amd64 and arm64, an ordinary merge builds nothing), the A1 rebuild and measurements, the cutover and retiring the paid x86 box | `IN PROGRESS` |
 | 2 | [INFRA-15](MVP/INFRA-15_VERIFY_SERVER_IMAGE_WORKFLOW_ON_GITHUB.md) | Verify the server-image, client-image and chat-image workflows on GitHub after INFRA-4, INFRA-5 and INFRA-8 merge (first push, release dispatch and tag, tag fallback, retention, package visibility) | `TODO` |
 | 3 | [INFRA-14](MVP/INFRA-14_PRODUCTION_KEYCLOAK_ON_ORACLE.md) | Production Keycloak on Oracle Always Free (production mode, theme and extension JARs, backups, real provider secrets); waits for INFRA-12 and INFRA-13 | `TODO` |
 | 4 | [INFRA-19](MVP/INFRA-19_BOX_CONFIG_IMAGE_FOR_A_FULLY_PULL_BASED_BOX.md) | A "box" config image: ship the box's non-secret files (Caddyfile, Compose files, init SQL, RabbitMQ config, realm, themes, Keycloak JARs built in CI) by pull through the same promote and deploy flow, so a fresh or changed box needs no manual file copying; estimated 2 to 3 days, cloud-init / Ansible / Terraform costed but not chosen; best done with or after INFRA-14 | `TODO` |
 | 5 | [INFRA-16](MVP/INFRA-16_DISTROLESS_SERVER_AND_CLIENT_IMAGES.md) | Evaluate distroless base images for the server image (and the client image, which needs a delivery-contract change first); after INFRA-6's run-flag hardening | `TODO` |
 | 6 | [INFRA-17](MVP/INFRA-17_DOWN_VERSION_DEPLOY_AND_SCHEMA_MIGRATION.md) | Down-version deploy and the database schema: make going back to an older release safe (expand/contract rule, backup before deploy, opt-in schema rollback, migration lint); until done, INFRA-6 blocks promoting a lower version | `TODO` |
 | 7 | [INFRA-18](MVP/INFRA-18_DEPLOY_FOLLOW_UPS_DEFERRED_FROM_INFRA_6.md) | Deploy follow-ups deferred from INFRA-6 (zero-downtime deploys, deploy notifications and a status view, Promote starting CI by itself); one collecting ticket, split when picked up | `TODO` |
+| 8 | [INFRA-20](MVP/INFRA-20_ORACLE_HOSTING_FOLLOW_UPS.md) | Oracle hosting follow-ups left open by the INFRA-12 spike: latency and the Cloudflare test, authenticated load (feed, Discover, WebSocket, Keycloak logins), idle reclamation and the current A1 allowance; measured on the A1 box after INFRA-12's move | `TODO` |
 
 ---
 

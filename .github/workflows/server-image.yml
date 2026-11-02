@@ -1,10 +1,11 @@
 # Server image — builds server/Dockerfile and publishes it to GHCR (INFRA-4).
 #
 #   pull request   -> checks the version and builds the image, pushes nothing (a broken Dockerfile fails before merge)
-#   push to master -> ordinary build: pushes :sha-<short> and :edge, jar stamped <version>+<short sha>
+#   push to master -> ordinary merge: builds and pushes nothing (INFRA-12: a release is the only deployable image), jar stamped <version>+<short sha>
 #                     RELEASE, when `version` in gradle.properties has no tag server-v<version> yet (and is not the
 #                     0.0.0 placeholder): also pushes :X.Y.Z and :latest, then creates the git tag server-vX.Y.Z
-#   manual run     -> no inputs; the same as a push to master. It is the "run again" for a release whose image push
+#   manual run     -> input `platforms` (default both architectures); builds only when the version has no tag yet, so it is the
+#                     same as a push to master. It is the "run again" for a release whose image push
 #                     failed (the tag is created last, so no tag exists and the re-run releases).
 #
 # A release is therefore a merged PR that raised the version (infra/scripts/server-version.sh bump), nothing else to click.
@@ -47,6 +48,15 @@ on:
       - 'infra/scripts/server-version.sh'
       - '.github/workflows/server-image.yml'
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'CPU architectures to build (default both: a release serves the A1 box and an x86 box from one tag)'
+        type: choice
+        default: linux/amd64,linux/arm64
+        options:
+          - linux/amd64,linux/arm64
+          - linux/arm64
+          - linux/amd64
 
 # Runs on master queue behind each other and are never cancelled half-way (a newer pending run replaces an older pending
 # one, which is safe: the release rule is "is there a tag yet", so the newer run still releases). Pull-request runs are replaced.
@@ -79,6 +89,7 @@ jobs:
         run: infra/scripts/server-image-plan.sh
 
       - uses: docker/setup-buildx-action@v3
+        if: steps.plan.outputs.build == 'true'
 
       - name: Log in to GHCR
         if: steps.plan.outputs.push == 'true'
@@ -89,11 +100,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build (and push)
+        if: steps.plan.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: server/Dockerfile
-          platforms: linux/amd64   # arm64 is added when the Always Free A1 box exists (INFRA-12)
+          platforms: ${{ inputs.platforms || (github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}   # release: both (the A1 box is arm64, an x86 box stays possible); pull request: amd64 (native, fast check); a manual run picks
           push: ${{ steps.plan.outputs.push == 'true' }}
           tags: ${{ steps.plan.outputs.tags }}
           provenance: false   # one plain manifest per tag, so retention can reason about versions
@@ -122,6 +134,7 @@ jobs:
         run: |
           {
             echo "### server-image"
+            echo "built: ${{ steps.plan.outputs.build }}, platforms: \`${{ inputs.platforms || (github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64') }}\`"
             echo "version \`${{ steps.plan.outputs.version }}\`, release: ${{ steps.plan.outputs.release }}, pushed: ${{ steps.plan.outputs.push }}"
             echo '```'
             echo "${{ steps.plan.outputs.tags }}"

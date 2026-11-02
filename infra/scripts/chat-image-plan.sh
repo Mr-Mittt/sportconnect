@@ -9,10 +9,10 @@
 # the tag chat-v<version> does not exist yet and the version is not the 0.0.0 placeholder; anything else is an ordinary build.
 #
 #   pull request     -> build only; version <version>+<sha7>
-#   ordinary build   -> pushes :sha-<sha7> and :edge; version <version>+<sha7>
-#   release          -> pushes :X.Y.Z, :latest, :sha-<sha7> and :edge; version X.Y.Z; the workflow creates the git tag last
+#   ordinary build   -> builds and pushes nothing (INFRA-12: CI minutes; only a release is deployable)
+#   release          -> builds, then pushes :X.Y.Z, :latest, :sha-<sha7> and :edge; version X.Y.Z; the workflow creates the git tag last
 #
-# Outputs: image, version (what the image is labelled with), build_date, push, release, create_git_tag, tags (one per line).
+# Outputs: image, version (what the image is labelled with), build_date, build, push, release, create_git_tag, tags (one per line).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -25,14 +25,14 @@ base="$(head -n 1 "$root/services/chat/VERSION" | tr -d '\r')"
 short="${SHA:0:7}"
 image="ghcr.io/$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')/sportconnect-chat"
 
-release=false; push=true; version="${base}+${short}"
+release=false; push=false; build=false; version="${base}+${short}"
 
 case "$EVENT_NAME" in
-  pull_request) push=false ;;
+  pull_request) build=true ;;
   push|workflow_dispatch)
     [ "$REF" = "refs/heads/master" ] || { echo "nothing to publish for $REF (images come from master only)" >&2; exit 1; }
     if [ "$base" != "0.0.0" ] && ! git -C "$root" rev-parse -q --verify "refs/tags/chat-v${base}" >/dev/null; then
-      release=true; version="$base"
+      release=true; push=true; build=true; version="$base"
     fi ;;
   *) echo "unsupported event $EVENT_NAME" >&2; exit 1 ;;
 esac
@@ -41,6 +41,7 @@ esac
   echo "image=$image"
   echo "version=$version"
   echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "build=$build"
   echo "push=$push"
   echo "release=$release"
   echo "create_git_tag=$release"
