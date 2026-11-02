@@ -133,3 +133,7 @@ Log row 15. The application only stores `geography(Point, 4326)` and indexes it 
 ## Point 3 (multi-arch builds) result 2026-11-02
 
 First release of all three images with both platforms (PR #396, log row 16): **Build (and push) times, owner's word:** client 6 m 28 s, chat 5 m 54 s, server 11 m 14 s, each with amd64 native and arm64 under QEMU on one `ubuntu-latest` runner. About 23.6 minutes of Actions per release of all three, so the 2,000 free minutes a month are not a constraint at this release rate, and a native arm runner is not needed. All three version tags list `linux/amd64` and `linux/arm64` in GHCR (read from the A1 box). **Still to prove:** that the images run: `sportconnect-deploy` on the A1 box (arm64) and on the x86 box (amd64, the reference), which also puts server `0.1.2`'s mail-health setting on a box for the first time.
+
+## Deploys of the multi-arch release (2026-11-02, log rows 17 to 19)
+
+`sportconnect-deploy` ran on both boxes with the same promoted versions (server `0.1.2`, chat `0.2.1`, client `0.1.1`): A1 (arm64) in 1 m 07 s, x86 (amd64, live) in 45 s, both healthy with no restarts. One tag per version served each box its own architecture. The outside requests against A1 (by `curl --resolve`, DNS untouched) matched the live site on all 12, and the live site still answers the same after its deploy. **Not yet proven:** a real sign-in and chat message through A1, the mail contributor's absence (INFRA-11) on a box, and the INFRA-6 check 9 failure path.
