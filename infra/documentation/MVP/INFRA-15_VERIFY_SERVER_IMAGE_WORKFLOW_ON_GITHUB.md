@@ -1,6 +1,6 @@
 # INFRA-15 · Verify the server-image workflow on GitHub
 
-**Status:** `TODO` · **Type:** Infrastructure (verification, GitHub-side) · **Dependency:** INFRA-4 merged to `master`
+**Status:** `IN PROGRESS` · **Type:** Infrastructure (verification, GitHub-side) · **Dependency:** INFRA-4 merged to `master`
 
 **Filed:** 2026-10-28, from INFRA-4. A workflow that publishes to GHCR can only run for real once it is on `master`, so INFRA-4 was verified locally (image build and boot, the version and plan scripts against a scratch repo with fake tags, `actionlint`) and these GitHub-side checks were left here, the same way HF-12 holds the client-ci ones.
 
@@ -112,3 +112,51 @@ Prod pointed at server `0.1.0`, client `0.1.0` and chat `0.2.0` (the first chat 
 - **9. Deliberate failure and restore: not run.** It needs a component whose `prod` differs from what runs; nothing is pending (no newer chat build exists since the docs merges did not touch chat). Do it at the next real release: break one value in a copy of the env file (for example `chat.env`), run `sportconnect-deploy`, check that everything the run changed is put back (`sc-<name>-prev` renamed back, `dist.prev` restored), that the report reads right and that `deploy.log` shows the failure. Until then the failure path is proven only against stand-ins (INFRA-6).
 - **Observation:** on the first plan the server showed `26.04`, not `unknown (local build)`. Reading the old `infra/oracle/server.Dockerfile` (`FROM eclipse-temurin:21-jre`, no version label of its own) this is the base image's Ubuntu release label; the container was not inspected. It only affects a locally built image; the real image sets its own `org.opencontainers.image.version` label (`server/Dockerfile`), and the run after the deploy shows `0.1.0`.
 - **Open after this run:** check 9 above; the `/release server patch` (`0.1.1`) check; the refusal checks of check 5 (missing version, run from another branch, older version, failed CI); check 4 for the client and chat; step 7 (delete permission, more than 10 `sha-` builds); client C2/C4/C6/C7/C8 and chat CH2.
+
+
+## Run sheet, 2026-11-02 (scope locked: every open check is proven in this ticket)
+
+Scope decisions (2026-11-02): all open checks stay in INFRA-15, no follow-up ticket; the PostGIS workflow (`postgis-image.yml`, INFRA-12) joins the checklist as **P1 to P6**; the earlier steps are not rewritten, this section records what changed since INFRA-12 (an ordinary merge now builds and pushes nothing, only a release pushes; a pull request builds `linux/amd64` only; a manual run has a `platforms` choice).
+
+**Proven by git, 2026-11-02 (no GitHub page needed).** All eight release tags exist on origin: `server-v0.1.0` (`6f26f90`), `server-v0.1.1` (`2b1653f`), `server-v0.1.2` (`66fc0a0`), `client-v0.1.0` (`b5472cc`), `client-v0.1.1` (`66fc0a0`), `chat-v0.1.0` (`8cc1eec`), `chat-v0.2.0` (`69e6668`), `chat-v0.2.1` (`66fc0a0`). That settles: the tag is created for every release; server step 5's `patch` bump (`0.1.0` to `0.1.1` to `0.1.2`); and a bare `/release` bumping several components on one branch (PR #396 bumped all three, one commit `66fc0a0`). **Read, not run:** the "Log in to GHCR" step has `if: steps.plan.outputs.push == 'true'`, so it is skipped when nothing is pushed; the `paths:` lists of `client-image` and `chat-image` exclude their docs folders; `*-image-plan.sh` exits 1 for a dispatch from any ref except `refs/heads/master`. **Not proven by reading:** the run pages below.
+
+**Steps (cheapest first). Record each result under its id, with "owner's word" where Claude did not see it.**
+
+Scratch pull requests (never merged; close each and delete its branch afterwards; the owner opens them, `gh` is not installed). Branch each from `master`.
+
+- **S1 (`scratch/infra-15-good`): the good pull-request run.** Add a comment line to the four workflow files `server-image.yml`, `client-image.yml`, `chat-image.yml` and `postgis-image.yml`, and change `ARG POSTGIS_VERSION=3.6` to `3.5` in `infra/postgis/Dockerfile`. Expect all four workflows to start. In each run: the Summary reads `pushed: false` (postgis: `PostGIS 3.5, pushed: false`, `platforms: linux/amd64`); the step **"Log in to GHCR" shows as skipped** (server step 3, C3, CH3, P3); the tag listed is `sha-<short>` only (postgis: `16-3.5`, which proves the tag follows the `ARG`, P6). If the 3.5 build fails because PGDG has no 3.5 package, note it and use 3.4. Keep this PR open until D1.
+- **S2 (`scratch/infra-15-bad-versions`): the bad-version check** (server step 4, C4, CH4). Set `version=0.0.9` in `gradle.properties`, `"version": "0.1"` in `client/package.json` (malformed) and `0.0.9` in `services/chat/VERSION`. Expect the "Check the version" step of each image workflow to fail the PR: the server's and chat's as "not higher than the latest release", the client's as not `X.Y.Z`.
+- **S3 (`scratch/infra-15-docs-only`): docs-only filters** (C3, CH3, P4). Change one line each in a file under `client/docs/`, a file under `services/chat/docs/` and `infra/documentation/`. Expect **no** `server-image`, `client-image`, `chat-image` or `postgis-image` run on the PR.
+
+Manual runs and the refusal (Actions, "Run workflow"):
+
+- **D1: the master-only refusal** (server step 6, second half). With S1 still open, run `server-image`, `client-image`, `chat-image` and `postgis-image` from branch `scratch/infra-15-good`. Expect each to fail at the plan step with `nothing to publish for refs/heads/scratch/infra-15-good (images come from master only)` (postgis: its own wording).
+- **P5: the `platforms` dropdown exists** on all four workflows (the "Run workflow" panel lists the three choices). Selecting a choice is exercised by D2 below; do not run postgis from master with one platform (it would replace the multi-arch `16-3.6`).
+
+Promote refusals (Actions, `promote`; none of these changes `prod`; the owner reads `prod` first with `sportconnect-deploy --plan` on `sc-a1`):
+
+- **R1: a version that does not exist.** `server`, `9.9.9`. Expect a refusal in the `check` job.
+- **R2: a run from another branch.** `promote` from `scratch/infra-15-good`. Expect a refusal (master only).
+- **R3: an older version.** Promote a version lower than the one on `prod` (for example `server 0.1.0` when `prod` is `0.1.1` or higher). Expect `OLDER ... blocked until INFRA-17`.
+- **R4: the same version again** for `client` and `chat` (check 4 for the two): the Summary says `prod` already points there and the approval job is skipped.
+- **R5: a failed CI run** can only be seen if a release commit had a failing `<component>-ci`; none exists. Recorded as **not provable on purpose** unless one appears; S2's failing version check shows the failure path of the image workflows, not of this lookup.
+
+Images (the A1 box or any Docker with a `read:packages` login):
+
+- **C2: the client image.** Pull `sportconnect-client:0.1.1`; `docker run --rm -v web:/srv <image>` into an empty volume, serve it with `caddy:2-alpine`: `/` and an unknown path return `index.html`, the bundle contains `https://auth.yoursport.vn` and not `localhost:8081`, the labels show version `0.1.1` and the revision.
+- **CH2: the chat image.** Pull `sportconnect-chat:0.2.1`: labels (version, revision, source, title, chat description), `docker top` of a running `sc-chat` shows UID 65532 (the box's running container is enough; no new boot is needed, since the box runs this image family), `/healthz` answers 200.
+- **P1, P2: the PostGIS package.** The package page of `sportconnect-postgis` is private and linked to the repository; the Summary of the merge run for PR #395 (`bdbe7bc`) reads `PostGIS 3.6, pushed: true`, `platforms: linux/amd64,linux/arm64`; `docker buildx imagetools inspect ghcr.io/mr-mittt/sportconnect-postgis:16-3.6` lists both platforms (the A1 log row 14 already shows the index digest).
+- **CH9: the Go version step.** In the chat release run's log the step "Go version from go.mod" prints `1.25` (read from any chat-image run on S1 or the drill below).
+
+The rebuild drill (guide section 15, "To rebuild a release"), on `chat` only, and **do not Promote or deploy chat between D2 and D3**:
+
+- **D2: re-run after a missing tag, one platform** (server step 6 first half, and the `platforms` choice). `git push origin :refs/tags/chat-v0.2.1`; run `chat-image` from `master` with `linux/arm64`. Expect `release: true`, `platforms: linux/arm64`, tags `:0.2.1`, `:latest`, `:sha-<short>`, `:edge` pushed, the tag `chat-v0.2.1` recreated last (on the current `master` commit, not `66fc0a0`), and `docker buildx imagetools inspect …sportconnect-chat:0.2.1` listing `linux/arm64` only.
+- **D3: the rebuild again, both platforms.** Delete the tag again, run `chat-image` from `master` with the default `linux/amd64,linux/arm64`. Expect both platforms back on `:0.2.1` and `:latest`.
+- **Promote chat `0.2.1`** (the rebuilt image has a new digest): approve, and check the `promote-apply` line and the digest equal to `…:0.2.1` (proves "works for the latest version", and `prod` now differs from what runs).
+- **Check 9: a deliberate deploy failure and its restore** on `sc-a1`, using that pending chat change: put a wrong value in a copy of `chat.env` (never print the file), run `sportconnect-deploy --yes`, check the report, that `sc-chat-prev` is renamed back and the old container runs, `deploy.log`; then restore the right file and deploy again; then `--plan` shows "everything is up to date".
+
+Retention (step 7, C7, CH7):
+
+- **Count the `sha-` versions** of the three packages (package page, "Versions"). Only releases push a `sha-` tag now. If a package has 11 or more, read the prune step of the next release run of that component: the owner should see versions deleted and no release tag, `latest` or `edge` touched. If every package has 10 or fewer, record the counts and that **the deletion cannot be provoked without publishing more releases**: the step is left observed-at-next-release, not proven here (the listing part is proven, no 403, server `0.1.0` run).
+
+**Closing:** after the results, Claude replaces the "(not run yet)" notes in `PRODUCTION_DEPLOYMENT_GUIDE.md` sections 5 (PostGIS image), 15 and 16 that these runs prove, adds a change-history row, `PROGRESS.md`, and moves INFRA-15 to Done. Anything not proven stays written down here as such.

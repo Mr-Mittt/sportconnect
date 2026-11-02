@@ -29,7 +29,7 @@ green run exists" pattern.
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [INFRA-15](MVP/INFRA-15_VERIFY_SERVER_IMAGE_WORKFLOW_ON_GITHUB.md) | Verify the server-image, client-image and chat-image workflows on GitHub after INFRA-4, INFRA-5 and INFRA-8 merge (first push, release dispatch and tag, tag fallback, retention, package visibility) | `TODO` |
+| 1 | [INFRA-15](MVP/INFRA-15_VERIFY_SERVER_IMAGE_WORKFLOW_ON_GITHUB.md) | Verify the server-image, client-image and chat-image workflows on GitHub after INFRA-4, INFRA-5 and INFRA-8 merge (first push, release dispatch and tag, tag fallback, retention, package visibility) | `IN PROGRESS` |
 | 2 | [INFRA-14](MVP/INFRA-14_PRODUCTION_KEYCLOAK_ON_ORACLE.md) | Production Keycloak on Oracle Always Free (production mode, theme and extension JARs, backups, real provider secrets); waits for INFRA-12 and INFRA-13 | `TODO` |
 | 3 | [INFRA-19](MVP/INFRA-19_BOX_CONFIG_IMAGE_FOR_A_FULLY_PULL_BASED_BOX.md) | A "box" config image: ship the box's non-secret files (Caddyfile, Compose files, init SQL, RabbitMQ config, realm, themes, Keycloak JARs built in CI) by pull through the same promote and deploy flow, so a fresh or changed box needs no manual file copying; estimated 2 to 3 days, cloud-init / Ansible / Terraform costed but not chosen; best done with or after INFRA-14 | `TODO` |
 | 4 | [INFRA-16](MVP/INFRA-16_DISTROLESS_SERVER_AND_CLIENT_IMAGES.md) | Evaluate distroless base images for the server image (and the client image, which needs a delivery-contract change first); after INFRA-6's run-flag hardening | `TODO` |
