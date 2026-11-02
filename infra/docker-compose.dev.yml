@@ -2,7 +2,7 @@ name: sportconnect-dev
 
 services:
   postgres:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:16-3.6
     environment:
       POSTGRES_DB: sportconnect_dev
       POSTGRES_USER: postgres
