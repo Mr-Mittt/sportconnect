@@ -74,7 +74,7 @@ then `http://localhost:18081/admin/master/console/`, user `admin`. Needs `KC_HOS
 - A new certificate name is probed by scanners within seconds. Block the Keycloak admin paths in the same change that publishes it.
 - `services/chat/Dockerfile` cannot build (Go 1.22 image, `go.mod` needs 1.25): INFRA-8 Delta. `run-containers.sh` patches the version from `go.mod`.
 - The `dev` profile hard-codes `app.internal-service-secret: some-shared-dev-secret` and ignores the `INTERNAL_SERVICE_SECRET` variable; the sandbox runs the `prod` profile instead.
-- Under the `prod` profile with no SMTP credentials `/actuator/health` is DOWN (mail health check): INFRA-11 Delta.
+- Under the `prod` profile with no SMTP credentials `/actuator/health` was DOWN (mail health check); fixed by INFRA-11 (mail is out of the health in `prod`).
 - Chat needs `REDIS_ADDR` (default `localhost:6379`), its schema is not created automatically, and it exits if it starts before the server is ready; Docker's restart policy covers the last one, `run-containers.sh` orders the start.
 - Keycloak's read-back of `smtpServer` and `kcadm ... --fields attributes` hide values (password, nested attributes); read the whole object to see them.
 - `curl` and Git Bash rewrite a leading `/path` into `C:/Program Files/Git/path` in `-w` labels; cosmetic only.
