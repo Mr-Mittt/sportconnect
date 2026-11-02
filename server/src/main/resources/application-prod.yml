@@ -41,6 +41,15 @@ springdoc:
   swagger-ui:
     enabled: false
 
+# INFRA-11: the mail check stays out of the overall health. With it in, a mail provider outage (or a wrong SMTP login)
+# makes /actuator/health report DOWN, so the container turns unhealthy and sportconnect-deploy restores the previous
+# release for a change that has nothing to do with mail. The database, Redis and RabbitMQ checks still drive the status.
+# Dev switches it off the same way (application-dev.yml).
+management:
+  health:
+    mail:
+      enabled: false
+
 # Production Server
 server:
   port: ${SERVER_PORT:8080}
