@@ -1,6 +1,6 @@
 # INFRA-15 · Verify the server-image workflow on GitHub
 
-**Status:** `IN PROGRESS` · **Type:** Infrastructure (verification, GitHub-side) · **Dependency:** INFRA-4 merged to `master`
+**Status:** `DONE` (2026-11-02) · **Type:** Infrastructure (verification, GitHub-side) · **Dependency:** INFRA-4 merged to `master`
 
 **Filed:** 2026-10-28, from INFRA-4. A workflow that publishes to GHCR can only run for real once it is on `master`, so INFRA-4 was verified locally (image build and boot, the version and plan scripts against a scratch repo with fake tags, `actionlint`) and these GitHub-side checks were left here, the same way HF-12 holds the client-ci ones.
 
@@ -199,3 +199,19 @@ Setup: chat `prod` had been moved to the rebuilt digest, so `--plan` read chat `
 - **CH9, the Go version step (first half), 2026-11-02, pasted build command from the D3 run:** `docker buildx build --build-arg GO_VERSION=1.25 --build-arg VERSION=0.2.1 --build-arg GIT_SHA=d65275d2… --platform linux/amd64,linux/arm64 … --tag …:sha-d65275d --tag …:edge --tag …:0.2.1 --tag …:latest --push services/chat`. `services/chat/go.mod` says `go 1.25.11` and the step's `awk` keeps `1.25`, so the value reached the build from `go.mod`. (The step prints nothing itself; it only writes `version=` to `$GITHUB_OUTPUT`.) **Passed.** The second half, a Go bump in `go.mod` building without a Dockerfile edit, needs a real bump and is **not proven here**; it is read from the next Go bump.
 - **P1, the PostGIS package page, 2026-11-02, owner's word:** `ghcr.io/mr-mittt/sportconnect-postgis` is private and linked to the repository ("yes"; not itemised per setting). **Passed.** With P2 to P4 and P6 this closes the PostGIS checklist, apart from P5's non-default `platforms` choices (not run on purpose: a one-platform run on `master` would replace the multi-arch `16-3.6`; the choice was exercised on chat in D2).
 - **C2, the bundle (second half), 2026-11-02, pasted output from `sc-a1`:** in `/srv/assets/index-BBaj9jba.js` of `sportconnect-client:0.1.1` the slice around the leftover string reads `(){const e="https://auth.yoursport.vn";return(e&&e.length>0?e:"http://localhost:8081").replace(/\/$/,"")}`: the configured value is `https://auth.yoursport.vn` and `http://localhost:8081` is only the unused fallback branch of the ternary in `keycloak.ts`. (The terminal broke the command over lines, so the `grep -c` count and the third slice did not run; this one slice answers the question.) **C2 passed**, with the rule restated: the bundle holds the configured auth URL, and `localhost:8081` may remain only as that dead fallback. The volume was removed afterwards.
+
+## Closing (2026-11-02)
+
+Every check in this ticket was run on GitHub or on the box and recorded above, except the ones listed here. The results of the owner's runs are the owner's word where a log was not pasted; those lines say so.
+
+**Not proven, and why (each is written down, none is silently dropped):**
+
+- **Retention's deletion** (server step 7, C7, CH7): every package holds fewer than 11 `sha-` builds (server 7 tagged, client 5, chat 6), and only releases push them now, so the delete call cannot be provoked. The listing works with the workflow token (no 403) and nothing was touched. Read the prune step's log of the first release that finds more than 10.
+- **A failed CI run in the promote check** (R5): no release commit has a failing `<component>-ci` run.
+- **A Go bump in `go.mod`** building without a Dockerfile edit (CH9 second half): needs a real bump.
+- **The non-default `platforms` choices on the PostGIS workflow** (P5): not run on purpose; the choice was exercised on chat.
+- **Smaller gaps:** the rendered Summary pages (the proofs are the logged step scripts with the values filled in); the individual server-image, client-image and chat-image tag lines of the pull-request runs; the bad-version error lines of S2 (the failures are the owner's word).
+
+**Corrections found on the way:** the `keycloak.ts` fallback literal `http://localhost:8081` stays in the bundle beside the configured `https://auth.yoursport.vn`, so the client check "no `localhost:8081`" is restated as "the configured value is the production URL"; a PostGIS pin that PGDG does not carry (3.5 on trixie) fails the pull-request build, which is the intended guard.
+
+The guide (sections 15, 16, change history) is updated to match.
