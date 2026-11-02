@@ -104,3 +104,4 @@ jobs:
             echo "${{ steps.plan.outputs.tag }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+# INFRA-15 scratch check

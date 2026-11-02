@@ -9,7 +9,7 @@
 # same minor (infra/docker-compose.dev.yml), and an existing database needs `SELECT postgis_extensions_upgrade();` once.
 FROM postgres:16
 
-ARG POSTGIS_VERSION=3.6
+ARG POSTGIS_VERSION=3.5
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
