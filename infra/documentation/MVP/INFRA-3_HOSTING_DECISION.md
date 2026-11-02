@@ -1,5 +1,7 @@
 # Hosting decision — Oracle Cloud, one x86 instance (Always Free A1 later)
 
+> **Update 2026-11-02 (INFRA-12): production now runs on the Always Free A1 (arm64), 2 OCPU / 12 GB** (Oracle's page lists 2 OCPU / 12 GB of A1 in total now, not 4 / 24). The x86 box was the first production box and the reference; it is stopped and to be terminated. Images are multi-arch (a release builds amd64 and arm64), PostgreSQL runs our own PostGIS 3.6 image because the official one has no arm64 build. Where this file says x86 "now" and A1 "later", read it as the state of 2026-10-27; see `INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md` and `INFRA-12_A1_MIGRATION_LOG.md`.
+
 **Date:** 2026-07-08 (first decision: AWS) · **Amended 2026-10-27:** Oracle Cloud, after the INFRA-12 spike
 **Status:** Agreed (repo owner + Claude). The AWS shape of 2026-07-08 is superseded; its record is kept below.
 **Evidence:** `INFRA-12_SPIKE_ORACLE_ALWAYS_FREE_HOSTING.md` (findings and decision), `INFRA-12_ORACLE_INSTANCE_SETUP_LOG.md` (every step), `INFRA-12_ORACLE_SANDBOX_RUNBOOK.md` (how to rebuild)
@@ -47,7 +49,7 @@ AWS free tier, one EC2 instance (Docker + Nginx/Caddy + self-hosted Redis) with 
 | Option | Why not |
 |---|---|
 | **AWS free tier (single EC2 + RDS)** | The 2026-07-08 choice, superseded above. 1 GB RAM is too small for the whole stack; 12-month clock. |
-| **Oracle Always Free A1 (arm64)** | The preferred home (free, 4 OCPU / 24 GB allowed), but "out of host capacity" in the region's only availability domain during INFRA-12. Reconsidered when capacity appears. |
+| **Oracle Always Free A1 (arm64)** | Production since 2026-11-02 (INFRA-12): capacity became available, the allowance is now 2 OCPU / 12 GB, the whole stack runs on it (load test: 54 to 62% of the 4-vCPU x86 box's throughput on 2 vCPUs, CPU-bound, no failures to speak of). Idle reclamation and the allowance staying free are tracked in INFRA-20. |
 | **Azure** | Same shape as AWS (12-month free VM) with several separate free-tier clocks. No advantage. |
 | **Google Cloud** | Cloud Run is free but Cloud SQL (managed Postgres) has no free tier; the database is the one piece this app cannot skip. |
 | **Render** | The free Postgres is auto-deleted after 30 days. |
