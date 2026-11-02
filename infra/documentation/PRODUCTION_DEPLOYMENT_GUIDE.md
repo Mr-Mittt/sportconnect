@@ -102,6 +102,8 @@ This exact sequence ran on 2026-10-27 (sandbox to new box, 2 accounts); a restor
 
 From your computer, with real DNS:
 
+**Checking a box before DNS points at it (rehearsal or cutover):** `curl --resolve yoursport.vn:443:<box IP> --resolve www.yoursport.vn:443:<box IP> --resolve auth.yoursport.vn:443:<box IP> https://yoursport.vn/…` sends the real host name to the new box with the real certificate, so the whole list below can be run against it while the old box still serves. Run the same request against the live site and compare status and size (done for the A1 box on 2026-11-02: 12 of 12 identical).
+
 | URL | Expected |
 |---|---|
 | `https://yoursport.vn/` | 200 (client) |
@@ -306,3 +308,4 @@ Not covered by a recorded run yet: the failure path. To test it on a release tha
 | 2026-11-02 | INFRA-12 | Section 1 steps 5 to 7: the A1 shape and its 2 OCPU / 12 GB allowance, the dynamic-group rule with two instances while boxes coexist, `uname -m` for both architectures. |
 | 2026-11-02 | INFRA-12 | Section 5 item 4: `postgis-image` ran on GitHub (PR #395 merged); `sportconnect-postgis:16-3.6` is a two-platform index in GHCR and the A1 box runs it (data intact). |
 | 2026-11-02 | INFRA-12 | Section 15: the first multi-arch releases (server `0.1.2`, client `0.1.1`, chat `0.2.1`, PR #396) built and pushed both platforms; times recorded. Deploying them to the boxes is not run yet. |
+| 2026-11-02 | INFRA-12 | First `sportconnect-deploy` on arm64 (A1 box): server `0.1.2`, chat `0.2.1`, client `0.1.1` in 1 m 07 s, all healthy; Caddy started with the restored certificates; section 10 gets the `curl --resolve` way to check a box before DNS moves (12 of 12 requests identical to the live site). The x86 box has not been deployed yet. |
