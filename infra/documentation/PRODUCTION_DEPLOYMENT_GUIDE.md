@@ -284,7 +284,9 @@ Not covered by a recorded run yet: the failure path. To test it on a release tha
 
 **Updating the command later.** To change only the script, no bundle is needed: `scp` the one file to the box, `sudo install -m 0755 ~/sportconnect-deploy.sh /usr/local/bin/sportconnect-deploy`, then `sportconnect-deploy --version` must equal `sha256sum infra/oracle/scripts/sportconnect-deploy.sh` on your computer. Check the repo file has LF line endings first (`file`).
 
-## 17. Moving production to another box: the cutover (INFRA-12)
+## 17. The standard box switch: moving production to another box (INFRA-12)
+
+**Two variants.** *Full* (users exist, no data may be lost): every step below, including the freeze and the final backup (steps 1 to 4). *Quick* (no end users yet, the data since the last nightly backup may be dropped; the variant chosen for the move to the A1 box on 2026-11-02): **skip steps 1 to 4**, because the new box already holds the newest nightly set from its rehearsal (log row 13), and start at step 5. In the quick variant the old box's timer must still be disabled at the switch (step 3 is not optional), and the data written on the old box after that backup is not carried over (say so in the log: what the date of the backup was, and that nobody but the owner used the site since).
 
 Written 2026-11-02 for the move from the x86 box (`sc-box`, amd64) to the A1 box (`sc-a1`, arm64); **none of it has been run yet** except where a step says so. It is the same for any other box: "old" is the box serving now, "new" is the box that takes over. Everything that can be done before the switch is in the preparation list, so the window in which users cannot write is short.
 
@@ -350,3 +352,4 @@ Written 2026-11-02 for the move from the x86 box (`sc-box`, amd64) to the A1 box
 | 2026-11-02 | INFRA-12 | First `sportconnect-deploy` on arm64 (A1 box): server `0.1.2`, chat `0.2.1`, client `0.1.1` in 1 m 07 s, all healthy; Caddy started with the restored certificates; section 10 gets the `curl --resolve` way to check a box before DNS moves (12 of 12 requests identical to the live site). |
 | 2026-11-02 | INFRA-12 | The same release deployed on the live x86 box by the owner (45 s, amd64, healthy); the outside checks and the isolation check passed afterwards. Both boxes run server `0.1.2`, chat `0.2.1`, client `0.1.1`. |
 | 2026-11-02 | INFRA-12 | New section 17, the cutover from one box to another (preparation, the window, after the switch, rolling back), and the new script `infra/oracle/scripts/restore-from-bucket.sh` (the row 13 restore as a file, with `EXPECT_SET`). **Not run yet**; the final-backup and DNS steps are written, not timed. |
+| 2026-11-02 | INFRA-12 | Section 17 renamed "the standard box switch" and given two variants: full (freeze, final backup, restore) and quick (no end users yet: skip steps 1 to 4 and accept the data of the last nightly backup; the old timer is still disabled at the switch). |
