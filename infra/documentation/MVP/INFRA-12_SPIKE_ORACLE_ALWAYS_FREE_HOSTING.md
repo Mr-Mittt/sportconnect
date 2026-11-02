@@ -2,7 +2,7 @@
 
 *Renamed 2026-11-02 (was: "Spike: can the whole stack run on Oracle Cloud Always Free (and Keycloak with it)?"). The spike answered GO on 2026-10-27; since A1 capacity appeared the ticket also carries the move to the A1 box (see the scope change at the end). The file name keeps the old wording so existing links work.*
 
-**Status:** `IN PROGRESS` · **Type:** Infrastructure (spike / hosting decision) · **Dependency:** none · **Gates:** INFRA-3..6 (and INFRA-7/8/9, which assume the AWS EC2 box)
+**Status:** `DONE` (2026-11-02) · **Type:** Infrastructure (spike / hosting decision) · **Dependency:** none · **Gates:** INFRA-3..6 (and INFRA-7/8/9, which assume the AWS EC2 box)
 
 **Filed:** 2026-10-13, from a `/feature` discussion on "login with Google, Facebook and Zalo". Keycloak (or any extra process) does not fit the 1 GB AWS free-tier EC2 box planned in `INFRA-3_HOSTING_DECISION.md`. The repo owner has since created an Oracle Cloud Always Free account. Oracle's Always Free page (read 2026-10-13) lists an Arm Ampere A1 allowance of **2 OCPU / 12 GB**, 200 GB block storage and 10 TB/month egress, which on paper holds the whole stack with room to spare. This ticket turns "on paper" into a measured go/no-go before any AWS ticket is built.
 
@@ -102,8 +102,8 @@ Rules decided with the owner: keep `linux/amd64` as a reference and a way back; 
 - [x] **B. Build the A1 box, no cutover** (done 2026-11-02, log rows 1 to 19: the box, our PostGIS image, the restore from the bucket, the first multi-arch deploys on both boxes, outside checks by `curl --resolve`). The owner gives the A1 IP, an `ssh` alias and the OCID. Runbook up to the stack start (`box-prepare.sh`, bundle, secrets, GHCR login, `start-stack.sh`); record which images do not start on arm64 (PostGIS `16-3.4` first; Keycloak, RabbitMQ, Redis, Caddy), Liquibase on arm64, start-up times; restore the newest bucket set (the first full restore from the bucket); check the stack from the box and from outside with a hosts-file override, DNS untouched.
 - [x] **C. Measure (point 4 on A1)** (done 2026-11-02, log row 20; results in "Point 4 on A1"). Idle memory and CPU, then the same read-only load test as on x86 so the two compare. The A1 box has 2 vCPUs against the x86 box's 4 (an OCPU on A1 is one core, no hyperthreads); say so in the result.
 - [x] **D. Cutover (owner steps)** (done 2026-11-02, log rows 21 to 25: DNS switched, checks passed, A1 backs up; the Brevo key is not rotated) — the standard box switch, guide section 17, **quick variant** (no end users: skip the freeze and the final backup, accept the data of the 2026-11-01 19:02 UTC nightly backup, decided by the owner 2026-11-02). A last backup from the old box; DNS for `yoursport.vn`, `www` and `auth`; after the Keycloak restore re-run `set-admin-pw.sh`, `set-credentials-client-secret.sh`, `set-master-frontend-url.sh` and check the Google provider, SMTP and the web redirect URI; the dynamic-group rule and bucket policy for the new instance OCID; the checks of guide section 10 from outside.
-- [ ] **E. The x86 box.** Keep it stopped for a soak period the owner chooses, then terminate it with its boot volume (or terminate at once; the rebuild from the bucket and the multi-arch images is documented). Update `INFRA-3_ORACLE_RESOURCES.md`, the guide and its history, the rebuild log, and the "sandbox" wording in `PORTS.md` rows 39 and 40.
-- [ ] **F. Close.** Findings and a final decision written here; the unclosed spike points (latency and the Cloudflare test, authenticated load, idle reclamation) are filed as INFRA-20 (done 2026-11-02); move INFRA-12 to Done.
+- [x] **E. The x86 box** (2026-11-02: stopped by the owner and removed from the dynamic group, log row 26; **terminating the stopped instance and its boot volume is left to the owner, later**; the resources doc, the rule and PORTS are updated). Keep it stopped for a soak period the owner chooses, then terminate it with its boot volume (or terminate at once; the rebuild from the bucket and the multi-arch images is documented). Update `INFRA-3_ORACLE_RESOURCES.md`, the guide and its history, the rebuild log, and the "sandbox" wording in `PORTS.md` rows 39 and 40.
+- [x] **F. Close** (2026-11-02: see "Closing" below; the unclosed spike points are INFRA-20). Findings and a final decision written here; the unclosed spike points (latency and the Cloudflare test, authenticated load, idle reclamation) are filed as INFRA-20 (done 2026-11-02); move INFRA-12 to Done.
 
 **Risks.** Oracle reportedly cut the Always Free A1 allowance to 2 OCPU / 12 GB around 2026-08-18 and some instances were disabled: keep the x86 box and nightly backups until the A1 box has soaked, and do not resize or terminate the A1 box (capacity can vanish). A cutover needs a short write freeze. Secrets stay on the boxes only.
 
@@ -159,3 +159,22 @@ Same test, same method as the x86 sandbox (k6 on the box, through Caddy and TLS,
 ## The switch (2026-11-02, log rows 21 to 25)
 
 Quick variant of the standard box switch (guide section 17): no end users, so no freeze and no final backup; the data of the 2026-11-01 19:02 UTC backup was kept and anything newer on the x86 box was dropped. After the post-restore Keycloak scripts, the owner's checks on A1 through a hosts-file entry (password sign-in, Google, chat with live push, reset email: owner's word), the old backup timer was disabled, the owner switched the DNS (TTL 300 s), and the 12 requests, the isolation check and the Keycloak issuer then passed through real DNS against `161.33.72.52`. The A1 box took over the backups (first set `20261102T092631Z`, `restore-test.sh` ok). **Open:** the scheduled 19:01 UTC backup, the Brevo key, the soak, then stop and terminate the x86 box (E), and the close (F).
+
+## Closing (2026-11-02)
+
+**Final decision: Oracle Cloud, the Always Free A1 (arm64, 2 OCPU / 12 GB) is production; the x86 box was the first production box and the reference, now stopped.** The spike's ten points, as they stand:
+
+| # | Point | Final result |
+|---|---|---|
+| 1 | A1 capacity | **Done:** available on 2026-11-02; the allowance is 2 OCPU / 12 GB (reported cut from 4 / 24 around 2026-08-18; Oracle's page, read by search, and community posts: not confirmed in the console by Claude). |
+| 2 | PostGIS on arm64 | **Done:** the official image has no arm64 build; own image `sportconnect-postgis:16-3.6` (log rows 5, 6, 14, 15). |
+| 3 | arm64 builds | **Done:** a release builds both platforms (client 6 m 28 s, chat 5 m 54 s, server 11 m 14 s). |
+| 4 | Whole stack, real numbers | **Done on A1 and x86:** idle about 1.5 GiB; 400-user read-only load test on both. Authenticated traffic: INFRA-20. |
+| 5 | Idle reclamation | **Open → INFRA-20.** |
+| 6 | Public HTTPS | **Done**, now on A1 through real DNS. |
+| 7 | Backups | **Done:** nightly timer on A1, first backup `20261102T092631Z`, restore tests ok; the scheduled run and the 7-day deletion are not observed yet. |
+| 8 | Deploy access | **Done:** pull-based `sportconnect-deploy` (INFRA-6), run on both architectures. |
+| 9 | Latency | **Open → INFRA-20.** |
+| 10 | Outbound email | **Done** (Brevo); the key is shared by both boxes and **not rotated** (the owner's decision, INFRA-3 row 23). |
+
+**Left open on purpose:** terminate the stopped x86 instance with its boot volume (owner, later); the Brevo key rotation (owner); INFRA-20; INFRA-6 check 9 (failure and restore of a deploy); a real mail-health check of INFRA-11 on a box (its setting is proven by tests, not on the box). The conditionals on GitHub that ran in this ticket (multi-arch release builds and the PostGIS image) are recorded in log rows 14 and 16; the `platforms` dropdown was not exercised.
