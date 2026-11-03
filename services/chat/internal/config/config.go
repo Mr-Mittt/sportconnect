@@ -23,6 +23,10 @@ type Config struct {
 	// Spring monolith (e.g. "localhost:6379" in dev).
 	RedisAddr string
 
+	// RedisPassword is the password of that Redis (INFRA-14). Empty means the instance has none, which is the dev
+	// default; production sets one through REDIS_PASSWORD.
+	RedisPassword string
+
 	// KeycloakIssuerURI is the `iss` Keycloak puts on access tokens (CHAT-17), the same value and env
 	// name as the monolith's KEYCLOAK_ISSUER_URI. Tokens are verified against the realm JWKS below,
 	// independently, with no callback to Spring or Keycloak per request.
@@ -74,6 +78,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		HTTPAddr:          getEnv("CHAT_HTTP_ADDR", ":8090"),
 		RedisAddr:         getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:     getEnv("REDIS_PASSWORD", ""),
 		MonolithBaseURL:   getEnv("MONOLITH_BASE_URL", "http://localhost:8080"),
 		CORSAllowedOrigin: getEnv("CHAT_CORS_ALLOWED_ORIGIN", "http://localhost:5173"),
 		KeycloakIssuerURI: getEnv("KEYCLOAK_ISSUER_URI", "http://localhost:8081/realms/sportconnect"),

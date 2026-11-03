@@ -18,13 +18,16 @@
 # the first start on a box whose chat database was built by hand rebuilds that database). A container put back
 # after a failure does not undo a migration the new version already ran (INFRA-17).
 # Run on the box on 2026-10-30 (INFRA-6, INFRA-15): plan, pull, the first deploy over the sandbox containers, the hardened
-# flags on the real images and the up-to-date run. Not run on the box yet: the failure path and the restore (tested only
-# locally against a throwaway registry).
+# flags on the real images and the up-to-date run. The failure path and the restore ran on the box on 2026-11-02 (INFRA-15,
+# check 9). INFRA-14: --recreate=server,chat starts those containers again from the image they already run, so a changed env file is read
+# (the env file is read when a container is created, not while it runs); the same pull, health wait and restore apply.
+# ENV_DIR names the folder the env files are read from (default WEB_DIR).
 set -uo pipefail
 
 # Everything below can be overridden from the environment; the defaults are the production box.
 IMAGE_BASE="${IMAGE_BASE:-ghcr.io/mr-mittt}"
 WEB_DIR="${WEB_DIR:-$HOME/web}"
+ENV_DIR="${ENV_DIR:-$WEB_DIR}"   # where server.env and chat.env are read from; fetch-secrets.sh (INFRA-14) can put them on tmpfs
 NET="${NET:-sportconnect-dev_default}"
 NAME_PREFIX="${NAME_PREFIX:-sc}"
 SERVER_WAIT="${SERVER_WAIT:-300}"   # seconds; the HEALTHCHECK start period alone is 120 s (Liquibase on a cold database)
@@ -35,8 +38,10 @@ LOG="$WEB_DIR/deploy.log"
 COMPONENTS=(server chat client)
 
 mode=ask
+RECREATE=""   # components to recreate from the image they already run (INFRA-14: new env file values, same image)
 for a in "$@"; do
   case "$a" in
+    --recreate=*) RECREATE=" $(printf '%s' "${a#--recreate=}" | tr ',' ' ') " ;;
     --yes) mode=yes ;;
     --plan) mode=plan ;;
     --version) sha256sum "$0" | cut -d' ' -f1; exit 0 ;;
@@ -94,8 +99,8 @@ flock -n 9 || die "another sportconnect-deploy is running (lock: $WEB_DIR/.deplo
 command -v docker >/dev/null || die "docker is not installed or not on PATH."
 docker info >/dev/null 2>&1 || die "cannot talk to Docker. Are you the 'ubuntu' user in the docker group (log in again after box-prepare.sh)?"
 missing=()
-[ -f "$WEB_DIR/server.env" ] || missing+=("$WEB_DIR/server.env")
-[ -f "$WEB_DIR/chat.env" ]   || missing+=("$WEB_DIR/chat.env")
+[ -f "$ENV_DIR/server.env" ] || missing+=("$ENV_DIR/server.env")
+[ -f "$ENV_DIR/chat.env" ]   || missing+=("$ENV_DIR/chat.env")
 [ -d "$WEB_DIR/dist" ]       || missing+=("$WEB_DIR/dist (the folder Caddy serves; create it with mkdir)")
 docker network inspect "$NET" >/dev/null 2>&1 || missing+=("the Docker network $NET (start the stack first: start-stack.sh)")
 if [ ${#missing[@]} -gt 0 ]; then
@@ -124,7 +129,8 @@ say ""
 printf '%-8s %-26s %-22s %s\n' component running prod action
 for c in "${COMPONENTS[@]}"; do
   act="unchanged"
-  if [ "${R_DIGEST[$c]}" != "${P_DIGEST[$c]}" ]; then act="DEPLOY"; changed+=("$c"); fi
+  if [ "${R_DIGEST[$c]}" != "${P_DIGEST[$c]}" ]; then act="DEPLOY"; changed+=("$c")
+  elif [ "$c" != client ] && [ "${RECREATE#* $c }" != "$RECREATE" ]; then act="RECREATE"; changed+=("$c"); fi
   printf '%-8s %-26s %-22s %s\n' "$c" "${R_VERSION[$c]}" "${P_VERSION[$c]}" "$act"
 done
 say ""
@@ -198,7 +204,7 @@ replace_container() {
   fi
   flags=(--cap-drop ALL --security-opt no-new-privileges --read-only)
   [ "$c" = server ] && flags+=(--tmpfs /tmp -v "$cn-logs:/var/log/sportconnect")
-  docker run -d --name "$cn" --restart unless-stopped --network "$NET" --env-file "$WEB_DIR/$c.env" "${flags[@]}" "$ref" >/dev/null \
+  docker run -d --name "$cn" --restart unless-stopped --network "$NET" --env-file "$ENV_DIR/$c.env" "${flags[@]}" "$ref" >/dev/null \
     || { FAIL_REASON="docker run failed for $ref"; return 1; }
   if [ "$c" = server ]; then wait_server_healthy "$cn"; else wait_chat_healthy "$cn"; fi
 }

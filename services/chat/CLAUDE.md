@@ -126,6 +126,7 @@ a formality.
 | `KEYCLOAK_JWK_SET_URI` | Spring's `KEYCLOAK_JWK_SET_URI` | The realm's JWKS. Default `<issuer>/protocol/openid-connect/certs`. Fetched lazily on the first token, so the service starts without Keycloak up. No secret is shared any more (CHAT-17) |
 | `INTERNAL_SERVICE_SECRET` | Spring's `INTERNAL_SERVICE_SECRET` | Authenticates this service's calls to `/internal/sync/**` on the monolith |
 | `REDIS_ADDR` | Spring's Redis | Same Redis instance the monolith already runs, reused for the sync stream |
+| `REDIS_PASSWORD` | Spring's `REDIS_PASSWORD` | Optional; empty means the Redis has no password (dev). Production sets it (INFRA-14) |
 | `MONOLITH_BASE_URL` | — | Only used for the cold-start bootstrap pull, never per-request |
 | `CHAT_HTTP_ADDR` | — | Defaults to `:8090` (`:8081` is the dev Keycloak, CHAT-19) |
 | `CHAT_CORS_ALLOWED_ORIGIN` | — | Defaults to `http://localhost:5173` (Vite dev) |

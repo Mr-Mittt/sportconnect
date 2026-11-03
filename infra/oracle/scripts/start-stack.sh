@@ -3,7 +3,7 @@
 # box-prepare.sh. It no longer builds or starts the application: the server, chat and the client files are deployed by
 # `sportconnect-deploy` (infra/oracle/scripts/sportconnect-deploy.sh) from the images a promote workflow points `prod` at.
 # Written from the commands run on 2026-10-26 (setup log steps 22 to 55). Only syntax-checked (`bash -n`); NOT re-run end to
-# end on a fresh box. INFRA-14 reshapes it (production settings for Postgres, Redis, RabbitMQ and Keycloak).
+# end on a fresh box. INFRA-14 added ~/web/stack.env (the passwords) and, on a fresh box, rotate-credentials.sh runs after it.
 #
 # Expects this layout on the box (copy it over with tar and scp; no git credentials on the box, see the guide):
 #   ~/sportconnect/                      the repo files the stack needs: infra/docker-compose.dev.yml, infra/scripts/init-chat-db.sql,
@@ -17,7 +17,10 @@
 set -euo pipefail
 
 NET=sportconnect-dev_default
-COMPOSE=(docker compose -f "$HOME/sportconnect/infra/docker-compose.dev.yml" -f "$HOME/web/kc-prod.override.yml")
+# INFRA-14: the passwords come from ~/web/stack.env (mode 600); the override refuses to start without them
+STACK_ENV="${STACK_ENV:-${ENV_DIR:-$HOME/web}/stack.env}"   # ENV_DIR: where fetch-secrets.sh put the files
+[ -f "$STACK_ENV" ] || { echo "$STACK_ENV is missing (infra/oracle/stack.env.example, or fetch-secrets.sh)" >&2; exit 1; }
+COMPOSE=(docker compose --env-file "$STACK_ENV" -f "$HOME/sportconnect/infra/docker-compose.dev.yml" -f "$HOME/web/kc-prod.override.yml")
 
 echo "== 1. dependencies (Postgres+PostGIS, Redis, RabbitMQ, Keycloak, Mailpit) with the production override"
 "${COMPOSE[@]}" up -d
@@ -33,4 +36,4 @@ docker run -d --name sc-caddy --restart unless-stopped --network "$NET" -p 80:80
 
 echo "== done: docker ps"
 docker ps --format '{{.Names}} {{.Status}}'
-echo "next: docker login ghcr.io (once), then sportconnect-deploy; the realm steps in the guide (scripts/set-*.sh) on a new box"
+echo "next: rotate-credentials.sh postgres and rabbitmq (new box), docker login ghcr.io (once), then sportconnect-deploy; the realm steps in the guide on a new box"

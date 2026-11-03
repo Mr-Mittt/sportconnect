@@ -108,6 +108,7 @@ file at all) it's silently a no-op.
 | `KEYCLOAK_JWK_SET_URI` | No | `<issuer>/protocol/openid-connect/certs` | Where the realm's signing keys are published; fetched on the first token, cached, refetched on an unknown `kid` (at most every 30 s) |
 | `INTERNAL_SERVICE_SECRET` | **Yes** | — | Sent as a header on this service's calls to the monolith's `/internal/sync/**` endpoints (§6.3); must match the monolith's `app.internal-service-secret` |
 | `REDIS_ADDR` | No | `localhost:6379` | Same Redis instance the monolith already uses |
+| `REDIS_PASSWORD` | No | empty | Password of that Redis; empty means none (the dev default). Production sets it (INFRA-14) |
 | `MONOLITH_BASE_URL` | No | `http://localhost:8080` | Only used for the one-time bootstrap pull (§6.3) |
 | `CHAT_HTTP_ADDR` | No | `:8090` | Where this service listens (not `:8081`, which is the dev Keycloak) |
 | `CHAT_CORS_ALLOWED_ORIGIN` | No | `http://localhost:5173` | The Vite dev server's origin |

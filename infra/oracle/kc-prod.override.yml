@@ -9,8 +9,10 @@
 # 3. KC_HOSTNAME_ADMIN lets the admin console work through an SSH tunnel on local port 18081 (the master realm also
 #    needs its frontendUrl, see scripts/set-master-frontend-url.sh).
 #
-# Still the dev defaults and NOT production-grade (loopback-only, but INFRA-14 must replace them): the Postgres password
-# `sa`, RabbitMQ guest/guest, Redis without a password.
+# 4. INFRA-14: no password is written in this file. Compose reads them from ~/web/stack.env (infra/oracle/stack.env.example,
+#    mode 600): pass `--env-file ~/web/stack.env` as start-stack.sh does. A variable that is missing stops `up` with a message.
+#    Postgres and RabbitMQ read their password variables only when their data volume is created; on an existing volume
+#    infra/oracle/scripts/rotate-credentials.sh sets the roles and the user. Redis and Keycloak read theirs at every start.
 services:
   keycloak:
     command: ["start", "--import-realm"]
@@ -20,17 +22,30 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
       KC_HOSTNAME_ADMIN: http://localhost:18081
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_dev
+      KC_DB_USERNAME: sc_keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:?set KC_DB_PASSWORD in ~/web/stack.env}
     ports: !override
       - "127.0.0.1:8081:8080"
   postgres:
     # INFRA-12: the official postgis/postgis image has no arm64 build; this one (infra/postgis, PostGIS 3.6) has both
     image: ghcr.io/mr-mittt/sportconnect-postgis:16-3.6
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in ~/web/stack.env}
     ports: !override
       - "127.0.0.1:5432:5432"
   redis:
+    # the password reaches the process as an environment variable and is expanded by the shell inside the container, so it
+    # is not in `docker ps` or in this file's rendered command
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in ~/web/stack.env}
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\""]
     ports: !override
       - "127.0.0.1:6379:6379"
   rabbitmq:
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:?set RABBITMQ_USERNAME in ~/web/stack.env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in ~/web/stack.env}
     ports: !override
       - "127.0.0.1:5672:5672"
       - "127.0.0.1:15672:15672"

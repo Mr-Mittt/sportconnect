@@ -1,6 +1,6 @@
 # INFRA-14 · Production Keycloak on Oracle Always Free
 
-**Status:** `TODO` · **Type:** Infrastructure · **Depends on:** **INFRA-12** (go decision and the rewritten INFRA-3..6), INFRA-13 · **Gates:** the social-login feature reaching production
+**Status:** `IN PROGRESS` · **Type:** Infrastructure · **Depends on:** **INFRA-12** (go decision and the rewritten INFRA-3..6), INFRA-13 · **Gates:** the social-login feature reaching production
 
 **Filed:** 2026-10-14, from the social-login `/feature`.
 
@@ -58,3 +58,19 @@ For this ticket, when the secrets move to OCI Vault (or SOPS + age):
 - The classic token has an expiry. Until it is automated, an expired token makes `sportconnect-deploy` fail on the registry read or the pull; add its expiry date to `SECRETS.md` and say how to rotate it (new token, same login command).
 - Alternative that removes the token: make the three GHCR packages public (they hold no secrets, the env files stay on the box). That exposes the compiled server, chat and client, so it is a decision for the owner, not assumed here.
 - Until then the manual login stays; no `set-ghcr-login.sh` is planned (owner decision, 2026-10-30): it would be thrown away when this ticket lands.
+
+## Scope locked 2026-11-03 (picked up with /workon)
+
+Owner decisions: one ticket, not split; secrets store = OCI Vault if the free allowance is confirmed in the console, else SOPS+age; Google is the only provider in scope (Facebook and Zalo wait for their apps); registration stays open (recorded in the guide, section 13); a Redis password is included, which needs a small chat change (chat 0.2.2); the app's Postgres role owns its database with the extensions created once by an admin.
+
+**Already true when the ticket was picked up** (INFRA-12/13): Keycloak runs in production `start` mode behind Caddy at `auth.yoursport.vn`; the nightly backup and the restore already cover `sportconnect_dev`, `sportconnect_chat_dev` and `keycloak_dev` together; the box reaches OCI with an instance principal. **Found while exploring:** chat had no Redis password setting (`redis.Options{Addr}` only), so a Redis password needs a chat release; the app's first migration runs `CREATE EXTENSION postgis`, which a non-superuser cannot do; the realm file is also what the dev Keycloak imports, so the production values cannot go in it.
+
+**Out of scope:** Facebook and Zalo providers, closing registration, rotating the Brevo key (owner's decision, INFRA-3 row 23), a config image (INFRA-19), monitoring, AWS.
+
+**Consumer census:** `server.env` and `chat.env` (updated here, examples too); `backup-postgres.sh` (compatible as-is: it reaches `postgres` through the container's local socket); `restore-from-bucket.sh` (updated: re-applies the roles after a restore); `sportconnect-deploy` (updated: `ENV_DIR`, `--recreate=`); `start-stack.sh` (updated: `stack.env`); chat `config.go` (updated: `REDIS_PASSWORD`); client, MSW and every API shape (not touched). No error code, enum or client string changes.
+
+## Build record (2026-11-03, branch `docs/infra-14-production-keycloak`)
+
+Built and checked locally: chat `REDIS_PASSWORD` (go build, vet, config tests); `rotate-credentials.sh` (against a throwaway Postgres with real-shaped objects and a throwaway RabbitMQ: ownership moved, PostGIS tables left to the extension, the app role runs DDL without being a superuser, cross-database `CONNECT` refused, idempotent); `apply-realm-production.sh` (throwaway Keycloak with the committed realm file: `check` failed everywhere, `apply` fixed it, `check` passed, second `apply` idempotent); `fetch-secrets.sh` (Linux container, stand-in `sops`); `docker compose config` of the production override with and without the passwords; `bash -n` on every script. Docs: guide sections 4, 5, 6, 13, new 18 and a change-history row, `SECRETS.md`, chat README and CLAUDE.md rows.
+
+**Not run yet** (all of it needs the box, and the order is in guide section 18): the Vault price and policy (or SOPS), the rehearsal on a restored copy, chat 0.2.2 (`/release chat patch`, promote), the live rotation with `sportconnect-deploy --recreate=server,chat`, `apply-realm-production.sh` on the live realm, the Keycloak admin password rotation, the sign-in/chat/reset-mail checks, the production-mode memory measurement, the restore drill with the new roles, and the real Google provider if its app exists. The ticket stays `IN PROGRESS` until those results are recorded.
