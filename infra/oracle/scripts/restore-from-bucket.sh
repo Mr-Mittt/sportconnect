@@ -17,6 +17,8 @@
 #                         BACKUP_BUCKET (default sportconnect-backups), PG_CONTAINER (default sportconnect-dev-postgres-1),
 #                         KC_CONTAINER (default sportconnect-dev-keycloak-1), STOP (default "sc-server sc-chat").
 #
+# INFRA-14: after the restore it runs rotate-credentials.sh postgres (same folder) when stack.env exists. Not run with that step yet.
+#
 # Written from the commands run on the A1 box on 2026-11-02 (INFRA-12 A1 migration log, row 13: an ad-hoc script piped to
 # `bash -s`). This file, with EXPECT_SET and the stop/start of the application containers, has not been run yet.
 set -uo pipefail
@@ -57,6 +59,15 @@ for db in $DATABASES; do
   docker exec -i "$PG" pg_restore -U postgres -d "$db" --no-owner --exit-on-error < "$work/${db}.dump" \
     || { echo "FAILED: restore of $db (the databases are in an unknown state; stop and read the log)" >&2; exit 1; }
 done
+
+# INFRA-14: the dumps carry no owners, so the restored objects belong to postgres again and the service roles may not exist
+rot="$(dirname "$0")/rotate-credentials.sh"
+if [ -f "${STACK_ENV:-${ENV_DIR:-$HOME/web}/stack.env}" ] && [ -f "$rot" ]; then
+  echo "== roles and ownership (rotate-credentials.sh postgres)"
+  bash "$rot" postgres || { echo "FAILED: roles and ownership; the services stay stopped" >&2; exit 1; }
+else
+  echo "WARNING: no stack.env or rotate-credentials.sh next to this script: run 'rotate-credentials.sh postgres' before starting the services" >&2
+fi
 
 if [ "$RESTORE_CADDY" = 1 ]; then
   echo "== restore caddy_data"

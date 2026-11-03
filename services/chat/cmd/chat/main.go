@@ -58,7 +58,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
+	redisClient := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, Password: cfg.RedisPassword})
 	defer redisClient.Close()
 
 	cache := sync.NewCacheStore(pool)

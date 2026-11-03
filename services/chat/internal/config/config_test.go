@@ -33,3 +33,28 @@ func TestLoad_MigrateOnStart(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_RedisPassword(t *testing.T) {
+	cases := []struct {
+		name string
+		set  bool
+		val  string
+		want string
+	}{
+		{"unset means no password", false, "", ""},
+		{"set is passed through", true, "s3cret", "s3cret"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("CHAT_DATABASE_URL", "postgres://x")
+			t.Setenv("INTERNAL_SERVICE_SECRET", "s")
+			t.Setenv("REDIS_PASSWORD", "")
+			if c.set {
+				t.Setenv("REDIS_PASSWORD", c.val)
+			}
+			cfg, err := Load()
+			require.NoError(t, err)
+			assert.Equal(t, c.want, cfg.RedisPassword)
+		})
+	}
+}
