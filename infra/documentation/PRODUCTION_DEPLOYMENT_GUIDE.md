@@ -353,6 +353,76 @@ What INFRA-14 adds, all in the repo: `infra/oracle/stack.env.example` (the passw
 7. **Measure Keycloak in production mode (not run yet).** `docker stats --no-stream sportconnect-dev-keycloak-1` at rest and during `k6 run -e TARGET_HOST=auth.yoursport.vn -e TARGET_PATH=/realms/sportconnect/.well-known/openid-configuration infra/scripts/loadtest/t.js` (read-only and anonymous; the numbers are a ceiling and not the cost of a login). Record both in the INFRA-14 ticket.
 8. **After every restore or rebuild:** the dumps are restored without owners, so the objects belong to `postgres` again and the roles may not exist. `restore-from-bucket.sh` runs `rotate-credentials.sh postgres` for you when `stack.env` is found (before the services start); run it by hand otherwise.
 
+### Creating the secrets store from nothing, and rebuilding it (INFRA-14)
+
+Written 2026-11-03 from what was done on the A1 box. Parts A to C ran for real (the outputs are in the INFRA-14 ticket and the change history); the table in part D is **not run yet**.
+
+**A. Once, in the OCI console (OCI Vault, the chosen store)**
+1. The dynamic group `sportconnect-box` exists and its rule matches the box (section 1 step 6; the backup policy already depends on it).
+2. Identity & Security, Vault, **Create Vault**: a **default** vault. Never a *virtual private vault* (billed). Note its OCID (not a secret).
+3. In the vault, **Master Encryption Keys**, Create Key: protection mode **Software** (HSM is billed), algorithm **AES**, 256 bits, name `sportconnect-secrets-key`. Wait for *Enabled*. Every secret asks for a key.
+4. Identity & Security, Policies, Create Policy in the root compartment, name `sportconnect-box-secrets`, manual editor, one statement: `Allow dynamic-group sportconnect-box to read secret-bundles in tenancy` (use `in compartment <name>` if the vault is not in the root). It is read-only: the box cannot create or change a secret. There is nothing to attach; the policy applies within about a minute.
+5. On the box: `oci --version` works (`install-backup.sh` installs it), and `/etc/sportconnect/secrets.conf` holds the line `VAULT_OCID=<the vault OCID>` (`sudo tee`; not secret).
+6. The form shows no price. The check is Billing, Cost Analysis the next day: a Vault line of 0.00. If anything is billed, switch to SOPS (step 1 above).
+
+**B. Make the values and upload them**
+1. On the box, in RAM (a folder on disk would keep plain-text copies; `/dev/shm` is tmpfs):
+   ```
+   umask 077; mkdir -p /dev/shm/stage && cd /dev/shm/stage
+   for f in server.env chat.env; do tr -d '\r' < ~/web/$f > $f; done     # a fresh box: start from the *.env.example files instead
+   gen() { openssl rand -hex 24; }
+   setkv() { { grep -v "^$2=" "$1" || true; printf '%s=%s\n' "$2" "$3"; } > "$1.tmp" && mv "$1.tmp" "$1"; }
+   P_PG=$(gen); P_APP=$(gen); P_CHAT=$(gen); P_KC=$(gen); P_MQ=$(gen); P_RD=$(gen)
+   cat > stack.env <<EOT
+   POSTGRES_PASSWORD=$P_PG
+   SC_APP_DB_PASSWORD=$P_APP
+   SC_CHAT_DB_PASSWORD=$P_CHAT
+   KC_DB_PASSWORD=$P_KC
+   RABBITMQ_USERNAME=sc_mq
+   RABBITMQ_PASSWORD=$P_MQ
+   REDIS_PASSWORD=$P_RD
+   EOT
+   setkv server.env DB_USERNAME sc_app;  setkv server.env DB_PASSWORD "$P_APP"; setkv server.env REDIS_PASSWORD "$P_RD"
+   setkv server.env RABBITMQ_USERNAME sc_mq; setkv server.env RABBITMQ_PASSWORD "$P_MQ"
+   setkv chat.env CHAT_DATABASE_URL "postgres://sc_chat:$P_CHAT@postgres:5432/sportconnect_chat_dev?sslmode=disable"
+   setkv chat.env REDIS_PASSWORD "$P_RD"
+   cp ~/.kc-admin-pw kc-admin-pw; unset P_PG P_APP P_CHAT P_KC P_MQ P_RD; chmod 600 *
+   for f in *.env; do echo "$f: $(cut -d= -f1 $f | tr '\n' ' ')"; done      # key names only
+   ```
+   Nothing is applied by this: the live files in `~/web` are not touched, and no service sees the values until section 18 step 5.2. **Save the files in the password manager first** (attachments or secure notes). From your computer, `scp -p sc-a1:/dev/shm/stage/* <a folder outside the repo>`, import them, then delete that local copy. The Vault copy and this one are the only two.
+3. In the console, vault, Secrets, **Create Secret**, one per file, the key `sportconnect-secrets-key`, template **Base64**: `sportconnect-prod-server-env`, `-chat-env`, `-stack-env`, `-kc-admin-pw` (and `-ghcr-token` if `fetch-secrets.sh` should log in to GHCR). The content of each is `base64 -w0 <file>`; to move it without showing it, run on your computer `ssh sc-a1 'base64 -w0 /dev/shm/stage/server.env' | clip` and paste. Clear the clipboard (and its history, Win+V) afterwards. Never paste a value into a chat.
+
+**C. Prove the round trip, then remove the staging folder**
+```
+eval "$(bash ~/sportconnect/infra/oracle/scripts/fetch-secrets.sh)"
+for f in server.env chat.env stack.env kc-admin-pw; do cmp /dev/shm/stage/$f $ENV_DIR/$f && echo "$f identical"; done
+find /dev/shm/stage -type f -exec shred -u {} + && rmdir /dev/shm/stage       # only after four "identical" lines
+```
+Four `written` lines and four `identical` lines mean the policy, the key, the encoding and the script are right. Mistakes met on the first run:
+- `PIPESTATUS[1]: unbound variable`: a bug in `fetch-secrets.sh` (fixed; the script on the box must be the fixed copy, commit `ad54888` or later).
+- `cmp: /server.env: No such file`: `$ENV_DIR` was empty because the fetch had stopped; run the script without `eval` to read its message.
+- `cmp` says the files differ: the template and the pasted text did not match (the Base64 template needs base64 text; Plain-Text needs the raw file). Recreate that secret.
+- `NotAuthorizedOrNotFound` or `could not be read`: the policy, the group name, the vault OCID or the secret name (`sportconnect-prod-` plus the item).
+
+**D. If a secret or the whole store is lost (not run yet)**
+
+| What is lost | What to do |
+|---|---|
+| The Vault (deleted, wrong region); the password manager still has the files | Repeat A, then upload the saved files (B step 3) and run C. Nothing on the box changes. |
+| The Vault and the password manager; the box still runs | The apps' values are in the running containers' own settings (`docker inspect sc-server` and `sc-chat`; an accepted residue, see below). Read them there without pasting them anywhere, rebuild `server.env` and `chat.env` from them, and save them at once. The service passwords cannot be read back from Postgres, so those are replaced (rows below). |
+| Postgres superuser or the role passwords | New values in `stack.env` and the app copies; `rotate-credentials.sh postgres` sets them through the container's local socket (no old password needed); then step 5 (d) so the services read them. |
+| RabbitMQ user | New values in `stack.env` and `server.env`; `rotate-credentials.sh rabbitmq`; recreate the server. |
+| Redis password | New value in `stack.env`, `server.env` and `chat.env`; `start-stack.sh` (recreates Redis); recreate the server and chat. |
+| Keycloak admin password | `set-admin-pw.sh` needs the old one. If both are gone, Keycloak 26's bootstrap-admin options create a new admin on start; not tried here, read Keycloak's documentation at the time. The realm and its users are in `keycloak_dev` and survive. |
+| Credentials client secret | New value in `server.env`; `apply-realm-production.sh apply`; recreate the server. |
+| Internal service secret | New value in `server.env` and `chat.env` (identical); recreate both. |
+| Brevo SMTP key | A new key in Brevo (it cannot be read back); `server.env`; `apply-realm-production.sh apply`; recreate the server. |
+| Google OAuth client secret | A new secret in Google Cloud; `infra/scripts/apply-realm-google-provider.sh`. |
+| GHCR token | A new classic PAT with only `read:packages`; `docker login ghcr.io` (typed by you, not pasted anywhere). |
+| The box's SSH key | A new key pair in the console, then the box's `authorized_keys` through the console. |
+
+After any replacement: put the new value in the Vault (edit the secret, which makes a new version), run `fetch-secrets.sh` again, and update the password-manager copy. `infra/oracle/SECRETS.md` has the same rotations per secret.
+
 **Redis and RabbitMQ residue.** Redis keeps its password in the container's environment (`docker inspect` shows it to anyone in the docker group); `rabbitmqctl` shows the password in its argument list inside the container for the moment it runs; Postgres can write a failed `CREATE ROLE ... PASSWORD` statement to its server log. On a one-user box these are accepted; they are recorded here so they are known.
 
 ## Change history
@@ -388,3 +458,4 @@ What INFRA-14 adds, all in the repo: `infra/oracle/stack.env.example` (the passw
 | 2026-11-02 | INFRA-12 | INFRA-12 closed. The x86 instance is stopped (not yet terminated) and out of the dynamic group; the A1 box reads the bucket with only its own OCID. Section 14 (tearing a box down) applies to the x86 instance when the owner terminates it. |
 | 2026-11-03 | INFRA-14 | New section 18 (credentials, secrets, the production realm) and section 13 rewritten: what is still not production-grade (registration open by decision, Brevo key not rotated, Facebook and Zalo, no monitoring). New files `stack.env.example`, `SECRETS.md`, `scripts/rotate-credentials.sh`, `scripts/fetch-secrets.sh`, `scripts/apply-realm-production.sh`; `kc-prod.override.yml` takes every password from `stack.env`; `start-stack.sh` needs `stack.env`; `sportconnect-deploy` gets `--recreate=` and `ENV_DIR`; `restore-from-bucket.sh` re-applies the roles; chat 0.2.2 reads `REDIS_PASSWORD`. Run against throwaway Postgres, RabbitMQ and Keycloak only. **Not run on the box yet** (every step of section 18). |
 | 2026-11-03 | INFRA-14 (box) | Vault chosen: default vault, software AES key, policy `Allow dynamic-group sportconnect-box to read secret-bundles in tenancy` (separate policy `sportconnect-box-secrets`), four secrets `sportconnect-prod-*` (Base64 template); `fetch-secrets.sh` round trip byte-identical (owner pasted the output). Its first real run found a bug (`PIPESTATUS` under `set -u`), fixed. Rehearsal on the newest backup in a throwaway Postgres: roles moved, second run changed nothing, isolation check ok, `ALTER TABLE` as each role ok (owner pasted the outputs). New `rotate-credentials.sh owners`. Vault cost line (Cost Analysis) and everything from step 4 on: not run yet. |
+| 2026-11-03 | INFRA-14 | Section 18: new subsection "Creating the secrets store from nothing, and rebuilding it": the console set-up (vault, software key, policy, `VAULT_OCID`), making the values in RAM, the Base64 upload, the round trip and the mistakes met, and what to do per secret if the store is lost. Parts A to C ran on the A1 box (owner's pasted outputs); the lost-secret table is not run yet. |
