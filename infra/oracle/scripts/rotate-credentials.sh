@@ -4,6 +4,7 @@
 #   rotate-credentials.sh postgres    least-privilege roles for the app, chat and Keycloak; new password for `postgres`
 #   rotate-credentials.sh rabbitmq    the application user (AMQP and STOMP share it); removes `guest`
 #   rotate-credentials.sh check       connects to Postgres as each role over the Docker network and asks RabbitMQ for the user
+#   rotate-credentials.sh owners      read-only: per database, how many objects in `public` each role owns (run before and after to see what a run changed)
 #
 # Redis is not handled here: its password is set by the Compose override (`--requirepass`, REDIS_PASSWORD) and takes
 # effect when Redis is recreated (guide section 18).
@@ -151,9 +152,26 @@ do_check() {
   return "$ok"
 }
 
+# owners: object counts per kind and owner, plus the database owner. Read-only; no names, no data.
+do_owners() {
+  local pair db
+  for pair in "${PAIRS[@]}"; do
+    read -r db _ <<< "$pair"
+    echo "== $db"
+    psql_admin -d "$db" -tA -F " " <<SQL || die "owners query failed for $db"
+SELECT 'relation:' || c.relkind::text, pg_get_userbyid(c.relowner), count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' GROUP BY 1, 2
+UNION ALL SELECT 'routine', pg_get_userbyid(p.proowner), count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' GROUP BY 1, 2
+UNION ALL SELECT 'enum', pg_get_userbyid(t.typowner), count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype = 'e' GROUP BY 1, 2
+UNION ALL SELECT 'database', pg_get_userbyid(datdba), 1 FROM pg_database WHERE datname = current_database()
+ORDER BY 1, 2;
+SQL
+  done
+}
+
 case "${1:-}" in
   postgres) do_postgres ;;
   rabbitmq) do_rabbitmq ;;
   check) do_check ;;
-  *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  owners) do_owners ;;
+  *) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

@@ -35,6 +35,7 @@ green run exists" pattern.
 | 4 | [INFRA-17](MVP/INFRA-17_DOWN_VERSION_DEPLOY_AND_SCHEMA_MIGRATION.md) | Down-version deploy and the database schema: make going back to an older release safe (expand/contract rule, backup before deploy, opt-in schema rollback, migration lint); until done, INFRA-6 blocks promoting a lower version | `TODO` |
 | 5 | [INFRA-18](MVP/INFRA-18_DEPLOY_FOLLOW_UPS_DEFERRED_FROM_INFRA_6.md) | Deploy follow-ups deferred from INFRA-6 (zero-downtime deploys, deploy notifications and a status view, Promote starting CI by itself); one collecting ticket, split when picked up | `TODO` |
 | 6 | [INFRA-20](MVP/INFRA-20_ORACLE_HOSTING_FOLLOW_UPS.md) | Oracle hosting follow-ups left open by the INFRA-12 spike: latency and the Cloudflare test, authenticated load (feed, Discover, WebSocket, Keycloak logins), idle reclamation and the current A1 allowance; measured on the A1 box after INFRA-12's move | `TODO` |
+| 7 | [INFRA-21](MVP/INFRA-21_PRODUCTION_NAMES_THAT_STILL_SAY_DEV.md) | Production names that still say `dev`: the Compose project `sportconnect-dev` (containers, network, volumes) and the `_dev` database names; options costed, none chosen; depends on INFRA-14 | `TODO` |
 
 ---
 

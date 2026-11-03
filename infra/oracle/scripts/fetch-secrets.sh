@@ -50,7 +50,8 @@ case "$BACKEND" in
     get() {
       oci secrets secret-bundle get-secret-bundle-by-name --secret-name "${PREFIX}$1" --vault-id "$VAULT_OCID" \
         --auth instance_principal --query 'data."secret-bundle-content".content' --raw-output 2>/dev/null | base64 -d
-      [ "${PIPESTATUS[0]}" = 0 ] && [ "${PIPESTATUS[1]}" = 0 ]
+      local rc=("${PIPESTATUS[@]}")   # copied at once: the next `[` would reset PIPESTATUS (and `set -u` then stops the script)
+      [ "${rc[0]}" = 0 ] && [ "${rc[1]}" = 0 ]
     }
     ;;
   sops)
