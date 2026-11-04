@@ -23,7 +23,7 @@
 # (/dev/shm/sportconnect), PREFIX, SECRETS_BACKEND, VAULT_OCID, SOPS_DIR, GHCR_USER. Non-secret settings may sit in
 # /etc/sportconnect/secrets.conf (KEY=value lines, read when present).
 #
-# Written for INFRA-14. Only syntax-checked (`bash -n`) and run with a fake store; not run against OCI Vault or SOPS yet.
+# Written for INFRA-14. Run against the real OCI Vault on the A1 box on 2026-11-03 (a bug in the Vault branch was found and fixed then); the SOPS branch has only been run with a stand-in `sops`.
 set -uo pipefail
 
 [ -f /etc/sportconnect/secrets.conf ] && while IFS='=' read -r k v; do

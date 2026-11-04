@@ -26,7 +26,7 @@
 # Settings (environment): PUBLIC_URL (https://yoursport.vn), ADMIN_URL (http://localhost:18081), KC_CONTAINER
 # (sportconnect-dev-keycloak-1), SERVER_ENV (~/web/server.env), ADMIN_PW_FILE (~/.kc-admin-pw), SCRIPTS (the directory of this file).
 #
-# Written for INFRA-14. Only syntax-checked and run against a throwaway Keycloak until it is run on the box.
+# Written for INFRA-14. Tested on a throwaway Keycloak, then run on the live A1 realm on 2026-11-03 (`apply` and `check`, all ok).
 set -uo pipefail
 
 PUBLIC_URL="${PUBLIC_URL:-https://yoursport.vn}"

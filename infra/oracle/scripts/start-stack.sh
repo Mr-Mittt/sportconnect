@@ -36,4 +36,4 @@ docker run -d --name sc-caddy --restart unless-stopped --network "$NET" -p 80:80
 
 echo "== done: docker ps"
 docker ps --format '{{.Names}} {{.Status}}'
-echo "next: rotate-credentials.sh postgres and rabbitmq (new box), docker login ghcr.io (once), then sportconnect-deploy; the realm steps in the guide on a new box"
+echo "next, on a NEW box only: rotate-credentials.sh postgres and rabbitmq, docker login ghcr.io (once), sportconnect-deploy, the realm steps in the guide. On a running box nothing: check with docker ps and sportconnect-deploy --plan"
