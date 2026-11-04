@@ -106,6 +106,8 @@ One command per rotation, so no secret is moved by hand: `rotate-credentials.sh 
 
 **Other results:** the Vault cost check on 2026-11-04 shows no Vault line in Cost Analysis (Nov 1 to Nov 3; look again in about a week). The 7-day backup deletion is observed: the set `20261027T170239Z` is gone and the oldest is `20261028T190038Z`. `start-stack.sh` no longer tells a running box to rotate credentials.
 
+**GHCR token in the Vault (2026-11-04):** the item `sportconnect-prod-ghcr-token` (`<github user>:<token>`) was created from the live login and fetched (owner's word). The failure path was tested on the box (pasted output): after `docker logout ghcr.io` and a version with an invalid token, `fetch-secrets.sh` wrote the four env files, printed that the GHCR login was skipped or failed and kept the existing login (none left), and `docker pull` of the server image failed with `unauthorized`; with the valid version current again it printed `docker login ghcr.io ok` and the pull printed `pull-ok`. Not tested: a new valid token, and the token expiry date from GitHub's response header.
+
 **Still to do before this ticket closes (five items, collected 2026-11-04 for 2026-11-05):**
 1. The backup after the rotation: the timer runs at 19:00 UTC; check `journalctl -u sportconnect-backup -n 5` for `ok (4 files)`. Then guide section 18 step 9 (retire the plain files and the dot-files, after `apply-realm-production.sh check` is clean).
 2. The production-mode Keycloak memory measurement (guide step 7): `docker stats --no-stream` at rest and during the read-only k6 run; record both here.
