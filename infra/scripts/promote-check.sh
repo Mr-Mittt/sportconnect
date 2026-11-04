@@ -30,13 +30,18 @@ block() { blocked=true; reasons+=("$1"); }
 warn()  { warnings+=("$1"); }
 
 case "$COMPONENT" in
-  server|client|chat) ;;
-  *) echo "promote-check: component must be server, client or chat (got '$COMPONENT')" >&2; exit 1 ;;
+  server|client|chat|box) ;;
+  *) echo "promote-check: component must be server, client, chat or box (got '$COMPONENT')" >&2; exit 1 ;;
 esac
 if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || "$VERSION" =~ ^sha-[0-9a-f]{7,40}$ ]]; then
   echo "promote-check: version must be a release (X.Y.Z) or a build (sha-<hex>); '$VERSION' is refused (edge, latest and prod are moving tags)" >&2
   exit 1
 fi
+
+# The CI whose result gates a promote: the component's own test workflow, and for the box (no test suite of its own) its image
+# workflow, which runs infra/scripts/verify-box-image.sh. The command the owner runs on the box afterwards.
+ci_name="${COMPONENT}-ci"; box_cmd="sportconnect-deploy"
+if [ "$COMPONENT" = box ]; then ci_name="box-image"; box_cmd="sportconnect-setup"; fi
 
 owner_lc="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
 image="ghcr.io/${owner_lc}/sportconnect-${COMPONENT}"
@@ -91,7 +96,7 @@ fi
 ci_text="not checked"
 ci_url=""
 if [ -n "$new_rev" ] && have_commit "$new_rev"; then
-  runs="$(gh api "repos/${REPO}/actions/workflows/${COMPONENT}-ci.yml/runs?branch=master&event=push&status=completed&per_page=50" \
+  runs="$(gh api "repos/${REPO}/actions/workflows/${ci_name}.yml/runs?branch=master&event=push&status=completed&per_page=50" \
     --jq '.workflow_runs[] | [.head_sha, .conclusion, .html_url] | @tsv' 2>/dev/null || true)"
   found=""
   while IFS=$'\t' read -r sha conclusion url; do
@@ -101,16 +106,16 @@ if [ -n "$new_rev" ] && have_commit "$new_rev"; then
   done <<<"$runs"
   if [ -z "$found" ]; then
     ci_text="no result found"
-    warn "no \`${COMPONENT}-ci\` result was found for this commit or any commit before it (older than GitHub's log retention, or never run). To run it again: Actions, \`${COMPONENT}-ci\`, Run workflow, choose the tag \`${COMPONENT}-v${VERSION}\`."
+    warn "no \`${ci_name}\` result was found for this commit or any commit before it (older than GitHub's log retention, or never run). To run it again: Actions, \`${ci_name}\`, Run workflow, choose the tag \`${COMPONENT}-v${VERSION}\`."
   else
     IFS='|' read -r sha conclusion ci_url <<<"$found"
     case "$conclusion" in
       success) ci_text="passed (run on \`${sha:0:7}\`)" ;;
       failure|timed_out|startup_failure)
         ci_text="FAILED (run on \`${sha:0:7}\`)"
-        if [ "$SKIP_CI_CHECK" = "true" ]; then warn "the CI check was SKIPPED by the person who started this run although \`${COMPONENT}-ci\` failed."
-        else block "\`${COMPONENT}-ci\` FAILED for this code (run on \`${sha:0:7}\`). Fix it, or start Promote again with \"skip CI check\" if you accept that."; fi ;;
-      *) ci_text="${conclusion} (run on \`${sha:0:7}\`)"; warn "the last \`${COMPONENT}-ci\` run ended '${conclusion}', which says nothing about the tests." ;;
+        if [ "$SKIP_CI_CHECK" = "true" ]; then warn "the CI check was SKIPPED by the person who started this run although \`${ci_name}\` failed."
+        else block "\`${ci_name}\` FAILED for this code (run on \`${sha:0:7}\`). Fix it, or start Promote again with \"skip CI check\" if you accept that."; fi ;;
+      *) ci_text="${conclusion} (run on \`${sha:0:7}\`)"; warn "the last \`${ci_name}\` run ended '${conclusion}', which says nothing about the tests." ;;
     esac
   fi
 fi
@@ -130,7 +135,7 @@ fi
   for r in "${reasons[@]+"${reasons[@]}"}"; do echo "- REFUSED: ${r}"; done
   if [ "$blocked" = false ] && [ "$nochange" = false ]; then
     echo
-    echo "Approve to move \`prod\` of ${COMPONENT}. Then run \`sportconnect-deploy\` on the box."
+    echo "Approve to move \`prod\` of ${COMPONENT}. Then run \`${box_cmd}\` on the box."
   fi
 } >> "$SUMMARY"
 

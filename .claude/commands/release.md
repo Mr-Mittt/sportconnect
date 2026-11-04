@@ -10,6 +10,7 @@ This is the whole flow of `infra/documentation/PRODUCTION_DEPLOYMENT_GUIDE.md` �
 | `server` | `infra/scripts/server-version.sh bump <arg>` (edits the root `gradle.properties`) | `server-v` | versioned (INFRA-4) |
 | `client` | `infra/scripts/client-version.sh bump <arg>` (edits `client/package.json`) | `client-v` | versioned (INFRA-5) |
 | `chat` | `infra/scripts/chat-version.sh bump <arg>` (edits `services/chat/VERSION`) | `chat-v` | versioned (INFRA-8) |
+| `box` | `infra/scripts/box-version.sh bump <arg>` (edits `infra/box/BOX_VERSION`) | `box-v` | versioned (INFRA-19); **never part of "all"**: name it, because it only changes when a box file does |
 
 All three components are versioned. A component added later gets a row here and nothing else in this command changes.
 
@@ -17,9 +18,9 @@ All three components are versioned. A component added later gets a row here and 
 
 ## Step 1 — Parse the arguments
 
-- The first word, if it is a component name (`server`, `client`, `chat`, or `all`), selects the component(s); otherwise the selection is **all components**.
+- The first word, if it is a component name (`server`, `client`, `chat`, `box`, or `all`), selects the component(s); otherwise the selection is **all components**.
 - The remaining word (or the only word) is the bump: `minor` (the default when nothing is given), `patch`, `major`, or an explicit `X.Y.Z`. Anything else: stop and show the format.
-- **No component given (= all):** release every component whose State is *versioned*, and say in one line which were skipped as not versioned yet. Today that is the server, the client and the chat service (all three).
+- **No component given (= all):** release every component whose State is *versioned*, and say in one line which were skipped as not versioned yet. Today that is the server, the client and the chat service (all three); **the box config image is never included** (release it with `/release box`, only when a box file changed).
 - **A component named explicitly that is not versioned yet:** stop and say so (INFRA-5 / INFRA-8), changing nothing.
 - **An explicit `X.Y.Z` with more than one component selected:** stop — a version number belongs to one component; ask for `/release <component> X.Y.Z`.
 
@@ -36,7 +37,7 @@ For each selected component run its version tool with the bump from Step 1 (no b
 ## Step 4 — Branch, commit, push
 
 1. Branch: `git switch -c chore/release-<component>-<X.Y.Z>` (several components: `chore/release-<comp1>-<ver1>-<comp2>-<ver2>`).
-2. Stage the changed version files **by name** (`gradle.properties` for the server, `client/package.json` for the client, `services/chat/VERSION` for chat) — never `git add -A`.
+2. Stage the changed version files **by name** (`gradle.properties` for the server, `client/package.json` for the client, `services/chat/VERSION` for chat, `infra/box/BOX_VERSION` for box) — never `git add -A`.
 3. Commit: `chore(release): <component> <X.Y.Z>` (several: `chore(release): server 0.2.0, client 0.1.0`), ending with the `Co-Authored-By` attribution line given in the session's attribution reminder.
 4. `git push -u origin <branch>`.
 

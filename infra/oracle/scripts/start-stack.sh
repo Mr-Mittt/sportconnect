@@ -5,7 +5,8 @@
 # Written from the commands run on 2026-10-26 (setup log steps 22 to 55). Only syntax-checked (`bash -n`); NOT re-run end to
 # end on a fresh box. INFRA-14 added ~/web/stack.env (the passwords) and, on a fresh box, rotate-credentials.sh runs after it.
 #
-# Expects this layout on the box (copy it over with tar and scp; no git credentials on the box, see the guide):
+# Expects this layout on the box (INFRA-19: `sportconnect-setup` unpacks it from the box image; before that, copy it over with tar
+# and scp; no git credentials on the box, see the guide):
 #   ~/sportconnect/                      the repo files the stack needs: infra/docker-compose.dev.yml, infra/scripts/init-chat-db.sql,
 #                                        infra/scripts/create-keycloak-db.sh, infra/rabbitmq, infra/keycloak/{realm,themes},
 #                                        the two Keycloak JARs in infra/keycloak/providers, infra/oracle
@@ -36,4 +37,4 @@ docker run -d --name sc-caddy --restart unless-stopped --network "$NET" -p 80:80
 
 echo "== done: docker ps"
 docker ps --format '{{.Names}} {{.Status}}'
-echo "next, on a NEW box only: rotate-credentials.sh postgres and rabbitmq, docker login ghcr.io (once), sportconnect-deploy, the realm steps in the guide. On a running box nothing: check with docker ps and sportconnect-deploy --plan"
+echo "next, on a NEW box only: rotate-credentials.sh postgres and rabbitmq, sportconnect-deploy, the realm steps in the guide (the GHCR login and the files come before this script: fetch-secrets.sh, sportconnect-setup). On a running box nothing: check with docker ps and sportconnect-deploy --plan"

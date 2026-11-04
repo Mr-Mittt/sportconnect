@@ -1,0 +1,28 @@
+# INFRA-19: an ALLOW-LIST for infra/box/Dockerfile (the build context is the repository root). Everything is excluded first, then
+# only the paths the Dockerfile copies are let back in. Deliberately absent: infra/keycloak/providers (a git-ignored folder
+# that holds client_secret_*.json, the Google OAuth secret, and locally built JARs) and every .env file.
+*
+!gradlew
+!build.gradle
+!gradle.properties
+!gradle
+!infra/keycloak-extensions
+infra/keycloak-extensions/build
+!infra/docker-compose.dev.yml
+!infra/scripts/init-chat-db.sql
+!infra/scripts/create-keycloak-db.sh
+!infra/rabbitmq
+!infra/keycloak/realm
+!infra/keycloak/themes
+!infra/oracle
+!client/keycloak-theme
+!client/package.json
+!client/pnpm-lock.yaml
+!client/src
+!client/public
+client/keycloak-theme/node_modules
+client/keycloak-theme/dist
+client/keycloak-theme/dist_keycloak
+client/keycloak-theme/storybook-static
+**/.env
+**/node_modules

@@ -11,6 +11,9 @@
 #      even when the VCN security list allows the port, so BOTH layers are needed. The rules go before the final REJECT.
 #   2. Saves the rules so they survive a reboot (iptables-persistent).
 #   3. Installs Docker Engine, the Compose plugin and buildx from Docker's official apt repository.
+#   4. Installs the OCI CLI (INFRA-19: moved here from install-backup.sh). fetch-secrets.sh needs it to read the Vault, and the
+#      Vault gives the GHCR login that sportconnect-setup needs to pull the box image, so it cannot wait for a script that
+#      arrives inside that image.
 #
 # NOT done here (console work): the VCN security list needs ingress rules for TCP 22, 80 and 443 from 0.0.0.0/0, and the
 # public subnet's route table needs a 0.0.0.0/0 rule to the Internet Gateway (without it SSH times out).
@@ -51,3 +54,12 @@ else
 fi
 docker --version 2>/dev/null || sudo docker --version
 docker compose version 2>/dev/null || sudo docker compose version
+
+echo "== 4. OCI CLI (pipx; Ubuntu 24.04 blocks pip outside a virtualenv)"
+if command -v oci >/dev/null 2>&1 || [ -x "$HOME/.local/bin/oci" ]; then
+  echo "oci already installed: $("$HOME/.local/bin/oci" --version 2>/dev/null || oci --version)"
+else
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq pipx >/dev/null
+  pipx install oci-cli
+  echo "installed: $("$HOME/.local/bin/oci" --version)"
+fi

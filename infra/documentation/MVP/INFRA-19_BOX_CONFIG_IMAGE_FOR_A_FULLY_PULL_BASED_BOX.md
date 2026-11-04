@@ -1,6 +1,6 @@
 # INFRA-19 · A "box" config image: ship the box's non-secret files by pull, so a fresh or changed box needs no manual file copying
 
-**Status:** `TODO` · **Type:** Infrastructure · **Depends on:** INFRA-6 (done); best done with or after INFRA-14 (it reshapes `start-stack.sh` and the Compose override, which this image would carry)
+**Status:** `IN PROGRESS` · **Type:** Infrastructure · **Depends on:** INFRA-6 (done); best done with or after INFRA-14 (it reshapes `start-stack.sh` and the Compose override, which this image would carry)
 
 **Filed:** 2026-11-01, from the owner's question after INFRA-7: apart from the Caddyfile, what else must be copied to a fresh box, and how to make it all automatic. Estimated and costed against the alternatives; the owner has not decided between those yet (see below).
 
@@ -10,7 +10,7 @@ Today the box's non-secret files arrive by hand: a `tar` bundle of `infra/` file
 
 - **Build:** a CI workflow (same shape as `client-image`/`chat-image`) builds a data-only image `sportconnect-box` holding every non-secret file, with the Keycloak theme and extension JARs **built in CI** instead of on a computer. Versioned, OCI labels, released on merge like the others.
 - **Promote:** `promote.yml` accepts `box` as a component and retags it as `prod` under the same approval gate and checks.
-- **Deploy:** `sportconnect-deploy` pulls it, unpacks it into `~/sportconnect` and `~/web` (the way it already fills `dist` from the client image), runs `caddy validate` then `caddy reload`, and runs `compose up -d` only when a Compose file changed. On failure it restores the previous files, as it does for the other components.
+- **Deploy (changed 2026-11-04: a new `sportconnect-setup` does this, see Scope change below):** `sportconnect-setup` pulls it, unpacks it into `~/sportconnect` and `~/web` (the way it already fills `dist` from the client image), runs `caddy validate` then `caddy reload`, and runs `compose up -d` only when a Compose file changed. On failure it restores the previous files, as it does for the other components.
 
 Who: the owner, through the existing promote and deploy flow. A fresh box then needs only `box-prepare.sh`, the GHCR login, the secrets and `sportconnect-deploy`.
 
@@ -33,15 +33,58 @@ Who: the owner, through the existing promote and deploy flow. A fresh box then n
 - Env files and secrets are never in the image and never overwritten by an unpack.
 - An older box version being promoted is blocked like the other components (INFRA-17 covers going back).
 
+## Scope change (2026-11-04, owner's decisions in the /workon session)
+
+**Why:** the ticket's purpose is to make a fresh box as small a setup as possible, so what is hand-copied and what ships in the image was made explicit, and the pull of the box image was split from the deploy of the application images.
+
+1. **A new command, `sportconnect-setup`, pulls only the box image.** It logs in through `fetch-secrets.sh`, pulls `sportconnect-box:prod`, installs its files (`~/sportconnect`, `~/web`, `/usr/local/bin`), runs `caddy validate` then `caddy reload`, runs `compose up -d` only when a Compose file changed, and restores the previous files on failure. **`sportconnect-deploy` is not widened**: it keeps pulling the application images (server, chat, client). Run setup when box files change and deploy when the application changes. Setup installs `sportconnect-deploy` from the image, so the self-update risk falls on one file only: setup itself, which is installed by hand (a change to it is a manual `install`, as `sportconnect-deploy` is today).
+2. **Hand-copied once per fresh box:** `sportconnect-setup.sh`, `fetch-secrets.sh` (the pull needs the GHCR login that the Vault item gives), `box-prepare.sh` (installs Docker and the firewall rules; Docker must exist before anything can be pulled), and `/etc/sportconnect/secrets.conf` (the Vault OCID; a config file, not a script). Prerequisites that are not shipped: Docker (from `box-prepare.sh`), the `oci` CLI (where it is installed on the box is not checked yet), and the instance-principal policy for the Vault (OCI console, once).
+3. **Shipped in the box image:** `sportconnect-deploy`, `start-stack.sh`, `rotate-credentials.sh`, `apply-realm-production.sh`, `backup-postgres.sh`, `install-backup.sh`, `restore-from-bucket.sh`, `restore-test.sh`, `set-admin-pw.sh`, `set-smtp.sh`, `set-web-client-uris.sh`, `set-master-frontend-url.sh`, `set-credentials-client-secret.sh`; `Caddyfile`, `kc-prod.override.yml`, the `*.env.example` templates, the `systemd/` units; the Compose file, init SQL, `create-keycloak-db.sh`, the RabbitMQ config, the realm and themes; both Keycloak JARs (built in CI). (Correction, Phase 2: no realm script under `infra/scripts` runs on the box; the box runs `apply-realm-production.sh` and the `set-*.sh` scripts, which are under `infra/oracle/scripts`. Only `init-chat-db.sql` and `create-keycloak-db.sh` of `infra/scripts` are needed.) A newer `fetch-secrets.sh` may also come in the image and be installed by setup for the next run (to settle at design; the first copy is always by hand). **Never in the image and never touched by an unpack:** `server.env`, `chat.env`, `stack.env`, `~/.kc-admin-pw`, the dot-files, `secrets.conf`.
+4. **`box-prepare.sh` is not folded into `sportconnect-setup`** (owner's decision): it is already tested, a fresh box is rare, and Docker's apt install cannot be tested on the Windows development machine.
+5. **The box image is private, like the other images** (owner's decision), so setup needs the GHCR login. Making it public would drop `fetch-secrets.sh` from the hand-copied set but expose the realm, Caddyfile and scripts; not chosen.
+6. **The PostGIS image stays separate** (`sportconnect-postgis:16-3.6`, `infra/postgis`, its own workflow): it is a runtime image, about 400 MB, with its own change rate and its own verified pipeline. The box image carries the files that name its tag. The tag is pinned in two places, `kc-prod.override.yml` and `rotate-credentials.sh` (`PG_CLIENT_IMAGE`); the box build checks that they match. A PostGIS bump is then a new box release plus `sportconnect-setup`, and Compose recreates the database container.
+
+**A fresh box then needs:** the console and DNS steps (guide sections 1 and 2); `scp` of the three scripts and `secrets.conf`; `box-prepare.sh`; `fetch-secrets.sh`; `sportconnect-setup`; `start-stack.sh`; `sportconnect-deploy`. This replaces the `tar` bundle, the hand-placed Caddyfile and the JARs built on a computer.
+
+7. **Three more decisions after the Phase 2 findings (2026-11-04, owner: "as your suggestion"):** (a) the OCI CLI install moves into `box-prepare.sh`, because `fetch-secrets.sh` needs `oci` to read the Vault and the Vault gives the GHCR login that the pull needs, so a script that arrives inside the image cannot install it (`install-backup.sh` keeps a skip-if-present check); (b) `promote-check.sh` gates the box on the `box-image` workflow run (the box has no test suite of its own; that workflow runs `infra/scripts/verify-box-image.sh`) and tells the owner to run `sportconnect-setup`; (c) `fetch-secrets.sh` is replaced from the image only after a successful install, as the last step. Also found in Phase 2: `infra/keycloak/providers/` holds the git-ignored Google OAuth secret JSON, so the image is built from an allow-list (`infra/box/Dockerfile.dockerignore`), never from a copy of `infra/`, and `verify-box-image.sh` fails the build if a secret-looking file is inside. `/release` can release `box` but never includes it in "all".
+
+**Added to Out of scope:** folding `box-prepare.sh` into setup; a self-updating `sportconnect-setup`; a public box image.
+
+**Estimate:** unchanged for now (2 to 3 days); the new script replaces the planned `sportconnect-deploy` extension, and the restore logic moves with it. Re-check at design.
+
 ## Scope
 
 1. The image and its build workflow (JARs built in CI), with a local `docker build` check.
 2. `promote.yml` and the promote scripts accept `box`.
-3. `sportconnect-deploy` pulls, unpacks, validates, reloads and restores; tested against a throwaway registry, then run for real on the box.
+3. `sportconnect-setup` (new; see Scope change) pulls, unpacks, validates, reloads and restores; `sportconnect-deploy` keeps the application images only; tested against a throwaway registry, then run for real on the box.
 4. Guide: replace the manual bundle step (section 3) and the Caddyfile-change step with the pull-based flow; change-history row; box log rows.
 
-**Out of scope:** secrets and the Vault/SOPS fetch (INFRA-14); DNS and the OCI console; the first GHCR login and the one-time realm scripts; a custom Keycloak image with the JARs, theme and realm baked in (INFRA-14); cloud-init, Ansible and Terraform (costed above, not chosen).
+**Out of scope:** folding `box-prepare.sh` into setup, a self-updating `sportconnect-setup`, a public box image (all 2026-11-04); secrets and the Vault/SOPS fetch (INFRA-14); DNS and the OCI console; the first GHCR login and the one-time realm scripts; a custom Keycloak image with the JARs, theme and realm baked in (INFRA-14); cloud-init, Ansible and Terraform (costed above, not chosen).
 
 **Tests / docs:** local registry test of the deploy extension (including a failing `caddy validate` and the restore); a real run on the box recorded in the INFRA-3 rebuild log; `PRODUCTION_DEPLOYMENT_GUIDE.md` and its change history; `PORTS.md` unchanged unless a port moves.
+
+## What was built (2026-11-04) and what is proven
+
+**Files:** `infra/box/Dockerfile`, `Dockerfile.dockerignore` (the allow-list) and `BOX_VERSION` (`0.0.0`, the placeholder, so merging this PR releases nothing); `.github/workflows/box-image.yml`; `infra/scripts/box-version.sh`, `box-image-plan.sh`, `verify-box-image.sh`, `test-sportconnect-setup.sh`; `infra/oracle/scripts/sportconnect-setup.sh`; changed: `promote.yml` and `promote-check.sh` (component `box`; the CI gate is the `box-image` workflow; the next step is `sportconnect-setup`), `box-prepare.sh` (installs the OCI CLI), `install-backup.sh` (comment only), `start-stack.sh` (header and closing hint), `/release` (`box`, never in "all"), the guide (sections 3, 9, 15, 16, 17, history row).
+
+**Design points that changed or were found while building:**
+- `sportconnect-setup` stages first and installs second, in a fixed order with a restore of everything it touched; `--plan` is a full dry run (it pulls and stages, installs nothing); it never restarts Keycloak (it prints the command) and never replaces itself.
+- The two JAR stages of the Dockerfile run on the build machine (`--platform=$BUILDPLATFORM`), so the arm64 image is not built under emulation.
+- The login theme compiles the client's own files: the theme stage needs `client/src`, `client/public` and the client's packages (two failed builds found it), and a change to those files also builds the box image.
+- `verify-box-image.sh` reads the executable bit and the line endings inside the image: on Windows a bind mount keeps neither, and Git Bash's `grep` drops a CR from a pattern.
+
+**Proven (my own runs on the development computer, 2026-11-04):**
+- `docker build` of the image (18 MB); `verify-box-image.sh` passes on it; nine deliberate defects (another PostGIS tag, a `client_secret_*.json`, an `.env`, CRLF, a missing JAR, a corrupt JAR, an invalid Caddyfile, a lost executable bit, a broken Compose file) were each caught.
+- `test-sportconnect-setup.sh`: 43 cases with a stand-in `docker`, all pass; four deliberate breakages of `sportconnect-setup.sh` (a Caddyfile replaced instead of written in place, no secret scan, no file restore, no compose restore) were each caught.
+- One real run of `sportconnect-setup` in a Linux container against the real image in a throwaway local registry: the real `buildx imagetools inspect`, pull, staging, `caddy validate` and `docker compose config`; `--plan`, then the install (files, Caddyfile, `sportconnect-deploy`, state file; an existing `server.env` untouched), then a second run that said it was up to date.
+- `promote-check.sh` with a stand-in `docker` and `gh`: `box` is accepted, the CI lookup asks for `box-image.yml`, an unknown component is refused. (The "run `sportconnect-setup`" sentence of the summary was not exercised: the stand-in gave a no-change promote.)
+- `box-version.sh check` and `box-image-plan.sh` were run locally.
+
+**Not proven yet (conditionals, in this order):**
+1. The `box-image` workflow on GitHub: the pull-request run, then the release run (the arm64 build, the push, the tag `box-v0.1.0`, the retention step, the `verify-box-image.sh` step on the runner).
+2. `/release box minor` (`0.1.0`), the promote of `box` with its approval, and that the first job finds the `box-image` run.
+3. `sportconnect-setup` on the A1 box: `--plan`, then the install; a real `caddy reload`; a real `docker compose up -d` after a Compose change; the failure path and its restore against real services; the GHCR login through `fetch-secrets.sh`. The box already runs, so the first run should be a Caddyfile-only or no-op release.
+4. A fresh box built from the hand-copied four files (the rebuild rehearsal of the guide's section 17), to prove the claim of this ticket end to end.
+5. Retire the manual `tar` bundle from guide section 3 once 3 and 4 have worked.
 
 **i18n / enums / account lifecycle:** none (no endpoint, no text, no enum).
