@@ -16,14 +16,16 @@
 # Items (secret names carry the prefix PREFIX, default sportconnect-prod-):
 #   server-env  -> $ENV_DIR/server.env      chat-env -> $ENV_DIR/chat.env      stack-env -> $ENV_DIR/stack.env
 #   kc-admin-pw -> $ENV_DIR/kc-admin-pw     (the Keycloak admin password, one line)
-#   ghcr-token  -> piped to `docker login ghcr.io -u $GHCR_USER --password-stdin`; skipped when GHCR_USER is unset or the item is
-#                  absent. The token is a classic PAT with only read:packages; it expires (infra/oracle/SECRETS.md has the date).
+#   ghcr-token  -> `docker login ghcr.io`. The item holds `<github user>:<token>` on one line (the form Docker keeps in
+#                  ~/.docker/config.json, decoded), so the user and the token rotate together. An item without a colon is
+#                  taken as the bare token and the user comes from GHCR_USER. Skipped when the item is absent. The token is a
+#                  classic PAT with only read:packages; it expires (infra/oracle/SECRETS.md has the date).
 #
 # Nothing secret is printed or put on a command line; files are mode 600 in a mode 700 folder. Settings: ENV_DIR
-# (/dev/shm/sportconnect), PREFIX, SECRETS_BACKEND, VAULT_OCID, SOPS_DIR, GHCR_USER. Non-secret settings may sit in
+# (/dev/shm/sportconnect), PREFIX, SECRETS_BACKEND, VAULT_OCID, SOPS_DIR, GHCR_USER (only for an item without a user). Non-secret settings may sit in
 # /etc/sportconnect/secrets.conf (KEY=value lines, read when present).
 #
-# Written for INFRA-14. Only syntax-checked (`bash -n`) and run with a fake store; not run against OCI Vault or SOPS yet.
+# Written for INFRA-14. Run against the real OCI Vault on the A1 box on 2026-11-03 (a bug in the Vault branch was found and fixed then); the SOPS branch has only been run with a stand-in `sops`.
 set -uo pipefail
 
 [ -f /etc/sportconnect/secrets.conf ] && while IFS='=' read -r k v; do
@@ -77,9 +79,14 @@ for pair in "server-env server.env" "chat-env chat.env" "stack-env stack.env" "k
   fetch_file $pair
 done
 
-if [ -n "${GHCR_USER:-}" ]; then
-  if get ghcr-token | docker login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null 2>&1; then echo "fetch-secrets: docker login ghcr.io ok" >&2
-  else echo "fetch-secrets: GHCR login skipped or failed (item ${PREFIX}ghcr-token, user $GHCR_USER); the existing login is kept" >&2; fi
-fi
+ghcr_login() { # the item is "<user>:<token>", or a bare token (then GHCR_USER names the user)
+  local item user token
+  item="$(get ghcr-token)" || return 1
+  case "$item" in *:*) user="${item%%:*}"; token="${item#*:}" ;; *) user="${GHCR_USER:-}"; token="$item" ;; esac
+  [ -n "$user" ] && [ -n "$token" ] || return 1
+  printf '%s' "$token" | docker login ghcr.io -u "$user" --password-stdin >/dev/null 2>&1
+}
+if ghcr_login; then echo "fetch-secrets: docker login ghcr.io ok" >&2
+else echo "fetch-secrets: GHCR login skipped or failed (item ${PREFIX}ghcr-token); the existing login is kept" >&2; fi
 
 echo "export ENV_DIR=$ENV_DIR"

@@ -22,6 +22,9 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
       KC_HOSTNAME_ADMIN: http://localhost:18081
+      # the register page (served from auth.yoursport.vn) reads /api/reference from the browser; without this the theme falls back to
+      # http://localhost:8080/api and the country list does not load. The API must also allow this origin (CORS_ORIGINS in server.env).
+      SPORTCONNECT_API_BASE_URL: https://yoursport.vn/api
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_dev
       KC_DB_USERNAME: sc_keycloak
       KC_DB_PASSWORD: ${KC_DB_PASSWORD:?set KC_DB_PASSWORD in ~/web/stack.env}

@@ -25,7 +25,7 @@
 # Settings: STACK_ENV, PG_CONTAINER (sportconnect-dev-postgres-1), RMQ_CONTAINER (sportconnect-dev-rabbitmq-1),
 #           NET (sportconnect-dev_default), PG_CLIENT_IMAGE (ghcr.io/mr-mittt/sportconnect-postgis:16-3.6, already on the box).
 #
-# Written for INFRA-14. Only syntax-checked (`bash -n`) until it is rehearsed on a restored copy and then run on the box.
+# Written for INFRA-14. Rehearsed on a restored copy of the real data (2026-11-03), then run on the live A1 box (`postgres`, `rabbitmq`, `check` all ok).
 set -uo pipefail
 
 STACK_ENV="${STACK_ENV:-${ENV_DIR:-$HOME/web}/stack.env}"

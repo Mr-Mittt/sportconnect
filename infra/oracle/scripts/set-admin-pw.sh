@@ -33,7 +33,7 @@ printf '%s\n%s\n' "$CUR" "$P1" | docker exec -i sportconnect-dev-keycloak-1 sh -
   $K config credentials --server http://localhost:8080 --realm master --user admin --password "$CUR" >/dev/null &&
   $K set-password -r master --username admin --new-password "$NEW" &&
   $K config credentials --server http://localhost:8080 --realm master --user admin --password "$NEW" >/dev/null &&
-  echo "changed, and verified by logging in with the new password"; rm -f ~/.keycloak/kcadm.config'
+  echo "changed, and verified by logging in with the new password"; rc=$?; rm -f ~/.keycloak/kcadm.config; exit $rc'
 printf '%s\n' "$P1" > ~/.kc-admin-pw
 chmod 600 ~/.kc-admin-pw
 echo "stored in ~/.kc-admin-pw (${#P1} characters, this is the length you should see)"

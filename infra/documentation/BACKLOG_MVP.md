@@ -36,6 +36,7 @@ green run exists" pattern.
 | 5 | [INFRA-18](MVP/INFRA-18_DEPLOY_FOLLOW_UPS_DEFERRED_FROM_INFRA_6.md) | Deploy follow-ups deferred from INFRA-6 (zero-downtime deploys, deploy notifications and a status view, Promote starting CI by itself); one collecting ticket, split when picked up | `TODO` |
 | 6 | [INFRA-20](MVP/INFRA-20_ORACLE_HOSTING_FOLLOW_UPS.md) | Oracle hosting follow-ups left open by the INFRA-12 spike: latency and the Cloudflare test, authenticated load (feed, Discover, WebSocket, Keycloak logins), idle reclamation and the current A1 allowance; measured on the A1 box after INFRA-12's move | `TODO` |
 | 7 | [INFRA-21](MVP/INFRA-21_PRODUCTION_NAMES_THAT_STILL_SAY_DEV.md) | Production names that still say `dev`: the Compose project `sportconnect-dev` (containers, network, volumes) and the `_dev` database names; options costed, none chosen; depends on INFRA-14 | `TODO` |
+| 8 | [INFRA-22](MVP/INFRA-22_ONE_VAULT_SECRET_PER_CREDENTIAL_AND_ENV_FILE_TEMPLATES.md) | One Vault secret per credential and env files built from repository templates by `fetch-secrets.sh` (no whole-file secrets, no duplicated values, non-secret settings in git); depends on INFRA-14, related to INFRA-19 | `TODO` |
 
 ---
 
