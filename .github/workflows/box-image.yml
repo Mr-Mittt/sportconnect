@@ -1,0 +1,190 @@
+# Box image — builds infra/box/Dockerfile (the box's non-secret files and the two Keycloak JARs) and publishes it to GHCR (INFRA-19).
+# Same shape as client-image.yml and chat-image.yml; read server-image.yml's header for the release rules:
+#
+#   pull request   -> checks the version, builds the image (amd64), runs infra/scripts/verify-box-image.sh on it, pushes nothing
+#   push to master -> ordinary merge: builds and pushes nothing (INFRA-12: a release is the only deployable image)
+#                     RELEASE, when infra/box/BOX_VERSION has no tag box-v<version> yet (and is not the 0.0.0 placeholder):
+#                     also checks the image, then pushes :X.Y.Z and :latest, then creates the git tag box-vX.Y.Z
+#   manual run     -> input `platforms` (default both architectures); builds only when the version has no tag yet, so it is the same
+#                     as a push to master (the "run again" for a release whose push failed)
+#
+# A release is a merged PR that raised the version (infra/scripts/box-version.sh bump, or /release box). What gets built and
+# tagged is decided in infra/scripts/box-image-plan.sh. The box build has no test suite of its own: verify-box-image.sh is the
+# gate (required files, no secret in the image, valid JARs, LF endings, `caddy validate`, `docker compose config`, the PostGIS
+# tag the same in both files that pin it). The Keycloak extensions JAR and the theme JAR are built INSIDE the Dockerfile, on the
+# build machine, once for both architectures. The login theme compiles the client's shared design files (client/src/index.css,
+# shared, features/auth/components, locales, public), so a change to those also builds this image.
+#
+# The image is deployed with `sportconnect-setup` on the box after Promote (component box); it is private like the others.
+# Verified only on GitHub after merge (INFRA-15 style): see INFRA-19.
+
+name: box-image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'infra/box/**'
+      - 'infra/oracle/**'
+      - '!infra/oracle/README.md'
+      - '!infra/oracle/SECRETS.md'
+      - 'infra/docker-compose.dev.yml'
+      - 'infra/rabbitmq/**'
+      - 'infra/keycloak/realm/**'
+      - 'infra/keycloak/themes/**'
+      - 'infra/keycloak-extensions/**'
+      - 'infra/scripts/init-chat-db.sql'
+      - 'infra/scripts/create-keycloak-db.sh'
+      - 'infra/scripts/box-image-plan.sh'
+      - 'infra/scripts/box-version.sh'
+      - 'infra/scripts/verify-box-image.sh'
+      - 'client/keycloak-theme/**'
+      - 'client/package.json'
+      - 'client/pnpm-lock.yaml'
+      - 'client/src/index.css'
+      - 'client/src/shared/**'
+      - 'client/src/features/auth/components/**'
+      - 'client/src/locales/**'
+      - 'client/public/**'
+      - '!client/keycloak-theme/storybook-static/**'
+      - '.github/workflows/box-image.yml'
+  pull_request:
+    paths:
+      - 'infra/box/**'
+      - 'infra/oracle/**'
+      - '!infra/oracle/README.md'
+      - '!infra/oracle/SECRETS.md'
+      - 'infra/docker-compose.dev.yml'
+      - 'infra/rabbitmq/**'
+      - 'infra/keycloak/realm/**'
+      - 'infra/keycloak/themes/**'
+      - 'infra/keycloak-extensions/**'
+      - 'infra/scripts/init-chat-db.sql'
+      - 'infra/scripts/create-keycloak-db.sh'
+      - 'infra/scripts/box-image-plan.sh'
+      - 'infra/scripts/box-version.sh'
+      - 'infra/scripts/verify-box-image.sh'
+      - 'client/keycloak-theme/**'
+      - 'client/package.json'
+      - 'client/pnpm-lock.yaml'
+      - 'client/src/index.css'
+      - 'client/src/shared/**'
+      - 'client/src/features/auth/components/**'
+      - 'client/src/locales/**'
+      - 'client/public/**'
+      - '!client/keycloak-theme/storybook-static/**'
+      - '.github/workflows/box-image.yml'
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'CPU architectures to build (default both: a release serves the A1 box and an x86 box from one tag)'
+        type: choice
+        default: linux/amd64,linux/arm64
+        options:
+          - linux/amd64,linux/arm64
+          - linux/arm64
+          - linux/amd64
+
+concurrency:
+  group: box-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: write   # create the box-vX.Y.Z git tag on a release
+  packages: write   # push to ghcr.io and prune old builds
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the release decision and the version check read the box-v* tags
+
+      - name: Check the version
+        run: infra/scripts/box-version.sh check
+
+      - name: Plan (version and tags)
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          OWNER: ${{ github.repository_owner }}
+        run: infra/scripts/box-image-plan.sh
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.plan.outputs.build == 'true'
+
+      - name: Log in to GHCR
+        if: steps.plan.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # One local amd64 build to check. The JAR stages run on this machine for every target, and the layer cache is shared with the
+      # push step below, so the release build after it only adds the arm64 file layer.
+      - name: Build for the check
+        if: steps.plan.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/box/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: sportconnect-box:check
+          provenance: false
+          build-args: |
+            VERSION=${{ steps.plan.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.plan.outputs.build_date }}
+          cache-from: type=gha,scope=box-image
+          cache-to: type=gha,mode=max,scope=box-image
+
+      - name: Check the image
+        if: steps.plan.outputs.build == 'true'
+        run: infra/scripts/verify-box-image.sh sportconnect-box:check
+
+      - name: Build and push
+        if: steps.plan.outputs.push == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/box/Dockerfile
+          platforms: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}   # release: both (the A1 box is arm64, an x86 box stays possible)
+          push: true
+          tags: ${{ steps.plan.outputs.tags }}
+          provenance: false   # one plain manifest per tag, so retention can reason about versions
+          build-args: |
+            VERSION=${{ steps.plan.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ steps.plan.outputs.build_date }}
+          cache-from: type=gha,scope=box-image
+          cache-to: type=gha,mode=max,scope=box-image
+
+      - name: Tag the release
+        if: steps.plan.outputs.create_git_tag == 'true'
+        run: |
+          git tag "box-v${{ steps.plan.outputs.version }}" "${{ github.sha }}"
+          git push origin "box-v${{ steps.plan.outputs.version }}"
+
+      - name: Retention (keep every release, latest, edge and the newest 10 sha builds)
+        if: steps.plan.outputs.push == 'true'
+        continue-on-error: true   # a refused delete must never fail a publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: infra/scripts/prune-ghcr-versions.sh "${{ github.repository_owner }}" sportconnect-box 10 --delete
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### box-image"
+            echo "built: ${{ steps.plan.outputs.build }}, pushed platforms: \`${{ inputs.platforms || 'linux/amd64,linux/arm64' }}\` (a pull request builds amd64 only and pushes nothing)"
+            echo "version \`${{ steps.plan.outputs.version }}\`, release: ${{ steps.plan.outputs.release }}, pushed: ${{ steps.plan.outputs.push }}"
+            echo '```'
+            echo "${{ steps.plan.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

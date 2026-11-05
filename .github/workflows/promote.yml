@@ -1,7 +1,8 @@
 # Promote — points the `prod` tag of one image at a chosen release or build (INFRA-6). The box deploys what `prod` points
-# at when its owner runs `sportconnect-deploy` (infra/oracle/scripts/sportconnect-deploy.sh); nothing here touches the box.
+# at when its owner runs `sportconnect-deploy` (infra/oracle/scripts/sportconnect-deploy.sh) for server, client and chat, or
+# `sportconnect-setup` (infra/oracle/scripts/sportconnect-setup.sh, INFRA-19) for the box config image; nothing here touches the box.
 #
-#   Actions -> promote -> Run workflow: component (server, client or chat) and version (X.Y.Z or sha-<hex>)
+#   Actions -> promote -> Run workflow: component (server, client, chat or box) and version (X.Y.Z or sha-<hex>)
 #
 #   job `check`    no approval needed. Reads the image `prod` points at now and the one asked for, checks that the new
 #                  image exists, is not older than the current one (down-version promotes are blocked until INFRA-17) and
@@ -23,7 +24,7 @@ on:
       component:
         description: 'Which image'
         type: choice
-        options: [server, client, chat]
+        options: [server, client, chat, box]
         required: true
       version:
         description: 'Release X.Y.Z or build sha-<hex> (never edge, latest or prod)'

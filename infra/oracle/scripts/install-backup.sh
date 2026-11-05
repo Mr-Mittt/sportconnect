@@ -17,7 +17,7 @@ set -euo pipefail
 
 ORACLE_DIR=${ORACLE_DIR:-$HOME/sportconnect/infra/oracle}
 
-echo "== 1. OCI CLI"
+echo "== 1. OCI CLI (INFRA-19: box-prepare.sh installs it now; this only installs it on a box prepared before that)"
 if command -v oci > /dev/null 2>&1 || [ -x "$HOME/.local/bin/oci" ]; then
   echo "oci already installed: $("$HOME/.local/bin/oci" --version 2> /dev/null || oci --version)"
 else
