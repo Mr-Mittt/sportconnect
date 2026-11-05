@@ -25,8 +25,19 @@ COMPOSE=(docker compose --env-file "$STACK_ENV" -f "$HOME/sportconnect/infra/doc
 
 echo "== 1. dependencies (Postgres+PostGIS, Redis, RabbitMQ, Keycloak, Mailpit) with the production override"
 "${COMPOSE[@]}" up -d
-until curl -fs -o /dev/null http://127.0.0.1:8081/realms/sportconnect/.well-known/openid-configuration; do sleep 3; done
-echo "keycloak realm is up"
+# Bounded wait (INFRA-19 rehearsal, 2026-11-05): on a NEW box Keycloak exits ("password authentication failed for user
+# sc_keycloak") until `rotate-credentials.sh postgres` has created that role, so an endless wait would never end.
+kc_up=0
+for _ in $(seq 1 40); do
+  if curl -fs -o /dev/null http://127.0.0.1:8081/realms/sportconnect/.well-known/openid-configuration; then kc_up=1; break; fi
+  sleep 3
+done
+if [ "$kc_up" = 1 ]; then
+  echo "keycloak realm is up"
+else
+  echo "WARNING: the keycloak realm did not come up in 2 minutes. On a NEW box that is expected until rotate-credentials.sh postgres has run;" >&2
+  echo "         then start it: ${COMPOSE[*]} up -d keycloak. On a running box, read: docker logs sportconnect-dev-keycloak-1. Going on with Caddy." >&2
+fi
 
 echo "== 2. Caddy (certificates live in the caddy_data volume: do not delete it, Let's Encrypt rate-limits re-issuing)"
 mkdir -p "$HOME/web/dist"

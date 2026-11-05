@@ -80,11 +80,17 @@ Who: the owner, through the existing promote and deploy flow. A fresh box then n
 - `promote-check.sh` with a stand-in `docker` and `gh`: `box` is accepted, the CI lookup asks for `box-image.yml`, an unknown component is refused. (The "run `sportconnect-setup`" sentence of the summary was not exercised: the stand-in gave a no-change promote.)
 - `box-version.sh check` and `box-image-plan.sh` were run locally.
 
-**Not proven yet (conditionals, in this order):**
-1. The `box-image` workflow on GitHub: the pull-request run, then the release run (the arm64 build, the push, the tag `box-v0.1.0`, the retention step, the `verify-box-image.sh` step on the runner).
-2. `/release box minor` (`0.1.0`), the promote of `box` with its approval, and that the first job finds the `box-image` run.
-3. `sportconnect-setup` on the A1 box: `--plan`, then the install; a real `caddy reload`; a real `docker compose up -d` after a Compose change; the failure path and its restore against real services; the GHCR login through `fetch-secrets.sh`. The box already runs, so the first run should be a Caddyfile-only or no-op release.
-4. A fresh box built from the hand-copied four files (the rebuild rehearsal of the guide's section 17), to prove the claim of this ticket end to end.
-5. Retire the manual `tar` bundle from guide section 3 once 3 and 4 have worked.
+**Proven on GitHub and on the A1 box (2026-11-05, owner's pasted outputs):**
+- The release run of `0.1.0` (PR #407): built and pushed both architectures, tags `0.1.0`, `latest`, `edge`, `sha-245eeb7` and `box-v0.1.0`; `imagetools inspect` listed amd64 and arm64; the package is linked to the repo.
+- `/release box minor` and the promote of `box` (`none -> 0.1.0`, the first job found the `box-image` run, `prod` -> `sha256:f7b47b8c9632…`). One defect found: the promote's "Done" line said to run `sportconnect-deploy` for the box; fixed to `sportconnect-setup` in `promote-apply.sh` (own branch).
+- `sportconnect-setup` on the A1 box: `--plan` (13 files, no Caddyfile or Compose change), the install (private GHCR pull, five steps, `installed: box 0.1.0`), a second run `unchanged`, `.setup-state` correct; then Keycloak restarted and the login worked with the CI-built JARs.
+
+**Fresh box (2026-11-05, my commands over SSH on a new A1):** `box-prepare.sh` incl. the OCI CLI, `fetch-secrets.sh` + GHCR login, `sportconnect-setup` full install with a real `compose up -d`, second run `unchanged`; Caddy with the real hostnames fails as expected, with a throwaway name on Let's Encrypt staging all three certificates were obtained. Defect found and fixed: `start-stack.sh` waited forever for Keycloak on a new box (its role is created by `rotate-credentials.sh postgres`); now a two-minute wait, a warning and Caddy.
+
+**Not proven yet (in this order):**
+1. The output of the retention step and of the `verify-box-image.sh` step on the runner (the run was reported green; those steps were not read).
+2. Through `sportconnect-setup` on the box: a real `caddy reload`, a real `docker compose up -d` after a Compose change, the failure path and its restore, and a changed `sportconnect-deploy`. This release changed none of them; the next box release that does is the test.
+3. The rest of the fresh-box rehearsal: `rotate-credentials.sh postgres|rabbitmq` and Keycloak after it, `sportconnect-deploy`, the realm steps (the box files, the GHCR login, `sportconnect-setup` and Caddy are proven, below).
+4. Retire the manual `tar` bundle from guide section 3 once 2 and 3 have worked.
 
 **i18n / enums / account lifecycle:** none (no endpoint, no text, no enum).
