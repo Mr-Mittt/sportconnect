@@ -57,7 +57,10 @@ if [ "$now" != "$NEW_DIGEST" ]; then
   fail "${IMAGE}:prod is ${now} after the retag, expected ${NEW_DIGEST}"
 fi
 echo "promote-apply: ${IMAGE}:prod -> ${NEW_DIGEST}"
+# The box config image (INFRA-19) is installed by sportconnect-setup; the application images by sportconnect-deploy.
+box_cmd="sportconnect-deploy"
+case "${IMAGE##*/}" in sportconnect-box) box_cmd="sportconnect-setup" ;; esac
 {
   echo "### Done"
-  echo "\`${IMAGE##*/}:prod\` now points at \`${NEW_DIGEST:0:19}\`. Run \`sportconnect-deploy\` on the box to deploy it."
+  echo "\`${IMAGE##*/}:prod\` now points at \`${NEW_DIGEST:0:19}\`. Run \`${box_cmd}\` on the box to deploy it."
 } >> "$SUMMARY"

@@ -175,6 +175,13 @@ export CADDY_PROBE_URL="https://example.test/" FAKE_CURL_RC=22
 run_setup --yes
 check "exit 1, failed at probe, tree back to v1" '[ $RC -eq 1 ] && echo "$OUT" | grep -q "SETUP FAILED at probe" && [ "$(tree_hash $T)" = "$before" ] && [ "$(state)" = "$D1|0.1.0" ]'
 
+echo "7b. an empty CADDY_PROBE_URL skips the check (found on a real box 2026-11-05: ':-' replaced the empty value with the default)"
+new_box; make_fixture "$FAKE_FIXTURE" v1; set_prod 0.1.0 $D1; run_setup --yes
+make_fixture "$FAKE_FIXTURE" v2; set_prod 0.1.1 $D2
+export CADDY_PROBE_URL="" FAKE_CURL_RC=22
+run_setup --yes
+check "installed although every curl would fail: the check was skipped" '[ $RC -eq 0 ] && [ "$(state)" = "$D2|0.1.1" ]'
+
 echo "8. refusals before any change"
 new_box; make_fixture "$FAKE_FIXTURE" v1; set_prod 0.1.0 $D1; run_setup --yes
 before="$(tree_hash $T)"
