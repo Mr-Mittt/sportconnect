@@ -89,10 +89,12 @@ Who: the owner, through the existing promote and deploy flow. A fresh box then n
 
 **Fresh box, later the same day (2026-11-05):** `rotate-credentials.sh postgres|rabbitmq|check` passed; Keycloak started and its realm answered about 30 s later; `sportconnect-deploy` deployed server, chat and client; `start-stack.sh` ran to the end; the failure path of `sportconnect-setup` against real services (all five steps, probe failed, three files restored byte for byte, no container recreated, exit 1) and then the success path (real `caddy reload`, `compose up -d`, `sportconnect-deploy` install) ran. Second defect found and fixed: `CADDY_PROBE_URL=""` did not skip the check in `sportconnect-setup` and `sportconnect-deploy` (`:-` replaces an empty value); test case 7b added and mutation-checked (fails with the old form; 44 tests pass).
 
+**The patch release `0.1.1` and the live box (2026-11-05, owner's pasted outputs):** "Check the image" passed all seven checks, retention said `nothing to delete`, the promote's summary named `sportconnect-setup`; on the live box `sportconnect-setup --plan` listed four files, the install ran, the second plan said `unchanged`, `.setup-state` held the `0.1.1` digest: a changed `sportconnect-deploy` was installed over a different one with no downtime. Not seen: the install output, `sportconnect-deploy --plan` afterwards, the installed command's checksum.
+
 **Not proven yet (in this order):**
-1. The output of the retention step and of the `verify-box-image.sh` step on the runner (the run was reported green; those steps were not read).
-2. A Compose change that recreates a container, and a changed `sportconnect-deploy` installed over a different one, through a real box release (the rehearsal changed only comments); the two fixes of this branch (`start-stack.sh`, the probe) reach the boxes only with the next box release.
-3. The realm steps and the restore on the fresh box (guide section 17), then the first real cutover use of this path.
-4. Retire the manual `tar` bundle from guide section 3 once 2 and 3 have worked.
+1. Retention actually deleting a version (the `0.1.1` run printed `nothing to delete`; the token's right to delete is unproven until there are more than ten `sha-*` builds). The "Check the image" step and the retention step were read for `0.1.1` and passed (below).
+2. A Compose change that recreates a container (known and untested, accepted by the owner 2026-11-05; the rehearsal changed only comments). Watch for the first box release that changes a Compose file: the plan's effects line names it.
+3. The realm steps and the restore on a fresh box (guide section 17); the rehearsal instance was terminated before them.
+4. Retire the manual `tar` bundle from guide section 3 once 3 has worked.
 
 **i18n / enums / account lifecycle:** none (no endpoint, no text, no enum).
