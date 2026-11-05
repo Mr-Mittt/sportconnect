@@ -43,7 +43,7 @@ ENV_DIR="${ENV_DIR:-$WEB_DIR}"             # where stack.env is read from; fetch
 STACK_ENV="${STACK_ENV:-$ENV_DIR/stack.env}"
 CADDY_NAME="${CADDY_NAME:-sc-caddy}"
 CADDY_IMAGE="${CADDY_IMAGE:-caddy:2-alpine}"
-CADDY_PROBE_URL="${CADDY_PROBE_URL:-https://yoursport.vn/}"   # empty = skip the final check through Caddy
+CADDY_PROBE_URL="${CADDY_PROBE_URL-https://yoursport.vn/}"   # set but empty = skip the final check through Caddy (no colon: ":-" would also replace an empty value)
 CADDY_PROBE_HOST="${CADDY_PROBE_HOST:-yoursport.vn}"
 BOX_IMAGE="${BOX_IMAGE:-$IMAGE_BASE/sportconnect-box}"
 STATE="$WEB_DIR/.setup-state"              # "<digest>|<version>" of the last box image installed

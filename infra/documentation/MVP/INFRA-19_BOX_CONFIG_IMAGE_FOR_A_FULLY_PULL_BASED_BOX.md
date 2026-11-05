@@ -87,10 +87,12 @@ Who: the owner, through the existing promote and deploy flow. A fresh box then n
 
 **Fresh box (2026-11-05, my commands over SSH on a new A1):** `box-prepare.sh` incl. the OCI CLI, `fetch-secrets.sh` + GHCR login, `sportconnect-setup` full install with a real `compose up -d`, second run `unchanged`; Caddy with the real hostnames fails as expected, with a throwaway name on Let's Encrypt staging all three certificates were obtained. Defect found and fixed: `start-stack.sh` waited forever for Keycloak on a new box (its role is created by `rotate-credentials.sh postgres`); now a two-minute wait, a warning and Caddy.
 
+**Fresh box, later the same day (2026-11-05):** `rotate-credentials.sh postgres|rabbitmq|check` passed; Keycloak started and its realm answered about 30 s later; `sportconnect-deploy` deployed server, chat and client; `start-stack.sh` ran to the end; the failure path of `sportconnect-setup` against real services (all five steps, probe failed, three files restored byte for byte, no container recreated, exit 1) and then the success path (real `caddy reload`, `compose up -d`, `sportconnect-deploy` install) ran. Second defect found and fixed: `CADDY_PROBE_URL=""` did not skip the check in `sportconnect-setup` and `sportconnect-deploy` (`:-` replaces an empty value); test case 7b added and mutation-checked (fails with the old form; 44 tests pass).
+
 **Not proven yet (in this order):**
 1. The output of the retention step and of the `verify-box-image.sh` step on the runner (the run was reported green; those steps were not read).
-2. Through `sportconnect-setup` on the box: a real `caddy reload`, a real `docker compose up -d` after a Compose change, the failure path and its restore, and a changed `sportconnect-deploy`. This release changed none of them; the next box release that does is the test.
-3. The rest of the fresh-box rehearsal: `rotate-credentials.sh postgres|rabbitmq` and Keycloak after it, `sportconnect-deploy`, the realm steps (the box files, the GHCR login, `sportconnect-setup` and Caddy are proven, below).
+2. A Compose change that recreates a container, and a changed `sportconnect-deploy` installed over a different one, through a real box release (the rehearsal changed only comments); the two fixes of this branch (`start-stack.sh`, the probe) reach the boxes only with the next box release.
+3. The realm steps and the restore on the fresh box (guide section 17), then the first real cutover use of this path.
 4. Retire the manual `tar` bundle from guide section 3 once 2 and 3 have worked.
 
 **i18n / enums / account lifecycle:** none (no endpoint, no text, no enum).

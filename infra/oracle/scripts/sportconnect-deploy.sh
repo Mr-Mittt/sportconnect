@@ -32,7 +32,7 @@ NET="${NET:-sportconnect-dev_default}"
 NAME_PREFIX="${NAME_PREFIX:-sc}"
 SERVER_WAIT="${SERVER_WAIT:-300}"   # seconds; the HEALTHCHECK start period alone is 120 s (Liquibase on a cold database)
 CHAT_WAIT="${CHAT_WAIT:-60}"
-CADDY_PROBE_URL="${CADDY_PROBE_URL:-https://yoursport.vn/}"   # empty = skip the final check through Caddy
+CADDY_PROBE_URL="${CADDY_PROBE_URL-https://yoursport.vn/}"   # set but empty = skip the final check through Caddy (no colon: ":-" would also replace an empty value)
 CADDY_PROBE_HOST="${CADDY_PROBE_HOST:-yoursport.vn}"
 LOG="$WEB_DIR/deploy.log"
 COMPONENTS=(server chat client)
