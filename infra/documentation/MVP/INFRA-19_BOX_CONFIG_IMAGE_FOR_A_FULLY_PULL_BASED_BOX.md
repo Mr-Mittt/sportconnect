@@ -1,6 +1,6 @@
 # INFRA-19 · A "box" config image: ship the box's non-secret files by pull, so a fresh or changed box needs no manual file copying
 
-**Status:** `IN PROGRESS` · **Type:** Infrastructure · **Depends on:** INFRA-6 (done); best done with or after INFRA-14 (it reshapes `start-stack.sh` and the Compose override, which this image would carry)
+**Status:** `DONE` (2026-11-05) · **Type:** Infrastructure · **Depends on:** INFRA-6 (done); best done with or after INFRA-14 (it reshapes `start-stack.sh` and the Compose override, which this image would carry)
 
 **Filed:** 2026-11-01, from the owner's question after INFRA-7: apart from the Caddyfile, what else must be copied to a fresh box, and how to make it all automatic. Estimated and costed against the alternatives; the owner has not decided between those yet (see below).
 
@@ -96,5 +96,7 @@ Who: the owner, through the existing promote and deploy flow. A fresh box then n
 2. A Compose change that recreates a container (known and untested, accepted by the owner 2026-11-05; the rehearsal changed only comments). Watch for the first box release that changes a Compose file: the plan's effects line names it.
 3. The realm steps and the restore on a fresh box (guide section 17); the rehearsal instance was terminated before them.
 4. Retire the manual `tar` bundle from guide section 3 once 3 has worked.
+
+**Closed 2026-11-05 (owner's decision).** The ticket's aim, a fresh or changed box with the files arriving by pull instead of a hand-made archive, is proven on the live box and on a fresh A1 up to the credentials and the deploy. Left open on purpose and written in the list above: a Compose change that recreates a container, retention deleting a version, and the realm steps and the restore on a fresh box. The manual `tar` bundle stays as approach B in guide section 3 until a rebuild has gone through those steps. Two defects found by the first real runs were fixed under this ticket (`start-stack.sh`, `CADDY_PROBE_URL`).
 
 **i18n / enums / account lifecycle:** none (no endpoint, no text, no enum).
