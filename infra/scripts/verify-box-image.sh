@@ -36,7 +36,8 @@ req=(web/Caddyfile web/kc-prod.override.yml bin/sportconnect-deploy
      sportconnect/infra/keycloak/providers/sportconnect-keycloak-extensions.jar sportconnect/infra/keycloak/providers/sportconnect-keycloak-theme.jar
      sportconnect/infra/oracle/scripts/fetch-secrets.sh sportconnect/infra/oracle/scripts/sportconnect-setup.sh
      sportconnect/infra/oracle/scripts/box-prepare.sh sportconnect/infra/oracle/scripts/start-stack.sh
-     sportconnect/infra/oracle/scripts/rotate-credentials.sh sportconnect/infra/oracle/scripts/sportconnect-deploy.sh)
+     sportconnect/infra/oracle/scripts/rotate-credentials.sh sportconnect/infra/oracle/scripts/sportconnect-deploy.sh
+     sportconnect/infra/oracle/scripts/set-google-provider.sh)
 miss=0
 for f in "${req[@]}"; do [ -s "$f" ] || { bad "missing or empty: $f"; miss=1; }; done
 [ -d sportconnect/infra/keycloak/themes/sportconnect ] || { bad "missing: sportconnect/infra/keycloak/themes/sportconnect"; miss=1; }

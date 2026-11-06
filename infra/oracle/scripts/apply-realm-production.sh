@@ -35,6 +35,7 @@ KC_CONTAINER="${KC_CONTAINER:-sportconnect-dev-keycloak-1}"
 SERVER_ENV="${SERVER_ENV:-${ENV_DIR:-$HOME/web}/server.env}"
 ADMIN_PW_FILE="${ADMIN_PW_FILE:-${ENV_DIR:+$ENV_DIR/kc-admin-pw}}"
 ADMIN_PW_FILE="${ADMIN_PW_FILE:-$HOME/.kc-admin-pw}"
+GOOGLE_FILE="${GOOGLE_FILE:-${ENV_DIR:+$ENV_DIR/google-oauth}}"   # the Google client of the Vault item google-oauth (INFRA-14), when fetched
 SCRIPTS="${SCRIPTS:-$(cd "$(dirname "$0")" && pwd)}"
 KCADM=/opt/keycloak/bin/kcadm.sh
 
@@ -78,7 +79,7 @@ do_apply() {
 # The check runs inside the container; it prints one "ok ..." or "FAIL ..." line per setting and never a secret.
 read -r -d '' CHECK_SCRIPT <<'EOS'
 K=/opt/keycloak/bin/kcadm.sh
-read -r PW; read -r CRED
+read -r PW; read -r CRED; read -r GID
 $K config credentials --server http://localhost:8080 --realm master --user admin --password "$PW" >/dev/null || { echo "FAIL cannot log in to the master realm (admin password?)"; exit 2; }
 bad=0
 flat() { tr -d '\n\r ' ; }
@@ -111,12 +112,17 @@ M=$($K get realms/master | flat)
 case "$M" in *"\"frontendUrl\":\"$ADMIN_URL\""*) say ok "master frontendUrl is $ADMIN_URL" ;; *) say FAIL "master frontendUrl is not $ADMIN_URL" ;; esac
 G=$($K get identity-provider/instances/google -r sportconnect 2>/dev/null | flat)
 case "$G" in *'"enabled":true'*) echo "info google provider is ENABLED" ;; *'"alias":"google"'*) echo "info google provider exists but is DISABLED" ;; *) echo "info google provider does not exist" ;; esac
+# INFRA-14: the client id is readable (the secret is hidden by Keycloak); GID is the id in the Vault item google-oauth, empty when the box has none
+if [ -z "$GID" ]; then echo "info no google-oauth item fetched: the provider's client id is not compared"
+else case "$G" in *"\"clientId\":\"$GID\""*) say ok "google provider client id equals the one in the Vault item" ;; *) say FAIL "google provider client id differs from the Vault item (or the provider is missing)" ;; esac; fi
 rm -f ~/.keycloak/kcadm.config
 exit $bad
 EOS
 
 do_check() {
-  printf '%s\n%s\n' "$(adminpw)" "$(envval KEYCLOAK_CREDENTIALS_CLIENT_SECRET)" | docker exec -i \
+  local gid=""
+  [ -n "$GOOGLE_FILE" ] && [ -f "$GOOGLE_FILE" ] && gid="$(tr -d '\r\n' < "$GOOGLE_FILE" | cut -d: -f1)"
+  printf '%s\n%s\n%s\n' "$(adminpw)" "$(envval KEYCLOAK_CREDENTIALS_CLIENT_SECRET)" "$gid" | docker exec -i \
     -e "PUBLIC_URL=$PUBLIC_URL" -e "ADMIN_URL=$ADMIN_URL" -e "SMTP_HOST=$(envval MAIL_HOST)" -e "SMTP_PORT=$(envval MAIL_PORT)" \
     -e "SMTP_FROM=$(envval EMAIL_FROM)" -e "SMTP_USER=$(envval MAIL_USERNAME)" "$KC_CONTAINER" sh -c "$CHECK_SCRIPT"
   local rc=$?

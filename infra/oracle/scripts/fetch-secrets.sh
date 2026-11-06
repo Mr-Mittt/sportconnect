@@ -16,6 +16,7 @@
 # Items (secret names carry the prefix PREFIX, default sportconnect-prod-):
 #   server-env  -> $ENV_DIR/server.env      chat-env -> $ENV_DIR/chat.env      stack-env -> $ENV_DIR/stack.env
 #   kc-admin-pw -> $ENV_DIR/kc-admin-pw     (the Keycloak admin password, one line)
+#   google-oauth -> $ENV_DIR/google-oauth   (the Google OAuth client, `<client id>:<client secret>` on one line; optional)
 #   ghcr-token  -> `docker login ghcr.io`. The item holds `<github user>:<token>` on one line (the form Docker keeps in
 #                  ~/.docker/config.json, decoded), so the user and the token rotate together. An item without a colon is
 #                  taken as the bare token and the user comes from GHCR_USER. Skipped when the item is absent. The token is a
@@ -78,6 +79,17 @@ for pair in "server-env server.env" "chat-env chat.env" "stack-env stack.env" "k
   # shellcheck disable=SC2086
   fetch_file $pair
 done
+
+# google-oauth (INFRA-14): the Google OAuth client, `<client id>:<client secret>` on one line. Optional: a box without the item keeps working
+# (nothing is written, and an old file left by an earlier fetch is removed so a stale secret cannot be read). `rotate-credentials.sh google` reads it.
+fetch_optional_google() {
+  local tmp="$ENV_DIR/.google-oauth.tmp"
+  rm -f "$ENV_DIR/google-oauth"
+  if get google-oauth > "$tmp" && [ -s "$tmp" ] && grep -q ':' "$tmp"; then
+    mv -f "$tmp" "$ENV_DIR/google-oauth"; chmod 600 "$ENV_DIR/google-oauth"; echo "fetch-secrets: google-oauth written" >&2
+  else rm -f "$tmp"; echo "fetch-secrets: item ${PREFIX}google-oauth absent or not <client id>:<client secret>; google-oauth not written" >&2; fi
+}
+fetch_optional_google
 
 ghcr_login() { # the item is "<user>:<token>", or a bare token (then GHCR_USER names the user)
   local item user token
