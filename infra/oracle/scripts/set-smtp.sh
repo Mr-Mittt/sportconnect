@@ -21,4 +21,5 @@ $KC update realms/sportconnect \
   -s smtpServer.starttls=true -s smtpServer.ssl=false && echo "realm smtp update ok"
 # The password is write-only: Keycloak hides it, so it is not part of this read-back.
 $KC get realms/sportconnect --fields 'smtpServer(host,port,from,fromDisplayName,auth,user,starttls,ssl)'
+echo   # kcadm prints no newline after its JSON: keep the next message line apart
 rm -f ~/.keycloak/kcadm.config

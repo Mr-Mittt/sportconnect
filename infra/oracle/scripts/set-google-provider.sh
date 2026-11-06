@@ -21,6 +21,7 @@ if ! $KC get identity-provider/instances/google -r sportconnect >/dev/null 2>&1;
 elif $KC update identity-provider/instances/google -r sportconnect -s "config.clientId=$GID" -s "config.clientSecret=$GSECRET"; then
   echo "google provider update ok"
   $KC get identity-provider/instances/google -r sportconnect --fields 'alias,enabled,config(clientId)' || rc=1
+  echo   # kcadm prints no newline after its JSON: keep the next message line apart
 else
   rc=1
 fi
