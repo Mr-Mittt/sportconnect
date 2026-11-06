@@ -9,8 +9,8 @@
 #   rotate-credentials.sh keycloak-admin   the Keycloak admin password: the new one is $ENV_DIR/kc-admin-pw; asks for the old one if needed
 #   rotate-credentials.sh google      the Google OAuth client id:secret in $ENV_DIR/google-oauth: tested against Google first, then set on the realm
 #   rotate-credentials.sh ghcr        the GHCR token: fetch-secrets.sh logs in with the Vault item, then the images are read and the expiry is printed
-#   rotate-credentials.sh all         postgres, rabbitmq, smtp, keycloak-admin in this order, stopping at the first failure (google and ghcr need
-#                                     your action in Google's or GitHub's console first, so they are not part of it)
+#   rotate-credentials.sh all         postgres, rabbitmq, smtp, keycloak-admin, google, ghcr in this order, stopping at the first failure; each one
+#                                     applies the value now in the Vault (new or not), so put any new value there first
 #
 # smtp, keycloak-admin, google and ghcr work on the finished files of fetch-secrets.sh (ENV_DIR: server.env, kc-admin-pw, google-oauth) and
 # on the live realm through kcadm inside the Keycloak container (secrets on stdin, as apply-realm-production.sh does); each one tests the
@@ -239,7 +239,7 @@ do_google() {
   esac
   echo "== google: setting them on the realm's google identity provider"
   printf '%s\n%s\n%s\n' "$(admin_pw)" "$gid" "$gsec" | in_kc "$SCRIPTS/set-google-provider.sh" || die "the realm step failed"
-  echo "== google done. Next: sign in with Google once (a private window). Then, in Google Cloud Console, disable the OLD client secret (APIs & Services, Credentials, the OAuth client)."
+  echo "== google done. Next: sign in with Google once (a private window). If the secret in the Vault is a NEW one, then disable the OLD client secret in Google Cloud Console (APIs & Services, Credentials, the OAuth client); if you re-ran the same secret there is nothing to disable."
 }
 
 do_smtp() {
@@ -313,12 +313,13 @@ do_ghcr() {
 
 do_all() {
   local step self="${ROTATE_SELF:-$0}"
-  for step in postgres rabbitmq smtp keycloak-admin; do
+  # keycloak-admin can ask for the old password in a terminal, so it comes before the two steps that never ask
+  for step in postgres rabbitmq smtp keycloak-admin google ghcr; do
     echo "##### rotate-credentials.sh $step"
     bash "$self" "$step" || die "the step '$step' failed; the steps after it were not run"
   done
-  echo "##### all four steps ran. Still yours: start-stack.sh (recreates the services on the new passwords), sportconnect-deploy --recreate=server,chat --yes,"
-  echo "##### and, when their outside secrets change, rotate-credentials.sh google and rotate-credentials.sh ghcr (after the new value is in the Vault)."
+  echo "##### all six steps ran. Still yours: start-stack.sh (recreates the services on new database, RabbitMQ or Redis passwords), sportconnect-deploy --recreate=server,chat --yes"
+  echo "##### (after a new database, RabbitMQ or mail value), a Google sign-in and, after a NEW Google secret, disabling the old one in Google Cloud Console."
 }
 
 case "${1:-}" in

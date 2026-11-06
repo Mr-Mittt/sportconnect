@@ -175,6 +175,8 @@ is "$(printf '%s' "$after" | sed -n 's/.*"firstBrokerLoginFlowAlias":"\([^"]*\)"
 GOOGLE_TOKEN_URL="http://127.0.0.1:$STUB_PORT/token" run rot google
 rc0 "running it again changes nothing and succeeds"
 
+# Not tested here: the newline that set-google-provider.sh and set-smtp.sh print after kcadm's JSON. kcadm ends its output differently in this
+# throwaway start-dev Keycloak (with a newline) than on the production box (without), so a check could not fail here; the box shows it.
 echo "== apply-realm-production.sh check, the Google line"
 chk() { ENV_DIR="$work/env" KC_CONTAINER="$KC_NAME" PUBLIC_URL=https://example.test ADMIN_URL=http://localhost:18081 SCRIPTS="$SC" bash "$SC/apply-realm-production.sh" check; }
 run chk; has "ok   google provider client id equals the one in the Vault item" "the client id of the Vault item matches the realm"
@@ -265,10 +267,12 @@ echo "$1" >> "$ROTATE_TEST_LOG"
 SH
 chmod +x "$work/self.sh"
 : > "$work/log"; ROTATE_TEST_LOG="$work/log" ROTATE_SELF="$work/self.sh" run rot all
-rc0 "all runs"; is "$(tr '\n' ' ' < "$work/log")" "postgres rabbitmq smtp keycloak-admin " "in the order postgres, rabbitmq, smtp, keycloak-admin"
-has "rotate-credentials.sh google" "and reminds about google and ghcr"
+rc0 "all runs"; is "$(tr '\n' ' ' < "$work/log")" "postgres rabbitmq smtp keycloak-admin google ghcr " "in the order postgres, rabbitmq, smtp, keycloak-admin, google, ghcr"
+has "all six steps ran" "and says all six ran"; has "disabling the old one" "and reminds about the old Google secret"
 : > "$work/log"; FAIL_AT=smtp ROTATE_TEST_LOG="$work/log" ROTATE_SELF="$work/self.sh" run rot all
 rcbad "all stops at a failing step"; is "$(tr '\n' ' ' < "$work/log")" "postgres rabbitmq smtp " "and ran nothing after it"; has "were not run" "and says so"
+: > "$work/log"; FAIL_AT=google ROTATE_TEST_LOG="$work/log" ROTATE_SELF="$work/self.sh" run rot all
+rcbad "all stops at a failing google step"; is "$(tr '\n' ' ' < "$work/log")" "postgres rabbitmq smtp keycloak-admin google " "and does not run ghcr after it"
 
 echo "== fetch-secrets.sh: the optional google-oauth item (Linux container)"
 img=""
