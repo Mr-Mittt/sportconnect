@@ -1,6 +1,6 @@
 # INFRA-14 · Production Keycloak on Oracle Always Free
 
-**Status:** `IN PROGRESS` · **Type:** Infrastructure · **Depends on:** **INFRA-12** (go decision and the rewritten INFRA-3..6), INFRA-13 · **Gates:** the social-login feature reaching production
+**Status:** `DONE` (2026-11-06) · **Type:** Infrastructure · **Depends on:** **INFRA-12** (go decision and the rewritten INFRA-3..6), INFRA-13 · **Gates:** the social-login feature reaching production
 
 **Filed:** 2026-10-14, from the social-login `/feature`.
 
@@ -167,3 +167,26 @@ Credential actions that are not on this list are in `infra/oracle/SECRETS.md`, s
 **Proven (my own runs, 2026-11-06):** `test-rotate-credentials.sh` 91 checks passed (the `all` cases: the six-step order, a stop at a failing step, a stop at `google` that does not run `ghcr`). Mutation check: removing `google ghcr` from the step list fails three checks. **Two newline checks I added could not fail:** with the fix removed the suite still passed, because in the throwaway Keycloak (`start-stack`-less `start-dev`, output piped through Windows) `kcadm` ends its JSON with a newline, while on the box it did not (observed on 2026-11-06). I deleted those checks and left a comment in the test; the fix is checked on the box only, and I did not find why `kcadm` differs. The first two attempts to rerun the suite after the change failed because the Docker VM on the development computer stopped answering (`timed out dialing Hyper-V socket`); after `wsl --shutdown` and a restart of Rancher Desktop the suite passed. No repository file was involved.
 
 **Not run on the box:** the six-step `all` (it needs box `0.1.3`, not released), then the newline fix. Still open in the ticket: a real rotation of each value (the GHCR token expires on 2026-12-02), and the reset-mail result after the `smtp` run (the owner checks).
+
+## Box 0.1.3 and the six-step `all` on the box (2026-11-06, source: the owner's pasted outputs)
+
+**Install:** box `0.1.3` (PR #417) promoted and installed by `sportconnect-setup`: 4 files differ (`SECRETS.md`, `rotate-credentials.sh`, `set-google-provider.sh`, `set-smtp.sh`), effects "none beyond the copied files" (no Keycloak restart, no Compose or Caddy change), the second `--plan` said `unchanged`, state `sha256:8e36161cbf70…|0.1.3`.
+
+**`rotate-credentials.sh all`:** all six steps ran in order and the run ended `all six steps ran`. `postgres` and `rabbitmq` re-set the values in use (the "Next:" lines they print do not apply to a no-change run); `smtp`: Brevo accepted the login, `realm smtp update ok`; `keycloak-admin`: "nothing to change"; `google`: `ok    Google accepts the client id and secret`, `google provider update ok`, the provider enabled with the same client id; `ghcr`: login ok, the box image read (`sha256:8e36161cbf70`), token expiry `2026-12-02 05:37:50 UTC`, scope `read:packages`. The newline fix works on the box: the read-back's closing brace is now on a line of its own. A blank line before the JSON of the `google` step is `kcadm`'s own and stays.
+
+**Open:** the reset-mail result after the `smtp` run (the owner checks); a real rotation of each value (the GHCR token expires on 2026-12-02); the full restore on a fresh box is INFRA-23.
+
+## Closed 2026-11-06 (owner's decision)
+
+**Reset mail:** a password-reset email arrived after the `smtp` run (owner's word, 2026-11-06).
+
+**What the ticket delivered (the approved scope of 2026-11-03 plus the follow-ups agreed on 2026-11-04, 2026-11-05 and 2026-11-06):**
+- Production-mode Keycloak behind Caddy with the committed realm and both JARs (the theme and the extensions), the live realm brought to the production values by `apply-realm-production.sh` (a recorded deviation from "mirror every realm change in the realm file", because the realm file also seeds the dev Keycloak).
+- Secrets in OCI Vault, fetched to tmpfs by `fetch-secrets.sh` (with the GHCR login and the optional `google-oauth` item); the plain env files and dot-files shredded (step 9, 2026-11-06).
+- Least-privilege Postgres roles (`sc_app`, `sc_chat`, `sc_keycloak`), a RabbitMQ user instead of `guest`, a Redis password (chat 0.2.2), all rotated on the live box on 2026-11-03.
+- One command per credential that is not made on the box: `rotate-credentials.sh smtp`, `keycloak-admin`, `google`, `ghcr`, and `all` (six steps), each testing the new value at its source first and changing nothing when that fails; `set-google-provider.sh`; the Vault items `kc-admin-pw`, `ghcr-token`, `google-oauth`.
+- Verified: the backups after the rotation, `restore-test.sh` on a post-rotation set, Keycloak at 945.8 MiB at rest and about 2.4 GiB under a 400-user ramp (1,058 requests per second, 4 of 290,841 failed, p95 523 ms), and every rotation command run on the box as a no-change re-check (Google accepted the right pair and refused a wrong one, Brevo accepted the login, the GHCR expiry was read, the admin password was already current).
+
+**Differences from the plan:** the Google client credentials got their own Vault item, not folded into `kc-admin-pw` (owner's decision, 2026-11-05); `all` first ran four steps and now runs six (2026-11-06); the credentials-client and internal service secrets have no rotation command (owner's decision, 2026-11-04); two checks I added for a newline fix could not fail in the throwaway Keycloak and were removed.
+
+**Not proven (written down, not blocking the close):** a real rotation of each value with a NEW value (a new Google secret, a new Brevo key, a new GHCR token, a new admin password; the GHCR token expires on 2026-12-02 05:37:50 UTC); the `keycloak-admin` branch that really changes the password has run only on a throwaway Keycloak; the full restore on a fresh box and the new roles after it are INFRA-23; the rollback recipe of guide step 5 can no longer be followed as written (the `*.old` files were shredded); the Brevo key was not rotated (owner's decision, INFRA-3 row 23); a common format for every Vault item is part of INFRA-22.
