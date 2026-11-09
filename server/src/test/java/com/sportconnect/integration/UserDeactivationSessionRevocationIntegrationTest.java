@@ -1,6 +1,5 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.UserRepository;
 import com.sportconnect.user.service.UserServiceImpl;
@@ -45,7 +44,7 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
     }
 
     private User createActiveUser() {
-        return userRepository.findById(createUserWithRoles(true, Role.USER)).orElseThrow();
+        return userRepository.findById(createUserWithRoles(true, "USER")).orElseThrow();
     }
 
     private static String cacheKey(UUID userId) {

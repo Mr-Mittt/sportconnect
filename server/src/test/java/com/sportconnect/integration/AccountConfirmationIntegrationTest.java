@@ -3,9 +3,7 @@ package com.sportconnect.integration;
 import com.sportconnect.email.api.EmailMessage;
 import com.sportconnect.email.api.EmailSender;
 import com.sportconnect.user.api.dto.PhoneStatus;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -19,7 +17,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
-import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -49,8 +46,6 @@ class AccountConfirmationIntegrationTest extends RedisBaseIT {
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
     @Autowired
-    private RoleRepository roleRepository;
-    @Autowired
     private StringRedisTemplate redis;
     @MockBean
     private EmailSender emailSender;
@@ -58,9 +53,6 @@ class AccountConfirmationIntegrationTest extends RedisBaseIT {
     @BeforeEach
     void setUp() {
         clean();
-        if (roleRepository.findByName(Role.USER).isEmpty()) {
-            roleRepository.save(Role.builder().name(Role.USER).description("test").build());
-        }
         TestKeycloak.tokenEndpointAvailable(true);
         TestKeycloak.adminAvailable(true);
     }
@@ -83,13 +75,11 @@ class AccountConfirmationIntegrationTest extends RedisBaseIT {
 
     /** An active user with a Keycloak password (or none: {@code password == null}). */
     private User register(String email, String password) {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         User saved = userRepository.save(User.builder()
                 .email(email)
                 .firstName("Confirm")
                 .lastName("Tester")
                 .isActive(true)
-                .roles(Set.of(userRole))
                 .build());
         TestKeycloak.registerUser(saved.getId(), email, password);
         return saved;
@@ -168,10 +158,9 @@ class AccountConfirmationIntegrationTest extends RedisBaseIT {
 
     @Test
     void confirmationCode_forAnAccountWithoutEmail_is400() throws Exception {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         User phoneOnly = userRepository.save(User.builder()
                 .phoneNumber("+84901112233").phoneStatus(PhoneStatus.VALID)
-                .firstName("Phone").lastName("Only").isActive(true).roles(Set.of(userRole)).build());
+                .firstName("Phone").lastName("Only").isActive(true).build());
         TestKeycloak.registerUser(phoneOnly.getId(), "+84901112233", PASSWORD);
 
         requestCode(phoneOnly, "DEACTIVATE")

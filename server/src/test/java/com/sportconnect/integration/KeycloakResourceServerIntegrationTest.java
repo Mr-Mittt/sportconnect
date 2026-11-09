@@ -5,9 +5,7 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSObject;
 import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.MACSigner;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
@@ -42,8 +40,6 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
     @Autowired
     private UserRepository userRepository;
 
-    @Autowired
-    private RoleRepository roleRepository;
 
     private UUID userId;
 
@@ -112,7 +108,7 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
 
     @Test
     void aDeactivatedUsersValidToken_isUnauthorized() throws Exception {
-        UUID inactive = createUserWithRoles(false, Role.USER);
+        UUID inactive = createUserWithRoles(false, "USER");
 
         me(TestKeycloak.token(inactive, "USER")).andExpect(status().isUnauthorized());
     }
@@ -160,22 +156,6 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
     void roleNamesThatAreNotUserOrAdmin_grantNothing() throws Exception {
         me(TestKeycloak.token(userId, "VENDOR", "offline_access", "uma_authorization", "default-roles-sportconnect", "user"))
                 .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void aRoleHeldOnlyInTheDatabase_grantsNothing() throws Exception {
-        // The legacy rows still exist until U27 drops the tables; nothing may read them for authorization any more.
-        UUID dbAdmin = createUserWithRoles(true);
-        User user = userRepository.findById(dbAdmin).orElseThrow();
-        for (String name : new String[] {"USER", "ADMIN"}) {
-            user.getRoles().add(roleRepository.findByName(name)
-                    .orElseGet(() -> roleRepository.save(Role.builder().name(name).description("legacy").build())));
-        }
-        userRepository.save(user);
-        UUID target = createUserWithRoles(true, "USER");
-
-        me(TestKeycloak.token(dbAdmin)).andExpect(status().isForbidden());
-        deleteUser(target, "Bearer " + TestKeycloak.token(dbAdmin)).andExpect(status().isForbidden());
     }
 
     @Test

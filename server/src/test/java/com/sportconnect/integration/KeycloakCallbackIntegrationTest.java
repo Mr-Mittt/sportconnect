@@ -1,9 +1,7 @@
 package com.sportconnect.integration;
 
 import com.sportconnect.user.api.dto.PhoneStatus;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -60,8 +58,6 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
     @Autowired
-    private RoleRepository roleRepository;
-    @Autowired
     private com.sportconnect.reference.repository.CountryRepository countryRepository;
     @Autowired
     private com.sportconnect.reference.repository.RegionRepository regionRepository;
@@ -76,9 +72,6 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
     void setUp() {
         clear();
         ReferenceTestData.reseed(dataSource);
-        if (roleRepository.findByName(Role.USER).isEmpty()) {
-            roleRepository.save(Role.builder().name(Role.USER).description("test").build());
-        }
     }
 
     @AfterEach
@@ -148,7 +141,6 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
 
     /** An existing account with a known id (what an earlier sign-in would have provisioned). */
     private UUID existingUser(boolean active, String email, String phone) {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         return userRepository.save(User.builder()
                 .email(email)
                 .phoneNumber(phone)
@@ -157,12 +149,10 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
                 .lastName("Name")
                 .username("old" + System.nanoTime())
                 .isActive(active)
-                .roles(Set.of(userRole))
                 .build()).getId();
     }
 
     private UUID existingUserWithId(UUID id, boolean active, String email) {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         return userRepository.save(User.builder()
                 .id(id)
                 .email(email)
@@ -170,7 +160,6 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
                 .lastName("Name")
                 .username("old" + System.nanoTime())
                 .isActive(active)
-                .roles(Set.of(userRole))
                 .build()).getId();
     }
 
@@ -269,7 +258,6 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
         assertThat(user.getIsEmailVerified()).isTrue();
         assertThat(user.getIsActive()).isTrue();
         assertThat(user.getLastLoginAt()).isNotNull();
-        assertThat(user.getRoles()).isEmpty(); // A37: no role is stored for the user; the roles are Keycloak's, carried in the token
         assertThat(responseRoles(result)).containsExactly("USER"); // ... and the session response shows the ones the token carries
         assertThat(userPreferenceRepository.findByUserId(sub)).get().extracting("language").isEqualTo("vi");
 

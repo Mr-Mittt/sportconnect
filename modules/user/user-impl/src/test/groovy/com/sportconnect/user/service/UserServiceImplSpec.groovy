@@ -17,10 +17,8 @@ import com.sportconnect.user.api.dto.UpdateProfileRequest
 import com.sportconnect.user.api.dto.UserFriendshipStatus
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
-import com.sportconnect.user.entity.Role
 import com.sportconnect.user.entity.User
 import com.sportconnect.user.entity.UserPreference
-import com.sportconnect.user.repository.RoleRepository
 import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.locationtech.jts.geom.Coordinate
@@ -40,7 +38,6 @@ import java.time.LocalDate
 class UserServiceImplSpec extends Specification {
 
     UserRepository userRepository = Mock()
-    RoleRepository roleRepository = Mock()
     AccountConfirmationService accountConfirmation = Mock()
     KeycloakCredentialService keycloakCredentials = Mock()
     UserFriendService userFriendService = Mock()
@@ -54,7 +51,7 @@ class UserServiceImplSpec extends Specification {
     GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326)
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, accountConfirmation, keycloakCredentials, userFriendService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
+    UserServiceImpl userService = new UserServiceImpl(userRepository, accountConfirmation, keycloakCredentials, userFriendService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
 
     def "getUserById should return user when found and active"() {
         given:
@@ -66,7 +63,6 @@ class UserServiceImplSpec extends Specification {
                 .lastName("Doe")
                 .username("johndoe")
                 .isActive(true)
-                .roles([new Role(id: 1, name: "USER")] as Set)
                 .build()
 
         when:
@@ -101,7 +97,6 @@ class UserServiceImplSpec extends Specification {
                 .id(userId)
                 .email("test@example.com")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         when:
@@ -132,7 +127,6 @@ class UserServiceImplSpec extends Specification {
                 .email(email)
                 .username("testuser")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         when:
@@ -176,7 +170,6 @@ class UserServiceImplSpec extends Specification {
                 .email("john@example.com")
                 .username(username)
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         when:
@@ -275,7 +268,6 @@ class UserServiceImplSpec extends Specification {
                 .firstName("Old")
                 .lastName("Name")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         def request = UpdateProfileRequest.builder()
@@ -322,7 +314,7 @@ class UserServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
         def user = User.builder()
                 .id(userId).email("old@example.com").firstName("Old").lastName("Name")
-                .isActive(true).roles([] as Set).build()
+                .isActive(true).build()
         def request = UpdateProfileRequest.builder()
                 .firstName("New").lastName("Name").username("newusername")
                 .avatarUrl("https://example.com/avatar.jpg").build()
@@ -356,7 +348,7 @@ class UserServiceImplSpec extends Specification {
         def user = User.builder()
                 .id(userId).email("test@example.com").firstName("Same").lastName("Name")
                 .username("sameusername").avatarUrl("https://example.com/same.jpg")
-                .isActive(true).roles([] as Set).build()
+                .isActive(true).build()
         def request = UpdateProfileRequest.builder()
                 .bio("A new bio").phoneNumber("+84901234567").city("New York").build()
 
@@ -376,7 +368,7 @@ class UserServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
         def user = User.builder()
                 .id(userId).email("test@example.com").gender(existing)
-                .isActive(true).roles([] as Set).build()
+                .isActive(true).build()
         def request = UpdateProfileRequest.builder().gender(sent).build()
 
         when:
@@ -402,7 +394,7 @@ class UserServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
         def user = User.builder()
                 .id(userId).email("test@example.com").firstName("Old").gender("MALE")
-                .isActive(true).roles([] as Set).build()
+                .isActive(true).build()
         def request = UpdateProfileRequest.builder().firstName("New").gender(sent).build()
 
         when:
@@ -431,7 +423,6 @@ class UserServiceImplSpec extends Specification {
                 .id(userId)
                 .email("test@example.com")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         def request = UpdateProfileRequest.builder()
@@ -466,7 +457,6 @@ class UserServiceImplSpec extends Specification {
                 .weightKg(new BigDecimal("65.00"))
                 .shoeSizeMm(250)
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         def request = UpdateProfileRequest.builder().firstName("New").build()
@@ -487,7 +477,7 @@ class UserServiceImplSpec extends Specification {
     def "updateProfile throws BadRequestException when heightCm is out of bounds"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
         def request = UpdateProfileRequest.builder().heightCm(heightValue).build()
 
         when:
@@ -507,7 +497,7 @@ class UserServiceImplSpec extends Specification {
     def "updateProfile throws BadRequestException when weightKg is out of bounds"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
         def request = UpdateProfileRequest.builder().weightKg(weightValue).build()
 
         when:
@@ -527,7 +517,7 @@ class UserServiceImplSpec extends Specification {
     def "updateProfile throws BadRequestException when shoeSizeMm is out of bounds (millimetres, 10-500)"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
         def request = UpdateProfileRequest.builder().shoeSizeMm(shoeSizeValue).build()
 
         when:
@@ -552,7 +542,6 @@ class UserServiceImplSpec extends Specification {
                 .id(userId)
                 .email("test@example.com")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         def locationRequest = new LocationRequest(latitude: 40.7128, longitude: -74.0060)
@@ -609,7 +598,6 @@ class UserServiceImplSpec extends Specification {
                 .id(userId)
                 .email("test@example.com")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         when:
@@ -638,7 +626,7 @@ class UserServiceImplSpec extends Specification {
     def "deactivateOwnAccount deactivates once the caller is confirmed (password or emailed code)"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
 
         when:
         userService.deactivateOwnAccount(userId, password, code)
@@ -660,7 +648,7 @@ class UserServiceImplSpec extends Specification {
     def "deactivateOwnAccount changes nothing when the confirmation fails"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
 
         when:
         userService.deactivateOwnAccount(userId, "wrong", null)
@@ -691,7 +679,7 @@ class UserServiceImplSpec extends Specification {
         where:
         found << [
                 Optional.empty(),
-                Optional.of(User.builder().id(UUID.randomUUID()).isActive(false).roles([] as Set).build())
+                Optional.of(User.builder().id(UUID.randomUUID()).isActive(false).build())
         ]
     }
 
@@ -807,7 +795,6 @@ class UserServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def point = geometryFactory.createPoint(new Coordinate(-74.0060, 40.7128))
-        def role = new Role(id: 1, name: "USER")
         def user = User.builder()
                 .id(userId)
                 .email("test@example.com")
@@ -819,7 +806,6 @@ class UserServiceImplSpec extends Specification {
                 .country("USA")
                 .isEmailVerified(true)
                 .isActive(true)
-                .roles([role] as Set)
                 .build()
 
         when:
@@ -838,7 +824,7 @@ class UserServiceImplSpec extends Specification {
     def "changePassword confirms the caller and then sets the new password in Keycloak"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
 
         when:
         userService.changePassword(userId, password, code, "newRaw12345")
@@ -858,7 +844,7 @@ class UserServiceImplSpec extends Specification {
     def "changePassword sets nothing in Keycloak when the confirmation fails"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
 
         when:
         userService.changePassword(userId, "wrongRaw", null, "newRaw12345")
@@ -889,7 +875,7 @@ class UserServiceImplSpec extends Specification {
     def "sendConfirmationCode emails the account in its preferred language"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
         def expected = ConfirmationCodeResponse.builder().resendAfterSeconds(60).expiresInSeconds(900).build()
 
         when:
@@ -921,7 +907,7 @@ class UserServiceImplSpec extends Specification {
     def "sendEmailVerification requests the mail when Keycloak does not hold the email as verified"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).build()
 
         when:
         def result = userService.sendEmailVerification(userId)
@@ -938,7 +924,7 @@ class UserServiceImplSpec extends Specification {
     def "sendEmailVerification sends nothing and updates the copy when Keycloak already has the email verified"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email("test@example.com").isActive(true).isEmailVerified(false).roles([] as Set).build()
+        def user = User.builder().id(userId).email("test@example.com").isActive(true).isEmailVerified(false).build()
 
         when:
         def result = userService.sendEmailVerification(userId)
@@ -955,7 +941,7 @@ class UserServiceImplSpec extends Specification {
     def "sendEmailVerification refuses an account with no email before asking Keycloak"() {
         given:
         def userId = UUID.randomUUID()
-        def user = User.builder().id(userId).email(email).isActive(true).roles([] as Set).build()
+        def user = User.builder().id(userId).email(email).isActive(true).build()
 
         when:
         userService.sendEmailVerification(userId)
@@ -991,14 +977,14 @@ class UserServiceImplSpec extends Specification {
         userService.markEmailVerified(userId)
 
         then:
-        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(User.builder().id(userId).isActive(true).isEmailVerified(false).roles([] as Set).build())
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(User.builder().id(userId).isActive(true).isEmailVerified(false).build())
         1 * userRepository.save({ User u -> u.isEmailVerified })
 
         when: "already verified"
         userService.markEmailVerified(userId)
 
         then:
-        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(User.builder().id(userId).isActive(true).isEmailVerified(true).roles([] as Set).build())
+        1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.of(User.builder().id(userId).isActive(true).isEmailVerified(true).build())
         0 * userRepository.save(_)
 
         when: "unknown or deactivated"
@@ -1007,38 +993,6 @@ class UserServiceImplSpec extends Specification {
         then:
         1 * userRepository.findByIdAndIsActiveTrue(userId) >> Optional.empty()
         0 * userRepository.save(_)
-    }
-
-    // ── getUserRoles ─────────────────────────────────────────────────────────
-
-    def "getUserRoles returns the correct set of role names"() {
-        given:
-        def userId = UUID.randomUUID()
-        def user = User.builder()
-                .id(userId)
-                .email("test@example.com")
-                .isActive(true)
-                .roles([new Role(id: 1, name: "USER"), new Role(id: 2, name: "ADMIN")] as Set)
-                .build()
-
-        when:
-        def result = userService.getUserRoles(userId)
-
-        then:
-        1 * userRepository.findById(userId) >> Optional.of(user)
-        result == ["USER", "ADMIN"] as Set
-    }
-
-    def "getUserRoles throws ResourceNotFoundException when user not found"() {
-        given:
-        def userId = UUID.randomUUID()
-
-        when:
-        userService.getUserRoles(userId)
-
-        then:
-        1 * userRepository.findById(userId) >> Optional.empty()
-        thrown(ResourceNotFoundException)
     }
 
     // ── updateLastLogin ──────────────────────────────────────────────────────
@@ -1050,7 +1004,6 @@ class UserServiceImplSpec extends Specification {
                 .id(userId)
                 .email("test@example.com")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
 
         when:
@@ -1085,7 +1038,6 @@ class UserServiceImplSpec extends Specification {
                 .city("Hanoi")
                 .country("Vietnam")
                 .isActive(true)
-                .roles([] as Set)
                 .build()
     }
 
@@ -1234,12 +1186,11 @@ class UserServiceImplSpec extends Specification {
     // U16 — country / region / language links
     // ══════════════════════════════════════════════════════════════════════
 
-    private static final Role USER_ROLE = new Role(id: 1, name: "USER")
 
     private User linkedUser(UUID id, Long countryId, Long regionId, String legacyCountry = null) {
         User.builder()
                 .id(id).email("linked@example.com").firstName("Lin").lastName("Ked")
-                .isActive(true).roles([USER_ROLE] as Set)
+                .isActive(true)
                 .countryId(countryId).regionId(regionId).country(legacyCountry)
                 .build()
     }

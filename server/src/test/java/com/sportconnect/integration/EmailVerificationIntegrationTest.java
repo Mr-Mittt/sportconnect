@@ -1,8 +1,6 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -12,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.web.servlet.ResultActions;
 
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,16 +29,11 @@ class EmailVerificationIntegrationTest extends RedisBaseIT {
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
     @Autowired
-    private RoleRepository roleRepository;
-    @Autowired
     private StringRedisTemplate redis;
 
     @BeforeEach
     void setUp() {
         clean();
-        if (roleRepository.findByName(Role.USER).isEmpty()) {
-            roleRepository.save(Role.builder().name(Role.USER).description("test").build());
-        }
         TestKeycloak.adminAvailable(true);
         TestKeycloak.resetVerification();
     }
@@ -63,13 +55,11 @@ class EmailVerificationIntegrationTest extends RedisBaseIT {
     }
 
     private User register(String email, boolean active) {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         User saved = userRepository.save(User.builder()
                 .email(email)
                 .firstName("Verify")
                 .lastName("Tester")
                 .isActive(active)
-                .roles(Set.of(userRole))
                 .build());
         TestKeycloak.registerUser(saved.getId(), email, "password123");
         return saved;

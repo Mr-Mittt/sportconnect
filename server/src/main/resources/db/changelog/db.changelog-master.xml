@@ -232,4 +232,7 @@
     <!-- U24: drop users.password_hash; the password lives only in Keycloak. -->
     <include file="db/changelog/changes/V083__drop_users_password_hash.sql" relativeToChangelogFile="false"/>
 
+    <!-- U27: drop roles and user_roles; roles are Keycloak's since A37. -->
+    <include file="db/changelog/changes/V084__drop_roles_and_user_roles.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

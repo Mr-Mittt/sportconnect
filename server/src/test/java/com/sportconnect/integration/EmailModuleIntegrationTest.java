@@ -1,7 +1,5 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.user.entity.Role;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -60,17 +58,12 @@ class EmailModuleIntegrationTest extends RedisBaseIT {
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
     @Autowired
-    private RoleRepository roleRepository;
-    @Autowired
     private DataSource dataSource;
 
     @BeforeEach
     void setUp() {
         clean();
         ReferenceTestData.reseed(dataSource);
-        if (roleRepository.findByName(Role.USER).isEmpty()) {
-            roleRepository.save(Role.builder().name(Role.USER).description("test").build());
-        }
     }
 
     @AfterEach

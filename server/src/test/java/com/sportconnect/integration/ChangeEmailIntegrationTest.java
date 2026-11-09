@@ -3,9 +3,7 @@ package com.sportconnect.integration;
 import com.sportconnect.email.api.EmailMessage;
 import com.sportconnect.email.api.EmailSender;
 import com.sportconnect.user.api.dto.PhoneStatus;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -22,7 +20,6 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -56,8 +53,6 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
     @Autowired
-    private RoleRepository roleRepository;
-    @Autowired
     private StringRedisTemplate redis;
     @MockBean
     private EmailSender emailSender;
@@ -65,9 +60,6 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
     @BeforeEach
     void setUp() {
         clean();
-        if (roleRepository.findByName(Role.USER).isEmpty()) {
-            roleRepository.save(Role.builder().name(Role.USER).description("test").build());
-        }
         TestKeycloak.resetIdentities();
         TestKeycloak.adminAvailable(true);
     }
@@ -90,10 +82,9 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
     /** An active user in the database and in Keycloak (username = email, as a registration leaves it). */
     private User register(String email, String password) {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         User saved = userRepository.save(User.builder()
                 .email(email).firstName("Change").lastName("Tester").isActive(true).isEmailVerified(false)
-                .roles(Set.of(userRole)).build());
+                .build());
         TestKeycloak.registerUser(saved.getId(), email, email, password);
         return saved;
     }
@@ -368,9 +359,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
     @Test
     void change_anyOtherUsername_isLeftAlone() throws Exception {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         User user = userRepository.save(User.builder().email("u26-k@example.com").firstName("K").lastName("K")
-                .isActive(true).roles(Set.of(userRole)).build());
+                .isActive(true).build());
         TestKeycloak.registerUser(user.getId(), "janedoe", "u26-k@example.com", PASSWORD);
         String code = issueNewEmailCode(user, "u26-k-new@example.com");
 
@@ -448,9 +438,8 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
 
     @Test
     void change_forAPhoneOnlyAccount_addsItsFirstEmail_withThePassword() throws Exception {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         User user = userRepository.save(User.builder().phoneNumber("+84901112244").phoneStatus(PhoneStatus.VALID)
-                .firstName("Phone").lastName("Only").isActive(true).roles(Set.of(userRole)).build());
+                .firstName("Phone").lastName("Only").isActive(true).build());
         TestKeycloak.registerUser(user.getId(), "+84901112244", PASSWORD);
         String code = issueNewEmailCode(user, "u26-o-first@example.com");
 

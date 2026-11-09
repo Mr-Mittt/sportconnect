@@ -49,7 +49,7 @@ class UserFriendServiceImplSpec extends Specification {
     UUID requestId = UUID.randomUUID()
 
     def user(UUID id, String firstName = "Test", String lastName = "User") {
-        User.builder().id(id).firstName(firstName).lastName(lastName).isActive(true).roles([].toSet()).build()
+        User.builder().id(id).firstName(firstName).lastName(lastName).isActive(true).build()
     }
 
     // ─── sendFriendRequest ───────────────────────────────────────────────────
