@@ -8,24 +8,29 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Changes
 
-- `apply-realm-production.sh` gets a realm roles step (INFRA-25, for A37): the realm roles `USER` and `ADMIN`, `USER` in the realm default role, and `USER` for every existing user that lacks it. `check` gets the matching `ok`/`FAIL` lines and lists the members of `ADMIN`.
-
 ### Applied automatically
-
-- `sportconnect-setup` installs the new `set-realm-roles.sh` and the changed `apply-realm-production.sh` under `~/sportconnect/infra/oracle/scripts`. Nothing in the realm changes until the manual step below.
 
 ### Manual actions on the box
 
+### Rollback
+
+### Depends on
+
+## 0.2.0 — 2026-11-09
+
+### Changes
+- `apply-realm-production.sh` gets a realm roles step (INFRA-25, for A37): the realm roles `USER` and `ADMIN`, `USER` in the realm default role, and `USER` for every existing user that lacks it. `check` gets the matching `ok`/`FAIL` lines and lists the members of `ADMIN`.
+- The realm seed file (`infra/keycloak/realm/sportconnect-realm.json`) now defines the roles `USER` and `ADMIN` and the default role (A37). It only seeds a brand-new realm (the import is `IGNORE_EXISTING`), so the live realm is unchanged by it.
+
+### Applied automatically
+- `sportconnect-setup` installs the new `set-realm-roles.sh` and the changed `apply-realm-production.sh` under `~/sportconnect/infra/oracle/scripts`. Nothing in the realm changes until the manual step below.
+
+### Manual actions on the box
 - box: `sportconnect-setup`, then `bash ~/sportconnect/infra/oracle/scripts/apply-realm-production.sh apply`, then `... check` (all lines `ok`; the `ADMIN` line is info). `apply` also re-applies the other production realm settings, as before (INFRA-14).
 - Keycloak console (Users, Role mapping): grant `ADMIN` to whoever is an admin today, **before** the server release that reads roles from the token (A37). Nothing grants it automatically.
 
 ### Rollback
-
 - Additive: the roles and the default-role entry are new; the previous box release and the current server ignore them. To undo, delete the roles `USER` and `ADMIN` in the console.
-
-### Depends on
-
-- none
 
 ## 0.1.3 — 2026-11-06
 
