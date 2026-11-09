@@ -28,7 +28,7 @@ class InternalUserSyncServiceSpec extends Specification {
     }
 
     def user(UUID id) {
-        User.builder().id(id).firstName("First").lastName("Last").isActive(true).roles([] as Set).build()
+        User.builder().id(id).firstName("First").lastName("Last").isActive(true).build()
     }
 
     // ─── listFriendships ─────────────────────────────────────────────────────

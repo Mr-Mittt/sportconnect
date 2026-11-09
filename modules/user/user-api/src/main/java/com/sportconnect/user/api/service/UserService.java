@@ -195,15 +195,6 @@ public interface UserService {
     boolean existsByUsername(String username);
 
     /**
-     * Roles held in our own {@code user_roles} table.
-     *
-     * <p>A37: <b>no longer authoritative.</b> The roles that grant access come from the Keycloak access token
-     * ({@code realm_access.roles}), and nothing reads this table for authorization any more. Kept until U27 drops the
-     * tables; do not use it for a new access decision.
-     */
-    Set<String> getUserRoles(UUID userId);
-
-    /**
      * A26: re-activates a deactivated account by id (the Keycloak sign-in knows the subject, not an email, and a phone-only
      * account has none). An already active account is returned unchanged. Evicts the cached access state after commit, so
      * the next request sees the account as active at once.

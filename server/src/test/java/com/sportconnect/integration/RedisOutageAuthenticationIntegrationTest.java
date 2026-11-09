@@ -1,6 +1,5 @@
 package com.sportconnect.integration;
 
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.repository.UserRepository;
 import com.sportconnect.user.service.UserServiceImpl;
 import org.junit.jupiter.api.AfterEach;
@@ -51,7 +50,7 @@ class RedisOutageAuthenticationIntegrationTest extends BaseIT {
     }
 
     private UUID createActiveUser() {
-        return createUserWithRoles(true, Role.USER);
+        return createUserWithRoles(true, "USER");
     }
 
     @Test

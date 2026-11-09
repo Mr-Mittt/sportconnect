@@ -32,7 +32,6 @@ import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.entity.UserPreference;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -74,8 +73,6 @@ public class UserServiceImpl implements UserService {
     private static final int USERNAME_MAX = 50;
 
     private final UserRepository userRepository;
-    /** A37: no longer read (roles come from the Keycloak token); removed with the role tables in U27. */
-    private final RoleRepository roleRepository;
     // U24: the password lives in Keycloak; confirming the caller and setting the new password go through these
     private final AccountConfirmationService accountConfirmation;
     private final KeycloakCredentialService keycloakCredentials;
@@ -94,7 +91,6 @@ public class UserServiceImpl implements UserService {
 
     public UserServiceImpl(
             UserRepository userRepository,
-            RoleRepository roleRepository,
             AccountConfirmationService accountConfirmation,
             KeycloakCredentialService keycloakCredentials,
             UserFriendService userFriendService,
@@ -110,7 +106,6 @@ public class UserServiceImpl implements UserService {
         this.referenceService = referenceService;
         this.userPreferenceRepository = userPreferenceRepository;
         this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
         this.accountConfirmation = accountConfirmation;
         this.keycloakCredentials = keycloakCredentials;
         this.userFriendService = userFriendService;
@@ -662,16 +657,6 @@ public class UserServiceImpl implements UserService {
         referenceService.requireValidSelection(countryId, request.getRegionId());
         user.setCountryId(countryId);
         user.setRegionId(request.getRegionId());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Set<String> getUserRoles(UUID userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
-        return user.getRoles().stream()
-                .map(role -> role.getName())
-                .collect(java.util.stream.Collectors.toSet());
     }
 
     /** {@inheritDoc} Takes the row lock {@link #deleteUser} takes, so a re-activation cannot interleave with a deactivation. */

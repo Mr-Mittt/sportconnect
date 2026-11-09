@@ -1,9 +1,7 @@
 package com.sportconnect.integration;
 
 import com.sportconnect.user.api.dto.PhoneStatus;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -15,7 +13,6 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.ResultActions;
 
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,15 +45,10 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
     private UserRepository userRepository;
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
-    @Autowired
-    private RoleRepository roleRepository;
 
     @BeforeEach
     void setUp() {
         clean();
-        if (roleRepository.findByName(Role.USER).isEmpty()) {
-            roleRepository.save(Role.builder().name(Role.USER).description("test").build());
-        }
     }
 
     @AfterEach
@@ -82,7 +74,6 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     /** An existing user, as an earlier sign-in would have stored them ({@code phone} already in E.164, or null). */
     private User existingUser(String email, String phone) {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         return userRepository.save(User.builder()
                 .email(email)
                 .phoneNumber(phone)
@@ -90,7 +81,6 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
                 .firstName("Phone")
                 .lastName("Tester")
                 .isActive(true)
-                .roles(Set.of(userRole))
                 .build());
     }
 

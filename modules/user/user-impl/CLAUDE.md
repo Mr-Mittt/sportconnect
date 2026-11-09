@@ -1,6 +1,6 @@
 # CLAUDE.md — user-impl
 
-User entity with UUID PK and PostGIS geolocation, role management, profile CRUD, and soft delete.
+User entity with UUID PK and PostGIS geolocation, profile CRUD, and soft delete (roles are Keycloak's, A37).
 
 ## Dependencies
 
@@ -19,7 +19,7 @@ User entity with UUID PK and PostGIS geolocation, role management, profile CRUD,
 
 | Class | Purpose |
 |---|---|
-| `User` | UUID PK; PostGIS `Point` location; `isActive` soft delete; eager ManyToMany roles (A37: legacy, no longer read for authorization, dropped by U27) |
+| `User` | UUID PK; PostGIS `Point` location; `isActive` soft delete; no roles: they are Keycloak's (A37) and the `roles` / `user_roles` tables and the `Role` entity are gone (U27, `V084`) |
 | `UserServiceImpl` | CRUD + location conversion; `GeometryFactory(PrecisionModel(), 4326)` created in constructor |
 | `UserController` | `/api/users/**` — GET lookups are `hasRole('USER')` since U11 (not public); the by-id/email/username lookups return `UserInfoResponse` (PII-free, + `activeSportIds` since U15) |
 
@@ -62,7 +62,7 @@ DELETE /api/users/{userId}               ROLE_ADMIN
 ## Gotchas
 
 - `leetcode.java` and `leetcodeSpec.groovy` are scratch files — not application code, ignore them.
-- A37: `UserServiceImpl.provisionExternalUser()` attaches no role. Roles are Keycloak's (the realm default role USER is what every account holds) and reach the backend in the access token; the `roles`/`user_roles` tables are unused until U27 drops them. (`createUser` and `updateUserPassword` went with the register and reset endpoints, A28.)
+- A37: `UserServiceImpl.provisionExternalUser()` attaches no role. Roles are Keycloak's (the realm default role USER is what every account holds) and reach the backend in the access token; the `roles`/`user_roles` tables, `Role`, `RoleRepository`, `User.roles` and `UserService.getUserRoles` were dropped by U27 (`V084`, shipped in the same server release as A37, so the previous release cannot run against that database). (`createUser` and `updateUserPassword` went with the register and reset endpoints, A28.)
 - **Country / region / language (U16).** `users.country_id` / `region_id` are plain ids into the reference domain (no FK, no JPA
   relation). `users.country` (free text) is **legacy**: never written any more, kept only as the display fallback for users whose text
   matched no country row. `UserResponse.country` is the linked country's English name, else that legacy text.

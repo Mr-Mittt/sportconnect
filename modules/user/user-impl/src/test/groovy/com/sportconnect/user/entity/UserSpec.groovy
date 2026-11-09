@@ -54,37 +54,6 @@ class UserSpec extends Specification {
         fullName == "john@example.com"
     }
 
-    def "addRole should add role to user"() {
-        given:
-        def user = User.builder()
-                .email("test@example.com")
-                .roles(new HashSet<>())
-                .build()
-        def role = new Role(id: 1, name: "USER")
-
-        when:
-        user.addRole(role)
-
-        then:
-        user.roles.size() == 1
-        user.roles.contains(role)
-    }
-
-    def "removeRole should remove role from user"() {
-        given:
-        def role = new Role(id: 1, name: "USER")
-        def user = User.builder()
-                .email("test@example.com")
-                .roles([role] as Set)
-                .build()
-
-        when:
-        user.removeRole(role)
-
-        then:
-        user.roles.size() == 0
-    }
-
     def "equals should return true for same id"() {
         given:
         def id = UUID.randomUUID()
@@ -118,7 +87,6 @@ class UserSpec extends Specification {
         def id = UUID.randomUUID()
         def dateOfBirth = LocalDate.of(1990, 1, 1)
         def point = geometryFactory.createPoint(new Coordinate(-74.0060, 40.7128))
-        def role = new Role(id: 1, name: "USER")
 
         when:
         def user = User.builder()
@@ -138,7 +106,6 @@ class UserSpec extends Specification {
                 .country("USA")
                 .isEmailVerified(true)
                 .isActive(true)
-                .roles([role] as Set)
                 .build()
 
         then:
@@ -158,7 +125,6 @@ class UserSpec extends Specification {
         user.country == "USA"
         user.isEmailVerified == true
         user.isActive == true
-        user.roles.size() == 1
     }
 
     def "default values should be set correctly"() {

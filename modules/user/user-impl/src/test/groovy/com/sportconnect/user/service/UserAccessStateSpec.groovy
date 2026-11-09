@@ -6,9 +6,7 @@ import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.UserAccessState
 import com.sportconnect.user.api.service.UserFriendService
-import com.sportconnect.user.entity.Role
 import com.sportconnect.user.entity.User
-import com.sportconnect.user.repository.RoleRepository
 import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.springframework.dao.QueryTimeoutException
@@ -20,20 +18,20 @@ import spock.lang.Subject
 
 import java.time.Duration
 
-/** A25: the cached {isActive, roles} lookup behind the per-request authentication gate. */
+/** A25: the cached active-flag lookup behind the per-request authentication gate. */
 class UserAccessStateSpec extends Specification {
 
     UserRepository userRepository = Mock()
     UserAccessStateCache cache = Mock()
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, Mock(RoleRepository), Mock(AccountConfirmationService), Mock(KeycloakCredentialService),
+    UserServiceImpl userService = new UserServiceImpl(userRepository, Mock(AccountConfirmationService), Mock(KeycloakCredentialService),
             Mock(UserFriendService), Mock(UserSportProfileService), Mock(StringRedisTemplate),
             new ObjectMapper(), Mock(ReferenceService), Mock(UserPreferenceRepository), cache, Mock(UserProvisioningLock))
 
-    private static User user(UUID id, boolean active, String... roles) {
+    private static User user(UUID id, boolean active) {
         User.builder().id(id).email("a@x.com").isActive(active)
-                .roles(roles.toList().withIndex().collect { n, i -> new Role(id: i + 1, name: n) } as Set).build()
+                .build()
     }
 
     def "a cache hit is returned without touching the database"() {
@@ -60,7 +58,7 @@ class UserAccessStateSpec extends Specification {
 
         then:
         1 * cache.get(id) >> Optional.empty()
-        1 * userRepository.findById(id) >> Optional.of(user(id, false, "USER", "ADMIN"))   // the DB role rows exist but must not be read
+        1 * userRepository.findById(id) >> Optional.of(user(id, false))
         1 * cache.put(id, new UserAccessState(false))
         result.get() == new UserAccessState(false)
     }

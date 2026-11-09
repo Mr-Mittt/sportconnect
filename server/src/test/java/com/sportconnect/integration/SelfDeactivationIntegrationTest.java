@@ -1,9 +1,7 @@
 package com.sportconnect.integration;
 
 import com.jayway.jsonpath.JsonPath;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserPreferenceRepository;
 import com.sportconnect.user.repository.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -14,7 +12,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,15 +38,10 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
     private UserRepository userRepository;
     @Autowired
     private UserPreferenceRepository userPreferenceRepository;
-    @Autowired
-    private RoleRepository roleRepository;
 
     @BeforeEach
     void setUp() {
         clean();
-        if (roleRepository.findByName(Role.USER).isEmpty()) {
-            roleRepository.save(Role.builder().name(Role.USER).description("test").build());
-        }
     }
 
     @AfterEach
@@ -68,13 +60,11 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
 
     /** An active user with a known Keycloak password (what a password user has once the first sign-in provisioned them). */
     private User register(String email) {
-        Role userRole = roleRepository.findByName(Role.USER).orElseThrow();
         User saved = userRepository.save(User.builder()
                 .email(email)
                 .firstName("Auth")
                 .lastName("Tester")
                 .isActive(true)
-                .roles(Set.of(userRole))
                 .build());
         TestKeycloak.registerUser(saved.getId(), email, PASSWORD);
         return saved;

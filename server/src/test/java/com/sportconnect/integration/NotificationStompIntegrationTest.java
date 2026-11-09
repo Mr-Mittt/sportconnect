@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.auth.api.service.JwtTokenService;
 import com.sportconnect.notification.push.NotificationLiveUpdateMessage;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.repository.UserRepository;
 import java.lang.reflect.Type;
 import java.util.List;
@@ -141,7 +140,7 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
     void sessionJoinRequestCreatedEvent_producesALiveStompFrameOnTheRecipientsSubscribedDestination() throws Exception {
         UUID actorId = UUID.randomUUID();
         // A28: STOMP CONNECT runs the A25 active gate, so the recipient must be a real, active user.
-        UUID recipientId = createUserWithRoles(true, Role.USER);
+        UUID recipientId = createUserWithRoles(true, "USER");
 
         CompletableFuture<NotificationLiveUpdateMessage> received = subscribeAsUser(recipientId);
 
@@ -158,7 +157,7 @@ class NotificationStompIntegrationTest extends RabbitMqStompTestContainerBase {
     /** A28, closing A20's STOMP half: a valid Keycloak token of a deactivated user no longer opens a socket. */
     @Test
     void stompConnect_withAValidTokenOfADeactivatedUser_isRefused() throws Exception {
-        UUID deactivatedId = createUserWithRoles(false, Role.USER);
+        UUID deactivatedId = createUserWithRoles(false, "USER");
 
         assertThatThrownBy(() -> subscribeAsUser(deactivatedId)).isNotNull();
         assertThat(stompSession == null || !stompSession.isConnected()).isTrue();

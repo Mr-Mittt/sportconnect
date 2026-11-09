@@ -1,11 +1,3 @@
--- Create roles table
-CREATE TABLE IF NOT EXISTS roles (
-    id BIGSERIAL PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE,
-    description VARCHAR(255),
-    created_at TIMESTAMP NOT NULL
-);
-
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
@@ -55,15 +47,6 @@ CREATE TABLE IF NOT EXISTS user_preferences (
     privacy_location VARCHAR(20) DEFAULT 'friends',
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP
-);
-
--- Create user_roles join table
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id UUID NOT NULL,
-    role_id BIGINT NOT NULL,
-    PRIMARY KEY (user_id, role_id),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (role_id) REFERENCES roles(id)
 );
 
 -- Create sports table (needed once PostServiceImpl started querying it directly — A9,

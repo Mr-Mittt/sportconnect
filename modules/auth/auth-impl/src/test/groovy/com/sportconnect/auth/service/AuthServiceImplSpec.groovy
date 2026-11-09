@@ -54,7 +54,7 @@ class AuthServiceImplSpec extends Specification {
 
     private UserResponse userResponse(UUID id, boolean active) {
         UserResponse.builder().id(id).email("u@example.com").firstName("U").lastName("Ser")
-                .isActive(active).roles(new HashSet<>(["ADMIN"])).build()   // a stale DB-style role the response must NOT use (A37)
+                .isActive(active).build()
     }
 
     def "callback provisions the user from the verified token's claims and opens the session"() {
@@ -81,7 +81,7 @@ class AuthServiceImplSpec extends Specification {
         0 * keycloak.endSession(_)
     }
 
-    def "the session's user.roles are the verified token's realm roles, never the roles on the user entity (A37)"() {
+    def "the session's user.roles are the verified token's realm roles (A37)"() {
         given:
         def sub = UUID.randomUUID()
         keycloak.exchangeCode("c", "v") >> tokens()
@@ -91,7 +91,7 @@ class AuthServiceImplSpec extends Specification {
         when:
         def result = authService.callback("c", "v")
 
-        then: "userResponse() carries a stale ADMIN; only what the token says may reach the client"
+        then: "only what the token says reaches the client"
         result.user.roles == expected
 
         where:

@@ -10,9 +10,7 @@ import com.sportconnect.user.api.dto.PhoneStatus
 import com.sportconnect.user.api.dto.UpdateProfileRequest
 import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.service.UserFriendService
-import com.sportconnect.user.entity.Role
 import com.sportconnect.user.entity.User
-import com.sportconnect.user.repository.RoleRepository
 import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.springframework.dao.DataIntegrityViolationException
@@ -25,7 +23,6 @@ import spock.lang.Subject
 class UserIdentifiersSpec extends Specification {
 
     UserRepository userRepository = Mock()
-    RoleRepository roleRepository = Mock()
     AccountConfirmationService accountConfirmation = Mock()
     KeycloakCredentialService keycloakCredentials = Mock()
     UserFriendService userFriendService = Mock()
@@ -35,13 +32,12 @@ class UserIdentifiersSpec extends Specification {
     UserPreferenceRepository userPreferenceRepository = Mock()
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, accountConfirmation, keycloakCredentials, userFriendService,
+    UserServiceImpl userService = new UserServiceImpl(userRepository, accountConfirmation, keycloakCredentials, userFriendService,
             userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService, userPreferenceRepository, Mock(UserAccessStateCache), Mock(UserProvisioningLock))
 
-    private static final Role USER_ROLE = new Role(id: 1, name: "USER")
 
     private User existing(UUID id, String email, String phone) {
-        User.builder().id(id).email(email).phoneNumber(phone).isActive(true).roles([USER_ROLE] as Set).build()
+        User.builder().id(id).email(email).phoneNumber(phone).isActive(true).build()
     }
 
     // ---- updateProfile ----

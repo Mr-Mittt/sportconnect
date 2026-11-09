@@ -9,10 +9,8 @@ import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.ExternalIdentity
 import com.sportconnect.user.api.dto.PhoneStatus
 import com.sportconnect.user.api.service.UserFriendService
-import com.sportconnect.user.entity.Role
 import com.sportconnect.user.entity.User
 import com.sportconnect.user.entity.UserPreference
-import com.sportconnect.user.repository.RoleRepository
 import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.springframework.dao.DataIntegrityViolationException
@@ -25,7 +23,6 @@ import spock.lang.Subject
 class UserProvisioningSpec extends Specification {
 
     UserRepository userRepository = Mock()
-    RoleRepository roleRepository = Mock()
     AccountConfirmationService accountConfirmation = Mock()
     KeycloakCredentialService keycloakCredentials = Mock()
     UserFriendService userFriendService = Mock()
@@ -37,11 +34,10 @@ class UserProvisioningSpec extends Specification {
     UserProvisioningLock provisioningLock = Mock()
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, accountConfirmation, keycloakCredentials, userFriendService,
+    UserServiceImpl userService = new UserServiceImpl(userRepository, accountConfirmation, keycloakCredentials, userFriendService,
             userSportProfileService, stringRedisTemplate, new ObjectMapper(), referenceService,
             userPreferenceRepository, accessStateCache, provisioningLock)
 
-    private static final Role USER_ROLE = new Role(id: 1, name: "USER")
 
     private final UUID sub = UUID.randomUUID()
 
@@ -65,11 +61,10 @@ class UserProvisioningSpec extends Specification {
         1 * userRepository.save({ User u ->
             u.id == sub && u.email == "a@example.com" && u.isEmailVerified && u.isActive &&
                     u.username == "auser" && u.firstName == "A" && u.lastName == "User" &&
-                    u.roles.isEmpty() && u.isNew()
+                    u.isNew()
         }) >> { User u -> u }
         1 * userRepository.flush()
         result.id == sub
-        0 * roleRepository._
     }
 
     def "the per-subject lock is taken before the row is looked up, for a new and for an existing subject"() {
@@ -80,12 +75,12 @@ class UserProvisioningSpec extends Specification {
         1 * provisioningLock.acquire(sub)
 
         then:
-        1 * userRepository.findById(sub) >> Optional.of(User.builder().id(sub).isActive(true).roles([USER_ROLE] as Set).build())
+        1 * userRepository.findById(sub) >> Optional.of(User.builder().id(sub).isActive(true).build())
     }
 
     def "an account that already exists is returned as it is, active or not, and nothing is saved"() {
         given:
-        def existing = User.builder().id(sub).email("kept@example.com").isActive(false).roles([USER_ROLE] as Set).build()
+        def existing = User.builder().id(sub).email("kept@example.com").isActive(false).build()
 
         when:
         def provisioned = userService.provisionExternalUser(identity().email("other@example.com").build())
@@ -392,7 +387,7 @@ class UserProvisioningSpec extends Specification {
 
     def "reactivateUser flips a deactivated account on and evicts the cached access state"() {
         given:
-        def user = User.builder().id(sub).isActive(false).roles([USER_ROLE] as Set).build()
+        def user = User.builder().id(sub).isActive(false).build()
 
         when:
         def result = userService.reactivateUser(sub)
@@ -406,7 +401,7 @@ class UserProvisioningSpec extends Specification {
 
     def "reactivateUser leaves an active account alone"() {
         given:
-        def user = User.builder().id(sub).isActive(true).roles([USER_ROLE] as Set).build()
+        def user = User.builder().id(sub).isActive(true).build()
 
         when:
         userService.reactivateUser(sub)

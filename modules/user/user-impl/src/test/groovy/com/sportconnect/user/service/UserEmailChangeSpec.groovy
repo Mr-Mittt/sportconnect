@@ -15,7 +15,6 @@ import com.sportconnect.user.api.dto.ConfirmationPurpose
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.entity.User
 import com.sportconnect.user.entity.UserPreference
-import com.sportconnect.user.repository.RoleRepository
 import com.sportconnect.user.repository.UserPreferenceRepository
 import com.sportconnect.user.repository.UserRepository
 import org.springframework.data.redis.connection.stream.MapRecord
@@ -37,7 +36,6 @@ class UserEmailChangeSpec extends Specification {
     static final String GOOGLE_PICTURE = "https://lh3.googleusercontent.com/a/pic"
 
     UserRepository userRepository = Mock()
-    RoleRepository roleRepository = Mock()
     AccountConfirmationService accountConfirmation = Mock()
     KeycloakCredentialService keycloakCredentials = Mock()
     UserFriendService userFriendService = Mock()
@@ -49,7 +47,7 @@ class UserEmailChangeSpec extends Specification {
     ObjectMapper objectMapper = new ObjectMapper()
 
     @Subject
-    UserServiceImpl userService = new UserServiceImpl(userRepository, roleRepository, accountConfirmation, keycloakCredentials,
+    UserServiceImpl userService = new UserServiceImpl(userRepository, accountConfirmation, keycloakCredentials,
             userFriendService, userSportProfileService, stringRedisTemplate, objectMapper, referenceService,
             userPreferenceRepository, accessStateCache, Mock(UserProvisioningLock))
 
@@ -61,7 +59,7 @@ class UserEmailChangeSpec extends Specification {
 
     private User account(Map overrides = [:]) {
         def builder = User.builder().id(ID).email("old@example.com").firstName("Old").lastName("Name").isActive(true)
-                .isEmailVerified(false).roles([] as Set)
+                .isEmailVerified(false)
         overrides.each { key, value -> builder."$key"(value) }
         builder.build()
     }
@@ -290,7 +288,7 @@ class UserEmailChangeSpec extends Specification {
         0 * userRepository.saveAndFlush(_)
 
         where:
-        found << [Optional.empty(), Optional.of(User.builder().id(ID).email("old@example.com").isActive(false).roles([] as Set).build())]
+        found << [Optional.empty(), Optional.of(User.builder().id(ID).email("old@example.com").isActive(false).build())]
     }
 
     def "changeEmail refuses the account's own address before any proof is consumed"() {
