@@ -25,12 +25,13 @@ Last verified: 2026-10-16 (CHAT-17/19); the Oracle rows were added 2026-10-26 (I
 | 8091 | Keycloak for the credential-rotation test (throwaway container) | `infra/scripts/test-rotate-credentials.sh` (`ROTATE_TEST_KC_PORT`) | bound to `127.0.0.1`; admin password `old-admin-password-1` (test only) |
 | 8092 | Mailpit SMTP that demands a login, for the credential-rotation test (throwaway container; container port 1025) | `infra/scripts/test-rotate-credentials.sh` (`ROTATE_TEST_SMTP_PORT`) | bound to `127.0.0.1`; user `sc-user` (test only) |
 | 8093 | Stand-in for Google's token endpoint and GitHub's `/user`, for the credential-rotation test (a Node process) | `infra/scripts/test-rotate-credentials.sh` (`ROTATE_TEST_STUB_PORT`) | bound to `127.0.0.1` |
+| 8094 | Keycloak for the realm-roles test (throwaway container) | `infra/scripts/test-realm-roles.sh` (`ROLES_TEST_KC_PORT`) | bound to `127.0.0.1`; admin password `roles-admin-password-1`; started and removed by the test (INFRA-25) |
 | 8613 | RabbitMQ STOMP (host side of container 61613) | `infra/docker-compose.dev.yml` | deliberately not 61613, see below |
 | 9876 | Playwright mock backend (MSW-style server) | `client/e2e/mocks/mockServerConfig.ts` (`MOCK_SERVER_PORT`) | |
 | 15672 | RabbitMQ management UI (guest/guest) | `infra/docker-compose.dev.yml` | |
 | 18081 | Local end of the SSH tunnel to the Oracle production box's Keycloak (`ssh -L 18081:127.0.0.1:8081 ubuntu@<box>`) | `infra/oracle/kc-prod.override.yml` (`KC_HOSTNAME_ADMIN`), `infra/oracle/scripts/set-master-frontend-url.sh` | admin console at `http://localhost:18081/admin/`; the number is baked into the sandbox realm (master `frontendUrl`), so change all three together. Not the dev Compose Keycloak (8081) |
 
-Free and meant for the next service: **8094 to 8099** (take the next one in order and add the row).
+Free and meant for the next service: **8095 to 8099** (take the next one in order and add the row).
 
 ## Container / production ports
 

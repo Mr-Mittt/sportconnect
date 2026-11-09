@@ -17,6 +17,8 @@
 #   smtpServer             host, port, from and user from MAIL_HOST / MAIL_PORT / EMAIL_FROM / MAIL_USERNAME in server.env, auth on
 #   master realm           attributes.frontendUrl = $ADMIN_URL (the admin console through the SSH tunnel)
 #   sportconnect realm     editUsernameAllowed true (U26)
+#   sportconnect realm     realm roles USER and ADMIN; USER in the realm default role; every real user holds USER (INFRA-25, for A37,
+#                          set-realm-roles.sh). ADMIN is created EMPTY: grant it by hand in the console. `check` lists its members.
 # Reported, not enforced: registrationAllowed (open on purpose, INFRA-14 decision), the state of the Google provider.
 #
 # Inputs: ~/.kc-admin-pw (the Keycloak admin password, mode 600, see set-admin-pw.sh) and ~/web/server.env (mode 600). Both are
@@ -74,6 +76,8 @@ do_apply() {
     $K config credentials --server http://localhost:8080 --realm master --user admin --password "$PW" >/dev/null || exit 1
     $K update realms/sportconnect -s editUsernameAllowed=true && echo "editUsernameAllowed set"
     rm -f ~/.keycloak/kcadm.config' || die "editUsernameAllowed step failed"
+  echo "== realm roles (INFRA-25): USER, ADMIN, USER in the default role, USER for every existing user"
+  adminpw | in_kc "$SCRIPTS/set-realm-roles.sh" || die "realm roles step failed"
 }
 
 # The check runs inside the container; it prints one "ok ..." or "FAIL ..." line per setting and never a secret.
@@ -115,6 +119,31 @@ case "$G" in *'"enabled":true'*) echo "info google provider is ENABLED" ;; *'"al
 # INFRA-14: the client id is readable (the secret is hidden by Keycloak); GID is the id in the Vault item google-oauth, empty when the box has none
 if [ -z "$GID" ]; then echo "info no google-oauth item fetched: the provider's client id is not compared"
 else case "$G" in *"\"clientId\":\"$GID\""*) say ok "google provider client id equals the one in the Vault item" ;; *) say FAIL "google provider client id differs from the Vault item (or the provider is missing)" ;; esac; fi
+# INFRA-25: the realm roles the backend reads from the token. ADMIN has no required members (the owner grants it by hand): only listed.
+if $K get roles/USER -r sportconnect >/dev/null 2>&1; then say ok "realm role USER exists"; else say FAIL "realm role USER does not exist (run apply)"; fi
+if $K get roles/ADMIN -r sportconnect >/dev/null 2>&1; then say ok "realm role ADMIN exists"; else say FAIL "realm role ADMIN does not exist (run apply)"; fi
+if $K get-roles -r sportconnect --rname default-roles-sportconnect --fields name --format csv --noquotes 2>/dev/null | grep -qx USER; then
+  say ok "USER is in the realm default role"; else say FAIL "USER is not in the realm default role (run apply)"; fi
+first=0; total=0; missing=0
+while :; do
+  page=$($K get users -r sportconnect -q first=$first -q max=100 --fields id,username --format csv --noquotes 2>/dev/null)
+  [ -n "$page" ] || break
+  n=0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    n=$((n + 1))
+    case "${line#*,}" in service-account-*) continue ;; esac
+    total=$((total + 1))
+    $K get-roles -r sportconnect --uid "${line%%,*}" --effective --fields name --format csv --noquotes 2>/dev/null | grep -qx USER || missing=$((missing + 1))
+  done <<EOF
+$page
+EOF
+  [ "$n" -lt 100 ] && break
+  first=$((first + 100))
+done
+if [ "$missing" = 0 ]; then say ok "all $total real users hold USER"; else say FAIL "$missing of $total real users lack USER (run apply)"; fi
+ADMINS=$($K get roles/ADMIN/users -r sportconnect --fields username --format csv --noquotes 2>/dev/null | tr '\n' ' ')
+echo "info ADMIN members: ${ADMINS:-none (grant it by hand in the Keycloak console)}"
 rm -f ~/.keycloak/kcadm.config
 exit $bad
 EOS
