@@ -36,6 +36,8 @@ green run exists" pattern.
 | 5 | [INFRA-21](MVP/INFRA-21_PRODUCTION_NAMES_THAT_STILL_SAY_DEV.md) | Production names that still say `dev`: the Compose project `sportconnect-dev` (containers, network, volumes) and the `_dev` database names; options costed, none chosen; depends on INFRA-14 | `TODO` |
 | 6 | [INFRA-22](MVP/INFRA-22_ONE_VAULT_SECRET_PER_CREDENTIAL_AND_ENV_FILE_TEMPLATES.md) | One Vault secret per credential and env files built from repository templates by `fetch-secrets.sh` (no whole-file secrets, no duplicated values, non-secret settings in git); depends on INFRA-14, related to INFRA-19 | `TODO` |
 | 7 | [INFRA-23](MVP/INFRA-23_FULL_RESTORE_ON_A_FRESH_BOX.md) | Full restore on a fresh box: rebuild the production box on a new A1 instance from the bucket backup (restore with the new roles, the post-restore realm steps, outside checks); split out of INFRA-14 item 3, also closes INFRA-19's unproven realm-steps-and-restore; depends on INFRA-14 and INFRA-19 | `TODO` |
+| 8 | [INFRA-24](MVP/INFRA-24_RELEASE_NOTES_PER_COMPONENT_CHECKED_BY_RELEASE.md) | Release notes per component (server, client, chat, box) in `documentation/release-notes/`, checked and cleaned by `/release`, enforced by the `*-version.sh check` commands and shown in the promote summary | `IN PROGRESS` |
+| 9 | [INFRA-25](MVP/INFRA-25_PRODUCTION_REALM_ROLES_STEP_AND_BACKFILL.md) | Production realm: a `roles` step in `apply-realm-production.sh` (realm roles USER and ADMIN, USER as default role) and the backfill of existing users; ships in a box release; for A37 | `TODO` |
 
 ---
 

@@ -120,6 +120,15 @@ if [ -n "$new_rev" ] && have_commit "$new_rev"; then
   fi
 fi
 
+# INFRA-24: the release notes of the version being promoted (documentation/release-notes/<COMPONENT>.md, written by /release), so
+# the reviewer reads what changes and what to run on the box before approving. A build (sha-...) has none; a release without a
+# section only warns, because the promote must still work for releases cut before this file existed.
+notes_text=""
+if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  if notes_text="$("$(dirname "$0")/release-notes.sh" section "$COMPONENT" "$VERSION" 2>/dev/null)"; then :
+  else notes_text=""; warn "no release notes were found for ${COMPONENT} ${VERSION} (documentation/release-notes); read the commits before approving."; fi
+fi
+
 {
   echo "### Promote ${COMPONENT}: ${cur_version:-nothing deployed yet} -> ${new_version:-$VERSION}"
   echo
@@ -131,6 +140,12 @@ fi
   echo
   echo "CI for this code: ${ci_text}${ci_url:+ ([run](${ci_url}))}"
   echo
+  if [ -n "$notes_text" ]; then
+    echo "#### Release notes ${COMPONENT} ${VERSION}"
+    echo
+    printf '%s\n' "$notes_text" | sed 's/^### /##### /'
+    echo
+  fi
   for w in "${warnings[@]+"${warnings[@]}"}"; do echo "- WARNING: ${w}"; done
   for r in "${reasons[@]+"${reasons[@]}"}"; do echo "- REFUSED: ${r}"; done
   if [ "$blocked" = false ] && [ "$nochange" = false ]; then

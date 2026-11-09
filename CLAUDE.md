@@ -80,6 +80,10 @@ Treat "merged" as the trigger for this cleanup, and run it without being asked a
 6. **Report** the new `master` SHA, that the branch was deleted, and confirm the working tree is
    otherwise untouched.
 
+## Release notes
+
+Each image released on its own (server, client, chat, and the box config image) has a release-note file in `documentation/release-notes/` (`SERVER.md`, `CLIENT.md`, `CHAT.md`, `BOX.md`; format in its `README.md`, INFRA-24). **A change that alters what a released image does, or what the owner must run on the box, adds its lines under `## Unreleased` of that file in the same PR** (Changes, Applied automatically, Manual actions on the box, Rollback, Depends on). `/release` checks the block (empty, vague deploy steps, placeholders, ticket ids of the commits missing), cuts it into the version's section and commits it with the bump; no notes, no release. The `*-version.sh check` commands fail when the current version has no section, and the promote summary shows the section to the reviewer. The notes are the per-release view of what changed; `infra/documentation/PRODUCTION_DEPLOYMENT_GUIDE.md` stays the source of truth for how production is set up.
+
 ## Commands
 
 ### Dev environment (Postgres+PostGIS, Redis)
