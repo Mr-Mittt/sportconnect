@@ -832,7 +832,7 @@ class UserServiceImplSpec extends Specification {
         result.location.longitude == -74.0060
         result.city == "New York"
         result.country == "USA"
-        result.roles.contains("USER")
+        result.roles.isEmpty()   // A37: roles are not read from the entity (the web layer fills them from the token)
     }
 
     def "changePassword confirms the caller and then sets the new password in Keycloak"() {

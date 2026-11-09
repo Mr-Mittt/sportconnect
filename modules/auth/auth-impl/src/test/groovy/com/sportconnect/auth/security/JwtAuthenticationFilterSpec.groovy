@@ -38,12 +38,16 @@ class JwtAuthenticationFilterSpec extends Specification {
         SecurityContextHolder.clearContext()
     }
 
-    private static Jwt jwt(String sub) {
-        Jwt.withTokenValue("t").header("alg", "RS256").subject(sub)
-                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300)).build()
+    private static Jwt jwt(String sub, Object realmAccess = null) {
+        def builder = Jwt.withTokenValue("t").header("alg", "RS256").subject(sub)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(300))
+        if (realmAccess != null) {
+            builder.claim("realm_access", realmAccess)
+        }
+        builder.build()
     }
 
-    def "an active user is authenticated with the roles from the database, principal = sub"() {
+    def "an active user is authenticated with the roles from the token, principal = sub (A37)"() {
         given:
         def id = UUID.randomUUID()
 
@@ -51,12 +55,57 @@ class JwtAuthenticationFilterSpec extends Specification {
         filter.doFilterInternal(request, response, chain)
 
         then:
-        1 * jwtDecoder.decode("some.token") >> jwt(id.toString())
-        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(true, ["USER", "ADMIN"]))
+        1 * jwtDecoder.decode("some.token") >> jwt(id.toString(), [roles: ["USER", "ADMIN"]])
+        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(true))
         def auth = SecurityContextHolder.context.authentication
         auth.principal == id.toString()
         auth.authorities*.authority as Set == ["ROLE_USER", "ROLE_ADMIN"] as Set
         chain.request != null
+    }
+
+    def "the roles come from the token, not from the account state: a token without them authenticates with no authority"() {
+        given:
+        def id = UUID.randomUUID()
+
+        when:
+        filter.doFilterInternal(request, response, chain)
+
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(id.toString(), realmAccess)
+        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(true))
+        def auth = SecurityContextHolder.context.authentication
+        auth.principal == id.toString()
+        auth.authorities.isEmpty()
+
+        where:
+        realmAccess << [null, [roles: []], [:], "not-an-object", [roles: "USER"], [roles: [1, null]]]
+    }
+
+    def "only USER and ADMIN become authorities: Keycloak's own roles and unknown names are ignored"() {
+        given:
+        def id = UUID.randomUUID()
+
+        when:
+        filter.doFilterInternal(request, response, chain)
+
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(id.toString(),
+                [roles: ["offline_access", "uma_authorization", "default-roles-sportconnect", "user", "VENDOR", "USER", "USER"]])
+        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(true))
+        SecurityContextHolder.context.authentication.authorities*.authority == ["ROLE_USER"]
+    }
+
+    def "a deactivated user stays anonymous even with an ADMIN claim in the token (A37)"() {
+        given:
+        def id = UUID.randomUUID()
+
+        when:
+        filter.doFilterInternal(request, response, chain)
+
+        then:
+        1 * jwtDecoder.decode(_) >> jwt(id.toString(), [roles: ["USER", "ADMIN"]])
+        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(false))
+        SecurityContextHolder.context.authentication == null
     }
 
     def "a deactivated user stays anonymous"() {
@@ -68,7 +117,7 @@ class JwtAuthenticationFilterSpec extends Specification {
 
         then:
         1 * jwtDecoder.decode(_) >> jwt(id.toString())
-        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(false, ["USER"]))
+        1 * userService.getAccessState(id) >> Optional.of(new UserAccessState(false))
         SecurityContextHolder.context.authentication == null
         chain.request != null
         request.getAttribute(JwtAuthenticationFilter.FAILURE_ATTRIBUTE) == null
@@ -154,7 +203,7 @@ class JwtAuthenticationFilterSpec extends Specification {
 
         then:
         1 * jwtDecoder.decode(_) >> jwt(UUID.randomUUID().toString())
-        1 * userService.getAccessState(_) >> Optional.of(new UserAccessState(true, ["USER"]))
+        1 * userService.getAccessState(_) >> Optional.of(new UserAccessState(true))
         thrown(IllegalStateException)
     }
 }

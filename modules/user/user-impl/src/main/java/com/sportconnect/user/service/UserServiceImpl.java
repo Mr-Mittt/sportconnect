@@ -30,7 +30,6 @@ import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.dto.UserSearchResponse;
 import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.entity.UserPreference;
 import com.sportconnect.user.repository.RoleRepository;
@@ -75,6 +74,7 @@ public class UserServiceImpl implements UserService {
     private static final int USERNAME_MAX = 50;
 
     private final UserRepository userRepository;
+    /** A37: no longer read (roles come from the Keycloak token); removed with the role tables in U27. */
     private final RoleRepository roleRepository;
     // U24: the password lives in Keycloak; confirming the caller and setting the new password go through these
     private final AccountConfirmationService accountConfirmation;
@@ -794,9 +794,8 @@ public class UserServiceImpl implements UserService {
                 .isEmailVerified(identity.isEmailVerified())
                 .isActive(true)
                 .build();
-        Role userRole = roleRepository.findByName(Role.USER)
-                .orElseThrow(() -> new RuntimeException("Default USER role not found"));
-        user.addRole(userRole);
+        // A37: no role is attached here any more. Roles live in Keycloak (the realm default role USER is what every new
+        // account holds) and reach the backend in the access token.
 
         User saved = saveUserFlushed(user);
         String language = resolveActiveLanguage(identity.getLanguageCode());
@@ -899,8 +898,7 @@ public class UserServiceImpl implements UserService {
             return cached;
         }
         Optional<UserAccessState> loaded = userRepository.findById(userId).map(user -> new UserAccessState(
-                Boolean.TRUE.equals(user.getIsActive()),
-                user.getRoles().stream().map(Role::getName).sorted().toList()));
+                Boolean.TRUE.equals(user.getIsActive())));
         loaded.ifPresent(state -> accessStateCache.put(userId, state));
         return loaded;
     }
@@ -1050,9 +1048,8 @@ public class UserServiceImpl implements UserService {
                 .shoeSizeMm(user.getShoeSizeMm())
                 .isEmailVerified(user.getIsEmailVerified())
                 .isActive(user.getIsActive())
-                .roles(user.getRoles().stream()
-                        .map(role -> role.getName())
-                        .collect(Collectors.toSet()))
+                // A37: roles come from the Keycloak access token and are set by the web layer on the caller's own responses.
+                .roles(java.util.Set.of())
                 .createdAt(user.getCreatedAt())
                 .lastLoginAt(user.getLastLoginAt())
                 .build();

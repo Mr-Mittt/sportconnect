@@ -99,7 +99,7 @@ class ChangeEmailIntegrationTest extends RedisBaseIT {
     }
 
     private ResultActions as(User user, MockHttpServletRequestBuilder request, String body) throws Exception {
-        return mockMvc.perform(request.header("Authorization", bearer(user.getId())).contentType(MediaType.APPLICATION_JSON).content(body));
+        return mockMvc.perform(request.header("Authorization", bearerFor(user.getId(), "USER")).contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     private ResultActions requestNewEmailCode(User user, String newEmail) throws Exception {

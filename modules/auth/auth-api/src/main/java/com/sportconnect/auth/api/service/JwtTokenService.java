@@ -7,7 +7,7 @@ import java.util.List;
  * JWT token service interface.
  *
  * <p>A25: the <em>reading</em> methods verify a Keycloak access token (RS256, JWKS, issuer, audience); {@code sub} is
- * the user id, there are no role claims (roles come from {@code UserService.getAccessState}) and the email may be
+ * the user id, roles are in {@code realm_access.roles} (A37) and the email may be
  * missing. There is no token minting here any more: Keycloak issues every token (A28 removed the HS256 mint).
  */
 public interface JwtTokenService {
@@ -33,7 +33,7 @@ public interface JwtTokenService {
     String getEmailFromToken(String token);
 
     /**
-     * Extract authorities/roles from token
+     * The application roles ({@code USER}, {@code ADMIN}) in the token's {@code realm_access.roles} (A37), without the {@code ROLE_} prefix
      */
     List<String> getAuthoritiesFromToken(String token);
 

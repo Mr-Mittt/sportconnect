@@ -1366,5 +1366,54 @@
         ]
       }
     }
-  ]
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "offline_access",
+        "description": "${role_offline-access}",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "USER",
+        "description": "Regular user; every account holds it through the realm default role",
+        "composite": false,
+        "clientRole": false,
+        "attributes": {}
+      },
+      {
+        "name": "ADMIN",
+        "description": "Platform administrator; granted by hand in the Keycloak console",
+        "composite": false,
+        "clientRole": false,
+        "attributes": {}
+      },
+      {
+        "name": "default-roles-sportconnect",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": [
+            "offline_access",
+            "uma_authorization",
+            "USER"
+          ]
+        }
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "default-roles-sportconnect",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
+  }
 }

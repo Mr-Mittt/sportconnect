@@ -92,7 +92,7 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
 
         // Populates user:access-state:<id> with "active".
         mockMvc.perform(get("/api/users/me").header("Authorization", authorization)).andExpect(status().isOk());
-        assertThat(stringRedisTemplate.opsForValue().get(cacheKey(userId))).startsWith("1|");
+        assertThat(stringRedisTemplate.opsForValue().get(cacheKey(userId))).isEqualTo("1"); // A37: just the active flag
 
         userServiceImpl.deleteUser(userId);
 
@@ -111,7 +111,7 @@ class UserDeactivationSessionRevocationIntegrationTest extends RedisBaseIT {
         userServiceImpl.deleteUser(user.getId());
         mockMvc.perform(get("/api/users/me").header("Authorization", authorization)).andExpect(status().isUnauthorized());
         // The 401 above cached "inactive"; reactivating must evict it, not wait for the TTL.
-        assertThat(stringRedisTemplate.opsForValue().get(cacheKey(user.getId()))).startsWith("0|");
+        assertThat(stringRedisTemplate.opsForValue().get(cacheKey(user.getId()))).isEqualTo("0"); // A37: just the active flag
 
         userServiceImpl.reactivateUser(user.getId());
 

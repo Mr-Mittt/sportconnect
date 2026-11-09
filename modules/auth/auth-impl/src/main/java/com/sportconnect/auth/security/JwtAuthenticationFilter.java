@@ -32,7 +32,8 @@ import java.util.UUID;
  *   <li>The token is verified by the {@link JwtDecoder} (RS256 signature against the realm JWKS, expiry, issuer,
  *       audience). A token that fails any of that leaves the request anonymous.</li>
  *   <li>{@code sub} is the {@code users.id}. {@link UserService#getAccessState} (cached, DB fallback) says whether that
- *       user exists and is active, and what roles it holds; roles come from our database, never from a claim. An
+ *       user exists and is active (that flag is ours: Keycloak knows nothing of a deactivated account). A37: the roles come from the
+ *       verified token's {@code realm_access.roles} ({@link TokenRoles}), not from our database. An
  *       unprovisioned {@code sub} or a deactivated user leaves the request anonymous. This is the one
  *       enforcement point for a deactivated caller (U12), so a token issued before the deactivation stops working
  *       at once.</li>
@@ -112,7 +113,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        List<SimpleGrantedAuthority> authorities = state.roles().stream()
+        List<SimpleGrantedAuthority> authorities = TokenRoles.of(jwt).stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                 .toList();
         UsernamePasswordAuthenticationToken authentication =

@@ -52,7 +52,7 @@ class UserProvisioningSpec extends Specification {
 
     // ---- provisionExternalUser ----
 
-    def "creates the user with the subject as id, the USER role, no password and the verified flag from the token"() {
+    def "creates the user with the subject as id, no role of its own (A37: roles are Keycloak's) and the verified flag from the token"() {
         when:
         def provisioned = userService.provisionExternalUser(identity().build())
         def result = provisioned.user()
@@ -62,14 +62,14 @@ class UserProvisioningSpec extends Specification {
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail("a@example.com") >> false
         1 * userRepository.existsByUsername("auser") >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u ->
             u.id == sub && u.email == "a@example.com" && u.isEmailVerified && u.isActive &&
                     u.username == "auser" && u.firstName == "A" && u.lastName == "User" &&
-                    u.roles*.name == ["USER"] && u.isNew()
+                    u.roles.isEmpty() && u.isNew()
         }) >> { User u -> u }
         1 * userRepository.flush()
         result.id == sub
+        0 * roleRepository._
     }
 
     def "the per-subject lock is taken before the row is looked up, for a new and for an existing subject"() {
@@ -107,7 +107,6 @@ class UserProvisioningSpec extends Specification {
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByPhoneNumber("+84901234567") >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.phoneNumber == "+84901234567" && u.email == null }) >> { User u -> u }
     }
 
@@ -143,7 +142,6 @@ class UserProvisioningSpec extends Specification {
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         0 * userRepository.existsByPhoneNumber(_)
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.phoneNumber == "12" && u.phoneStatus == PhoneStatus.INVALID && u.email != null }) >> { User u -> u }
         result.phoneNumber == "12"
         result.phoneStatus == PhoneStatus.INVALID
@@ -156,7 +154,6 @@ class UserProvisioningSpec extends Specification {
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByPhoneNumber("+84901234567") >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.phoneStatus == PhoneStatus.VALID }) >> { User u -> u }
     }
 
@@ -177,7 +174,6 @@ class UserProvisioningSpec extends Specification {
 
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.phoneNumber == null && u.phoneStatus == null }) >> { User u -> u }
     }
 
@@ -197,7 +193,6 @@ class UserProvisioningSpec extends Specification {
         given:
         userRepository.findById(sub) >> Optional.empty()
         userRepository.existsByEmail(_) >> false
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         userRepository.save(_) >> { throw new DataIntegrityViolationException("x", new RuntimeException(detail)) }
 
         when:
@@ -226,7 +221,6 @@ class UserProvisioningSpec extends Specification {
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail(_) >> false
         1 * userRepository.existsByUsername("n" * 50) >> true
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u ->
             u.username.length() == 50 && u.username.endsWith("-" + sub.toString().substring(0, 6))
         }) >> { User u -> u }
@@ -239,7 +233,6 @@ class UserProvisioningSpec extends Specification {
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail(_) >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.username == null }) >> { User u -> u }
         0 * userRepository.existsByUsername(_)
     }
@@ -251,7 +244,6 @@ class UserProvisioningSpec extends Specification {
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail(_) >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.username == null }) >> { User u -> u }
         0 * userRepository.existsByUsername(_)
     }
@@ -263,7 +255,6 @@ class UserProvisioningSpec extends Specification {
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail(_) >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.username == null }) >> { User u -> u }
         0 * userRepository.existsByUsername(_)
 
@@ -278,7 +269,6 @@ class UserProvisioningSpec extends Specification {
     private void expectNewUser() {
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail(_) >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save(_) >> { User u -> provisioned = u; u }
         // the response resolves display names of a stored zone
         _ * referenceService.getCountriesByIds(_) >> [:]
@@ -372,7 +362,6 @@ class UserProvisioningSpec extends Specification {
         then:
         1 * userRepository.findById(sub) >> Optional.empty()
         1 * userRepository.existsByEmail(_) >> false
-        1 * roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         1 * userRepository.save({ User u -> u.firstName == "Tran" && u.lastName == "Van Binh" }) >> { User u -> u }
     }
 
@@ -383,7 +372,6 @@ class UserProvisioningSpec extends Specification {
         referenceService.isActiveLanguage("zz") >> false
         userRepository.findById(sub) >> Optional.empty()
         userRepository.existsByEmail(_) >> false
-        roleRepository.findByName(Role.USER) >> Optional.of(USER_ROLE)
         userRepository.save(_) >> { User u -> u }
 
         when:

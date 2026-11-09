@@ -6,7 +6,10 @@ import com.nimbusds.jose.JWSObject;
 import com.nimbusds.jose.Payload;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.sportconnect.user.entity.Role;
+import com.sportconnect.user.entity.User;
+import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserRepository;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,12 +42,15 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private RoleRepository roleRepository;
+
     private UUID userId;
 
     @BeforeEach
     void setUp() {
         userRepository.deleteAll();
-        userId = createUserWithRoles(true, Role.USER);
+        userId = createUserWithRoles(true, "USER");
     }
 
     @AfterEach
@@ -59,7 +65,7 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
 
     @Test
     void aValidToken_authenticates_asTheSubjectUser() throws Exception {
-        me(TestKeycloak.token(userId))
+        me(TestKeycloak.token(userId, "USER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(userId.toString()));
     }
@@ -101,14 +107,14 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
 
     @Test
     void aValidTokenForASubNobodyProvisioned_isUnauthorized() throws Exception {
-        me(TestKeycloak.token(UUID.randomUUID())).andExpect(status().isUnauthorized());
+        me(TestKeycloak.token(UUID.randomUUID(), "USER")).andExpect(status().isUnauthorized());
     }
 
     @Test
     void aDeactivatedUsersValidToken_isUnauthorized() throws Exception {
         UUID inactive = createUserWithRoles(false, Role.USER);
 
-        me(TestKeycloak.token(inactive)).andExpect(status().isUnauthorized());
+        me(TestKeycloak.token(inactive, "USER")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -122,24 +128,73 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isOk());
     }
 
-    // ---------- roles come from the database, never from the token ----------
+    // ---------- A37: roles come from the token's realm_access.roles, never from our database ----------
+
+    private ResultActions deleteUser(UUID target, String bearerValue) throws Exception {
+        return mockMvc.perform(delete("/api/users/{id}", target).header("Authorization", bearerValue));
+    }
 
     @Test
-    void aRoleClaimInTheToken_isIgnored() throws Exception {
-        UUID target = createUserWithRoles(true, Role.USER);
+    void aUserToken_reachesAUserEndpoint_butNotAnAdminOne() throws Exception {
+        UUID target = createUserWithRoles(true, "USER");
 
-        mockMvc.perform(delete("/api/users/{id}", target).header("Authorization",
-                        "Bearer " + TestKeycloak.forUser(userId).rolesClaim("ADMIN").build()))
+        me(TestKeycloak.token(userId, "USER")).andExpect(status().isOk());
+        deleteUser(target, "Bearer " + TestKeycloak.token(userId, "USER")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void anAdminToken_reachesAnAdminEndpoint() throws Exception {
+        UUID admin = createUserWithRoles(true, "USER", "ADMIN");
+        UUID target = createUserWithRoles(true, "USER");
+
+        deleteUser(target, bearer(admin)).andExpect(status().isOk());
+    }
+
+    @Test
+    void aTokenWithoutRoles_isForbiddenEverywhereThatNeedsOne() throws Exception {
+        me(TestKeycloak.token(userId)).andExpect(status().isForbidden());
+        me(TestKeycloak.forUser(userId).build()).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void roleNamesThatAreNotUserOrAdmin_grantNothing() throws Exception {
+        me(TestKeycloak.token(userId, "VENDOR", "offline_access", "uma_authorization", "default-roles-sportconnect", "user"))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    void aRoleHeldInTheDatabase_isHonoured() throws Exception {
-        UUID admin = createUserWithRoles(true, Role.USER, Role.ADMIN);
-        UUID target = createUserWithRoles(true, Role.USER);
+    void aRoleHeldOnlyInTheDatabase_grantsNothing() throws Exception {
+        // The legacy rows still exist until U27 drops the tables; nothing may read them for authorization any more.
+        UUID dbAdmin = createUserWithRoles(true);
+        User user = userRepository.findById(dbAdmin).orElseThrow();
+        for (String name : new String[] {"USER", "ADMIN"}) {
+            user.getRoles().add(roleRepository.findByName(name)
+                    .orElseGet(() -> roleRepository.save(Role.builder().name(name).description("legacy").build())));
+        }
+        userRepository.save(user);
+        UUID target = createUserWithRoles(true, "USER");
 
-        mockMvc.perform(delete("/api/users/{id}", target).header("Authorization", bearer(admin)))
-                .andExpect(status().isOk());
+        me(TestKeycloak.token(dbAdmin)).andExpect(status().isForbidden());
+        deleteUser(target, "Bearer " + TestKeycloak.token(dbAdmin)).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aDeactivatedUser_withAValidAdminToken_isStillRefused() throws Exception {
+        UUID inactiveAdmin = createUserWithRoles(false, "USER", "ADMIN");
+        UUID target = createUserWithRoles(true, "USER");
+
+        me(TestKeycloak.token(inactiveAdmin, "USER", "ADMIN")).andExpect(status().isUnauthorized());
+        deleteUser(target, bearer(inactiveAdmin)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void theProfileResponseCarriesTheTokenRoles_notTheDatabaseOnes() throws Exception {
+        UUID admin = createUserWithRoles(true, "USER", "ADMIN");
+
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.roles.length()").value(2))
+                .andExpect(jsonPath("$.data.roles", Matchers.containsInAnyOrder("USER", "ADMIN")));
     }
 
     // ---------- Keycloak unreachable ----------
@@ -165,9 +220,9 @@ class KeycloakResourceServerIntegrationTest extends RedisBaseIT {
 
     @Test
     void aKeyAlreadyCached_keepsWorking_whenKeycloakGoesDown() throws Exception {
-        me(TestKeycloak.token(userId)).andExpect(status().isOk()); // the decoder now holds the key set
+        me(TestKeycloak.token(userId, "USER")).andExpect(status().isOk()); // the decoder now holds the key set
         TestKeycloak.jwksAvailable(false);
 
-        me(TestKeycloak.token(userId)).andExpect(status().isOk());
+        me(TestKeycloak.token(userId, "USER")).andExpect(status().isOk());
     }
 }

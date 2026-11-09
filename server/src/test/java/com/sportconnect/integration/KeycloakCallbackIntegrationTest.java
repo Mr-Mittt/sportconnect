@@ -104,6 +104,22 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
                 .content("{\"code\": \"" + code + "\", \"codeVerifier\": \"" + verifier + "\"}"));
     }
 
+    /** A37: the roles the session response shows the client ({@code data.user.roles}). */
+    private static List<String> responseRoles(MvcResult result) throws Exception {
+        return com.jayway.jsonpath.JsonPath.read(result.getResponse().getContentAsString(), "$.data.user.roles");
+    }
+
+    @Test
+    void theSessionShowsTheRolesOfTheTokenKeycloakIssued() throws Exception {
+        MvcResult admin = signIn(TestKeycloak.Identity.of(UUID.randomUUID()).email("roles-a@example.com").roles("USER", "ADMIN", "offline_access"))
+                .andExpect(status().isOk()).andReturn();
+        MvcResult none = signIn(TestKeycloak.Identity.of(UUID.randomUUID()).email("roles-b@example.com").roles())
+                .andExpect(status().isOk()).andReturn();
+
+        assertThat(responseRoles(admin)).containsExactly("ADMIN", "USER");
+        assertThat(responseRoles(none)).isEmpty();
+    }
+
     private ResultActions signIn(TestKeycloak.Identity identity) throws Exception {
         return callback(TestKeycloak.issueCode(identity, VERIFIER), VERIFIER);
     }
@@ -253,7 +269,8 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
         assertThat(user.getIsEmailVerified()).isTrue();
         assertThat(user.getIsActive()).isTrue();
         assertThat(user.getLastLoginAt()).isNotNull();
-        assertThat(user.getRoles()).extracting(Role::getName).containsExactly(Role.USER);
+        assertThat(user.getRoles()).isEmpty(); // A37: no role is stored for the user; the roles are Keycloak's, carried in the token
+        assertThat(responseRoles(result)).containsExactly("USER"); // ... and the session response shows the ones the token carries
         assertThat(userPreferenceRepository.findByUserId(sub)).get().extracting("language").isEqualTo("vi");
 
         // The token the response carries works on an authenticated endpoint: the row now exists for the A25 gate.
@@ -511,11 +528,11 @@ class KeycloakCallbackIntegrationTest extends RedisBaseIT {
     void reactivationByASocialSignIn_isVisibleToTheGateAtOnce() throws Exception {
         UUID sub = existingUserWithId(UUID.randomUUID(), false, "gate@example.com");
         // The 401 caches "inactive"; the reactivation must evict it rather than wait for the TTL.
-        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(sub))).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearerFor(sub, "USER"))).andExpect(status().isUnauthorized());
 
         signIn(TestKeycloak.Identity.of(sub).email("gate@example.com").viaProvider("facebook")).andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(sub))).andExpect(status().isOk());
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearerFor(sub, "USER"))).andExpect(status().isOk());
     }
 
     // ---------- A36: the Google picture as the avatar, on the first Google sign-in only ----------
