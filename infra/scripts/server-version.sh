@@ -65,6 +65,8 @@ case "$cmd" in
     if [ -n "$latest" ] && higher "$latest" "$cur"; then
       die "gradle.properties version $cur is lower than the latest release $latest (tag server-v$latest)"
     fi
+    # INFRA-24: a released version must have its section in documentation/release-notes (written by /release).
+    if [ "$cur" != "0.0.0" ]; then "$root/infra/scripts/release-notes.sh" check-released server "$cur" >/dev/null || exit 1; fi
     if [ "$cur" = "0.0.0" ]; then
       echo "server-version: $cur is the placeholder; nothing will be released"
     elif git -C "$root" rev-parse -q --verify "refs/tags/server-v$cur" >/dev/null; then

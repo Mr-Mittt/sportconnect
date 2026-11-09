@@ -66,6 +66,8 @@ case "$cmd" in
     if [ -n "$latest" ] && higher "$latest" "$cur"; then
       die "infra/box/BOX_VERSION $cur is lower than the latest release $latest (tag box-v$latest)"
     fi
+    # INFRA-24: a released version must have its section in documentation/release-notes (written by /release).
+    if [ "$cur" != "0.0.0" ]; then "$root/infra/scripts/release-notes.sh" check-released box "$cur" >/dev/null || exit 1; fi
     if [ "$cur" = "0.0.0" ]; then
       echo "box-version: $cur is the placeholder; nothing will be released"
     elif git -C "$root" rev-parse -q --verify "refs/tags/box-v$cur" >/dev/null; then

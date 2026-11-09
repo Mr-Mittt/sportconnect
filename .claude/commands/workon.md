@@ -350,6 +350,7 @@ Report what was tested and whether it passed. Fix failures before moving on.
      - If `module` is `chat` → `services/chat/docs/<TICKET_ID>_<TICKET_TITLE>.md`
      - Otherwise → `modules/<domain>/docs/<TICKET_ID>_<TICKET_TITLE>.md`
 3. Add a one-line summary to `PROGRESS.md` under the relevant section
+   **Release notes (INFRA-24):** if the ticket changes what a released image does or what the owner must run (server, client, chat, or the box config image), add its lines under `## Unreleased` in `documentation/release-notes/<COMPONENT>.md` in this same change: Changes, Applied automatically, Manual actions on the box (`- none` if nothing), Rollback, Depends on. A ticket that touches no image (docs, tests, tooling) adds nothing. `/release` refuses a component whose block is empty or vague.
 4. Update the ticket's status in the backlog file (`BACKLOG_<VERSION>.md`):
    - **Restructured** → move the ticket's row from the **Open** table into the **Done** table,
      inserted at the position that keeps Done sorted by completion date descending (newest first) —

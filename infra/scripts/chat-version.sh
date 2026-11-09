@@ -66,6 +66,8 @@ case "$cmd" in
     if [ -n "$latest" ] && higher "$latest" "$cur"; then
       die "services/chat/VERSION $cur is lower than the latest release $latest (tag chat-v$latest)"
     fi
+    # INFRA-24: a released version must have its section in documentation/release-notes (written by /release).
+    if [ "$cur" != "0.0.0" ]; then "$root/infra/scripts/release-notes.sh" check-released chat "$cur" >/dev/null || exit 1; fi
     if [ "$cur" = "0.0.0" ]; then
       echo "chat-version: $cur is the placeholder; nothing will be released"
     elif git -C "$root" rev-parse -q --verify "refs/tags/chat-v$cur" >/dev/null; then

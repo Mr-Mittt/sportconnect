@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [U19](MVP/U19_REMOVE_CITY_FIELD.md) | Remove `city` field entirely from the backend — superseded by Region (U16), found during CLIENT-REF-3 pickup | `TODO` |
+| 2 | [U27](MVP/U27_DROP_ROLES_AND_USER_ROLES_TABLES.md) | Drop the `roles` and `user_roles` tables, the `Role` entity and `getUserRoles` (V084), after A37 has run in production | `TODO` |
 
 ---
 

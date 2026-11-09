@@ -22,6 +22,7 @@
 | 1 | [A14](MVP/A14_NARROW_JWT_FILTER_CATCH_ALL.md) | Low priority: narrow `JwtAuthenticationFilter`'s catch-all so unexpected failures (DB, claim bugs) surface as a 5xx with an `errorCode` instead of a silent 401 that triggers client refresh churn; found during A11 | `TODO` |
 | 2 | [A16](MVP/A16_SERIALIZE_REFRESH_WITH_PLAIN_LOGOUT.md) | Low priority: a refresh racing a plain `logout` is not serialized by the U12 `users` row lock (only `deleteUser` takes it), so a refresh in flight can mint a live token pair just after logout; found during A12 | `TODO` |
 | 3 | [A30](MVP/A30_REACTIVATION_TICKET_SURVIVES_REDIS_OUTAGE.md) | Low priority, known gap from A26: the re-activation ticket lives only in Redis, so while Redis is down a deactivated password user cannot get or confirm a ticket (503, session ended); keep Redis as the fast path with a database fallback, or accept and document it | `TODO` |
+| 4 | [A37](MVP/A37_ROLES_FROM_KEYCLOAK_TOKEN.md) | Roles (USER, ADMIN) come from the Keycloak token `realm_access.roles`, not our `user_roles` table; the active gate stays on our DB; realm roles and default role by script | `TODO` |
 
 ---
 
