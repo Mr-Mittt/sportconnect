@@ -39,7 +39,7 @@ class StompAuthChannelInterceptorSpec extends Specification {
         jwtTokenService.validateToken("good-token") >> true
         jwtTokenService.isTokenExpired("good-token") >> false
         jwtTokenService.getUserIdFromToken("good-token") >> USER_ID.toString()
-        userService.getAccessState(USER_ID) >> Optional.of(new UserAccessState(true, ["USER"]))
+        userService.getAccessState(USER_ID) >> Optional.of(new UserAccessState(true))
 
         when:
         interceptor.preSend(message, null)
@@ -66,7 +66,7 @@ class StompAuthChannelInterceptorSpec extends Specification {
 
         where:
         subject             | state
-        USER_ID.toString()  | Optional.of(new UserAccessState(false, ["USER"]))
+        USER_ID.toString()  | Optional.of(new UserAccessState(false))
         USER_ID.toString()  | Optional.empty()
         "not-a-uuid"        | Optional.empty()
     }

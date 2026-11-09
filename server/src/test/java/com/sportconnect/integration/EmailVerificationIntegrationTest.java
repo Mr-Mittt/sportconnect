@@ -76,7 +76,7 @@ class EmailVerificationIntegrationTest extends RedisBaseIT {
     }
 
     private ResultActions requestVerification(User user) throws Exception {
-        return mockMvc.perform(post("/api/users/me/email-verification").header("Authorization", bearer(user.getId())));
+        return mockMvc.perform(post("/api/users/me/email-verification").header("Authorization", bearerFor(user.getId(), "USER")));
     }
 
     @Test

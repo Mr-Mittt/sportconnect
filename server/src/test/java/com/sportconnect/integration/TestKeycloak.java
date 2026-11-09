@@ -134,8 +134,14 @@ public final class TestKeycloak {
     }
 
     /** A valid access token for {@code userId}. */
+    /** A token for {@code userId} that carries NO realm roles (A37: roles are in the token, so this one authorizes nothing). */
     public static String token(UUID userId) {
         return forUser(userId).build();
+    }
+
+    /** A token for {@code userId} whose {@code realm_access.roles} are exactly {@code roles} (A37). */
+    public static String token(UUID userId, String... roles) {
+        return forUser(userId).realmRoles(roles).build();
     }
 
     public static Builder forUser(UUID userId) {
@@ -283,6 +289,8 @@ public final class TestKeycloak {
         private String locale;
         private String phoneNumber;
         private String identityProvider;
+        /** A37: a new account holds the realm default role, which contains USER; the sign-in token says so. */
+        private String[] roles = {"USER"};
         private final java.util.Map<String, String> extraClaims = new java.util.LinkedHashMap<>();
 
         private Identity(UUID sub) {
@@ -292,6 +300,12 @@ public final class TestKeycloak {
         /** A password user: no {@code identity_provider} claim. */
         public static Identity of(UUID sub) {
             return new Identity(sub);
+        }
+
+        /** The realm roles the access token carries (default: just {@code USER}, like the realm default role). */
+        public Identity roles(String... roles) {
+            this.roles = roles;
+            return this;
         }
 
         public Identity email(String email) {
@@ -360,7 +374,7 @@ public final class TestKeycloak {
         }
 
         Builder accessToken() {
-            Builder b = forUser(sub);
+            Builder b = forUser(sub).realmRoles(roles);
             putIfPresent(b, "email", email);
             if (email != null) {
                 b.claim("email_verified", emailVerified);
@@ -740,7 +754,7 @@ public final class TestKeycloak {
         private Duration lifetime = Duration.ofMinutes(5);
         private boolean signWithOtherKey;
         private String keyId = KEY_ID;
-        private List<String> rolesClaim;
+        private List<String> realmRoles;
         private final Map<String, Object> extraClaims = new HashMap<>();
 
         private Builder(String subject) {
@@ -775,9 +789,9 @@ public final class TestKeycloak {
             return this;
         }
 
-        /** A role claim the backend must ignore (roles come from the database). */
-        public Builder rolesClaim(String... roles) {
-            this.rolesClaim = List.of(roles);
+        /** A37: the roles the backend authorizes with: Keycloak's {@code realm_access.roles} claim. */
+        public Builder realmRoles(String... roles) {
+            this.realmRoles = List.of(roles);
             return this;
         }
 
@@ -797,8 +811,8 @@ public final class TestKeycloak {
                         .jwtID(UUID.randomUUID().toString())
                         .issueTime(Date.from(lifetime.isNegative() ? now.plus(lifetime).minusSeconds(60) : now))
                         .expirationTime(Date.from(now.plus(lifetime)));
-                if (rolesClaim != null) {
-                    claims.claim("roles", rolesClaim);
+                if (realmRoles != null) {
+                    claims.claim("realm_access", Map.of("roles", realmRoles));
                 }
                 extraClaims.forEach(claims::claim);
                 SignedJWT jwt = new SignedJWT(

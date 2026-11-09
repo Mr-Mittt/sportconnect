@@ -55,6 +55,11 @@ public class UserResponse {
     private Integer shoeSizeMm;
     private Boolean isEmailVerified;
     private Boolean isActive;
+    /**
+     * A37: the caller's roles from the Keycloak access token ({@code USER}, {@code ADMIN}), set by the web layer on the
+     * caller's own profile responses ({@code GET /api/users/me}, {@code PUT /api/users/{id}/profile}) and on the sign-in and
+     * refresh responses. Empty everywhere else: the service no longer reads roles from the database.
+     */
     private Set<String> roles;
     private LocalDateTime createdAt;
     private LocalDateTime lastLoginAt;

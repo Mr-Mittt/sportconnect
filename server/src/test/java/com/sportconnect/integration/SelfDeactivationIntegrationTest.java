@@ -82,7 +82,7 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
 
     private ResultActions deactivate(User user, String body) throws Exception {
         return mockMvc.perform(post("/api/users/me/deactivate")
-                .header("Authorization", bearer(user.getId()))
+                .header("Authorization", bearerFor(user.getId(), "USER"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
     }
@@ -103,7 +103,7 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
 
         assertThat(isActive("u22-ok@example.com")).isFalse();
         // The access token the caller used is dead, and so is the refresh cookie.
-        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(session.getId())))
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearerFor(session.getId(), "USER")))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/auth/refresh").with(anonymous()).cookie(new Cookie("refreshToken", refreshToken)))
                 .andExpect(status().isUnauthorized());
@@ -140,7 +140,7 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.errorCode").value("CURRENT_PASSWORD_INCORRECT"));
 
         assertThat(isActive("u22-wrong@example.com")).isTrue();
-        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(session.getId())))
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearerFor(session.getId(), "USER")))
                 .andExpect(status().isOk());
     }
 
@@ -171,7 +171,7 @@ class SelfDeactivationIntegrationTest extends RedisBaseIT {
         deactivate(caller, "{\"currentPassword\": \"" + PASSWORD + "\"}").andExpect(status().isOk());
 
         assertThat(isActive("u22-other@example.com")).isTrue();
-        mockMvc.perform(get("/api/users/me").header("Authorization", bearer(other.getId())))
+        mockMvc.perform(get("/api/users/me").header("Authorization", bearerFor(other.getId(), "USER")))
                 .andExpect(status().isOk());
     }
 }

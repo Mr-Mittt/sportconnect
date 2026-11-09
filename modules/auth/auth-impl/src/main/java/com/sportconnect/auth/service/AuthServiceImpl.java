@@ -2,6 +2,7 @@ package com.sportconnect.auth.service;
 
 import com.sportconnect.auth.api.dto.AuthResponse;
 import com.sportconnect.auth.api.service.AuthService;
+import com.sportconnect.auth.security.TokenRoles;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ServiceUnavailableException;
 import com.sportconnect.common.exception.UnauthorizedException;
@@ -19,6 +20,7 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -312,7 +314,7 @@ public class AuthServiceImpl implements AuthService {
                 .refreshTokenMaxAgeSeconds(tokens.refreshExpiresIn())
                 .tokenType("Bearer")
                 .expiresIn(tokens.expiresIn() * 1000)
-                .user(toUserResponse(user))
+                .user(toUserResponse(user, TokenRoles.of(verify(tokens.accessToken()))))
                 .build();
     }
 
@@ -320,9 +322,10 @@ public class AuthServiceImpl implements AuthService {
      * Convert UserResponse to a simple response object for AuthResponse.user. A mutable map (not
      * {@code Map.of}) is required here because avatarUrl/phoneNumber are frequently absent for a
      * new user — {@code Map.of} throws on any null value, so the previously-Map.of-only version of
-     * this method could never have carried those two fields safely.
+     * this method could never have carried those two fields safely. A37: {@code roles} are the ones in the verified access
+     * token ({@code realm_access.roles}), the same source the request filter authorizes with, not the user entity.
      */
-    private Object toUserResponse(UserResponse user) {
+    private Object toUserResponse(UserResponse user, List<String> roles) {
         Map<String, Object> response = new HashMap<>();
         response.put("id", user.getId());
         response.put("email", user.getEmail());
@@ -331,7 +334,7 @@ public class AuthServiceImpl implements AuthService {
         response.put("username", user.getUsername() != null ? user.getUsername() : "");
         response.put("phoneNumber", user.getPhoneNumber());
         response.put("avatarUrl", user.getAvatarUrl());
-        response.put("roles", user.getRoles());
+        response.put("roles", roles);
         return response;
     }
 }

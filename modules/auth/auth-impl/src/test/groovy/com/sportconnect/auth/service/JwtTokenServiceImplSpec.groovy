@@ -52,14 +52,15 @@ class JwtTokenServiceImplSpec extends Specification {
     def "the user id is the sub claim, the email is nullable, roles are never read from the token"() {
         given:
         def id = UUID.randomUUID().toString()
-        jwtDecoder.decode("with-email") >> jwt([sub: id, email: "k@example.com", roles: ["ADMIN"]])
+        jwtDecoder.decode("with-email") >> jwt([sub: id, email: "k@example.com", realm_access: [roles: ["offline_access", "ADMIN", "USER"]]])
         jwtDecoder.decode("no-email") >> jwt([sub: id])
 
         expect:
         jwtTokenService.getUserIdFromToken("with-email") == id
         jwtTokenService.getEmailFromToken("with-email") == "k@example.com"
         jwtTokenService.getEmailFromToken("no-email") == null
-        jwtTokenService.getAuthoritiesFromToken("with-email").isEmpty()
+        jwtTokenService.getAuthoritiesFromToken("with-email") == ["ADMIN", "USER"]   // A37: the application roles of realm_access.roles
+        jwtTokenService.getAuthoritiesFromToken("no-email").isEmpty()
     }
 
     def "getIssuedAtFromToken returns iat"() {

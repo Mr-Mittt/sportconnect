@@ -195,7 +195,11 @@ public interface UserService {
     boolean existsByUsername(String username);
 
     /**
-     * Get user roles (for JWT token generation)
+     * Roles held in our own {@code user_roles} table.
+     *
+     * <p>A37: <b>no longer authoritative.</b> The roles that grant access come from the Keycloak access token
+     * ({@code realm_access.roles}), and nothing reads this table for authorization any more. Kept until U27 drops the
+     * tables; do not use it for a new access decision.
      */
     Set<String> getUserRoles(UUID userId);
 
@@ -247,9 +251,10 @@ public interface UserService {
     ProvisionedUser provisionExternalUser(ExternalIdentity identity);
 
     /**
-     * A25: the per-request authentication gate. Resolves a token subject to whether the account may act and what
-     * roles it holds, from a short-lived cache (evicted when the account is deactivated or reactivated) with the
-     * database as the fallback, so it keeps answering when Redis is down.
+     * A25: the per-request authentication gate. Resolves a token subject to whether the account may act, from a
+     * short-lived cache (evicted when the account is deactivated or reactivated) with the
+     * database as the fallback, so it keeps answering when Redis is down. A37: it carries no roles; those come from the
+     * verified Keycloak token.
      *
      * <p>Includes deactivated accounts (that is the point: the caller turns {@code isActive == false} into a 401).
      * Empty means no such user, e.g. a valid Keycloak identity that has not been provisioned yet.

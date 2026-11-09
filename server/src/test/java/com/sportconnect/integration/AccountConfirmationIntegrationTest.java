@@ -96,7 +96,7 @@ class AccountConfirmationIntegrationTest extends RedisBaseIT {
     }
 
     private ResultActions asUser(User user, org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request, String body) throws Exception {
-        return mockMvc.perform(request.header("Authorization", bearer(user.getId())).contentType(MediaType.APPLICATION_JSON).content(body));
+        return mockMvc.perform(request.header("Authorization", bearerFor(user.getId(), "USER")).contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     private ResultActions requestCode(User user, String purpose) throws Exception {

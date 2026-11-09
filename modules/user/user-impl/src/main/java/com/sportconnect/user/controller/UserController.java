@@ -23,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,7 +35,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -67,8 +70,9 @@ public class UserController {
     })
     @GetMapping("/me")
     @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal String callerIdStr) {
+    public ResponseEntity<ApiResponse<UserResponse>> getMe(@AuthenticationPrincipal String callerIdStr, Authentication authentication) {
         UserResponse response = userService.getUserById(UUID.fromString(callerIdStr));
+        response.setRoles(callerRoles(authentication));
         return ResponseEntity.ok(ApiResponse.success("User retrieved successfully", response));
     }
 
@@ -124,8 +128,10 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> updateProfile(
             @PathVariable UUID userId,
             @AuthenticationPrincipal String callerIdStr,
-            @Valid @RequestBody UpdateProfileRequest request) {
+            @Valid @RequestBody UpdateProfileRequest request,
+            Authentication authentication) {
         UserResponse response = userService.updateProfile(userId, UUID.fromString(callerIdStr), request);
+        response.setRoles(callerRoles(authentication));
         return ResponseEntity.ok(ApiResponse.success("Profile updated successfully", response));
     }
 
@@ -274,5 +280,18 @@ public class UserController {
     public ResponseEntity<ApiResponse<Boolean>> checkUsernameExists(@RequestParam String username) {
         boolean exists = userService.existsByUsername(username);
         return ResponseEntity.ok(ApiResponse.success("Username check completed", exists));
+    }
+
+    /**
+     * A37: the caller's roles as the Keycloak access token carried them, read back from the request's authorities
+     * (JwtAuthenticationFilter built them as {@code ROLE_<name>}), without the prefix: {@code USER}, {@code ADMIN}.
+     * Roles are no longer stored on the user, so the profile responses that include them take them from here.
+     */
+    private static Set<String> callerRoles(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .map(authority -> authority.getAuthority())
+                .filter(name -> name.startsWith("ROLE_"))
+                .map(name -> name.substring("ROLE_".length()))
+                .collect(Collectors.toSet());
     }
 }

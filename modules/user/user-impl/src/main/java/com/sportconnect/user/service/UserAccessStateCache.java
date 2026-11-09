@@ -9,8 +9,6 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,7 +24,10 @@ import java.util.UUID;
  * eviction; that stale entry lives at most {@code app.user.access-state-ttl} (60 s by default), the bound on how long
  * a deactivated user can slip through in that race.
  *
- * <p>Entry format: {@code <1|0>|<ROLE>,<ROLE>}, e.g. {@code 1|USER,ADMIN}.
+
+ * <p>Entry format (A37): {@code 1} active, {@code 0} deactivated. Before A37 the value was {@code <1|0>|<ROLE>,<ROLE>}
+ * (e.g. {@code 1|USER,ADMIN}); {@link #decode} still reads that form, so entries cached by the previous release stay usable for
+ * their remaining TTL (60 s) and a deploy does not turn them all into misses at once.
  */
 @Component
 class UserAccessStateCache {
@@ -78,16 +79,16 @@ class UserAccessStateCache {
     }
 
     private static String encode(UserAccessState state) {
-        return (state.isActive() ? "1" : "0") + "|" + String.join(",", state.roles());
+        return state.isActive() ? "1" : "0";
     }
 
     private static Optional<UserAccessState> decode(String value) {
-        int bar = value.indexOf('|');
-        if (bar != 1) {
+        // "1" / "0" (A37), or the previous release's "1|USER,ADMIN" / "0|USER": only the leading flag is read.
+        boolean current = value.length() == 1;
+        boolean legacy = value.length() > 1 && value.charAt(1) == '|';
+        if (!(current || legacy) || (value.charAt(0) != '1' && value.charAt(0) != '0')) {
             return Optional.empty();
         }
-        String roles = value.substring(bar + 1);
-        List<String> names = roles.isEmpty() ? List.of() : Arrays.asList(roles.split(","));
-        return Optional.of(new UserAccessState(value.charAt(0) == '1', names));
+        return Optional.of(new UserAccessState(value.charAt(0) == '1'));
     }
 }

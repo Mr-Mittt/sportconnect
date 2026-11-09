@@ -1,6 +1,7 @@
 package com.sportconnect.auth.service;
 
 import com.sportconnect.auth.api.service.JwtTokenService;
+import com.sportconnect.auth.security.TokenRoles;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -9,7 +10,6 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -62,9 +62,9 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         return jwt.getIssuedAt();
     }
 
-    /** Always empty: roles live in our database ({@code UserService.getAccessState}), never in the token. */
+    /** A37: the application roles in the token's {@code realm_access.roles} (USER, ADMIN), as {@link TokenRoles} reads them for every request. */
     @Override
     public List<String> getAuthoritiesFromToken(String token) {
-        return Collections.emptyList();
+        return TokenRoles.of(jwtDecoder.decode(token));
     }
 }

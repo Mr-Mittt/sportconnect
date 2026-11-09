@@ -54,7 +54,7 @@ class AuthServiceImplSpec extends Specification {
 
     private UserResponse userResponse(UUID id, boolean active) {
         UserResponse.builder().id(id).email("u@example.com").firstName("U").lastName("Ser")
-                .isActive(active).roles(new HashSet<>(["USER"])).build()
+                .isActive(active).roles(new HashSet<>(["ADMIN"])).build()   // a stale DB-style role the response must NOT use (A37)
     }
 
     def "callback provisions the user from the verified token's claims and opens the session"() {
@@ -79,6 +79,42 @@ class AuthServiceImplSpec extends Specification {
         result.refreshTokenMaxAgeSeconds == 86400L
         result.expiresIn == 300000L
         0 * keycloak.endSession(_)
+    }
+
+    def "the session's user.roles are the verified token's realm roles, never the roles on the user entity (A37)"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.exchangeCode("c", "v") >> tokens()
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [email: "a@example.com", realm_access: realmAccess])
+        userService.provisionExternalUser(_) >> new ProvisionedUser(userResponse(sub, true), false)
+
+        when:
+        def result = authService.callback("c", "v")
+
+        then: "userResponse() carries a stale ADMIN; only what the token says may reach the client"
+        result.user.roles == expected
+
+        where:
+        realmAccess                                                   | expected
+        [roles: ["USER"]]                                             | ["USER"]
+        [roles: ["offline_access", "ADMIN", "USER", "uma_authorization"]] | ["ADMIN", "USER"]
+        [roles: []]                                                   | []
+        null                                                          | []
+    }
+
+    def "refresh answers with the roles of the new access token (A37)"() {
+        given:
+        def sub = UUID.randomUUID()
+        keycloak.refresh("old") >> tokens("new")
+        jwtDecoder.decode(ACCESS) >> jwt(sub, [realm_access: [roles: ["USER", "ADMIN"]]])
+        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true))
+        userService.getUserById(sub) >> userResponse(sub, true)
+
+        when:
+        def result = authService.refreshToken("old")
+
+        then:
+        result.user.roles == ["ADMIN", "USER"]
     }
 
     def "callback records a verified email for an existing unverified row, but not for a new one or a deactivated one"() {
@@ -486,7 +522,7 @@ class AuthServiceImplSpec extends Specification {
         def sub = UUID.randomUUID()
         keycloak.refresh("old") >> tokens("rotated")
         jwtDecoder.decode(ACCESS) >> jwt(sub)
-        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true, ["USER"]))
+        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true))
         userService.getUserById(sub) >> userResponse(sub, true)
 
         when:
@@ -505,7 +541,7 @@ class AuthServiceImplSpec extends Specification {
         stored.isEmailVerified = storedVerified
         keycloak.refresh("old") >> tokens("rotated")
         jwtDecoder.decode(ACCESS) >> jwt(sub, claims)
-        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true, ["USER"]))
+        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true))
         userService.getUserById(sub) >> stored
 
         when:
@@ -530,7 +566,7 @@ class AuthServiceImplSpec extends Specification {
         stored.isEmailVerified = false
         keycloak.refresh("old") >> tokens("rotated")
         jwtDecoder.decode(ACCESS) >> jwt(sub, [email_verified: true])
-        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true, ["USER"]))
+        userService.getAccessState(sub) >> Optional.of(new UserAccessState(true))
         userService.getUserById(sub) >> stored
         userService.markEmailVerified(sub) >> { throw new RuntimeException("db down") }
 
@@ -560,7 +596,7 @@ class AuthServiceImplSpec extends Specification {
         0 * userService.getUserById(_)
 
         where:
-        state << [Optional.of(new UserAccessState(false, ["USER"])), Optional.empty()]
+        state << [Optional.of(new UserAccessState(false)), Optional.empty()]
     }
 
     def "refresh passes Keycloak's refusal and outage through"() {

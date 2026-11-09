@@ -96,7 +96,7 @@ class UserIdentifierConstraintsIntegrationTest extends RedisBaseIT {
 
     private ResultActions updateProfile(User user, String json) throws Exception {
         return mockMvc.perform(put("/api/users/{id}/profile", user.getId())
-                .header("Authorization", bearer(user.getId()))
+                .header("Authorization", bearerFor(user.getId(), "USER"))
                 .contentType(MediaType.APPLICATION_JSON).content(json));
     }
 

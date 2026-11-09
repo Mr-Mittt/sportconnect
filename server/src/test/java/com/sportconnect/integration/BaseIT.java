@@ -10,16 +10,13 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import com.sportconnect.user.entity.Role;
 import com.sportconnect.user.entity.User;
-import com.sportconnect.user.repository.RoleRepository;
 import com.sportconnect.user.repository.UserRepository;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 
@@ -55,35 +52,47 @@ public abstract class BaseIT {
         registry.add("app.keycloak.credentials-client-secret", () -> TestKeycloak.CREDENTIALS_CLIENT_SECRET);
     }
 
-    /** The {@code Authorization} header value for a valid Keycloak-style token of {@code userId} (A25). */
+    /**
+     * A37: the realm roles each test user holds in Keycloak, recorded by {@link #createUserWithRoles}. {@link #bearer} puts
+     * them in the token's {@code realm_access.roles}. Roles are not stored on the user any more, so this map is the tests'
+     * stand-in for Keycloak's role mappings.
+     */
+    private static final java.util.Map<UUID, String[]> KEYCLOAK_ROLES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * The {@code Authorization} header value for a valid Keycloak-style token of {@code userId} (A25). A37: the token carries
+     * the roles {@link #createUserWithRoles} recorded for that user, and none for any other id.
+     */
     protected static String bearer(UUID userId) {
-        return "Bearer " + TestKeycloak.token(userId);
+        return "Bearer " + TestKeycloak.token(userId, KEYCLOAK_ROLES.getOrDefault(userId, new String[0]));
+    }
+
+    /**
+     * A37: a token for {@code userId} that carries exactly {@code roles} in {@code realm_access.roles}, for a test that builds its
+     * user by hand (not through {@link #createUserWithRoles}) and so has no recorded roles.
+     */
+    protected static String bearerFor(UUID userId, String... roles) {
+        return "Bearer " + TestKeycloak.token(userId, roles);
     }
 
     @Autowired
     private UserRepository baseUsers;
 
-    @Autowired
-    private RoleRepository baseRoles;
-
     /**
-     * A25: roles come from the database now (the token carries none), so a user a test authenticates as through a real
-     * token needs its roles as rows. Creates the user (and any missing role) and returns its id.
+     * A37: roles are Keycloak's and travel in the token, so the roles given here are recorded for {@link #bearer} and NOT
+     * written to the database: a test that authenticates through a real token proves the database no longer matters.
+     * Creates the (active or deactivated) user and returns its id.
      */
     protected UUID createUserWithRoles(boolean active, String... roleNames) {
-        HashSet<Role> roles = new HashSet<>();
-        for (String name : roleNames) {
-            roles.add(baseRoles.findByName(name)
-                    .orElseGet(() -> baseRoles.save(Role.builder().name(name).description("test").build())));
-        }
-        return baseUsers.save(User.builder()
+        UUID id = baseUsers.save(User.builder()
                 .email("it-" + UUID.randomUUID() + "@example.com")
                 .firstName("It")
                 .lastName("Tester")
                 .username("ittester" + System.nanoTime())
                 .isActive(active)
-                .roles(roles)
                 .build()).getId();
+        KEYCLOAK_ROLES.put(id, roleNames);
+        return id;
     }
 
     @Autowired
