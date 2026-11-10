@@ -37,6 +37,7 @@ green run exists" pattern.
 | 6 | [INFRA-22](MVP/INFRA-22_ONE_VAULT_SECRET_PER_CREDENTIAL_AND_ENV_FILE_TEMPLATES.md) | One Vault secret per credential and env files built from repository templates by `fetch-secrets.sh` (no whole-file secrets, no duplicated values, non-secret settings in git); depends on INFRA-14, related to INFRA-19 | `TODO` |
 | 7 | [INFRA-23](MVP/INFRA-23_FULL_RESTORE_ON_A_FRESH_BOX.md) | Full restore on a fresh box: rebuild the production box on a new A1 instance from the bucket backup (restore with the new roles, the post-restore realm steps, outside checks); split out of INFRA-14 item 3, also closes INFRA-19's unproven realm-steps-and-restore; depends on INFRA-14 and INFRA-19 | `TODO` |
 | 8 | [INFRA-26](MVP/INFRA-26_RELEASE_NOTES_DEPENDS_ON_VERSION_MUST_EXIST.md) | Release notes: a `Depends on` version must exist (a tag, or the version released in the same run); today only a person catches `box >= 0.1.4` when no such box version was ever released | `TODO` |
+| 9 | [INFRA-27](MVP/INFRA-27_KEYCLOAK_EXTENSIONS_JAR_NOT_REPRODUCIBLE.md) | The Keycloak extensions JAR in the box image is rebuilt, and differs, whenever the server version changes (`gradle.properties` is an input of its build stage); make it reproducible so the install plan shows only real changes | `TODO` |
 
 ---
 

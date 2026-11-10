@@ -1,6 +1,6 @@
 # LOC-7 · Saving a location fails on the production box: the timezone engine's native library cannot load from a noexec `/tmp`
 
-**Status:** `IN PROGRESS` (fixed and tested on the development computer 2026-11-10; not run on the box yet, needs a box patch release and `--recreate=server`; no new server image)
+**Status:** `DONE` (2026-11-10: fixed and tested on the development computer, then run on the live box with box `0.2.1` and `--recreate=server`; no new server image)
 **Type:** Bug (production), with a deploy-flag change in `infra`
 **Depends on:** LOC-4 (the timezone engine), INFRA-6 (the hardened run flags)
 **Filed:** 2026-11-10, from the owner's report on the live box: saving a new location returned an error (the Google Maps link resolved fine; the failure was on save).
@@ -36,10 +36,22 @@ Alternatives considered and not taken: the option and folder in the image (a new
 
 - `LocationTimeZoneResolverSpec` (Spock): an engine factory that throws `UnsatisfiedLinkError`, `NoClassDefFoundError`, `ExceptionInInitializerError` or `IllegalStateException` makes `resolve` throw that same error (never an empty zone); a failed start is not cached, the next call builds the engine again and answers. 10 tests pass. Mutation check: with a catch added in `resolve` that returns empty, 5 fail (the 4 failure cases and the not-cached case).
 - New `infra/scripts/test-server-native-lib.sh` (7 checks, about a minute, needs Docker and `javac`): runs the real `TimeZoneEngine` of `server.jar` in the server's base image as uid 10001 under the flags read from `sportconnect-deploy.sh`. Passes: no hardening works; the old flags fail with the reported error (a control); the real flags work; without the `JAVA_TOOL_OPTIONS` entry it fails; without the extra mount it fails; `/tmp` is still `noexec` and `/opt/native` is exec, `nosuid`, `nodev`. Mutation checks: removing the mount from the deploy script and removing the variable each fail the check that needs them.
-- Not run: anything on the box (arm64; the local runs are amd64, the failure mechanism is the same on both), the full `:server:test` suite (the changed class has its own spec; no other test touches it), an integration test (the resolver is mocked in `LocationServiceImplSpec`; the integration is the flags test above).
+- Not run locally: the arm64 box (the local runs are amd64; the box run is recorded below), the full `:server:test` suite (the changed class has its own spec; no other test touches it), an integration test (the resolver is mocked in `LocationServiceImplSpec`; the integration is the flags test above).
 
 ## Release
 
-A box patch only (`sportconnect-deploy.sh`; notes in `documentation/release-notes/BOX.md`, Unreleased), then on the box `sportconnect-setup` and `sportconnect-deploy --recreate=server` (the flags apply when the container is created, and an unchanged image is not redeployed otherwise). No server image, so no server release or promote; the resolver's Javadoc and test seam ride in the next one. After the recreate: `docker exec sc-server grep -E ' /(tmp|opt/native) ' /proc/mounts` shows `noexec` on `/tmp` only, saving a location in the app succeeds, and `docker logs sc-server 2>&1 | grep -c UnsatisfiedLinkError` prints 0. This ticket stays `IN PROGRESS` until that result is recorded (owner's pasted output).
+A box patch only (`sportconnect-deploy.sh`; notes in `documentation/release-notes/BOX.md`, Unreleased), then on the box `sportconnect-setup` and `sportconnect-deploy --recreate=server` (the flags apply when the container is created, and an unchanged image is not redeployed otherwise). No server image, so no server release or promote; the resolver's Javadoc and test seam ride in the next one. After the recreate: `docker exec sc-server grep -E ' /(tmp|opt/native) ' /proc/mounts` shows `noexec` on `/tmp` only, saving a location in the app succeeds, and `docker logs sc-server 2>&1 | grep -c UnsatisfiedLinkError` prints 0. The result is recorded below.
 
 **Out of scope:** the VNPT DNS failure for OpenStreetMap tiles in the browser (not our server), proxying map tiles, replacing timeshape, rejecting coordinates that resolve to no timezone (LOC-8).
+
+## Run on the box (2026-11-10, owner's pasted outputs unless noted)
+
+**Release.** Box `0.2.1` (PR #428), promoted to `sha256:0fe8056ac5ab…`. `sportconnect-setup --plan` showed `0.2.0` to `0.2.1` with three files: `sportconnect-deploy.sh`, its installed copy `bin/sportconnect-deploy`, and `sportconnect-keycloak-extensions.jar`.
+
+**The unexpected JAR.** No source under `infra/keycloak-extensions` changed between the two box releases; `gradle.properties` did (the server version bump, PR #425), and the box `Dockerfile` copies it into the stage that builds the JAR, so the stage was rebuilt and the bytes changed (Gradle keeps file timestamps; the 0.2.0 install had reused a cached layer). The owner compared the installed JAR with the one in the new image: 661 entries each, all CRCs equal (`True`). Installed; Keycloak was not restarted (the install's note offered it; declined, the content is the same).
+
+**Recreate.** `sportconnect-deploy --recreate=server`: `server 0.2.0 0.2.0 RECREATE`, chat and client unchanged, `deployed: server 0.2.0`.
+
+**Checks.** `/proc/mounts`: `tmpfs /tmp ... rw,nosuid,nodev,noexec` and `tmpfs /opt/native ... rw,nosuid,nodev,relatime,size=16384k` (no `noexec`). `printenv JAVA_TOOL_OPTIONS`: `-DZstdTempFolder=/opt/native`. Container health: `healthy`. Saving a location in the app worked (owner's word). `docker logs sc-server 2>&1 | grep -c UnsatisfiedLinkError` printed `0` after the save.
+
+**Not shown.** The timezone stored on the new location, and a log count taken before the save (the recreated container starts a fresh log, so the earlier error is not in it).
