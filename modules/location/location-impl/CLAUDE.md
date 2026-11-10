@@ -14,6 +14,7 @@ both point at by id instead of each carrying its own raw location fields.
 | `modules/sport/sport-api` | Batch `sportName` enrichment on `LocationResponse` |
 | Hibernate Spatial + JTS | Same `geography(Point,4326)` pattern as `user-impl`/`post-impl` |
 | JDK `java.net.http.HttpClient` | Outbound call to resolve short Google Maps links — no external library |
+| `net.iakovlev:timeshape` (and zstd-jni under it) | Offline timezone lookup (LOC-4); zstd-jni unpacks a native library at first use, see Gotchas |
 
 ## Key Classes
 
@@ -62,3 +63,9 @@ POST /api/locations/resolve-maps-url   ROLE_USER — resolve only, does not pers
   are an accepted crowdsourcing tradeoff (see `docs/BACKLOG_MVP.md`).
 - `claimedByVendorId` is a bare nullable `Long` with no FK and no `Vendor` entity — don't build
   claim/ownership logic against it until a real Vendor/Facility domain exists.
+- The timezone engine (`LocationTimeZoneResolver`, `timeshape`) reads its data through zstd-jni, which unpacks a native `.so` into a temp
+  folder on first use and loads it. A `noexec` mount refuses that (the production box's `/tmp`, LOC-7): the server image sets
+  `-DZstdTempFolder=/opt/native` and the box mounts an exec tmpfs there (`sportconnect-deploy.sh`). The resolver does not swallow a failure to
+  start the engine: a location without its timezone would make generated sessions use the JVM zone
+  (`SessionGenerationService#resolveZone`), so the save fails. Run `infra/scripts/test-server-native-lib.sh` after touching either
+  flag; it needs Docker and a built `server.jar`.

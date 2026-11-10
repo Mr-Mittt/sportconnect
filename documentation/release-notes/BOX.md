@@ -8,13 +8,23 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Changes
 
+- `sportconnect-deploy` starts the server container with a second small tmpfs, `/opt/native` (`rw,exec,nosuid,nodev`, 16 MB), next to `/tmp`, which stays `noexec` (LOC-7). The server's timezone engine needs to load a native library, which a `noexec` `/tmp` refuses; the server image points it at `/opt/native` (server patch release).
+
 ### Applied automatically
+
+- Nothing at install. The running server keeps its old flags until its container is replaced by the next `sportconnect-deploy` that deploys a server.
 
 ### Manual actions on the box
 
+- box: `sportconnect-setup` (it installs the changed `sportconnect-deploy`); then the server patch release is deployed with `sportconnect-deploy`.
+
 ### Rollback
 
+- Box 0.2.0 still runs the server image of the matching patch release, but saving a location then keeps failing as before: the folder exists in the image, a read-only container cannot write to it without the mount, and the timezone engine does not start. The older server image behaves the same.
+
 ### Depends on
+
+- none
 
 ## 0.2.0 — 2026-11-09
 
