@@ -203,7 +203,11 @@ replace_container() {
     docker stop "$cn" >/dev/null 2>&1; docker rename "$cn" "$cn-prev" || { FAIL_REASON="could not rename the running $cn"; return 1; }
   fi
   flags=(--cap-drop ALL --security-opt no-new-privileges --read-only)
-  [ "$c" = server ] && flags+=(--tmpfs /tmp -v "$cn-logs:/var/log/sportconnect")
+  # The server: /tmp is writable but noexec (Docker's default for --tmpfs). zstd-jni, which the timezone engine reads its dataset through,
+  # unpacks a native library into a folder and loads it, which a noexec mount refuses ("failed to map segment from shared object",
+  # LOC-7). /opt/native is a second, small tmpfs that allows exec and holds only that library; the image points zstd-jni at it with
+  # -DZstdTempFolder=/opt/native (server/Dockerfile). /tmp stays noexec. infra/scripts/test-server-native-lib.sh reads this line.
+  [ "$c" = server ] && flags+=(--tmpfs /tmp --tmpfs /opt/native:rw,exec,nosuid,nodev,size=16m -v "$cn-logs:/var/log/sportconnect")
   docker run -d --name "$cn" --restart unless-stopped --network "$NET" --env-file "$ENV_DIR/$c.env" "${flags[@]}" "$ref" >/dev/null \
     || { FAIL_REASON="docker run failed for $ref"; return 1; }
   if [ "$c" = server ]; then wait_server_healthy "$cn"; else wait_chat_healthy "$cn"; fi
