@@ -64,8 +64,8 @@ POST /api/locations/resolve-maps-url   ROLE_USER — resolve only, does not pers
 - `claimedByVendorId` is a bare nullable `Long` with no FK and no `Vendor` entity — don't build
   claim/ownership logic against it until a real Vendor/Facility domain exists.
 - The timezone engine (`LocationTimeZoneResolver`, `timeshape`) reads its data through zstd-jni, which unpacks a native `.so` into a temp
-  folder on first use and loads it. A `noexec` mount refuses that (the production box's `/tmp`, LOC-7): the server image sets
-  `-DZstdTempFolder=/opt/native` and the box mounts an exec tmpfs there (`sportconnect-deploy.sh`). The resolver does not swallow a failure to
+  folder on first use and loads it. A `noexec` mount refuses that (the production box's `/tmp`, LOC-7): the box script sets
+  `JAVA_TOOL_OPTIONS=-DZstdTempFolder=/opt/native` and mounts an exec tmpfs there (`sportconnect-deploy.sh`). The resolver does not swallow a failure to
   start the engine: a location without its timezone would make generated sessions use the JVM zone
   (`SessionGenerationService#resolveZone`), so the save fails. Run `infra/scripts/test-server-native-lib.sh` after touching either
   flag; it needs Docker and a built `server.jar`.

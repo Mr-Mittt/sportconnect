@@ -41,11 +41,9 @@ LABEL org.opencontainers.image.title="sportconnect-server" \
       org.opencontainers.image.created="${BUILD_DATE}"
 
 # Non-root. application-prod.yml logs to /var/log/sportconnect/application.log, so that directory must be writable.
-# /opt/native is where zstd-jni (used by the timezone engine, LOC-7) unpacks its native library: the box mounts an exec tmpfs there
-# because its /tmp is noexec (sportconnect-deploy.sh); started without that mount (a plain `docker run`) it is an ordinary folder.
 RUN groupadd --system --gid 10001 app && \
     useradd --system --uid 10001 --gid app --no-create-home app && \
-    mkdir -p /var/log/sportconnect /opt/native && chown app:app /var/log/sportconnect /opt/native
+    mkdir -p /var/log/sportconnect && chown app:app /var/log/sportconnect
 WORKDIR /app
 COPY --from=build --chown=app:app /server.jar /app/server.jar
 USER app
@@ -60,4 +58,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
     CMD curl -fs http://localhost:8080/actuator/health || exit 1
 
 # 60% of the container's memory limit for the heap; the rest is metaspace, threads and the other containers on the box.
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=60", "-DZstdTempFolder=/opt/native", "-jar", "/app/server.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=60", "-jar", "/app/server.jar"]

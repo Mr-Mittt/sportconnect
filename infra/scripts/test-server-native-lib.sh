@@ -9,17 +9,16 @@
 # flags, which is how it reached production. This runs a tiny program (it starts the same TimeZoneEngine) on the real libraries of
 # server.jar, in the server's own base image, as the server's user (uid 10001).
 #
-# It reads the flags from the files that define them, not from a copy: the `flags=` lines of replace_container() in
-# infra/oracle/scripts/sportconnect-deploy.sh and the -D options of the ENTRYPOINT in server/Dockerfile. So a change to either file
-# is what gets tested. Cases:
+# It reads the flags from the file that defines them, not from a copy: the `flags=` lines of replace_container() in
+# infra/oracle/scripts/sportconnect-deploy.sh (the fix is entirely there: an exec tmpfs at /opt/native and JAVA_TOOL_OPTIONS naming
+# it, so no new server image is needed). A change to that file is what gets tested. Cases:
 #   1. no hardening at all: works (the program and the jar are sound)
 #   2. the OLD flags (read-only, cap-drop, --tmpfs /tmp, nothing else): fails with the reported error (a control: if this ever starts
-#      working, the check below proves nothing and says so)
-#   3. the REAL flags and the Dockerfile's JVM options: works
-#   4. the real flags without the JVM option: fails (the option is needed)
-#   5. the real JVM option without the extra mount: fails (the mount is needed)
+#      working, the checks below prove nothing and it says so)
+#   3. the REAL flags: works
+#   4. the real flags without the JAVA_TOOL_OPTIONS entry: fails (the setting is needed)
+#   5. the real flags without the /opt/native mount: fails (the mount is needed)
 #   6. /tmp is still noexec under the real flags, and the native folder is exec but not suid or dev (the exception stays narrow)
-#   7. the Dockerfile creates the native folder owned by the app user (a plain `docker run` without the mount still works)
 # Needs Docker, javac (JDK 21), unzip. Removes everything it created. Takes about a minute (the engine builds its index each run).
 set -uo pipefail
 
@@ -48,8 +47,6 @@ trap 'rm -rf "$work"; docker volume rm -f "$VOLUME" >/dev/null 2>&1 || true' EXI
 # ---- what the real files say ----
 IMAGE="$(tr -d '\r' < "$DOCKERFILE" | sed -n 's/^FROM \(eclipse-temurin:[^ ]*\)$/\1/p' | tail -n 1)"
 [ -n "$IMAGE" ] || { echo "test-server-native-lib: no runtime FROM eclipse-temurin line in the Dockerfile" >&2; exit 2; }
-JVM_OPTS=()
-while IFS= read -r o; do JVM_OPTS+=("$o"); done < <(tr -d '\r' < "$DOCKERFILE" | grep '^ENTRYPOINT' | grep -o '"-D[^"]*"' | tr -d '"')
 flag_lines="$(tr -d '\r' < "$DEPLOY" | grep -E '^[[:space:]]*(flags=\(|\[ "\$c" = server \] && flags\+=\()')"
 [ -n "$flag_lines" ] || { echo "test-server-native-lib: the flags= lines of replace_container() were not found in $DEPLOY" >&2; exit 2; }
 c=server; cn="sc-native-lib-test"; flags=()
@@ -58,9 +55,22 @@ eval "$flag_lines" || { echo "test-server-native-lib: could not evaluate the fla
 REAL_FLAGS=()
 for f in "${flags[@]}"; do REAL_FLAGS+=("${f//$cn-logs/$VOLUME}"); done
 OLD_FLAGS=(--read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp)
-echo "image:     $IMAGE"
-echo "jvm opts:  ${JVM_OPTS[*]:-(none)}"
+
+# without <regex> <flags...>: the flags minus every "<option> <value>" pair whose value matches the regex
+without() {
+  local re="$1"; shift
+  local a=("$@") out=() i=0
+  while [ "$i" -lt "${#a[@]}" ]; do
+    if [ $((i + 1)) -lt "${#a[@]}" ] && [[ "${a[$((i+1))]}" =~ $re ]]; then i=$((i + 2)); continue; fi
+    out+=("${a[$i]}"); i=$((i + 1))
+  done
+  printf '%s\n' "${out[@]}"
+}
+to_array() { local name="$1"; shift; eval "$name=()"; while IFS= read -r l; do eval "$name+=(\"\$l\")"; done; }
+
+echo "image:      $IMAGE"
 echo "real flags: ${REAL_FLAGS[*]}"
+printf '%s\n' "${REAL_FLAGS[@]}" | grep -q '^JAVA_TOOL_OPTIONS=-DZstdTempFolder=' || { echo "test-server-native-lib: the deploy script's server flags have no JAVA_TOOL_OPTIONS=-DZstdTempFolder=... entry" >&2; }
 
 # ---- the program: starts the same engine the location save uses ----
 mkdir -p "$work/probe/lib"
@@ -78,41 +88,36 @@ JAVA
 (cd "$work/probe" && javac --release 21 -cp "lib/*" -d . Probe.java) || { echo "test-server-native-lib: javac failed" >&2; exit 2; }
 P="$(hostpath "$work/probe")"
 
-# probe <label> <flags...> -- <jvm opts...> : prints the program's output
+# probe <docker flags...> : prints the program's output (the JVM options come only from the flags, like on the box)
 probe() {
-  local fl=() jv=() seen=0
-  for a in "$@"; do
-    if [ "$a" = "--" ]; then seen=1; elif [ $seen = 0 ]; then fl+=("$a"); else jv+=("$a"); fi
-  done
-  docker run --rm --user 10001:10001 -m 2g ${fl[@]+"${fl[@]}"} -v "$P:/probe:ro" "$IMAGE" \
-    java -Xmx1g ${jv[@]+"${jv[@]}"} -cp "/probe:/probe/lib/*" Probe 2>&1
+  docker run --rm --user 10001:10001 -m 2g "$@" -v "$P:/probe:ro" "$IMAGE" \
+    java -Xmx1g -cp "/probe:/probe/lib/*" Probe 2>&1
 }
 works() { echo "$1" | grep -q 'PROBE zone=Asia/Ho_Chi_Minh'; }
 
-out="$(probe -- )"
+out="$(probe)"
 works "$out" && ok "1. without any hardening the engine starts and answers Asia/Ho_Chi_Minh" || { no "1. without any hardening the engine starts"; echo "$out" | tail -5; }
 
-out="$(probe "${OLD_FLAGS[@]}" -- )"
+out="$(probe "${OLD_FLAGS[@]}")"
 if works "$out"; then no "2. control: the old flags no longer fail, so this test proves nothing (Docker changed the tmpfs default?)"
 elif echo "$out" | grep -q 'failed to map segment'; then ok "2. control: the old flags (--tmpfs /tmp only) fail with 'failed to map segment from shared object'"
 else no "2. control: the old flags fail, but not with the reported error"; echo "$out" | tail -4; fi
 
-out="$(probe "${REAL_FLAGS[@]}" -- "${JVM_OPTS[@]}")"
-works "$out" && ok "3. the real flags and the Dockerfile's JVM options: the engine starts and answers Asia/Ho_Chi_Minh" || { no "3. the real flags and the Dockerfile's JVM options: the engine starts"; echo "$out" | grep -E 'PROBE|Exception|Error|Cannot|failed' | head -4; }
+out="$(probe "${REAL_FLAGS[@]}")"
+works "$out" && ok "3. the real flags: the engine starts and answers Asia/Ho_Chi_Minh" || { no "3. the real flags: the engine starts"; echo "$out" | grep -E 'PROBE|Exception|Error|Cannot|failed' | head -4; }
 
-out="$(probe "${REAL_FLAGS[@]}" -- )"
-works "$out" && no "4. without the JVM option the engine still starts (the option is not needed?)" || ok "4. without the JVM option the engine does not start (the option is needed)"
+to_array NO_ENV < <(without '^JAVA_TOOL_OPTIONS=' "${REAL_FLAGS[@]}")
+out="$(probe "${NO_ENV[@]}")"
+works "$out" && no "4. without the JAVA_TOOL_OPTIONS entry the engine still starts (the setting is not needed?)" || ok "4. without the JAVA_TOOL_OPTIONS entry the engine does not start (the setting is needed)"
 
-out="$(probe "${OLD_FLAGS[@]}" -- "${JVM_OPTS[@]}")"
+to_array NO_MOUNT < <(without '^/opt/native' "${REAL_FLAGS[@]}")
+out="$(probe "${NO_MOUNT[@]}")"
 works "$out" && no "5. without the extra mount the engine still starts (the mount is not needed?)" || ok "5. without the extra mount the engine does not start (the mount is needed)"
 
 mounts="$(docker run --rm --user 10001:10001 "${REAL_FLAGS[@]}" "$IMAGE" sh -c 'grep -E " /(tmp|opt/native) " /proc/mounts' 2>&1)"
 echo "$mounts" | grep -E ' /tmp ' | grep -q 'noexec' && ok "6a. /tmp is still mounted noexec" || { no "6a. /tmp is still mounted noexec"; echo "$mounts"; }
 nl="$(echo "$mounts" | grep -E ' /opt/native ')"
 if [ -n "$nl" ] && ! echo "$nl" | grep -q 'noexec' && echo "$nl" | grep -q 'nosuid' && echo "$nl" | grep -q 'nodev'; then ok "6b. the native folder allows exec and is nosuid, nodev"; else no "6b. the native folder allows exec and is nosuid, nodev"; echo "$nl"; fi
-
-df="$(tr -d '\r' < "$DOCKERFILE")"
-echo "$df" | grep -q 'mkdir -p .*/opt/native' && echo "$df" | grep -q 'chown app:app .*/opt/native' && ok "7. the Dockerfile creates /opt/native and gives it to the app user" || no "7. the Dockerfile creates /opt/native and gives it to the app user"
 
 echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
