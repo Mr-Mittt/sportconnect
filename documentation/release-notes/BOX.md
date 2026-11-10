@@ -8,19 +8,20 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Changes
 
-- `sportconnect-deploy` starts the server container with a second small tmpfs, `/opt/native` (`rw,exec,nosuid,nodev`, 16 MB), next to `/tmp`, which stays `noexec` (LOC-7). The server's timezone engine needs to load a native library, which a `noexec` `/tmp` refuses; the server image points it at `/opt/native` (server patch release).
+- `sportconnect-deploy` starts the server container with a second small tmpfs, `/opt/native` (`rw,exec,nosuid,nodev`, 16 MB), next to `/tmp`, which stays `noexec`, and with `JAVA_TOOL_OPTIONS=-DZstdTempFolder=/opt/native` (LOC-7). This fixes saving a location on the box, which returned a 500: the timezone engine's zstd-jni library has to load a native file, which the `noexec` `/tmp` refuses. No new server image is needed.
 
 ### Applied automatically
 
-- Nothing at install. The running server keeps its old flags until its container is replaced by the next `sportconnect-deploy` that deploys a server.
+- Nothing at install. The running server keeps its old flags until its container is created again (the manual step below).
 
 ### Manual actions on the box
 
-- box: `sportconnect-setup` (it installs the changed `sportconnect-deploy`); then the server patch release is deployed with `sportconnect-deploy`.
+- box: `sportconnect-setup` (it installs the changed `sportconnect-deploy`), then `sportconnect-deploy --recreate=server`. This restarts the server from the image it already runs, so the API is unavailable for the health wait (about a minute).
+- Check, on the box: `docker exec sc-server grep -E ' /(tmp|opt/native) ' /proc/mounts` shows `noexec` on `/tmp` and not on `/opt/native`; then save a location in the app, and `docker logs sc-server 2>&1 | grep -c UnsatisfiedLinkError` prints 0.
 
 ### Rollback
 
-- Box 0.2.0 still runs the server image of the matching patch release, but saving a location then keeps failing as before: the folder exists in the image, a read-only container cannot write to it without the mount, and the timezone engine does not start. The older server image behaves the same.
+- Nothing to undo: the extra folder and the JVM property only add a place for that one library. If the new container fails its health check, `sportconnect-deploy` puts the previous one back (as for any deploy).
 
 ### Depends on
 

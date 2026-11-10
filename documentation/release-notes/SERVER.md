@@ -8,25 +8,13 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Changes
 
-- Saving a location no longer fails with a 500 on the production box (LOC-7). The timezone engine reads its data through zstd-jni, which unpacks a native library into a folder and loads it; the box's `/tmp` is `noexec`, so the load failed on the first location save. The image now starts the JVM with `-DZstdTempFolder=/opt/native`, a small folder the box mounts as an exec tmpfs (box patch, see Depends on).
-- A location is never stored without a timezone because the engine failed: if the engine cannot start, the save fails (as it always did), because sessions generated at a location without a timezone would be scheduled in the wrong zone (LOC-7, owner's decision; the resolver's Javadoc no longer claims it never throws).
-
 ### Applied automatically
-
-- The image creates `/opt/native` owned by the app user; nothing to do.
 
 ### Manual actions on the box
 
-- box: install the box patch first (`sportconnect-setup`), then `sportconnect-deploy` for this server. The new container flags come from the box script, so a server deployed by an older box script still runs, but saving a location keeps failing as before.
-- After the deploy, on the box: `docker exec sc-server grep -E ' /(tmp|opt/native) ' /proc/mounts` shows `noexec` on `/tmp` and not on `/opt/native`; then save a location in the app and check `docker logs sc-server 2>&1 | grep -c UnsatisfiedLinkError` prints 0.
-
 ### Rollback
 
-- No migration: the previous server release (0.2.0) still runs against this database, and with it saving a location fails again (the bug this release fixes). Nothing else changes.
-
 ### Depends on
-
-- box >= 0.2.1
 
 ## 0.2.0 — 2026-11-09
 

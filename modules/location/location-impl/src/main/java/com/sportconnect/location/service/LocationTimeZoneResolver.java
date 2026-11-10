@@ -31,7 +31,7 @@ import java.util.function.Supplier;
  * save instead of returning empty. The first such failure was zstd-jni (which {@code TimeZoneEngine}
  * reads its data through) unable to load its native library from the production container's
  * {@code noexec} {@code /tmp}: every location save returned a 500 until the image gave the library
- * its own exec folder ({@code server/Dockerfile}, {@code sportconnect-deploy.sh}). Do not add a
+ * its own exec folder ({@code sportconnect-deploy.sh}). Do not add a
  * catch that turns that into {@code Optional.empty()}. A failed start is not cached, so a transient
  * one recovers on the next call.
  *
