@@ -20,7 +20,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Rollback
 
-- Box 0.2.0 still works with the server image of the matching patch release: the folder exists in the image but a read-only container cannot write to it, so the timezone engine does not start and a location is saved without a timezone (one `LOC-7:` ERROR line in the server log). With the older server image the location save fails with a 500, as before.
+- Box 0.2.0 still runs the server image of the matching patch release, but saving a location then keeps failing as before: the folder exists in the image, a read-only container cannot write to it without the mount, and the timezone engine does not start. The older server image behaves the same.
 
 ### Depends on
 

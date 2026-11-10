@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/location/location-impl`
-**Last updated:** 2026-11-10 (LOC-7 filed, fix in progress)
+**Last updated:** 2026-11-10 (LOC-7 in progress, LOC-8 filed)
 
 ---
 
@@ -20,7 +20,8 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [LOC-5](MVP/LOC-5_VENUE_COUNTRY_REGION_LINKS.md) | Venue `Location` gains nullable `country_id`/`region_id`, auto-derived from coordinates on create (never rejects) + idempotent one-time backfill runner; new `location-impl` → `reference-api` edge. Needs REF-1 + REF-2 (`reference` backlog). Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
-| 2 | [LOC-7](MVP/LOC-7_TIMEZONE_ENGINE_NATIVE_LIBRARY_ON_THE_HARDENED_BOX.md) | **[Production bug]** Saving a location fails on the box: the timezone engine's zstd-jni native library cannot load from the container's `noexec` `/tmp` (INFRA-6 hardening); fixed with a small exec tmpfs `/opt/native` plus `-DZstdTempFolder`, and the resolver now degrades to a null timezone instead of a 500; not run on the box yet | `IN PROGRESS` |
+| 2 | [LOC-7](MVP/LOC-7_TIMEZONE_ENGINE_NATIVE_LIBRARY_ON_THE_HARDENED_BOX.md) | **[Production bug]** Saving a location fails on the box: the timezone engine's zstd-jni native library cannot load from the container's `noexec` `/tmp` (INFRA-6 hardening); fixed with a small exec tmpfs `/opt/native` plus `-DZstdTempFolder`, and the resolver deliberately keeps failing the save when the engine cannot start (a null timezone would schedule generated sessions in the wrong zone); not run on the box yet | `IN PROGRESS` |
+| 3 | [LOC-8](MVP/LOC-8_REJECT_COORDINATES_WITH_NO_TIMEZONE.md) | Creating a location with coordinates that match no timezone (out-of-range latitude or longitude) is saved today with a null timezone; reject it with a clear error code instead (a null timezone schedules generated sessions in the wrong zone) | `TODO` |
 
 ---
 

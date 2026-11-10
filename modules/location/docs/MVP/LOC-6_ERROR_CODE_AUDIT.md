@@ -27,7 +27,7 @@ Phase B of the error-handling program for **location**: (1) **check** every user
 | `GET /locations/search`, `GET /locations/favorites` | `sportId is required` (400) | VALIDATION | none, generic | | The search controller's required request parameter rejects a missing `sportId` first; the service guard is a backstop. A client bug, nothing to act on. |
 | `POST /locations/resolve-maps-url` | `url is required` (service guard; `@NotBlank` catches it first) | VALIDATION | none, `VALIDATION_FAILED` | | Generic. |
 | `@Valid` field messages (name, address, sourceMapsUrl) | `name is required` and similar | VALIDATION | `VALIDATION_FAILED` (C12) | | Unchanged. |
-| Coordinates / timezone | best-effort derivation, never throws | n/a | none | | No error surface. |
+| Coordinates / timezone | best-effort derivation, never throws (LOC-7, 2026-11-10: an engine that cannot start now fails the save on purpose; an empty zone for an impossible coordinate is LOC-8) | n/a | none | | No error surface. |
 | **Deactivated caller** | no endpoint checks `isActive`; the JWT filter does not either | n/a | none | | Gets the same responses as any caller: the known U12 gap, out of scope. |
 
 **Account lifecycle:** the audit also records what a deactivated caller receives per endpoint (CLAUDE.md § Account lifecycle).

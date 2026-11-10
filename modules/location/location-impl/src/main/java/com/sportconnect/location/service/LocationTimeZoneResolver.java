@@ -13,8 +13,8 @@ import java.util.function.Supplier;
  * point-in-polygon lookup against the bundled timezone-boundary dataset — no external network
  * call, no API key, unlike {@link GoogleMapsUrlResolver}'s live HTTP redirect-following.
  *
- * <p>Best-effort by design: returns empty (never throws) rather than reject or default to a
- * fallback zone. In practice this dataset gives full global coverage — every physically valid
+ * <p>Returns empty, rather than guessing a fallback zone, when no polygon matches. In practice
+ * this dataset gives full global coverage — every physically valid
  * coordinate resolves to <em>something</em>, including open ocean and both poles (nautical
  * {@code Etc/GMT±N} zones and Antarctica territorial claims — verified empirically, e.g.
  * {@code (0, -140) -> Etc/GMT+9}). {@link TimeZoneEngine#query} also never validates its input, so
@@ -24,6 +24,16 @@ import java.util.function.Supplier;
  * separate, out-of-scope gap this ticket doesn't fix. {@link
  * com.sportconnect.location.service.LocationServiceImpl#createLocation} persists whatever comes
  * back (present or empty) as-is.
+ *
+ * <p><b>A failure to build the engine is NOT swallowed (LOC-7).</b> A location saved without its
+ * timezone makes the sessions generated at it use the JVM's own zone ({@code
+ * SessionGenerationService#resolveZone}), silently wrong, so an engine that cannot start fails the
+ * save instead of returning empty. The first such failure was zstd-jni (which {@code TimeZoneEngine}
+ * reads its data through) unable to load its native library from the production container's
+ * {@code noexec} {@code /tmp}: every location save returned a 500 until the image gave the library
+ * its own exec folder ({@code server/Dockerfile}, {@code sportconnect-deploy.sh}). Do not add a
+ * catch that turns that into {@code Optional.empty()}. A failed start is not cached, so a transient
+ * one recovers on the next call.
  *
  * <p><b>Self-managed lazy init, not a Spring {@code @Lazy} bean.</b> {@code
  * TimeZoneEngine.initialize()} is expensive enough (builds an in-memory spatial index over the
@@ -35,17 +45,6 @@ import java.util.function.Supplier;
  * annotation correctly present in the compiled class) — the double-checked-locking field below
  * defers the real cost to the first actual {@link #resolve} call regardless of how Spring wires
  * this bean, with no dependency on proxy behavior at all.
- *
- * <p><b>A broken engine never breaks the save (LOC-7).</b> {@code TimeZoneEngine} reads its dataset
- * through zstd-jni, which unpacks a native library into a temp folder and loads it. On the
- * production box the container's {@code /tmp} is mounted {@code noexec}, the load failed with an
- * {@code UnsatisfiedLinkError}, and because that surfaces as a {@link LinkageError} (an {@code Error},
- * not an {@code Exception}) it escaped as an unhandled 500 on every location save. A failure to
- * build the engine is now logged once at ERROR and remembered: from then on every call returns
- * empty (the location is saved without a timezone) instead of retrying a class the JVM can no
- * longer initialise. The cause is still fixed where it lives (the image's native-library folder,
- * {@code server/Dockerfile} and {@code sportconnect-deploy.sh}); this only makes the next such
- * failure a degraded save and not an outage.
  */
 @Slf4j
 @Component
@@ -53,8 +52,6 @@ public class LocationTimeZoneResolver {
 
     private final Supplier<TimeZoneEngine> engineFactory;
     private volatile TimeZoneEngine timeZoneEngine;
-    /** Set once building the engine failed with an error; the JVM cannot recover that class, so no retry. */
-    private volatile boolean engineUnavailable;
 
     /** Test-only: inject a pre-built engine (e.g. a {@code @Shared} one) to avoid re-running the
      * expensive {@link TimeZoneEngine#initialize()} once per test method. */
@@ -72,31 +69,19 @@ public class LocationTimeZoneResolver {
         this.engineFactory = TimeZoneEngine::initialize;
     }
 
-    /** Returns the IANA zone id at the given coordinates, or empty if none matches or the engine is unavailable. */
+    /** Returns the IANA zone id at the given coordinates, or empty if none matches. */
     public Optional<String> resolve(double latitude, double longitude) {
-        TimeZoneEngine engine = engine();
-        if (engine == null) {
-            return Optional.empty();
-        }
-        return engine.query(latitude, longitude)
+        return engine().query(latitude, longitude)
                 .map(ZoneId::getId);
     }
 
     private TimeZoneEngine engine() {
         TimeZoneEngine result = timeZoneEngine;
-        if (result == null && !engineUnavailable) {
+        if (result == null) {
             synchronized (this) {
                 result = timeZoneEngine;
-                if (result == null && !engineUnavailable) {
-                    try {
-                        timeZoneEngine = result = engineFactory.get();
-                    } catch (LinkageError | RuntimeException e) {
-                        // LinkageError covers UnsatisfiedLinkError, NoClassDefFoundError and ExceptionInInitializerError
-                        // (a native library that cannot be loaded). OutOfMemoryError and the like are not caught on purpose.
-                        engineUnavailable = true;
-                        log.error("LOC-7: the timezone engine cannot start; locations are saved without a timezone until the server is restarted. "
-                                + "Check that the native-library folder is writable and executable (docs: PRODUCTION_DEPLOYMENT_GUIDE.md, run flags of the server container)", e);
-                    }
+                if (result == null) {
+                    timeZoneEngine = result = engineFactory.get();
                 }
             }
         }

@@ -54,17 +54,19 @@ class LocationTimeZoneResolverSpec extends Specification {
         resolver.resolve(200.0d, 0.0d) == Optional.empty()
     }
 
-    // LOC-7: on the production box zstd-jni (which TimeZoneEngine reads its dataset through) could not load its native
-    // library because /tmp is noexec, the failure was an Error, and every location save returned a 500.
-    def "an engine that cannot start gives an empty zone instead of failing the save, and is not retried"() {
+    // LOC-7: a location saved without its timezone makes the sessions generated at it use the JVM's zone, so an engine that
+    // cannot start must fail the call, never answer "no zone". On the production box zstd-jni could not load its native library
+    // from the noexec /tmp, which surfaced as exactly these errors.
+    def "an engine that cannot start fails the call instead of answering no zone"() {
         given:
-        def calls = 0
-        def broken = new LocationTimeZoneResolver({ calls++; throw failure } as Supplier<TimeZoneEngine>)
+        def broken = new LocationTimeZoneResolver({ throw failure } as Supplier<TimeZoneEngine>)
 
-        expect:
-        broken.resolve(10.7626d, 106.6602d) == Optional.empty()
-        broken.resolve(51.5074d, -0.1278d) == Optional.empty()
-        calls == 1
+        when:
+        broken.resolve(10.7626d, 106.6602d)
+
+        then:
+        def thrown = thrown(Throwable)
+        thrown.is(failure)
 
         where:
         failure << [
@@ -75,25 +77,25 @@ class LocationTimeZoneResolverSpec extends Specification {
         ]
     }
 
-    def "an out-of-memory error is not swallowed as an unavailable engine"() {
-        given:
-        def oom = new LocationTimeZoneResolver({ throw new OutOfMemoryError("Java heap space") } as Supplier<TimeZoneEngine>)
-
-        when:
-        oom.resolve(10.7626d, 106.6602d)
-
-        then:
-        thrown(OutOfMemoryError)
-    }
-
-    def "an engine that starts is built once and answers normally"() {
+    def "a failed start is not cached: the next call builds the engine again and answers"() {
         given:
         def calls = 0
-        def working = new LocationTimeZoneResolver({ calls++; engine } as Supplier<TimeZoneEngine>)
+        def flaky = new LocationTimeZoneResolver({
+            if (calls++ == 0) { throw new IllegalStateException("transient") }
+            engine
+        } as Supplier<TimeZoneEngine>)
 
-        expect:
-        working.resolve(10.7626d, 106.6602d) == Optional.of("Asia/Ho_Chi_Minh")
-        working.resolve(51.5074d, -0.1278d) == Optional.of("Europe/London")
-        calls == 1
+        when:
+        flaky.resolve(10.7626d, 106.6602d)
+
+        then:
+        thrown(IllegalStateException)
+
+        when:
+        def zone = flaky.resolve(10.7626d, 106.6602d)
+
+        then:
+        zone == Optional.of("Asia/Ho_Chi_Minh")
+        calls == 2
     }
 }
