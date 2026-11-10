@@ -1,6 +1,6 @@
 # INFRA-24 · Release notes per component, checked and cleaned by `/release`
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE` (2026-11-09)
 **Type:** Infrastructure (release process)
 **Depends on:** none (INFRA-4, INFRA-5, INFRA-8, INFRA-19 and INFRA-6 exist; this adds to them)
 **Filed:** 2026-11-09, from the `/feature` session "Move roles to Keycloak" (see A37): production is live and a release has no written record of what it changes, what the owner must run on the box and in what order. The owner asked for a release-note document per image (server, client, chat, box) and for `/release` to check and clean it before releasing.
@@ -17,4 +17,4 @@ Also: the four `*-version.sh check` commands (already run by the image workflows
 
 **Tests:** `infra/scripts/test-release-notes.sh` (placeholder, empty and missing cases, `cut` output, `section`, the `check` integration); a run of `/release` on a scratch branch with a deliberately bad file.
 
-**Verified only on GitHub after merge:** the promote summary showing the notes (like the other registry-dependent steps of INFRA-15).
+**Verified on GitHub (2026-11-09, owner's word):** the promote summary showed the notes for box `0.2.0` and for server `0.2.0`. `/release` ran for both (the notes were checked, one stale line fixed and cut into the version section, the PR description built from them). Fixed in the same docs change (found at the first box release, 2026-11-09): `/release` Step 5 built the prefilled PR link with `encodeURIComponent` alone, which leaves `( ) ! * '` unencoded (a `)` in the body ended the link), and its 7000-character fallback was too high (a link of about 2800 characters wrapped in the terminal and could not be clicked as one link). The command now encodes those five characters too (checked with a sample containing all of them: `a%20%28b%29%20c%21%20d%2A%20e%27%20f%26g`) and falls back to the plain `pull/new/<branch>` link plus the description block above about 2000 characters. Filed as INFRA-26 (not part of this ticket): the `Depends on` version is only format-checked. **Known and unchecked (owner's decision to close with these open):** the CI enforcement (`*-version.sh check` failing when the current version has no notes section) has not been seen failing on a real PR on GitHub (it passed on the two release PRs, assumed from the merges, the runs were not read), and no run of `/release` on a scratch branch with a deliberately bad file was done (the stop cases are covered by `test-release-notes.sh` on the development computer only). Found at the first server release: the notes named box `0.1.4`, a version that never existed; the check cannot know that, the judgement step caught it.
