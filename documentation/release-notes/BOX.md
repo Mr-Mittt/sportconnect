@@ -8,24 +8,28 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Changes
 
-- `sportconnect-deploy` starts the server container with a second small tmpfs, `/opt/native` (`rw,exec,nosuid,nodev`, 16 MB), next to `/tmp`, which stays `noexec`, and with `JAVA_TOOL_OPTIONS=-DZstdTempFolder=/opt/native` (LOC-7). This fixes saving a location on the box, which returned a 500: the timezone engine's zstd-jni library has to load a native file, which the `noexec` `/tmp` refuses. No new server image is needed.
-
 ### Applied automatically
-
-- Nothing at install. The running server keeps its old flags until its container is created again (the manual step below).
 
 ### Manual actions on the box
 
+### Rollback
+
+### Depends on
+
+## 0.2.1 — 2026-11-10
+
+### Changes
+- `sportconnect-deploy` starts the server container with a second small tmpfs, `/opt/native` (`rw,exec,nosuid,nodev`, 16 MB), next to `/tmp`, which stays `noexec`, and with `JAVA_TOOL_OPTIONS=-DZstdTempFolder=/opt/native` (LOC-7). This fixes saving a location on the box, which returned a 500: the timezone engine's zstd-jni library has to load a native file, which the `noexec` `/tmp` refuses. No new server image is needed.
+
+### Applied automatically
+- Nothing at install. The running server keeps its old flags until its container is created again (the manual step below).
+
+### Manual actions on the box
 - box: `sportconnect-setup` (it installs the changed `sportconnect-deploy`), then `sportconnect-deploy --recreate=server`. This restarts the server from the image it already runs, so the API is unavailable for the health wait (about a minute).
 - Check, on the box: `docker exec sc-server grep -E ' /(tmp|opt/native) ' /proc/mounts` shows `noexec` on `/tmp` and not on `/opt/native`; then save a location in the app, and `docker logs sc-server 2>&1 | grep -c UnsatisfiedLinkError` prints 0.
 
 ### Rollback
-
 - Nothing to undo: the extra folder and the JVM property only add a place for that one library. If the new container fails its health check, `sportconnect-deploy` puts the previous one back (as for any deploy).
-
-### Depends on
-
-- none
 
 ## 0.2.0 — 2026-11-09
 
