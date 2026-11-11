@@ -19,14 +19,15 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
-| 2 | [SESSION-22](MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md) | `SessionEventsConsumerIntegrationTest` fails intermittently on its RabbitMQ container — **~50% flake rate** (6 of 12 full runs), fails as a block on `AmqpIOException`, passes in isolation | `TODO` |
-| 3 | [SESSION-26](MVP/SESSION-26_DISCOVER_ATTRIBUTE_FILTER.md) | Session-attribute filtering on discover (deferred from SESSION-25) | `TODO` |
-| 4 | [SESSION-29](MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md) | Old `CANCELLED`/`COMPLETED` session storage — retention concern, documented only, no direction decided (revisit once there's real usage/storage data) | `TODO` |
-| 5 | [SESSION-41](MVP/SESSION-41_GENERATION_FAILURE_BACKSTOP.md) | No retry/backstop for a failed eager group-session generation attempt — SESSION-38's failure isolation leaves no periodic sweep to catch a missed group | `TODO` |
-| 6 | [SESSION-44](MVP/SESSION-44_REJECT_JOIN_AND_APPROVAL_ON_COMPLETED_SESSION.md) | `joinSession` (and approve/reject) reject only `CANCELLED`, not `COMPLETED` — a join or join request on a finished session succeeds (and notifies the creator); found during client CLIENT-SESSION-30 by code review, not yet reproduced live | `TODO` |
-| 7 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
-| 8 | [SESSION-48](MVP/SESSION-48_REMOVE_DESCRIPTION_FROM_THE_SESSION_API.md) | Remove description from the session API (deferred from CLIENT-SESSION-34; depends on it) | `TODO` |
+| 1 | [SESSION-49](MVP/SESSION-49_NULL_SESSION_TITLE_BREAKS_NOTIFICATION_LIST.md) | A session with a null title makes `getSessionTitlesByIds` throw, so the whole notification list returns 500 | `TODO` |
+| 2 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
+| 3 | [SESSION-22](MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md) | `SessionEventsConsumerIntegrationTest` fails intermittently on its RabbitMQ container — **~50% flake rate** (6 of 12 full runs), fails as a block on `AmqpIOException`, passes in isolation | `TODO` |
+| 4 | [SESSION-26](MVP/SESSION-26_DISCOVER_ATTRIBUTE_FILTER.md) | Session-attribute filtering on discover (deferred from SESSION-25) | `TODO` |
+| 5 | [SESSION-29](MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md) | Old `CANCELLED`/`COMPLETED` session storage — retention concern, documented only, no direction decided (revisit once there's real usage/storage data) | `TODO` |
+| 6 | [SESSION-41](MVP/SESSION-41_GENERATION_FAILURE_BACKSTOP.md) | No retry/backstop for a failed eager group-session generation attempt — SESSION-38's failure isolation leaves no periodic sweep to catch a missed group | `TODO` |
+| 7 | [SESSION-44](MVP/SESSION-44_REJECT_JOIN_AND_APPROVAL_ON_COMPLETED_SESSION.md) | `joinSession` (and approve/reject) reject only `CANCELLED`, not `COMPLETED` — a join or join request on a finished session succeeds (and notifies the creator); found during client CLIENT-SESSION-30 by code review, not yet reproduced live | `TODO` |
+| 8 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
+| 9 | [SESSION-48](MVP/SESSION-48_REMOVE_DESCRIPTION_FROM_THE_SESSION_API.md) | Remove description from the session API (deferred from CLIENT-SESSION-34; depends on it) | `TODO` |
 
 ---
 
