@@ -1,5 +1,6 @@
 package com.sportconnect.session.api.dto;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -47,6 +48,23 @@ public class UpdateSessionRequest {
 
     @Min(value = 0, message = "initialSlot must be >= 0")
     private Integer initialSlot;
+
+    /** SESSION-46 — non-null replaces, null leaves, {@code 0} clears. Same open-seat rule as on
+     * create, checked on the resulting values. */
+    @Min(value = 0, message = "maleSlots must be >= 0")
+    private Integer maleSlots;
+
+    @Min(value = 0, message = "femaleSlots must be >= 0")
+    private Integer femaleSlots;
+
+    /** SESSION-46 — optional on update; 1 to 10. */
+    @Min(value = 1, message = "gameMood must be between 1 and 10")
+    @Max(value = 10, message = "gameMood must be between 1 and 10")
+    private Integer gameMood;
+
+    /** SESSION-46 — non-null replaces, empty string clears, null leaves. */
+    @Size(max = 300, message = "feeNote must not exceed 300 characters")
+    private String feeNote;
 
     /** SESSION-23 — replace-semantics: a non-null map is filtered against the sport's session
      * attribute schema (A17) and stored wholesale, replacing whatever was there. {@code null}

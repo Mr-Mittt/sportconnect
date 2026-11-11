@@ -133,7 +133,7 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
         sessionId = sessionRepository.save(Session.builder()
                 .groupId(null).isPublic(true).postId(postId).sessionType(SessionType.STANDALONE)
                 .createdBy(creatorId).sportId(sportId).locationId(1L)
-                .scheduledStart(Instant.now().plusSeconds(86400)).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now().plusSeconds(86400)).status(SessionStatus.PREPARING)
                 .capacity(9999).feeType(FeeType.FREE).initialSlot(0).autoApprove(false)
                 .build()).getId();
     }

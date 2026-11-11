@@ -424,7 +424,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .attributes(["match/note": "old", "match/gone": "y"]).build()
         def request = UpdateSessionRequest.builder().attributes(["match/note": "new"]).build()
 
@@ -442,7 +442,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .attributes(["match/note": "keep"]).build()
         def request = UpdateSessionRequest.builder().title("New title").build()
 
@@ -460,7 +460,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .attributes(["match/note": "old"]).build()
         def request = UpdateSessionRequest.builder().attributes([:]).build()
 
@@ -509,7 +509,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED).build()
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING).build()
         def request = UpdateSessionRequest.builder().title("New title").build()
 
         when:
@@ -2345,7 +2345,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .capacity(10).feeType(FeeType.FREE).initialSlot(0).build()
         def request = UpdateSessionRequest.builder().initialSlot(5).build()
 
@@ -2362,7 +2362,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .capacity(10).feeType(FeeType.FREE).build()
         def request = UpdateSessionRequest.builder().capacity(20).build()
 
@@ -2512,12 +2512,32 @@ class SessionServiceImplSpec extends Specification {
         result.status == SessionStatus.PREPARING
     }
 
-    def "createSession starts SCHEDULED when both locationId and feeType are present"() {
+    def "createSession starts PREPARING when location and fee are present but the duration is missing"() {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder()
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).feeType(FeeType.FREE).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
+                .status(SessionStatus.PREPARING).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.PREPARING && s.scheduledEndAt == null }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.PREPARING
+    }
+
+    def "createSession starts SCHEDULED when location, fee type and duration are all present"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder()
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
+                .durationMinutes(90).capacity(10).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart)
                 .status(SessionStatus.SCHEDULED).build()
@@ -2532,16 +2552,15 @@ class SessionServiceImplSpec extends Specification {
         result.status == SessionStatus.SCHEDULED
     }
 
-    def "updateSession flips PREPARING to SCHEDULED once both locationId and feeType are completed"() {
+    def "updateSession does not flip PREPARING to SCHEDULED even when location, fee and duration are all present"() {
         given:
         def userId = UUID.randomUUID()
-        // .feeType(null) explicitly, not omitted â€” Session.feeType's @Builder.Default only
-        // applies when the builder method is never called at all; a genuinely-missing feeType
-        // (as a real PREPARING session would have) requires calling it with null.
+        // .feeType(null) explicitly, not omitted - Session.feeType's @Builder.Default only
+        // applies when the builder method is never called at all.
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).feeType(null)
                 .scheduledStart(Instant.now().plusSeconds(86400)).status(SessionStatus.PREPARING)
                 .capacity(10).build()
-        def request = UpdateSessionRequest.builder().locationId(1L).feeType(FeeType.FREE).build()
+        def request = UpdateSessionRequest.builder().locationId(1L).feeType(FeeType.FREE).durationMinutes(60).build()
 
         when:
         def result = sessionService.updateSession(1L, userId, request)
@@ -2549,10 +2568,12 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * locationService.getLocation(1L) >> basketballLocation
-        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.SCHEDULED }) >> session
+        1 * sessionRepository.save({ Session s ->
+            s.status == SessionStatus.PREPARING && s.locationId == 1L && s.scheduledEndAt != null
+        }) >> session
         interaction { stubBatchEnrichment() }
         1 * sessionOutboxWriter.record("session.details.updated", { it.sessionId == 1L && it.actorId == userId })
-        result.status == SessionStatus.SCHEDULED
+        result.status == SessionStatus.PREPARING
     }
 
     def "updateSession stays PREPARING when only one of locationId/feeType is completed"() {
@@ -2580,7 +2601,7 @@ class SessionServiceImplSpec extends Specification {
         given:
         def userId = UUID.randomUUID()
         def session = Session.builder().id(1L).createdBy(userId).sportId(1L).locationId(1L)
-                .scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED)
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING)
                 .capacity(10).feeType(FeeType.FREE).build()
         def request = UpdateSessionRequest.builder().title("New title").build()
 
@@ -3111,5 +3132,342 @@ class SessionServiceImplSpec extends Specification {
         1 * commentService.createSessionComment(999L, userId, request) >> response
         1 * sessionOutboxWriter.record("session.comment.created", _)
         0 * commentService.createSystemSessionComment(_, _, _)
+    }
+
+    // -- SESSION-46: slots, game mood, fee note, optional title, PREPARING lifecycle ------------
+
+    private Session preparingSession(UUID creator, Map overrides = [:]) {
+        def b = Session.builder().id(1L).createdBy(creator).sportId(1L).feeType(null)
+                .scheduledStart(Instant.parse("2026-12-01T10:00:00Z")).status(SessionStatus.PREPARING)
+                .capacity(10).initialSlot(0).gameMood(5)
+        overrides.each { k, v -> b."$k"(v) }
+        return b.build()
+    }
+
+    private CreateSessionRequest.CreateSessionRequestBuilder createBase() {
+        CreateSessionRequest.builder().sportId(1L).scheduledStart(Instant.now().plusSeconds(86400))
+                .capacity(10).gameMood(5)
+    }
+
+    def "createSession stores maleSlots, femaleSlots, gameMood and a trimmed feeNote"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = createBase().maleSlots(2).femaleSlots(3).gameMood(8).feeNote("  bring cash  ").build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * sessionRepository.save({ Session s ->
+            s.maleSlots == 2 && s.femaleSlots == 3 && s.gameMood == 8 && s.feeNote == "bring cash"
+        }) >> Session.builder().id(1L).postId(999L).build()
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession stores a blank feeNote as null"() {
+        given:
+        def request = createBase().feeNote("   ").build()
+
+        when:
+        sessionService.createSession(UUID.randomUUID(), request)
+
+        then:
+        1 * sessionRepository.save({ Session s -> s.feeNote == null }) >> Session.builder().id(1L).postId(999L).build()
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession stores a blank title as null and gives the companion post a fixed text"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = createBase().title("   ").build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * postService.createSessionPost(userId, "New session") >> 42L
+        1 * sessionRepository.save({ Session s -> s.title == null }) >> Session.builder().id(1L).postId(42L).build()
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession accepts slots that exactly fill the open seats"() {
+        when:
+        sessionService.createSession(UUID.randomUUID(),
+                createBase().capacity(10).initialSlot(4).maleSlots(a).femaleSlots(b).build())
+
+        then:
+        1 * sessionRepository.save(_) >> Session.builder().id(1L).postId(999L).build()
+        interaction { stubBatchEnrichment() }
+
+        where:
+        a | b
+        3 | 3
+        6 | 0
+        0 | 6
+    }
+
+    def "createSession rejects slots one over the open seats"() {
+        when:
+        sessionService.createSession(UUID.randomUUID(),
+                createBase().capacity(10).initialSlot(4).maleSlots(a).femaleSlots(b).build())
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == 'SESSION_GENDER_SLOTS_EXCEED_OPEN'
+        0 * sessionRepository.save(_)
+
+        where:
+        a | b
+        4 | 3
+        7 | null
+    }
+
+    def "createSession counts slots against capacity minus initialSlot, not capacity"() {
+        when:
+        sessionService.createSession(UUID.randomUUID(),
+                createBase().capacity(5).initialSlot(5).maleSlots(1).build())
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == 'SESSION_GENDER_SLOTS_EXCEED_OPEN'
+        0 * sessionRepository.save(_)
+    }
+
+    def "updateSession is rejected in every status except PREPARING, before any field is applied"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [status: status])
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().title("Changed").build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_PREPARING'
+        session.title == null
+        0 * sessionRepository.save(_)
+        0 * sessionOutboxWriter.record(*_)
+
+        where:
+        status << [SessionStatus.SCHEDULED, SessionStatus.ONGOING, SessionStatus.COMPLETED, SessionStatus.CANCELLED]
+    }
+
+    def "updateSession while PREPARING changes every detail field, not just location and fee"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId)
+        def newStart = Instant.parse("2026-12-05T08:00:00Z")
+        def request = UpdateSessionRequest.builder()
+                .title("T").description("D").locationNote("Court 2").scheduledStart(newStart)
+                .durationMinutes(90).capacity(12).feeType(FeeType.SPLIT).autoApprove(true).initialSlot(2)
+                .maleSlots(3).femaleSlots(4).gameMood(9).feeNote("split evenly").build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s ->
+            s.title == "T" && s.description == "D" && s.locationNote == "Court 2" && s.scheduledStart == newStart &&
+                    s.scheduledEndAt == newStart.plusSeconds(5400) && s.capacity == 12 && s.feeType == FeeType.SPLIT &&
+                    s.autoApprove && s.initialSlot == 2 && s.maleSlots == 3 && s.femaleSlots == 4 &&
+                    s.gameMood == 9 && s.feeNote == "split evenly"
+        }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession slots: 0 clears one and leaves the other untouched"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [maleSlots: 2, femaleSlots: 3])
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().maleSlots(0).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.maleSlots == null && s.femaleSlots == 3 }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession checks the slot rule on the resulting values, so lowering capacity can break it"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [maleSlots: 4, femaleSlots: 4])
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().capacity(6).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'SESSION_GENDER_SLOTS_EXCEED_OPEN'
+        0 * sessionRepository.save(_)
+    }
+
+    def "updateSession keeps the feeNote when the fee type changes (unlike feeAmountVnd)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [feeNote: "old", feeType: FeeType.FIXED, feeAmountVnd: 50000L])
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().feeType(FeeType.FREE).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.feeNote == "old" && s.feeAmountVnd == null }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession clears feeNote with an empty string"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [feeNote: "old"])
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().feeNote("").build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.feeNote == null }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession with only a new start moves the end by the same amount"() {
+        given:
+        def userId = UUID.randomUUID()
+        def start = Instant.parse("2026-12-01T10:00:00Z")
+        def session = preparingSession(userId, [scheduledStart: start, scheduledEndAt: start.plusSeconds(3600)])
+        def newStart = Instant.parse("2026-12-02T18:30:00Z")
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().scheduledStart(newStart).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s ->
+            s.scheduledStart == newStart && s.scheduledEndAt == newStart.plusSeconds(3600)
+        }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession with a new start and a duration lets the duration win"() {
+        given:
+        def userId = UUID.randomUUID()
+        def start = Instant.parse("2026-12-01T10:00:00Z")
+        def session = preparingSession(userId, [scheduledStart: start, scheduledEndAt: start.plusSeconds(3600)])
+        def newStart = Instant.parse("2026-12-02T18:30:00Z")
+
+        when:
+        sessionService.updateSession(1L, userId,
+                UpdateSessionRequest.builder().scheduledStart(newStart).durationMinutes(30).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.scheduledEndAt == newStart.plusSeconds(1800) }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession with a new start leaves a session without an end without one"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId)
+
+        when:
+        sessionService.updateSession(1L, userId,
+                UpdateSessionRequest.builder().scheduledStart(Instant.parse("2026-12-09T10:00:00Z")).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.scheduledEndAt == null }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "scheduleSession moves a ready PREPARING session to SCHEDULED"() {
+        given:
+        def userId = UUID.randomUUID()
+        def start = Instant.parse("2026-12-01T10:00:00Z")
+        def session = preparingSession(userId, [locationId: 1L, feeType: FeeType.FREE, scheduledEndAt: start.plusSeconds(3600)])
+
+        when:
+        def result = sessionService.scheduleSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.status == SessionStatus.SCHEDULED }) >> session
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.SCHEDULED
+    }
+
+    def "scheduleSession lists every missing requirement"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [locationId: loc, feeType: fee, feeAmountVnd: amount,
+                                                scheduledEndAt: end])
+
+        when:
+        sessionService.scheduleSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        def e = thrown(BadRequestException)
+        e.errorCode == 'SESSION_NOT_READY'
+        e.errorParams.missing == missing
+        0 * sessionRepository.save(_)
+
+        where:
+        loc  | fee            | amount | end                                   || missing
+        null | null           | null   | null                                  || ["location", "fee", "duration"]
+        1L   | FeeType.FREE   | null   | null                                  || ["duration"]
+        null | FeeType.FREE   | null   | Instant.parse("2026-12-01T11:00:00Z") || ["location"]
+        1L   | FeeType.FIXED  | null   | Instant.parse("2026-12-01T11:00:00Z") || ["fee"]
+    }
+
+    def "scheduleSession rejects any status but PREPARING"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [status: status])
+
+        when:
+        sessionService.scheduleSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_PREPARING'
+        0 * sessionRepository.save(_)
+
+        where:
+        status << [SessionStatus.SCHEDULED, SessionStatus.ONGOING, SessionStatus.COMPLETED, SessionStatus.CANCELLED]
+    }
+
+    def "scheduleSession rejects a non-creator of a standalone session before checking readiness"() {
+        given:
+        def session = preparingSession(UUID.randomUUID())
+
+        when:
+        sessionService.scheduleSession(1L, UUID.randomUUID())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_CREATOR_REQUIRED'
+        0 * sessionRepository.save(_)
+    }
+
+    def "scheduleSession on a group-linked session requires canManageMembers"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(UUID.randomUUID(), [groupId: 5L])
+
+        when:
+        sessionService.scheduleSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.canManageMembers(5L, userId) >> false
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
     }
 }

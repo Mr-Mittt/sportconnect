@@ -388,6 +388,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     fee_amount_vnd BIGINT,
     initial_slot INTEGER NOT NULL DEFAULT 0,
     auto_approve BOOLEAN NOT NULL DEFAULT FALSE,
+    -- SESSION-46 (V085-V087): per-gender slots, game mood, fee note.
+    male_slots INTEGER,
+    female_slots INTEGER,
+    game_mood INTEGER NOT NULL DEFAULT 5,
+    fee_note VARCHAR(300),
     cancel_reason VARCHAR(500),
     cancelled_by UUID,
     cancelled_at TIMESTAMP,

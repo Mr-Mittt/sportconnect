@@ -148,6 +148,7 @@ public class SessionGenerationService {
                     .scheduledStart(nextOccurrence)
                     .scheduledEndAt(scheduledEndAt)
                     .status(SessionStatus.SCHEDULED)
+                    .gameMood(5)
                     .build();
 
             try {

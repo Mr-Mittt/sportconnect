@@ -292,10 +292,11 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 
-    @Operation(summary = "Update a session", description = "Standalone → creator only. Group-linked → owner/admin only. Partial update.")
+    @Operation(summary = "Update a session", description = "Standalone → creator only. Group-linked → owner/admin only. Partial update, and only while the session is PREPARING (SESSION-46): every field except sport and group can change; any other status is 409 SESSION_NOT_PREPARING. Slots 0 and an empty feeNote clear. Leaving PREPARING is the explicit POST /schedule.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or locationId/feeType changed outside PREPARING (409 SESSION_NOT_PREPARING)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or maleSlots + femaleSlots over the open slots (SESSION_GENDER_SLOTS_EXCEED_OPEN)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "The session is not PREPARING (SESSION_NOT_PREPARING)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator / not a group owner or admin (SESSION_CREATOR_REQUIRED, SESSION_GROUP_ADMIN_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
@@ -309,6 +310,25 @@ public class SessionController {
         SessionResponse response = sessionService.updateSession(
                 sessionId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Session updated successfully", response));
+    }
+
+    @Operation(summary = "Schedule a prepared session", description = "SESSION-46 — PREPARING → SCHEDULED. Same gating as update. Needs location, fee and duration.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session scheduled"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Location, fee or duration missing (SESSION_NOT_READY, errorParams.missing lists them)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator / not a group owner or admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "The session is not PREPARING (SESSION_NOT_PREPARING)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
+    @PostMapping("/{sessionId}/schedule")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<SessionResponse>> scheduleSession(
+            @PathVariable Long sessionId,
+            Authentication authentication) {
+        SessionResponse response = sessionService.scheduleSession(
+                sessionId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success("Session scheduled successfully", response));
     }
 
     @Operation(summary = "Cancel a session", description = "Same gating as update. Soft action — the row is kept with status=CANCELLED. Rejected if already completed or cancelled.")
