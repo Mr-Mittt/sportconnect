@@ -2,12 +2,10 @@ import {
   IconChevronDown,
   IconCheck,
   IconClock,
-  IconCoin,
   IconHeart,
   IconHeartFilled,
   IconLoader2,
   IconLogout,
-  IconMapPin,
   IconUserPlus,
   IconUsers,
   IconX,
@@ -21,8 +19,6 @@ import { SportIcon } from '@/shared/components/SportIcon';
 import { ResourceUnavailable } from '@/shared/components/ResourceUnavailable';
 import { getApiError } from '@/shared/lib/apiError';
 import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
-import { formatFeeDisplay } from '@/shared/lib/feeType';
-import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { getRampBadgeClasses, getRampFillClass } from '@/shared/lib/rampStyles';
 import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
 import { getParticipationAction, type ParticipationActionKind } from '@/shared/lib/sessionParticipation';
@@ -41,10 +37,11 @@ import { Input } from '@/shared/ui/input';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant, UpdateSessionPayload } from '../types';
-import { SessionAttributesSummary } from './SessionAttributesSummary';
 import { SessionCommentComposer } from './SessionCommentComposer';
 import { SessionCommentSection } from './SessionCommentSection';
-import { SessionPreparingCompletion, type CompletionFavorites } from './SessionPreparingCompletion';
+import { SessionReadinessDialog } from './SessionConfirmDialogs';
+import { SessionDetailSections, type CompletionFavorites } from './SessionDetailSections';
+import { missingForSession } from '../sessionReadiness';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 
 interface SessionDetailModalProps {
@@ -85,16 +82,30 @@ interface SessionDetailModalProps {
    * inheritance in the read view. `null` / absent → no inheritance, defaults render. */
   refBaseSchema?: ResolvedSportAttributeSchema | null;
 
-  /** CLIENT-SESSION-21 (SESSION-24): PREPARING-completion — rendered via
-   * `SessionPreparingCompletion` only when `canManage && session.status === 'PREPARING'`. */
+  /** CLIENT-SESSION-34: per-section editing of a PREPARING session (host only). The location picked in
+   * the Where editor, its picker, and its favourites dropdown data — page-owned like the create form's. */
   selectedCompletionLocation: Location | null;
   onOpenCompletionLocationPicker: () => void;
   completionLocationPicker: LocationPickerProps;
-  /** CLIENT-SESSION-23: favorites for the completion form's location dropdown. */
   completionFavorites: CompletionFavorites;
-  onCompleteSession: (payload: UpdateSessionPayload) => void;
-  isCompletingSession: boolean;
-  isCompleteSessionError: boolean;
+  onClearCompletionLocation: () => void;
+  /** The creator's profile attributes — the `#ref` choice source of the Session detail editor. */
+  refChoiceSource?: Record<string, unknown> | null;
+  /** Saves one section's fields; `onDone` runs once it succeeded. */
+  onUpdateSession: (payload: UpdateSessionPayload, onDone: () => void) => void;
+  isUpdatingSession: boolean;
+  isUpdateSessionError: boolean;
+  /** A specific line for a coded failure (e.g. gender slots over the open ones); absent = the generic one. */
+  updateSessionErrorText?: string;
+
+  /** CLIENT-SESSION-34: "Mark it scheduled" and its confirmation popup (the "Are you ready?" complete
+   * variant), which also opens by itself when a save completes the last missing field. */
+  isScheduleConfirmOpen: boolean;
+  onScheduleConfirmOpenChange: (open: boolean) => void;
+  onSchedule: () => void;
+  isScheduling: boolean;
+  isScheduleError: boolean;
+  scheduleErrorText?: string;
 
   onJoin: () => void;
   isJoining: boolean;
@@ -258,10 +269,12 @@ function ActionButtonContent({
  * have managed via Cancel session; now that's gone, they simply have no participation action —
  * post-ship refinement, same day).
  *
- * CLIENT-SESSION-21 (SESSION-24) renders `SessionPreparingCompletion` between the
- * cancelled-status block and the Players section for the session's own manager while it's
- * `PREPARING` — the first "edit session" surface this codebase has, scoped narrowly to
- * completing the location/fee `CreateSessionModal` allowed leaving blank at creation.
+ * CLIENT-SESSION-34 replaced CLIENT-SESSION-21's `SessionPreparingCompletion` block and the always-open
+ * location / fee / description / attributes rows with `SessionDetailSections`: Overview, When, Where,
+ * Who, Cost (and the sport's Session detail), each collapsible and, for the host of a `PREPARING`
+ * session, editable one section at a time. A `PREPARING` session also shows an amber banner to every
+ * viewer; the host additionally sees what is still missing and a "Mark it scheduled" button in the
+ * footer (disabled until nothing is missing) that opens the "Are you ready?" confirmation.
  */
 export function SessionDetailModal({
   isOpen,
@@ -282,9 +295,18 @@ export function SessionDetailModal({
   onOpenCompletionLocationPicker,
   completionLocationPicker,
   completionFavorites,
-  onCompleteSession,
-  isCompletingSession,
-  isCompleteSessionError,
+  onClearCompletionLocation,
+  refChoiceSource,
+  onUpdateSession,
+  isUpdatingSession,
+  isUpdateSessionError,
+  updateSessionErrorText,
+  isScheduleConfirmOpen,
+  onScheduleConfirmOpenChange,
+  onSchedule,
+  isScheduling,
+  isScheduleError,
+  scheduleErrorText,
   onJoin,
   isJoining,
   isJoinError,
@@ -348,8 +370,11 @@ export function SessionDetailModal({
     participationAction?.kind === 'LEAVE' && session !== undefined && session.createdBy === currentUserId;
 
   const loadCategory = isError && loadError !== undefined ? getApiError(loadError).category : undefined;
+  // CLIENT-SESSION-34: what a PREPARING session still needs before it can be scheduled.
+  const missing = session !== undefined && session.status === 'PREPARING' ? missingForSession(session) : [];
 
   return (
+    <>
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
@@ -411,54 +436,6 @@ export function SessionDetailModal({
 
           {session !== undefined && (
             <>
-              <div className="flex flex-col gap-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <IconMapPin className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
-                  {/* SESSION-24: null on a PREPARING session created without a location. */}
-                  <span className="text-2sm text-text-primary">
-                    {session.location?.name ?? t('card.locationPending')}
-                  </span>
-                  {session.location !== null &&
-                    session.location.latitude !== null &&
-                    session.location.longitude !== null && (
-                      <a
-                        href={directionsUrl(session.location.latitude, session.location.longitude)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-2sm font-medium text-text-accent hover:underline"
-                      >
-                        {t('detail.getDirections')}
-                      </a>
-                    )}
-                </div>
-                {session.location?.address !== null && session.location?.address !== undefined && (
-                  <div className="pl-6 text-2xs text-text-muted">{session.location.address}</div>
-                )}
-                {session.locationNote !== null && (
-                  <div className="pl-6 text-2xs text-text-muted">{session.locationNote}</div>
-                )}
-              </div>
-
-              {session.description !== null && (
-                <p className="text-2sm text-text-secondary">{session.description}</p>
-              )}
-
-              <div className="flex items-center gap-1.5 text-2sm text-text-primary">
-                <IconCoin className="size-4 shrink-0 text-text-muted" aria-hidden="true" />
-                {formatFeeDisplay(session.feeType, session.feeAmountVnd)}
-              </div>
-
-              {/* CLIENT-SESSION-16: read-only view of the session's stored sport-specific
-                  attributes (A17). Renders nothing when the session has none, the sport has no
-                  session schema, or every field filters out. */}
-              {sessionAttributeSchema != null && session.attributes != null && (
-                <SessionAttributesSummary
-                  schema={sessionAttributeSchema}
-                  values={session.attributes}
-                  refBaseSchema={refBaseSchema}
-                />
-              )}
-
               {session.status === 'CANCELLED' && (
                 <div className="border-hairline rounded-lg border-border bg-surface-1 p-2.5 text-2sm text-text-secondary">
                   <div>
@@ -477,20 +454,38 @@ export function SessionDetailModal({
                 </div>
               )}
 
-              {/* CLIENT-SESSION-21 (SESSION-24): only this session's own creator/owner-admin can
-                  complete a still-PREPARING session's missing location/fee. */}
-              {canManage && session.status === 'PREPARING' && (
-                <SessionPreparingCompletion
-                  session={session}
-                  selectedLocation={selectedCompletionLocation}
-                  onOpenLocationPicker={onOpenCompletionLocationPicker}
-                  locationPicker={completionLocationPicker}
-                  favorites={completionFavorites}
-                  onSubmit={onCompleteSession}
-                  isSubmitting={isCompletingSession}
-                  isError={isCompleteSessionError}
-                />
+              {/* CLIENT-SESSION-34: every viewer of a PREPARING session sees the warning; the host also
+                  sees what is still missing. */}
+              {session.status === 'PREPARING' && (
+                <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-2xs leading-relaxed text-amber-800">
+                  <p>
+                    <strong>{t('detail.preparingBanner.lead')}</strong> {t('detail.preparingBanner.body')}
+                  </p>
+                  {canManage && missing.length > 0 && (
+                    <p className="mt-1">
+                      <strong>{t('detail.stillMissing')}</strong>{' '}
+                      {missing.map((field) => t(`form.missingItem.${field}`)).join(', ')}
+                    </p>
+                  )}
+                </div>
               )}
+
+              <SessionDetailSections
+                i18nOverridePrefix={i18nOverridePrefix}
+                session={session}
+                canEdit={canManage && session.status === 'PREPARING'}
+                onUpdateSession={onUpdateSession}
+                isSaving={isUpdatingSession}
+                saveError={isUpdateSessionError ? (updateSessionErrorText ?? t('detail.saveError')) : null}
+                selectedLocation={selectedCompletionLocation}
+                onOpenLocationPicker={onOpenCompletionLocationPicker}
+                locationPicker={completionLocationPicker}
+                favorites={completionFavorites}
+                onClearLocation={onClearCompletionLocation}
+                sessionAttributeSchema={sessionAttributeSchema}
+                refBaseSchema={refBaseSchema}
+                refChoiceSource={refChoiceSource}
+              />
 
               <section aria-label={t('detail.players.label')} className="flex flex-col gap-2">
                 <button
@@ -749,6 +744,20 @@ export function SessionDetailModal({
 
         {session !== undefined && (
           <div className="border-hairline-t flex flex-col gap-2.5 border-border px-4 py-3">
+            {/* CLIENT-SESSION-34: the host's way out of PREPARING (SESSION-46 has no automatic flip). */}
+            {canManage && session.status === 'PREPARING' && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-2xs text-text-muted">{t('detail.markScheduledHint')}</span>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={missing.length > 0}
+                  onClick={() => onScheduleConfirmOpenChange(true)}
+                >
+                  {t('detail.markScheduled')}
+                </Button>
+              </div>
+            )}
             {!isCommentsForbidden && (
               <SessionCommentComposer
                 currentUser={currentUser}
@@ -802,5 +811,17 @@ export function SessionDetailModal({
         )}
       </DialogContent>
     </Dialog>
+      {session !== undefined && (
+        <SessionReadinessDialog
+          i18nOverridePrefix={i18nOverridePrefix}
+          isOpen={isScheduleConfirmOpen}
+          missing={missing}
+          onBack={() => onScheduleConfirmOpenChange(false)}
+          onConfirm={onSchedule}
+          isSubmitting={isScheduling}
+          errorText={isScheduleError ? (scheduleErrorText ?? t('detail.scheduleError')) : undefined}
+        />
+      )}
+    </>
   );
 }

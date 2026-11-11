@@ -154,7 +154,7 @@
     "SESSION_CREATOR_REQUIRED": "Chỉ người tạo buổi chơi mới làm được việc này.",
     "SESSION_CANCELLED": "Buổi chơi này đã bị hủy.",
     "SESSION_NOT_CANCELLABLE": "Buổi chơi này đã kết thúc hoặc đã bị hủy.",
-    "SESSION_NOT_PREPARING": "Chỉ có thể đổi địa điểm và phí khi buổi chơi còn đang chuẩn bị.",
+    "SESSION_NOT_PREPARING": "Buổi chơi này không thể chỉnh sửa nữa.",
     "SESSION_NOT_PARTICIPANT": "Bạn không còn tham gia buổi chơi này.",
     "SESSION_CREATOR_CANNOT_LEAVE": "Là người tạo, bạn không thể rời buổi chơi này. Hãy hủy buổi chơi.",
     "SESSION_SPORT_REQUIRED": "Hãy chọn môn thể thao cho buổi chơi.",
@@ -171,6 +171,8 @@
     "LOCATION_MAPS_URL_INVALID": "Liên kết này không hợp lệ.",
     "LOCATION_MAPS_URL_UNSUPPORTED": "Chỉ hỗ trợ liên kết Google Maps.",
     "NOTIFICATION_NOT_FOUND": "Thông báo này không khả dụng.",
-    "NOTIFICATION_FORBIDDEN": "Thông báo này không khả dụng."
+    "NOTIFICATION_FORBIDDEN": "Thông báo này không khả dụng.",
+    "SESSION_GENDER_SLOTS_EXCEED_OPEN": "Số chỗ cho nam và nữ không được vượt quá số chỗ trống.",
+    "SESSION_NOT_READY": "Buổi chơi này còn cần địa điểm, phí và thời lượng trước khi có thể lên lịch."
   }
 }

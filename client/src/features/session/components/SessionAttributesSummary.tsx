@@ -59,6 +59,9 @@ export interface SessionAttributesSummaryProps {
    * `node.prefillKey`). Optional: absent / not-yet-loaded → no inheritance, defaults render.
    */
   refBaseSchema?: ResolvedSportAttributeSchema | null;
+  /** CLIENT-SESSION-34: the detail modal wraps this in its own "Session detail" section, whose header
+   * already carries the title. */
+  hideHeading?: boolean;
 }
 
 /** Full `/`-separated path of a child node — `''` prefix (a root group) yields the bare key. */
@@ -174,6 +177,7 @@ export function SessionAttributesSummary({
   schema,
   values,
   refBaseSchema,
+  hideHeading = false,
   i18nOverridePrefix,
 }: SessionAttributesSummaryProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -192,7 +196,7 @@ export function SessionAttributesSummary({
 
   return (
     <section aria-label={t('attributes.detail')} className="flex flex-col gap-2">
-      <h3 className="text-2sm font-semibold text-text-primary">{t('attributes.heading')}</h3>
+      {!hideHeading && <h3 className="text-2sm font-semibold text-text-primary">{t('attributes.heading')}</h3>}
       <div className="flex flex-col gap-3">
         {groups.map((entry) => (
           <div key={entry.key}>{entry.node}</div>

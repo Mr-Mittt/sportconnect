@@ -55,9 +55,48 @@ describe('CreateSessionModal i18n', () => {
     renderModal();
     expect(screen.getByText('Tạo buổi chơi của bạn')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Tạo buổi chơi' }));
-    expect(screen.getByText('Vui lòng nhập tên buổi chơi.')).toBeInTheDocument();
-    expect(screen.getByText('Vui lòng nhập thời lượng.')).toBeInTheDocument();
+    // CLIENT-SESSION-34: title and duration are optional; only the open slot is validated here.
     expect(screen.getByText('Vui lòng nhập số chỗ trống.')).toBeInTheDocument();
+  });
+
+  it('renders the new sections, the missing chips, the mood labels and the who-can-join options in Vietnamese', async () => {
+    await i18n.changeLanguage('vi');
+    renderModal();
+    for (const name of [/^Tổng quan/, /^Khi nào/, /^Ở đâu/, /^Ai chơi/, /^Chi phí/]) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(screen.getByText('Còn thiếu: thời lượng')).toBeInTheDocument();
+    expect(screen.getByText('Còn thiếu: địa điểm')).toBeInTheDocument();
+    expect(screen.getByText('Còn thiếu: phí')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Bất kỳ ai' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'Theo giới tính' })).toBeInTheDocument();
+    expect(screen.getByText('5 · Bình thường')).toBeInTheDocument();
+    expect(screen.queryByText(/không bắt buộc/)).not.toBeInTheDocument();
+  });
+
+  it('renders the auto-approve confirmation and both readiness popups in Vietnamese', async () => {
+    await i18n.changeLanguage('vi');
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole('checkbox', { name: 'Tự động duyệt yêu cầu tham gia' }));
+    expect(screen.getByText('Bật tự động duyệt?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Hủy' }));
+    await user.type(screen.getByLabelText(/^Chỗ trống/), '5');
+    await user.click(screen.getByRole('button', { name: 'Tạo buổi chơi' }));
+    expect(screen.getByText('Bạn đã sẵn sàng chưa?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tiếp tục chỉnh sửa' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tạo buổi chơi đang chuẩn bị' })).toBeInTheDocument();
+  });
+
+  it('renders the leave-without-saving question in Vietnamese', async () => {
+    await i18n.changeLanguage('vi');
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByLabelText(/^Chỗ trống/), '5');
+    await user.keyboard('{Escape}');
+    expect(screen.getByText('Rời đi mà không lưu?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tiếp tục chỉnh sửa' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rời đi' })).toBeInTheDocument();
   });
 
   it('prefers an override-prefix key over the default copy', () => {

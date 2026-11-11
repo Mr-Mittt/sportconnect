@@ -15,11 +15,17 @@ interface SessionStartTimePickerProps {
   onChange: (value: string) => void;
   /** Testability seam — defaults to the real clock. */
   now?: Date;
+  /** CLIENT-SESSION-34: names this instance ("Ends at") so a second picker on the same form has its
+   * own accessible names ("Ends at: date"); unset keeps the plain "Date" / "Hour" / "Minute". */
+  field?: string;
+  /** CLIENT-SESSION-34: `false` for the optional "Ends at" instance — it stays empty until the user
+   * (or the duration) fills it, instead of pushing the "now + 1h" default up on mount. */
+  prefillWhenEmpty?: boolean;
 }
 
 const PICK_DATE_VALUE = 'pick-a-date';
 const CUSTOM_DATE_VALUE = 'custom-date';
-const MINUTE_STEP = 5;
+const MINUTE_STEP = 1;
 
 /**
  * CLIENT-SESSION-2's replacement for `CreateSessionModal`'s old native `datetime-local` "Starts
@@ -55,22 +61,43 @@ export function SessionStartTimePicker({
   value,
   onChange,
   now = new Date(),
+  field,
+  prefillWhenEmpty = true,
   i18nOverridePrefix,
 }: SessionStartTimePickerProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   const [showCalendar, setShowCalendar] = useState(false);
   const [datePart, setDatePart] = useState(() =>
-    value !== '' ? value.slice(0, 10) : format(startOfDay(now), 'yyyy-MM-dd'),
+    value !== '' ? value.slice(0, 10) : prefillWhenEmpty ? format(startOfDay(now), 'yyyy-MM-dd') : '',
   );
   const [hourPart, setHourPart] = useState(() =>
-    value !== '' ? value.slice(11, 13) : String((now.getHours() + 1) % 24).padStart(2, '0'),
+    value !== ''
+      ? value.slice(11, 13)
+      : prefillWhenEmpty
+        ? String((now.getHours() + 1) % 24).padStart(2, '0')
+        : '',
   );
-  const [minutePart, setMinutePart] = useState(() => (value !== '' ? value.slice(14, 16) : '00'));
+  const [minutePart, setMinutePart] = useState(() =>
+    value !== '' ? value.slice(14, 16) : prefillWhenEmpty ? '00' : '',
+  );
+  // CLIENT-SESSION-34: `value` can now change from outside (the parent derives the end from the
+  // start and the duration), so a new non-empty `value` is adopted into the three pieces — a render-
+  // phase adjustment, no effect. An empty `value` is never adopted: it is also what the picker reports
+  // while a piece is still missing, and re-deriving from it would discard what was already picked.
+  const [adoptedValue, setAdoptedValue] = useState(value);
+  if (value !== adoptedValue) {
+    setAdoptedValue(value);
+    if (value !== '' && value !== `${datePart}T${hourPart}:${minutePart}`) {
+      setDatePart(value.slice(0, 10));
+      setHourPart(value.slice(11, 13));
+      setMinutePart(value.slice(14, 16));
+    }
+  }
 
   useEffect(() => {
-    if (value === '') onChange(`${datePart}T${hourPart}:${minutePart}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once, on mount only, to push the
-    // pre-selected defaults up; not resynced if value/now change later.
+    if (value === '' && prefillWhenEmpty) onChange(`${datePart}T${hourPart}:${minutePart}`);
+    // Run once, on mount only, to push the pre-selected defaults up; not resynced if value/now change later.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const floor = startOfDay(now);
@@ -108,7 +135,8 @@ export function SessionStartTimePicker({
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-1.5">
         <Select
-          aria-label={t('time.date')}
+          className="min-w-0 flex-1"
+          aria-label={field === undefined ? t('time.date') : t('time.dateFor', { field })}
           value={showCalendar ? PICK_DATE_VALUE : isCustomDate ? CUSTOM_DATE_VALUE : datePart}
           onChange={(event) => handleDateSelect(event.target.value)}
         >
@@ -132,7 +160,8 @@ export function SessionStartTimePicker({
         </Select>
 
         <Select
-          aria-label={t('time.hour')}
+          className="w-16 shrink-0 px-2 text-center"
+          aria-label={field === undefined ? t('time.hour') : t('time.hourFor', { field })}
           value={hourPart}
           onChange={(event) => commit(datePart, event.target.value, minutePart)}
         >
@@ -147,7 +176,8 @@ export function SessionStartTimePicker({
         </Select>
 
         <Select
-          aria-label={t('time.minute')}
+          className="w-16 shrink-0 px-2 text-center"
+          aria-label={field === undefined ? t('time.minute') : t('time.minuteFor', { field })}
           value={minutePart}
           onChange={(event) => commit(datePart, hourPart, event.target.value)}
         >

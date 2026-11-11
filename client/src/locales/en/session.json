@@ -155,20 +155,10 @@
     "hour": "Hour",
     "minute": "Minute",
     "date": "Date",
-    "minuteShort": "Min"
-  },
-  "preparing": {
-    "title": "Complete session setup",
-    "missing": {
-      "locationAndFee": "Location and Fee",
-      "location": "Location",
-      "fee": "Fee"
-    },
-    "missingPrefix": "Still missing:",
-    "missingSuffix": ". Complete it before this session starts, or it will be auto-cancelled.",
-    "error": "Couldn't complete the session setup. Try again.",
-    "saving": "Saving…",
-    "save": "Save"
+    "minuteShort": "Min",
+    "dateFor": "{{field}}: date",
+    "hourFor": "{{field}}: hour",
+    "minuteFor": "{{field}}: minute"
   },
   "calendar": {
     "previousMonth": "Previous month",
@@ -187,7 +177,11 @@
     "viewDetailsLabel": "{{title}} — View details",
     "viewDetails": "View details",
     "actionLabel": "{{title}} — {{action}}",
-    "working": "Working…"
+    "working": "Working…",
+    "mood": "Game mood {{mood}}",
+    "genderSplit": "Open: {{split}}",
+    "male": "male",
+    "female": "female"
   },
   "upcomingMatches": {
     "label": "Upcoming matches",
@@ -239,12 +233,41 @@
       "CANCEL": "Cancelling…",
       "LEAVE": "Leaving…",
       "DECLINE": "Declining…"
+    },
+    "preparingBanner": {
+      "lead": "The host is still preparing this session.",
+      "body": "Some details, such as the location or fee, may change. It is cancelled automatically if it is not scheduled before it starts."
+    },
+    "stillMissing": "Still missing:",
+    "markScheduled": "Mark it scheduled",
+    "markScheduledHint": "Available once nothing is missing.",
+    "scheduleError": "Couldn't schedule the session. Try again.",
+    "saveError": "Couldn't save your changes. Try again.",
+    "summary": {
+      "sport": "Sport",
+      "title": "Title",
+      "starts": "Starts",
+      "duration": "Duration",
+      "ends": "Ends",
+      "minutes": "{{count}} min",
+      "location": "Location",
+      "note": "Note",
+      "taken": "Taken",
+      "open": "Open",
+      "male": "male",
+      "female": "female",
+      "anyone": "anyone",
+      "mood": "Mood",
+      "autoApprove": "Auto approve",
+      "yes": "Yes",
+      "no": "No",
+      "fee": "Fee",
+      "feeNote": "Fee note"
     }
   },
   "create": {
     "title": "Create your session",
     "noSportsPrompt": "Hey champ, add a sport first — can't host a match out of thin air! 🏆",
-    "basicInfo": "Session basic information",
     "sport": {
       "label": "Sport",
       "placeholder": "Select a sport"
@@ -254,18 +277,18 @@
       "placeholder": "e.g. Sunday pickup run"
     },
     "location": {
-      "label": "Location (optional)",
+      "label": "Location",
       "pickSportFirst": "Pick a sport first."
     },
     "locationNote": {
-      "label": "Location note (optional)",
+      "label": "Location note",
       "placeholder": "e.g. Court 3"
     },
     "startsAt": {
       "label": "Starts at"
     },
     "duration": {
-      "label": "Duration in minutes",
+      "label": "Duration (min)",
       "placeholder": "e.g. 90"
     },
     "takenSlot": {
@@ -275,31 +298,29 @@
       "label": "Open slot"
     },
     "slots": {
-      "placeholder": "e.g. 10"
+      "placeholder": "e.g. 10",
+      "male": "Male slot",
+      "female": "Female slot",
+      "maleInput": "Male slots",
+      "femaleInput": "Female slots"
     },
     "slotsSummary": "{{taken}}/{{capacity}} slots",
     "fee": {
-      "label": "Fee (optional)"
-    },
-    "description": {
-      "label": "Description (optional)",
-      "placeholder": "What's this session about?"
+      "label": "Fee"
     },
     "detail": "Session detail",
     "error": "Couldn't create the session. Try again.",
-    "preparingPrefix": "This session will be created as",
-    "preparingSuffix": "— add a location and fee to make it {{scheduled}}. You can complete it anytime before it starts, or it will be auto-cancelled.",
     "creating": "Creating…",
     "submit": "Create session",
     "validation": {
       "sport": "Sport is required.",
-      "title": "Title is required.",
       "startTime": "Start time is required.",
-      "duration": "Duration is required.",
-      "openSlot": "Open slot is required."
+      "openSlot": "Open slot is required.",
+      "endAfterStart": "The end must be after the start.",
+      "genderOverOpen": "Male and female slots can't be more than the open slots."
     },
     "invite": {
-      "label": "Invite your friend (optional)",
+      "label": "Invite your friend",
       "remove": "Remove {{name}}",
       "placeholder": "Search friends by name…",
       "searchLabel": "Search friends to invite",
@@ -307,12 +328,90 @@
       "noResults": "No friends found."
     },
     "autoApprove": {
-      "label": "Auto approve join request",
-      "hint": "Everyone can join without your review."
+      "label": "Auto approve join request"
+    },
+    "endsAt": {
+      "label": "Ends at"
+    },
+    "whoCanJoin": {
+      "label": "Who can join",
+      "anyone": "Anyone",
+      "byGender": "By gender"
+    },
+    "mood": {
+      "label": "Game mood",
+      "ends": {
+        "low": "For fun",
+        "mid": "Normal",
+        "high": "Competitive"
+      }
+    },
+    "feeNote": {
+      "label": "Fee note",
+      "placeholder": "e.g. Cash at the door, includes shuttlecocks",
+      "counter": "{{count}}/{{max}}"
+    },
+    "autoApproveConfirm": {
+      "title": "Turn on auto approve?",
+      "body": "Everyone can join without your review.",
+      "cancel": "Cancel",
+      "confirm": "Turn on"
+    },
+    "leave": {
+      "title": "Leave without saving?",
+      "body": "This session has not been created yet. If you leave now, what you entered will be lost.",
+      "stay": "Keep editing",
+      "leave": "Leave"
     }
   },
   "attributes": {
     "heading": "Session detail",
     "detail": "Session detail"
+  },
+  "form": {
+    "sections": {
+      "overview": "Overview",
+      "when": "When",
+      "where": "Where",
+      "who": "Who",
+      "cost": "Cost"
+    },
+    "missing": "Missing: {{list}}",
+    "missingItem": {
+      "location": "location",
+      "fee": "fee",
+      "duration": "duration",
+      "openSlot": "open slot"
+    },
+    "edit": "Edit",
+    "save": "Save",
+    "saving": "Saving…",
+    "discard": "Discard"
+  },
+  "mood": {
+    "level": {
+      "low": "For fun",
+      "mid": "Normal",
+      "high": "Competitive"
+    }
+  },
+  "readiness": {
+    "title": "Are you ready?",
+    "incomplete": {
+      "body": "This information is still missing, so the session will be {{preparing}} until you complete it:",
+      "back": "Continue editing",
+      "confirm": "Create preparing session"
+    },
+    "complete": {
+      "body": "The session is ready to be {{scheduled}}. Its details can't be edited after that. Are you ready?",
+      "back": "Let me check again",
+      "confirm": "Let's go"
+    },
+    "missing": {
+      "location": "Location",
+      "fee": "Fee",
+      "duration": "Duration"
+    },
+    "working": "Working…"
   }
 }

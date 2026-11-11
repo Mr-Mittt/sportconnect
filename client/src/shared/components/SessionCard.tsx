@@ -1,8 +1,10 @@
 import { IconClock, IconCoin, IconMapPin, IconUsers } from '@tabler/icons-react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
+import { formatGameMood, GAME_MOOD_BADGE_CLASSES, getGameMoodLevel } from '@/shared/lib/gameMood';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
+import { genderSplitText } from '@/shared/lib/sessionSlots';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { getParticipationAction } from '@/shared/lib/sessionParticipation';
 import { getSessionStatusLabel, SESSION_STATUS_CLASSES } from '@/shared/lib/sessionStatus';
@@ -108,6 +110,10 @@ export function SessionCard({
   const action = getParticipationAction(session);
   const isActionPending = isParticipationActionPending(session.id);
   const isLeaveHiddenForCreator = action?.kind === 'LEAVE' && session.createdBy === currentUserId;
+  const genderSplit = genderSplitText(session.maleSlots, session.femaleSlots, {
+    male: t('card.male'),
+    female: t('card.female'),
+  });
   const timeRange = formatSessionTimeRange(session.scheduledStart, session.scheduledEndAt);
 
   return (
@@ -151,11 +157,29 @@ export function SessionCard({
           <IconCoin className={s.detailIcon} aria-hidden="true" />
           {formatFeeDisplay(session.feeType, session.feeAmountVnd)}
         </div>
-        <div className="flex items-center gap-1">
-          {s.showParticipantIcon && <IconUsers className={s.detailIcon} aria-hidden="true" />}
-          {formatParticipantCount(session.participantCount, session.capacity)}
+        <div className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1">
+            {s.showParticipantIcon && <IconUsers className={s.detailIcon} aria-hidden="true" />}
+            {formatParticipantCount(session.participantCount, session.capacity)}
+          </span>
+          {/* CLIENT-SESSION-34 (SESSION-46): the game mood — the number is the signal, the colour an
+              accent; the full wording ("5 · Normal") is the tooltip and the accessible name. */}
+          <span
+            title={formatGameMood(session.gameMood)}
+            aria-label={t('card.mood', { mood: formatGameMood(session.gameMood) })}
+            className={cn(
+              'rounded-full px-1.5 text-2xs font-semibold text-white',
+              GAME_MOOD_BADGE_CLASSES[getGameMoodLevel(session.gameMood)],
+            )}
+          >
+            {session.gameMood}
+          </span>
         </div>
       </div>
+      {/* The gender split of the open seats, only when the host set one (and only on the roomy card). */}
+      {size === 'full' && genderSplit !== '' && (
+        <div className="text-2xs text-text-muted">{t('card.genderSplit', { split: genderSplit })}</div>
+      )}
 
       <div className={s.actionsRow}>
         <button

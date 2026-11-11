@@ -80,6 +80,13 @@
   --color-amber-50: #fbf1de;
   --color-amber-800: #7a4f06;
 
+  /* CLIENT-SESSION-34: game mood (1 for fun .. 10 competitive). The slider track runs low -> mid ->
+     high; the same three also tint a mood badge by level (1-3 low, 4-7 mid, 8-10 high). The number
+     is always shown beside the colour, which is only an accent. */
+  --color-mood-low: #15803d;
+  --color-mood-mid: #946510;
+  --color-mood-high: #a32d2d;
+
   /*
    * Decorative-only accent for the Login/Register CommunityIllustration's
    * central hub icon + its connector lines (design-reference-login.html).
@@ -183,4 +190,49 @@ body {
 input[type='password']::-ms-reveal,
 input[type='password']::-ms-clear {
   display: none;
+}
+
+/* CLIENT-SESSION-34: the game mood slider's track and thumb (GameMoodSlider). The track gradient and
+   the thumb use the --color-mood-* / surface tokens; the native range input does the rest. */
+.game-mood-slider {
+  background: linear-gradient(to right, var(--color-mood-low), var(--color-mood-mid), var(--color-mood-high));
+}
+.game-mood-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: var(--color-surface-2);
+  border: 2px solid var(--color-text-primary);
+}
+.game-mood-slider::-moz-range-thumb {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  background: var(--color-surface-2);
+  border: 2px solid var(--color-text-primary);
+}
+
+/* CLIENT-SESSION-34: a section's border flicks for 1s when it is un-collapsed — the header's own colour
+   (surface-1) as a ring, twice, so the eye finds the section that just opened. Off for reduced motion. */
+@keyframes section-flick {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  20%,
+  70% {
+    box-shadow: 0 0 0 3px var(--color-surface-1);
+  }
+  45% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.section-flick {
+  animation: section-flick 1s ease-in-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .section-flick {
+    animation: none;
+  }
 }

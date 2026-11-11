@@ -155,20 +155,10 @@
     "hour": "Giờ",
     "minute": "Phút",
     "date": "Ngày",
-    "minuteShort": "Phút"
-  },
-  "preparing": {
-    "title": "Hoàn tất thiết lập buổi chơi",
-    "missing": {
-      "locationAndFee": "Địa điểm và Phí",
-      "location": "Địa điểm",
-      "fee": "Phí"
-    },
-    "missingPrefix": "Còn thiếu:",
-    "missingSuffix": ". Hãy hoàn tất trước khi buổi chơi bắt đầu, nếu không buổi chơi sẽ tự động bị hủy.",
-    "error": "Không thể hoàn tất thiết lập buổi chơi. Vui lòng thử lại.",
-    "saving": "Đang lưu…",
-    "save": "Lưu"
+    "minuteShort": "Phút",
+    "dateFor": "{{field}}: ngày",
+    "hourFor": "{{field}}: giờ",
+    "minuteFor": "{{field}}: phút"
   },
   "calendar": {
     "previousMonth": "Tháng trước",
@@ -187,7 +177,11 @@
     "viewDetailsLabel": "{{title}} — Xem chi tiết",
     "viewDetails": "Xem chi tiết",
     "actionLabel": "{{title}} — {{action}}",
-    "working": "Đang xử lý…"
+    "working": "Đang xử lý…",
+    "mood": "Không khí {{mood}}",
+    "genderSplit": "Chỗ trống: {{split}}",
+    "male": "nam",
+    "female": "nữ"
   },
   "upcomingMatches": {
     "label": "Trận sắp tới",
@@ -239,12 +233,41 @@
       "CANCEL": "Đang hủy…",
       "LEAVE": "Đang rời…",
       "DECLINE": "Đang từ chối…"
+    },
+    "preparingBanner": {
+      "lead": "Chủ trì vẫn đang chuẩn bị buổi chơi này.",
+      "body": "Một số thông tin, như địa điểm hoặc phí, có thể thay đổi. Buổi chơi sẽ tự động bị hủy nếu chưa được lên lịch trước khi bắt đầu."
+    },
+    "stillMissing": "Còn thiếu:",
+    "markScheduled": "Đánh dấu đã lên lịch",
+    "markScheduledHint": "Dùng được khi không còn thông tin nào thiếu.",
+    "scheduleError": "Không thể lên lịch buổi chơi. Vui lòng thử lại.",
+    "saveError": "Không thể lưu thay đổi. Vui lòng thử lại.",
+    "summary": {
+      "sport": "Môn thể thao",
+      "title": "Tên",
+      "starts": "Bắt đầu",
+      "duration": "Thời lượng",
+      "ends": "Kết thúc",
+      "minutes": "{{count}} phút",
+      "location": "Địa điểm",
+      "note": "Ghi chú",
+      "taken": "Đã có",
+      "open": "Chỗ trống",
+      "male": "nam",
+      "female": "nữ",
+      "anyone": "bất kỳ ai",
+      "mood": "Không khí",
+      "autoApprove": "Tự động duyệt",
+      "yes": "Có",
+      "no": "Không",
+      "fee": "Phí",
+      "feeNote": "Ghi chú phí"
     }
   },
   "create": {
     "title": "Tạo buổi chơi của bạn",
     "noSportsPrompt": "Này nhà vô địch, hãy thêm một môn thể thao trước đã — không thể tổ chức trận đấu từ hư không! 🏆",
-    "basicInfo": "Thông tin cơ bản của buổi chơi",
     "sport": {
       "label": "Môn thể thao",
       "placeholder": "Chọn một môn thể thao"
@@ -254,11 +277,11 @@
       "placeholder": "VD: Chơi giao lưu Chủ nhật"
     },
     "location": {
-      "label": "Địa điểm (không bắt buộc)",
+      "label": "Địa điểm",
       "pickSportFirst": "Hãy chọn môn thể thao trước."
     },
     "locationNote": {
-      "label": "Ghi chú địa điểm (không bắt buộc)",
+      "label": "Ghi chú địa điểm",
       "placeholder": "VD: Sân số 3"
     },
     "startsAt": {
@@ -275,31 +298,29 @@
       "label": "Chỗ trống"
     },
     "slots": {
-      "placeholder": "VD: 10"
+      "placeholder": "VD: 10",
+      "male": "Chỗ cho nam",
+      "female": "Chỗ cho nữ",
+      "maleInput": "Số chỗ cho nam",
+      "femaleInput": "Số chỗ cho nữ"
     },
     "slotsSummary": "{{taken}}/{{capacity}} chỗ",
     "fee": {
-      "label": "Phí (không bắt buộc)"
-    },
-    "description": {
-      "label": "Mô tả (không bắt buộc)",
-      "placeholder": "Buổi chơi này về điều gì?"
+      "label": "Phí"
     },
     "detail": "Chi tiết buổi chơi",
     "error": "Không thể tạo buổi chơi. Vui lòng thử lại.",
-    "preparingPrefix": "Buổi chơi này sẽ được tạo với trạng thái",
-    "preparingSuffix": "— hãy thêm địa điểm và phí để chuyển sang \"{{scheduled}}\". Bạn có thể hoàn tất bất cứ lúc nào trước khi buổi chơi bắt đầu, nếu không buổi chơi sẽ tự động bị hủy.",
     "creating": "Đang tạo…",
     "submit": "Tạo buổi chơi",
     "validation": {
       "sport": "Vui lòng chọn môn thể thao.",
-      "title": "Vui lòng nhập tên buổi chơi.",
       "startTime": "Vui lòng chọn thời gian bắt đầu.",
-      "duration": "Vui lòng nhập thời lượng.",
-      "openSlot": "Vui lòng nhập số chỗ trống."
+      "openSlot": "Vui lòng nhập số chỗ trống.",
+      "endAfterStart": "Giờ kết thúc phải sau giờ bắt đầu.",
+      "genderOverOpen": "Số chỗ cho nam và nữ không được vượt quá số chỗ trống."
     },
     "invite": {
-      "label": "Mời bạn bè (không bắt buộc)",
+      "label": "Mời bạn bè",
       "remove": "Xóa {{name}}",
       "placeholder": "Tìm bạn bè theo tên…",
       "searchLabel": "Tìm bạn bè để mời",
@@ -307,12 +328,90 @@
       "noResults": "Không tìm thấy bạn bè nào."
     },
     "autoApprove": {
-      "label": "Tự động duyệt yêu cầu tham gia",
-      "hint": "Mọi người có thể tham gia mà không cần bạn duyệt."
+      "label": "Tự động duyệt yêu cầu tham gia"
+    },
+    "endsAt": {
+      "label": "Kết thúc lúc"
+    },
+    "whoCanJoin": {
+      "label": "Ai được tham gia",
+      "anyone": "Bất kỳ ai",
+      "byGender": "Theo giới tính"
+    },
+    "mood": {
+      "label": "Không khí buổi chơi",
+      "ends": {
+        "low": "Vui là chính",
+        "mid": "Bình thường",
+        "high": "Thi đấu"
+      }
+    },
+    "feeNote": {
+      "label": "Ghi chú về phí",
+      "placeholder": "VD: Trả tiền mặt tại sân, đã gồm tiền cầu",
+      "counter": "{{count}}/{{max}}"
+    },
+    "autoApproveConfirm": {
+      "title": "Bật tự động duyệt?",
+      "body": "Mọi người có thể tham gia mà không cần bạn duyệt.",
+      "cancel": "Hủy",
+      "confirm": "Bật"
+    },
+    "leave": {
+      "title": "Rời đi mà không lưu?",
+      "body": "Buổi chơi này chưa được tạo. Nếu rời đi bây giờ, những gì bạn đã nhập sẽ bị mất.",
+      "stay": "Tiếp tục chỉnh sửa",
+      "leave": "Rời đi"
     }
   },
   "attributes": {
     "heading": "Chi tiết buổi chơi",
     "detail": "Chi tiết buổi chơi"
+  },
+  "form": {
+    "sections": {
+      "overview": "Tổng quan",
+      "when": "Khi nào",
+      "where": "Ở đâu",
+      "who": "Ai chơi",
+      "cost": "Chi phí"
+    },
+    "missing": "Còn thiếu: {{list}}",
+    "missingItem": {
+      "location": "địa điểm",
+      "fee": "phí",
+      "duration": "thời lượng",
+      "openSlot": "chỗ trống"
+    },
+    "edit": "Sửa",
+    "save": "Lưu",
+    "saving": "Đang lưu…",
+    "discard": "Bỏ thay đổi"
+  },
+  "mood": {
+    "level": {
+      "low": "Vui là chính",
+      "mid": "Bình thường",
+      "high": "Thi đấu"
+    }
+  },
+  "readiness": {
+    "title": "Bạn đã sẵn sàng chưa?",
+    "incomplete": {
+      "body": "Những thông tin sau còn thiếu, nên buổi chơi sẽ ở trạng thái \"{{preparing}}\" cho đến khi bạn hoàn tất:",
+      "back": "Tiếp tục chỉnh sửa",
+      "confirm": "Tạo buổi chơi đang chuẩn bị"
+    },
+    "complete": {
+      "body": "Buổi chơi đã sẵn sàng để chuyển sang \"{{scheduled}}\". Sau đó bạn không thể sửa thông tin nữa. Bạn đã sẵn sàng chưa?",
+      "back": "Để tôi kiểm tra lại",
+      "confirm": "Bắt đầu thôi"
+    },
+    "missing": {
+      "location": "Địa điểm",
+      "fee": "Phí",
+      "duration": "Thời lượng"
+    },
+    "working": "Đang xử lý…"
   }
 }

@@ -154,7 +154,7 @@
     "SESSION_CREATOR_REQUIRED": "Only the session's creator can do that.",
     "SESSION_CANCELLED": "This session has been cancelled.",
     "SESSION_NOT_CANCELLABLE": "This session has already ended or been cancelled.",
-    "SESSION_NOT_PREPARING": "Location and fee can only be changed while the session is still being prepared.",
+    "SESSION_NOT_PREPARING": "This session can no longer be edited.",
     "SESSION_NOT_PARTICIPANT": "You're no longer part of this session.",
     "SESSION_CREATOR_CANNOT_LEAVE": "As the creator you can't leave this session. Cancel it instead.",
     "SESSION_SPORT_REQUIRED": "Choose a sport for this session.",
@@ -171,6 +171,8 @@
     "LOCATION_MAPS_URL_INVALID": "That doesn't look like a valid link.",
     "LOCATION_MAPS_URL_UNSUPPORTED": "Only Google Maps links are supported.",
     "NOTIFICATION_NOT_FOUND": "This notification isn't available.",
-    "NOTIFICATION_FORBIDDEN": "This notification isn't available."
+    "NOTIFICATION_FORBIDDEN": "This notification isn't available.",
+    "SESSION_GENDER_SLOTS_EXCEED_OPEN": "Male and female slots can't be more than the open slots.",
+    "SESSION_NOT_READY": "This session still needs a location, a fee and a duration before it can be scheduled."
   }
 }

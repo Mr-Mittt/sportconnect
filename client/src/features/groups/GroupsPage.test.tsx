@@ -94,7 +94,7 @@ function mockGet(groupsResponse: () => Promise<unknown>) {
     if (url === '/sports') {
       return apiResponse([{ id: 5, name: 'Football', iconUrl: null }]) as never;
     }
-    if (url.endsWith('/attribute-schema')) return apiResponse(null) as never;
+    if (url.endsWith('attribute-schema')) return apiResponse(null) as never;
     if (url === '/reference/languages' || url === '/reference/countries') {
       return apiResponse([]) as never;
     }

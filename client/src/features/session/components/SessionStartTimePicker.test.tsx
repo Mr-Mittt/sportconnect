@@ -122,4 +122,66 @@ describe('SessionStartTimePicker', () => {
 
     expect(screen.queryByText('Choose from the list instead')).not.toBeInTheDocument();
   });
+
+  describe('CLIENT-SESSION-34: one-minute steps, narrow selects, follows value, end variant', () => {
+    it('offers every minute from 00 to 59', () => {
+      render(<SessionStartTimePicker value="2026-08-04T19:07" onChange={vi.fn()} now={now} />);
+      const options = Array.from(screen.getByLabelText('Minute').querySelectorAll('option')).map((o) => o.textContent);
+      expect(options).toHaveLength(61);
+      expect(options.slice(1, 4)).toEqual(['00', '01', '02']);
+      expect(options[60]).toBe('59');
+      expect(screen.getByLabelText('Minute')).toHaveValue('07');
+    });
+
+    it('keeps the hour and minute selects narrow (two characters wide) and lets the date take the rest', () => {
+      render(<SessionStartTimePicker value="2026-08-04T19:07" onChange={vi.fn()} now={now} />);
+      expect(screen.getByLabelText('Hour').className).toContain('w-16');
+      expect(screen.getByLabelText('Minute').className).toContain('w-16');
+      expect(screen.getByLabelText('Date').className).toContain('flex-1');
+    });
+
+    it('adopts a new non-empty value passed from outside (the end follows the start and duration)', () => {
+      const { rerender } = render(<SessionStartTimePicker value="2026-08-04T19:00" onChange={vi.fn()} now={now} />);
+      rerender(<SessionStartTimePicker value="2026-08-05T21:45" onChange={vi.fn()} now={now} />);
+      expect(screen.getByLabelText('Date')).toHaveValue('2026-08-05');
+      expect(screen.getByLabelText('Hour')).toHaveValue('21');
+      expect(screen.getByLabelText('Minute')).toHaveValue('45');
+    });
+
+    it('an empty value from outside does not wipe what was already picked', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<SessionStartTimePicker value="" prefillWhenEmpty={false} onChange={vi.fn()} now={now} />);
+      await user.selectOptions(screen.getByLabelText('Hour'), '19');
+      rerender(<SessionStartTimePicker value="" prefillWhenEmpty={false} onChange={vi.fn()} now={now} />);
+      expect(screen.getByLabelText('Hour')).toHaveValue('19');
+    });
+
+    it('prefillWhenEmpty={false} starts empty and reports nothing on mount', () => {
+      const onChange = vi.fn();
+      render(<SessionStartTimePicker value="" prefillWhenEmpty={false} onChange={onChange} now={now} />);
+      expect(onChange).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Date')).toHaveValue('');
+      expect(screen.getByLabelText('Hour')).toHaveValue('');
+      expect(screen.getByLabelText('Minute')).toHaveValue('');
+    });
+
+    it('reports a value only once the date, hour and minute are all picked (end variant)', async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<SessionStartTimePicker value="" prefillWhenEmpty={false} onChange={onChange} now={now} />);
+      await user.selectOptions(screen.getByLabelText('Date'), 'Today');
+      await user.selectOptions(screen.getByLabelText('Hour'), '21');
+      expect(onChange).toHaveBeenLastCalledWith('');
+      await user.selectOptions(screen.getByLabelText('Minute'), '15');
+      expect(onChange).toHaveBeenLastCalledWith('2026-08-03T21:15');
+    });
+
+    it('a named instance gets its own accessible names so two pickers on one form do not clash', () => {
+      render(<SessionStartTimePicker field="Ends at" value="" prefillWhenEmpty={false} onChange={vi.fn()} now={now} />);
+      expect(screen.getByLabelText('Ends at: date')).toBeInTheDocument();
+      expect(screen.getByLabelText('Ends at: hour')).toBeInTheDocument();
+      expect(screen.getByLabelText('Ends at: minute')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Hour')).not.toBeInTheDocument();
+    });
+  });
 });

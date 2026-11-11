@@ -60,6 +60,13 @@ export interface Session {
   /** Participants the creator already accounts for outside the app, folded into
    * `participantCount` above (backend-side, `SessionServiceImpl.mapToResponses`). */
   initialSlot: number;
+  /** SESSION-46: seats reserved for men / women out of the open ones; null = not specified (anyone). */
+  maleSlots: number | null;
+  femaleSlots: number | null;
+  /** SESSION-46: 1 (for fun) to 10 (competitive); always set, 5 by default. */
+  gameMood: number;
+  /** SESSION-46: free text about the fee, at most 300 characters; null when none. */
+  feeNote: string | null;
   /** SESSION-6: false = non-invited joiners land in REQUESTED, awaiting creator/owner-admin
    * approval. An INVITED row always bypasses this gate regardless of this value. */
   autoApprove: boolean;

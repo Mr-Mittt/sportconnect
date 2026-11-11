@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-11-11 (SESSION-46 done)
+**Last updated:** 2026-11-11 (SESSION-46 done, SESSION-48 filed)
 
 ---
 
@@ -26,6 +26,7 @@
 | 5 | [SESSION-41](MVP/SESSION-41_GENERATION_FAILURE_BACKSTOP.md) | No retry/backstop for a failed eager group-session generation attempt — SESSION-38's failure isolation leaves no periodic sweep to catch a missed group | `TODO` |
 | 6 | [SESSION-44](MVP/SESSION-44_REJECT_JOIN_AND_APPROVAL_ON_COMPLETED_SESSION.md) | `joinSession` (and approve/reject) reject only `CANCELLED`, not `COMPLETED` — a join or join request on a finished session succeeds (and notifies the creator); found during client CLIENT-SESSION-30 by code review, not yet reproduced live | `TODO` |
 | 7 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
+| 8 | [SESSION-48](MVP/SESSION-48_REMOVE_DESCRIPTION_FROM_THE_SESSION_API.md) | Remove description from the session API (deferred from CLIENT-SESSION-34; depends on it) | `TODO` |
 
 ---
 
