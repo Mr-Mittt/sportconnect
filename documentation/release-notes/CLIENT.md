@@ -13,6 +13,8 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 - SESSION-49: the session title is required and pre-filled in the create form (en `<first name>'s session`, vi `Trận đấu của <first name>`); a blank title shows an inline error and blocks Create, and the detail editor cannot save a blank title.
 
+- CLIENT-NOTIF-6: the live notification socket and the chat socket no longer keep retrying with an expired access token. Each connect attempt sends the current token; a refused connection refreshes it once (one shared refresh for the whole app) and reconnects, and a refresh that is refused for good stops the socket. A refresh that arrives late can no longer sign the user out.
+
 ### Applied automatically
 
 - A new client image replaces the old one with the next deploy; nothing else changes on the box.

@@ -3,6 +3,8 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { AxiosError, type AxiosResponse } from 'axios';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiClient } from '@/app/apiClient';
+import { useAuthStore } from '@/app/authStore';
 import { chatApiClient } from './chatApiClient';
 import type { ChatMessage, ChatWebSocketEvent, Conversation, TypingEventPayload } from './types';
 import { useGroupChatData } from './useGroupChatData';
@@ -306,6 +308,82 @@ describe('useGroupChatData (via useChatConversation)', () => {
     FakeWebSocket.latest().triggerOpen();
 
     await vi.waitFor(() => expect(getSpy).toHaveBeenCalledTimes(2));
+  });
+
+  describe('token refresh on a refused handshake (CLIENT-NOTIF-6)', () => {
+    const refreshedSession = {
+      data: {
+        data: {
+          accessToken: 'fresh-token',
+          user: { id: '1', email: 'a@b.c', firstName: 'A', lastName: 'B', username: 'ab', phoneNumber: null, avatarUrl: null, roles: ['USER'] },
+        },
+      },
+    };
+
+    async function openThenSetUp() {
+      vi.useFakeTimers();
+      useAuthStore.setState({ accessToken: 'old-token', user: null });
+      vi.spyOn(chatApiClient, 'post').mockResolvedValueOnce({ data: conversation } as never);
+      vi.spyOn(chatApiClient, 'get').mockResolvedValue({ data: [messageA] } as never);
+      const rendered = renderHook(() => useGroupChatData(42), { wrapper });
+      await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+      return rendered;
+    }
+
+    afterEach(() => {
+      useAuthStore.getState().clearSession();
+    });
+
+    it('does not refresh when a socket that had opened drops', async () => {
+      const refreshSpy = vi.spyOn(apiClient, 'post');
+      await openThenSetUp();
+      FakeWebSocket.latest().triggerOpen();
+
+      FakeWebSocket.latest().triggerClose();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(refreshSpy).not.toHaveBeenCalled();
+      await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
+      expect(FakeWebSocket.latest().url).toContain('token=old-token');
+    });
+
+    it('refreshes once, then reconnects with the new token, when a socket closes before it ever opened', async () => {
+      const refreshSpy = vi.spyOn(apiClient, 'post').mockResolvedValueOnce(refreshedSession as never);
+      await openThenSetUp();
+
+      FakeWebSocket.latest().triggerClose(); // handshake refused: closed without an open
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      expect(refreshSpy).toHaveBeenCalledWith('/auth/refresh');
+      expect(FakeWebSocket.latest().url).toContain('token=fresh-token');
+    });
+
+    it('stops reconnecting, and the session ends, when the refresh is definitely refused (4xx)', async () => {
+      vi.spyOn(apiClient, 'post').mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } });
+      const { result } = await openThenSetUp();
+
+      FakeWebSocket.latest().triggerClose();
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(FakeWebSocket.instances).toHaveLength(1);
+      expect(result.current.connectionStatus).toBe('closed');
+      expect(useAuthStore.getState().accessToken).toBeNull();
+    });
+
+    it('keeps the session and keeps retrying when the refresh gets no answer (5xx)', async () => {
+      vi.spyOn(apiClient, 'post').mockRejectedValueOnce({ isAxiosError: true, response: { status: 503 } });
+      await openThenSetUp();
+
+      FakeWebSocket.latest().triggerClose();
+      await vi.advanceTimersByTimeAsync(1000); // refresh fails with 503, next attempt is scheduled
+      await vi.advanceTimersByTimeAsync(2000);
+
+      await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2));
+      expect(useAuthStore.getState().accessToken).toBe('old-token');
+    });
   });
 
   it("a stale socket's late close event is a no-op once superseded (the StrictMode double-invoke race)", async () => {

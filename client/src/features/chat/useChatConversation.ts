@@ -6,6 +6,7 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isDefiniteRefusal, refreshSession } from '@/app/apiClient';
 import { chatApiClient, buildChatWebSocketUrl } from './chatApiClient';
 import {
   getChatActionFailureKind,
@@ -272,8 +273,25 @@ export function useChatConversation(
     unmountedRef.current = false;
     reconnectDelayRef.current = RECONNECT_BASE_DELAY_MS;
 
-    const connect = (isReconnect: boolean) => {
+    // CLIENT-NOTIF-6: the handshake status is hidden from the browser, so a socket that closes before
+    // it ever opened is treated as a possible refused handshake (an expired token): refresh first.
+    const connect = (isReconnect: boolean, refreshFirst = false) => {
       if (unmountedRef.current) return;
+      if (refreshFirst) {
+        refreshSession().then(
+          () => connect(isReconnect),
+          (error: unknown) => {
+            if (isDefiniteRefusal(error)) {
+              // The session is over (already cleared; ProtectedRoute redirects): stop retrying.
+              setConnectionStatus('closed');
+              return;
+            }
+            // Backend or network down: keep the session and keep retrying with the usual backoff.
+            scheduleReconnect();
+          },
+        );
+        return;
+      }
       setConnectionStatus(isReconnect ? 'reconnecting' : 'connecting');
 
       const socket = new WebSocket(buildChatWebSocketUrl(conversationId));
@@ -291,8 +309,10 @@ export function useChatConversation(
       // message into the cache, making it look like it vanished. Comparing
       // socket identity instead makes a torn-down or superseded socket's
       // callbacks no-ops regardless of which ref reset when.
+      let opened = false;
       socket.onopen = () => {
         if (socketRef.current !== socket) return;
+        opened = true;
         setConnectionStatus('open');
         reconnectDelayRef.current = RECONNECT_BASE_DELAY_MS;
         if (isReconnect) {
@@ -321,10 +341,15 @@ export function useChatConversation(
         if (socketRef.current !== socket) return;
         socketRef.current = null;
         if (unmountedRef.current) return;
-        setConnectionStatus('reconnecting');
-        reconnectTimerRef.current = setTimeout(() => connect(true), reconnectDelayRef.current);
-        reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, RECONNECT_MAX_DELAY_MS);
+        scheduleReconnect(!opened);
       };
+    };
+
+    // Waits the current backoff, then reconnects (refreshing the token first when asked).
+    const scheduleReconnect = (refreshFirst = false) => {
+      setConnectionStatus('reconnecting');
+      reconnectTimerRef.current = setTimeout(() => connect(true, refreshFirst), reconnectDelayRef.current);
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, RECONNECT_MAX_DELAY_MS);
     };
 
     connect(false);

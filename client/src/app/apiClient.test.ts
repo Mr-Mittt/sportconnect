@@ -1,6 +1,13 @@
 import { AxiosHeaders, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { apiClient, attachAcceptLanguageHeader, attachAuthHeader, handleResponseError } from './apiClient';
+import {
+  apiClient,
+  attachAcceptLanguageHeader,
+  attachAuthHeader,
+  handleResponseError,
+  isDefiniteRefusal,
+  refreshSession,
+} from './apiClient';
 import { useAuthStore } from './authStore';
 import { useLocaleStore } from './localeStore';
 
@@ -233,5 +240,102 @@ describe('handleResponseError', () => {
     expect(postSpy).toHaveBeenCalledTimes(1);
     expect(requestSpy).toHaveBeenCalledTimes(2);
     expect(useAuthStore.getState().accessToken).toBe('shared-token');
+  });
+});
+
+describe('refreshSession (CLIENT-NOTIF-6)', () => {
+  afterEach(() => {
+    useAuthStore.getState().clearSession();
+    vi.restoreAllMocks();
+  });
+
+  it('REST 401s, the notification socket and the chat socket asking together make one /auth/refresh call', async () => {
+    let resolveRefresh!: (value: ReturnType<typeof fakeRefreshResponse>) => void;
+    const pending = new Promise<ReturnType<typeof fakeRefreshResponse>>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const postSpy = vi.spyOn(apiClient, 'post').mockReturnValueOnce(pending as never);
+    vi.spyOn(apiClient, 'request').mockResolvedValue({ data: 'ok' } as never);
+
+    const rest = handleResponseError(fake401(fakeRequest('/posts/feed')));
+    const notificationSocket = refreshSession();
+    const chatSocket = refreshSession();
+    resolveRefresh(fakeRefreshResponse('shared-token'));
+
+    await Promise.all([rest, notificationSocket, chatSocket]);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(await notificationSocket).toBe('shared-token');
+    expect(await chatSocket).toBe('shared-token');
+  });
+
+  it('starts a new refresh once the previous one has settled', async () => {
+    const postSpy = vi
+      .spyOn(apiClient, 'post')
+      .mockResolvedValueOnce(fakeRefreshResponse('first'))
+      .mockResolvedValueOnce(fakeRefreshResponse('second'));
+
+    expect(await refreshSession()).toBe('first');
+    expect(await refreshSession()).toBe('second');
+    expect(postSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('a refusal ends the session for every waiting caller, with one call', async () => {
+    useAuthStore.setState({ user: fixtureUser, accessToken: 'stale-token' });
+    const postSpy = vi
+      .spyOn(apiClient, 'post')
+      .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } });
+
+    const results = await Promise.allSettled([refreshSession(), refreshSession()]);
+
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    expect(postSpy).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().accessToken).toBeNull();
+  });
+
+  it('does not sign the user out when a refusal arrives after the session was already renewed', async () => {
+    // The worst case: this refresh started from "stale-token", something else (a login, another
+    // refresh) renewed the session while it was in flight, then this one came back refused.
+    useAuthStore.setState({ user: fixtureUser, accessToken: 'stale-token' });
+    let rejectRefresh!: (reason: unknown) => void;
+    const pending = new Promise((_, reject) => {
+      rejectRefresh = reject;
+    });
+    vi.spyOn(apiClient, 'post').mockReturnValueOnce(pending as never);
+
+    const refresh = refreshSession();
+    useAuthStore.setState({ user: fixtureUser, accessToken: 'renewed-token' });
+    rejectRefresh({ isAxiosError: true, response: { status: 401 } });
+
+    await expect(refresh).rejects.toBeDefined();
+    expect(useAuthStore.getState().accessToken).toBe('renewed-token');
+    expect(useAuthStore.getState().user).not.toBeNull();
+  });
+
+  it('keeps the session on a 5xx and on no response', async () => {
+    useAuthStore.setState({ user: fixtureUser, accessToken: 'stale-token' });
+    vi.spyOn(apiClient, 'post')
+      .mockRejectedValueOnce({ isAxiosError: true, response: { status: 503 } })
+      .mockRejectedValueOnce(new Error('network error'));
+
+    await expect(refreshSession()).rejects.toBeDefined();
+    await expect(refreshSession()).rejects.toBeDefined();
+
+    expect(useAuthStore.getState().accessToken).toBe('stale-token');
+  });
+});
+
+describe('isDefiniteRefusal', () => {
+  it.each([
+    [401, true],
+    [403, true],
+    [500, false],
+    [503, false],
+  ])('status %i -> %s', (status, expected) => {
+    expect(isDefiniteRefusal({ isAxiosError: true, response: { status } })).toBe(expected);
+  });
+
+  it('is false when there was no response at all', () => {
+    expect(isDefiniteRefusal(new Error('network error'))).toBe(false);
+    expect(isDefiniteRefusal({ isAxiosError: true })).toBe(false);
   });
 });

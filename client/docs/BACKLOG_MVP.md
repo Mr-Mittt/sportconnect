@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-12 (CLIENT-SESSION-36 and SPORT-17 filed)  
+**Last updated:** 2026-11-12 (CLIENT-NOTIF-6 done; CLIENT-SESSION-36 and SPORT-17 filed)  
 
 ---
 
@@ -68,7 +68,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [CLIENT-NOTIF-6](MVP/CLIENT-NOTIF-6_LIVE_SOCKET_RECONNECTS_WITH_A_STALE_TOKEN.md) | Live notification socket sends the token it had at mount, so it is refused once that token expires | `TODO` |
 | 2 | [FRIEND-3](MVP/FRIEND-3_CHAT_BOX_NOT_READY_AFTER_ACCEPTING_A_FRIEND_REQUEST.md) | The 1:1 chat box on `/friends` stays unavailable after accepting a friend request until a reload (found 2026-10-30, INFRA-7 live checks) — `useAcceptFriendRequest` invalidates only `friendKeys`, and the chat service's friendship cache may lag; cause to be confirmed at pickup | `TODO` |
 | 3 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 6 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
@@ -134,6 +133,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 26 | [CLIENT-NOTIF-6](MVP/CLIENT-NOTIF-6_LIVE_SOCKET_RECONNECTS_WITH_A_STALE_TOKEN.md) | Live notification and chat sockets send the token the store holds on every connect attempt and, when a connection is refused, refresh once through one shared `refreshSession()` before reconnecting; a refresh that loses a race can no longer sign the user out | `DONE` (2026-11-12) |
 | 25 | [CLIENT-SESSION-34](MVP/CLIENT-SESSION-34_SESSION_FORM_SECTIONS_SLOTS_MOOD_EDIT_AND_READINESS.md) | Create form in collapsible sections (Overview, When, Where, Who, Cost, Session detail) with linked start/duration/end (one-minute pickers), "Who can join" (Anyone / By gender), game mood slider, fee note, optional title and duration, "Are you ready?" and auto-approve confirmations; detail modal with the same sections, per-section Edit / Save / Discard on a Preparing session, a banner for every viewer and "Mark it scheduled" (auto-opened when the last gap is saved). Description removed from the client (SESSION-48 filed). 19 requirement mutations killed, scoped Vitest 1519+ and 53 e2e green | `DONE` (2026-11-11) |
 | 24 | [AUTH-20](MVP/AUTH-20_E2E_FLAKE_COMPLETE_PROFILE_DIALOG_IN_OWN_REDIRECT_TESTS.md) | Fix the e2e flakes of the INFRA-4 merge's CI run (2026-10-29): `/register` and the stored-locale test build their own Keycloak redirect, so the "Complete your profile" dialog hid the page (new `skipCompleteProfileDialog` helper); `matches-journey` matched the Pickleball pill with a substring `'All'` locator (now `exact: true`); the Home Feed Escape-popover flake did not reproduce and is HF-21 | `DONE` |
 | 23 | [AUTH-19](MVP/AUTH-19_UPDATE_BASELINES_FOR_THE_KEYCLOAK_AND_SOCIAL_LOGIN_TOPIC.md) | Update the visual baselines for the whole Keycloak and social-login topic (2026-10-22) — one pass for the topic: 90 files applied from the third dispatch artifact (81 new `auth-theme-*`, 3 new `account-settings-email-*`, the 6 changed ACCOUNT-6 dialogs), the other 153 byte-identical, then 21 `link-account` baselines from a fourth (the stories show `jordan@example.com` instead of a personal address). The first artifact showed two things the expectation missed, both fixed in specs before the dispatch that counted: `account-settings-default-*` never reaches the email row (new `email row` state), and `post-modal-empty-*` drew a browser focus ring since AUTH-14's redirect sign-in (blur, click, `:focus-visible` guard); the 'about 60 files' count was 81. The register Tab test that had failed since A27 is fixed. `visual-regression` job not yet run against these baselines | `DONE` (2026-10-22) |
