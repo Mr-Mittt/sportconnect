@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/social/group-impl`  
-**Last updated:** 2026-08-16
+**Last updated:** 2026-11-11 (B22 filed)
 
 ---
 
@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [B21](MVP/B21_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — join requests, invites | `TODO` |
+| 2 | [B22](MVP/B22_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence config carries a game mood for the sessions it generates (deferred from SESSION-46) | `TODO` |
 
 ---
 

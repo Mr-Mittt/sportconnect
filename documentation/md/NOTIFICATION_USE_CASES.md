@@ -159,3 +159,10 @@ current address. Should the **old** address get a plain notice ("your email was 
 a hijacked session learns of it and can react? Same family as NOTIF-8. Open: email only or also in-app, whether the
 new address gets anything (it gets the A33 verification mail only when the user asks), and whether the notice can
 be sent at all when the old address was never verified. U26 settles it at pickup.
+
+### NOTIF-10 · A PREPARING session becomes SCHEDULED (and its edits while PREPARING)
+**Date added:** 2026-11-11
+**Status:** `CANDIDATE`
+**Source:** SESSION-46 scoping (`/ticket` session) — surfaced, not resolved on the spot.
+
+SESSION-46 makes `PREPARING` a fully editable draft that the host leaves with an explicit Schedule action. Should the people who already joined or requested a `PREPARING` session be told when the host schedules it ("the details are final")? Related: every successful edit while `PREPARING` already fans out `session.details.updated` to the joined participants, which may be chatty while a host edits several times; should those be throttled or batched until Schedule? Open: recipients (joined only, or also requested/invited), one notice or one per edit, and how it relates to NOTIF-7 (the auto-cancel of a `PREPARING` session that never got scheduled).
