@@ -153,7 +153,7 @@ class SessionPostAccessGateIntegrationTest extends RedisBaseIT {
     }
 
     private Long createSession(Long groupId, Long postId) {
-        Session session = Session.builder()
+        Session session = Session.builder().title("Test session")
                 .groupId(groupId)
                 .isPublic(groupId == null)
                 .postId(postId)

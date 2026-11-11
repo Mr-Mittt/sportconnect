@@ -239,5 +239,6 @@
     <include file="db/changelog/changes/V085__sessions_gender_slots.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/changes/V086__sessions_game_mood.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/changes/V087__sessions_fee_note.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V088__sessions_title_not_null.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

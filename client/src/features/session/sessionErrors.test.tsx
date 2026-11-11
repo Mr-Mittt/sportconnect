@@ -63,6 +63,7 @@ describe('session error classification', () => {
   it.each([
     ['SESSION_CREATOR_CANNOT_LEAVE', 400],
     ['SESSION_SPORT_REQUIRED', 400],
+    ['SESSION_TITLE_REQUIRED', 400],
     ['POST_NOT_FOUND', 404],
     [undefined, 500],
   ])('%s is not a dialog code', (code, status) => {

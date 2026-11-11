@@ -274,7 +274,8 @@
     },
     "titleField": {
       "label": "Tên buổi chơi",
-      "placeholder": "VD: Chơi giao lưu Chủ nhật"
+      "placeholder": "VD: Chơi giao lưu Chủ nhật",
+      "default": "Trận đấu của {{firstName}}"
     },
     "location": {
       "label": "Địa điểm",
@@ -314,6 +315,7 @@
     "submit": "Tạo buổi chơi",
     "validation": {
       "sport": "Vui lòng chọn môn thể thao.",
+      "title": "Vui lòng đặt tên cho buổi chơi.",
       "startTime": "Vui lòng chọn thời gian bắt đầu.",
       "openSlot": "Vui lòng nhập số chỗ trống.",
       "endAfterStart": "Giờ kết thúc phải sau giờ bắt đầu.",

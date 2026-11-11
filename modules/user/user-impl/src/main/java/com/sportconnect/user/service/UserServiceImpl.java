@@ -54,6 +54,7 @@ import java.net.URISyntaxException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -533,6 +534,48 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public boolean existsByEmail(String email) {
         return !isBlank(email) && userRepository.existsByEmail(email);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: one query for the stored preferences, one for the users that have none, one reference lookup for their
+     * countries; every candidate language is then checked once per distinct code, not once per user.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, String> findPreferredLanguageCodes(Collection<UUID> userIds) {
+        if (userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, String> candidates = new HashMap<>();
+        userPreferenceRepository.findByUserIdIn(userIds)
+                .forEach(preference -> candidates.put(preference.getUserId(), preference.getLanguage()));
+        Map<UUID, User> usersWithoutPreference = userRepository
+                .findAllById(userIds.stream().filter(id -> !candidates.containsKey(id)).collect(Collectors.toList()))
+                .stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+        Set<Long> countryIds = usersWithoutPreference.values().stream()
+                .map(User::getCountryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, CountryResponse> countriesById = countryIds.isEmpty()
+                ? Map.of()
+                : referenceService.getCountriesByIds(countryIds);
+        usersWithoutPreference.forEach((id, user) -> {
+            CountryResponse country = user.getCountryId() == null ? null : countriesById.get(user.getCountryId());
+            if (country != null && country.getDefaultLanguageCode() != null) {
+                candidates.put(id, country.getDefaultLanguageCode());
+            }
+        });
+        Map<String, Boolean> activeByCode = new HashMap<>();
+        Map<UUID, String> result = new HashMap<>();
+        candidates.forEach((id, code) -> {
+            if (code != null && activeByCode.computeIfAbsent(code, referenceService::isActiveLanguage)) {
+                result.put(id, code);
+            }
+        });
+        return result;
     }
 
     @Override

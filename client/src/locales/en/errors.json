@@ -158,6 +158,7 @@
     "SESSION_NOT_PARTICIPANT": "You're no longer part of this session.",
     "SESSION_CREATOR_CANNOT_LEAVE": "As the creator you can't leave this session. Cancel it instead.",
     "SESSION_SPORT_REQUIRED": "Choose a sport for this session.",
+    "SESSION_TITLE_REQUIRED": "Give this session a title.",
     "SESSION_LOCATION_SPORT_MISMATCH": "This location isn't for the session's sport. Choose another one.",
     "SESSION_FEE_AMOUNT_REQUIRED": "Enter the fee amount.",
     "COUNTRY_NOT_FOUND": "That country isn't available. Pick another one.",

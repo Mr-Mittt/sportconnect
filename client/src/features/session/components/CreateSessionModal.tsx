@@ -29,6 +29,7 @@ import { missingForScheduling } from '../sessionReadiness';
 import { useSessionTimeFields } from '../sessionFormTime';
 import type { CreateSessionPayload } from '../types';
 import { useSessionWhoFields } from '../useSessionWhoFields';
+import { useAuthStore } from '@/app/authStore';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { AutoApproveConfirmDialog, LeaveWithoutSavingDialog, SessionReadinessDialog } from './SessionConfirmDialogs';
 import { SectionSummary, SessionFormSection, type SectionSummaryItem } from './SessionFormSection';
@@ -300,7 +301,11 @@ export function CreateSessionModal({
   // `selectedSport`'s initializer never re-runs; falling back to `initialSport` picks one up without
   // ever clobbering a sport the caller already picked.
   const displaySport: SportKey | '' = selectedSport !== '' ? selectedSport : initialSport;
-  const [title, setTitle] = useState('');
+  // SESSION-49: the title is required and starts as "<first name>'s session" (en) / "Trận đấu của <first name>" (vi).
+  // The account's first name is assumed present (making it required is auth A38 / client ACCOUNT-8).
+  const firstName = useAuthStore((state) => state.user?.firstName ?? '');
+  const defaultTitle = t('create.titleField.default', { firstName });
+  const [title, setTitle] = useState(defaultTitle);
   const [locationNote, setLocationNote] = useState('');
   const time = useSessionTimeFields({ start: '', duration: '' });
   const who = useSessionWhoFields({
@@ -334,7 +339,7 @@ export function CreateSessionModal({
   const [seededForSport, setSeededForSport] = useState(displaySport);
   if (displaySport !== seededForSport) {
     setSeededForSport(displaySport);
-    setTitle('');
+    setTitle(defaultTitle);
     setLocationNote('');
     time.setDuration('');
     time.setStart('');
@@ -369,7 +374,7 @@ export function CreateSessionModal({
     ([path, value]) => !(path in attributeDefaults) || JSON.stringify(attributeDefaults[path]) !== JSON.stringify(value),
   );
   const isDirty =
-    title.trim() !== '' ||
+    title.trim() !== defaultTitle ||
     locationNote.trim() !== '' ||
     time.duration !== '' ||
     time.end !== '' ||
@@ -389,6 +394,7 @@ export function CreateSessionModal({
   // after the start and the gender seats must fit in the open ones.
   const isValid =
     effectiveSportId !== undefined &&
+    title.trim() !== '' &&
     time.start !== '' &&
     who.open !== '' &&
     !time.isEndInvalid &&
@@ -459,6 +465,7 @@ export function CreateSessionModal({
   /** The id of the first field that blocks Create, in form order — the one to scroll to and focus. */
   const firstInvalidFieldId = (): string | undefined => {
     if (effectiveSportId === undefined) return 'create-session-sport';
+    if (title.trim() === '') return 'create-session-title';
     if (who.open === '') return 'create-session-open-slots';
     if (who.genderOverOpen) {
       return who.maleSlots >= who.femaleSlots ? 'create-session-male-slots' : 'create-session-female-slots';
@@ -496,7 +503,7 @@ export function CreateSessionModal({
     if (effectiveSportId === undefined) return;
     onSubmit({
       sportId: effectiveSportId,
-      title: title.trim() || undefined,
+      title: title.trim(),
       locationId: selectedLocation?.id,
       locationNote: locationNote.trim() || undefined,
       // CLIENT-SESSION-24: offset-aware — backend SESSION-33 requires an Instant.
@@ -563,6 +570,7 @@ export function CreateSessionModal({
                     i18nOverridePrefix={i18nOverridePrefix}
                     title={title}
                     onTitleChange={setTitle}
+                    showTitleError={hasAttemptedSubmit && title.trim() === ''}
                     sportField={
                       <>
                         <Label htmlFor="create-session-sport">

@@ -835,15 +835,18 @@ describe('SessionDetailModal', () => {
       expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     });
 
-    it('Overview: clearing the title saves an empty string (the server clears it)', async () => {
+    it('Overview: the title is required, so clearing it shows the error and cannot be saved (SESSION-49)', async () => {
       const user = userEvent.setup();
       const onUpdateSession = vi.fn();
       render(<SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />);
       await user.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
       expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-      await user.clear(screen.getByLabelText('Session title'));
+      await user.clear(screen.getByLabelText(/^Session title/));
+      expect(screen.getByText('Give this session a title.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      await user.type(screen.getByLabelText(/^Session title/), '  Renamed  ');
       await user.click(screen.getByRole('button', { name: 'Save' }));
-      expect(onUpdateSession).toHaveBeenCalledWith({ title: '' }, expect.any(Function));
+      expect(onUpdateSession).toHaveBeenCalledWith({ title: 'Renamed' }, expect.any(Function));
     });
 
     it('When: a new duration is saved as durationMinutes only', async () => {

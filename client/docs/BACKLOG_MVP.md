@@ -77,6 +77,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 8 | [GRP-12](MVP/GRP-12_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence form: game mood for generated sessions (deferred from CLIENT-SESSION-34; depends on B22) | `TODO` |
 | 9 | [CLIENT-SESSION-36](MVP/CLIENT-SESSION-36_UPDATE_BASELINES_FOR_THE_SESSION_FORM_SECTIONS.md) | Update the visual baselines for the session form sections (create-session and session-detail modals, possibly the discover panel) through the `update-baselines` dispatch and `/updatebaseline` (deferred from CLIENT-SESSION-34) | `TODO` |
 | 10 | [SPORT-17](MVP/SPORT-17_SEEDED_ATTRIBUTE_DEFAULT_READS_AS_A_USER_EDIT.md) | A schema default seeded by `SportAttributesFields` reads as a user edit in the profile editor and the session detail edit section (same defect as the create-session form fixed in CLIENT-SESSION-34; attributes customise each sport app-wide, so audit every host) | `TODO` |
+| 11 | [ACCOUNT-8](MVP/ACCOUNT-8_REQUIRE_FIRST_NAME_IN_ACCOUNT_SETTINGS.md) | First name is required when editing the profile in account settings (from SESSION-49; pairs with auth A38) | `TODO` |
 
 #### Removed / Deferred
 

@@ -14,6 +14,7 @@ import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.api.service.PostService;
+import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -34,6 +35,7 @@ import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -72,6 +74,7 @@ public class SessionGenerationService {
     private final SessionOutboxWriter sessionOutboxWriter;
     private final CommentService commentService;
     private final PostService postService;
+    private final UserService userService;
 
     /**
      * SESSION-38 — the shared per-config generation logic, extracted from the old
@@ -109,6 +112,11 @@ public class SessionGenerationService {
                 .distinct()
                 .collect(Collectors.toList());
         Map<Long, LocationResponse> locationsById = locationService.getLocationsByIds(locationIds);
+        // SESSION-49: a generated session is titled in its owner's language; one batch lookup, never one per config.
+        Map<UUID, String> languagesByOwnerId = userService.findPreferredLanguageCodes(configs.stream()
+                .map(GroupRecurrenceConfigResponse::getOwnerId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
 
         for (GroupRecurrenceConfigResponse config : configs) {
             if (!hasCompleteRecurrenceRule(config)) {
@@ -134,7 +142,8 @@ public class SessionGenerationService {
             // "benign race" by the catch block below, which doesn't distinguish a real constraint
             // violation from a genuine duplicate-key race. Found and fixed while building
             // SESSION-38's own IT coverage, the first real (non-mocked) exercise of this insert.
-            Long postId = postService.createSessionPost(config.getOwnerId(), "Recurring session");
+            String title = generatedTitle(config.getGroupName(), languagesByOwnerId.get(config.getOwnerId()));
+            Long postId = postService.createSessionPost(config.getOwnerId(), "Session: " + title);
 
             Session session = Session.builder()
                     .groupId(config.getGroupId())
@@ -143,6 +152,7 @@ public class SessionGenerationService {
                     .sessionType(SessionType.GROUP_RECURRING)
                     .createdBy(config.getOwnerId())
                     .sportId(config.getSportId())
+                    .title(title)
                     .locationId(config.getRecurrenceLocationId())
                     .locationNote(config.getRecurrenceLocationNote())
                     .scheduledStart(nextOccurrence)
@@ -295,6 +305,17 @@ public class SessionGenerationService {
             sessionRepository.saveAll(sessions);
             log.info("Auto-cancelled {} unprepared session(s)", sessions.size());
         } while (batch.hasNext());
+    }
+
+    /**
+     * SESSION-49: the title of a generated session, after its group, in the owner's language (it is stored text, so one
+     * language is fixed when the job runs): en {@code "<group>'s session"}, vi {@code "Trận đấu của nhóm <group>"}.
+     * Any other or unknown language gets the English one. Cut to the column's 200 characters.
+     */
+    static String generatedTitle(String groupName, String languageCode) {
+        String name = groupName == null ? "" : groupName.trim();
+        String title = "vi".equals(languageCode) ? "Trận đấu của nhóm " + name : name + "'s session";
+        return title.length() <= 200 ? title : title.substring(0, 200);
     }
 
     private boolean hasCompleteRecurrenceRule(GroupRecurrenceConfigResponse config) {

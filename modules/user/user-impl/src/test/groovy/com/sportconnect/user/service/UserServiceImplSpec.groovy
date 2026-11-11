@@ -695,6 +695,41 @@ class UserServiceImplSpec extends Specification {
         result == true
     }
 
+    def "findPreferredLanguageCodes: one lookup per source, preference first then the country default, each language checked once (SESSION-49)"() {
+        given:
+        def stored = UUID.randomUUID()
+        def storedInactive = UUID.randomUUID()
+        def byCountry = UUID.randomUUID()
+        def nothing = UUID.randomUUID()
+        def unknown = UUID.randomUUID()
+
+        when:
+        def result = userService.findPreferredLanguageCodes([stored, storedInactive, byCountry, nothing, unknown])
+
+        then:
+        1 * userPreferenceRepository.findByUserIdIn(_) >> [
+                UserPreference.builder().userId(stored).language("vi").build(),
+                UserPreference.builder().userId(storedInactive).language("xx").build()]
+        1 * userRepository.findAllById({ it as Set == [byCountry, nothing, unknown] as Set }) >> [
+                User.builder().id(byCountry).countryId(704L).build(),
+                User.builder().id(nothing).build()]
+        1 * referenceService.getCountriesByIds([704L] as Set) >> [704L: CountryResponse.builder().id(704L).defaultLanguageCode("vi").build()]
+        1 * referenceService.isActiveLanguage("vi") >> true
+        1 * referenceService.isActiveLanguage("xx") >> false
+        0 * userRepository.findById(_)
+        result == [(stored): "vi", (byCountry): "vi"]
+    }
+
+    def "findPreferredLanguageCodes: an empty id set touches nothing (SESSION-49)"() {
+        when:
+        def result = userService.findPreferredLanguageCodes([])
+
+        then:
+        0 * userPreferenceRepository._
+        0 * userRepository._
+        result == [:]
+    }
+
     def "findPreferredLanguageCode: an active stored preference wins over the country default (A10)"() {
         given:
         def id = UUID.randomUUID()

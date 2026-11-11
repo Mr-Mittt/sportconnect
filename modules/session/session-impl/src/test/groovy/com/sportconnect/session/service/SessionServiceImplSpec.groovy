@@ -117,7 +117,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession creates a standalone session open to any user"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L)
                 .locationId(1L)
                 .locationNote("Court 3")
@@ -144,7 +144,7 @@ class SessionServiceImplSpec extends Specification {
 
     def "createSession rejects a standalone session without a sportId"() {
         given:
-        def request = CreateSessionRequest.builder().locationId(1L).scheduledStart(Instant.now()).build()
+        def request = CreateSessionRequest.builder().title("Test session").locationId(1L).scheduledStart(Instant.now()).build()
 
         when:
         sessionService.createSession(UUID.randomUUID(), request)
@@ -157,7 +157,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession requires canManageMembers for a group-linked session"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .groupId(5L).locationId(1L).scheduledStart(Instant.now()).build()
 
         when:
@@ -173,7 +173,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession inherits sportId from the group when omitted"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
         def saved = Session.builder().id(2L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
@@ -195,7 +195,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession auto-joins the creator for a standalone session"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
@@ -216,7 +216,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession does not auto-join the creator for a group-linked session"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
         def saved = Session.builder().id(2L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
@@ -240,7 +240,7 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
         def inviteeA = UUID.randomUUID()
         def inviteeB = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .inviteeIds([inviteeA, inviteeB, inviteeA, userId])
                 .build()
@@ -269,7 +269,7 @@ class SessionServiceImplSpec extends Specification {
         def userId = UUID.randomUUID()
         def inviteeA = UUID.randomUUID()
         def inviteeB = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .inviteeIds([inviteeA, inviteeB])
                 .build()
@@ -293,7 +293,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession rejects a caller-supplied sportId naming a deactivated sport"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
 
         when:
@@ -313,7 +313,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession accepts a group-inherited sportId without re-checking sport status"() {
         given: "a group session with no sportId on the request, so it inherits the group's"
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
         def saved = Session.builder().id(3L).groupId(5L).sessionType(SessionType.GROUP_RECURRING)
@@ -337,7 +337,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession rejects a locationId whose sport doesn't match"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(2L).scheduledStart(Instant.now()).build()
 
         when:
@@ -365,7 +365,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession filters submitted attributes against the sport session schema and persists the survivors"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .attributes(["match/note": "bring water", "match/unknown": "x"])
                 .build()
@@ -387,7 +387,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession without attributes never fetches the session schema and leaves attributes null"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).build()
@@ -405,7 +405,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession rejects attributes whose filtered form exceeds the 4KB cap"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .attributes(["match/note": "x" * 5000])
                 .build()
@@ -2216,7 +2216,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession sets capacity/feeType/feeAmountVnd from the request"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(12).feeType(FeeType.FIXED).feeAmountVnd(50000L)
                 .build()
@@ -2240,7 +2240,7 @@ class SessionServiceImplSpec extends Specification {
 
     def "createSession rejects FIXED feeType with no feeAmountVnd"() {
         given:
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now())
                 .capacity(10).feeType(FeeType.FIXED).build()
 
@@ -2256,7 +2256,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession clears feeAmountVnd when feeType isn't FIXED"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).feeType(FeeType.FREE).feeAmountVnd(99999L)
                 .build()
@@ -2276,7 +2276,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession sets initialSlot from the request"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(7).feeType(FeeType.FREE).initialSlot(2)
                 .build()
@@ -2297,7 +2297,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession defaults initialSlot to 0 when omitted from the request"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(7).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -2316,7 +2316,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession folds initialSlot on top of the real JOINED participant count"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(7).feeType(FeeType.FREE).initialSlot(2)
                 .build()
@@ -2456,7 +2456,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession starts PREPARING when locationId is missing"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -2475,7 +2475,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession starts PREPARING when feeType is missing"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -2495,7 +2495,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession starts PREPARING when both locationId and feeType are missing"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).scheduledStart(Instant.now().plusSeconds(86400)).capacity(10).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
                 .sportId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.PREPARING).build()
@@ -2515,7 +2515,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession starts PREPARING when location and fee are present but the duration is missing"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -2535,7 +2535,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession starts SCHEDULED when location, fee type and duration are all present"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .durationMinutes(90).capacity(10).feeType(FeeType.FREE).build()
         def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId)
@@ -2620,7 +2620,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession creates the companion SESSION_POST before saving, and uses the returned id as postId"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .sportId(1L).locationId(1L).title("Sunday badminton")
                 .scheduledStart(Instant.now().plusSeconds(86400)).build()
 
@@ -2637,7 +2637,7 @@ class SessionServiceImplSpec extends Specification {
     def "createSession creates the companion SESSION_POST for a group-linked session too"() {
         given:
         def userId = UUID.randomUUID()
-        def request = CreateSessionRequest.builder()
+        def request = CreateSessionRequest.builder().title("Test session")
                 .groupId(5L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400)).build()
         def group = GroupResponse.builder().id(5L).sportId(1L).build()
 
@@ -3145,7 +3145,7 @@ class SessionServiceImplSpec extends Specification {
     }
 
     private CreateSessionRequest.CreateSessionRequestBuilder createBase() {
-        CreateSessionRequest.builder().sportId(1L).scheduledStart(Instant.now().plusSeconds(86400))
+        CreateSessionRequest.builder().title("Test session").sportId(1L).scheduledStart(Instant.now().plusSeconds(86400))
                 .capacity(10).gameMood(5)
     }
 
@@ -3176,18 +3176,63 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
     }
 
-    def "createSession stores a blank title as null and gives the companion post a fixed text"() {
+    def "createSession rejects a missing or blank title with SESSION_TITLE_REQUIRED and creates nothing (SESSION-49)"() {
+        given:
+        def request = createBase().title(badTitle).build()
+
+        when:
+        sessionService.createSession(UUID.randomUUID(), request)
+
+        then:
+        def e = thrown(BadRequestException)
+        e.errorCode == "SESSION_TITLE_REQUIRED"
+        0 * postService.createSessionPost(_, _)
+        0 * sessionRepository.save(_)
+
+        where:
+        badTitle << [null, "", "   "]
+    }
+
+    def "createSession stores the trimmed title (SESSION-49)"() {
         given:
         def userId = UUID.randomUUID()
-        def request = createBase().title("   ").build()
+        def request = createBase().title("  Friday game  ").build()
 
         when:
         sessionService.createSession(userId, request)
 
         then:
-        1 * postService.createSessionPost(userId, "New session") >> 42L
-        1 * sessionRepository.save({ Session s -> s.title == null }) >> Session.builder().id(1L).postId(42L).build()
+        1 * postService.createSessionPost(userId, "Session: Friday game") >> 42L
+        1 * sessionRepository.save({ Session s -> s.title == "Friday game" }) >> Session.builder().id(1L).postId(42L).build()
         interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession rejects a blank title with SESSION_TITLE_REQUIRED and leaves the session untouched (SESSION-49)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).sportId(1L).title("Keep me")
+                .scheduledStart(Instant.now()).status(SessionStatus.PREPARING).build()
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().title("   ").build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        def e = thrown(BadRequestException)
+        e.errorCode == "SESSION_TITLE_REQUIRED"
+        session.title == "Keep me"
+        0 * sessionRepository.save(_)
+    }
+
+    def "getSessionTitlesByIds leaves a session without a title out of the map instead of throwing (SESSION-49)"() {
+        when:
+        def titles = sessionService.getSessionTitlesByIds([1L, 2L])
+
+        then:
+        1 * sessionRepository.findAllById([1L, 2L]) >> [
+                Session.builder().id(1L).title("Friday game").build(),
+                Session.builder().id(2L).title(null).build()]
+        titles == [1L: "Friday game"]
     }
 
     def "createSession accepts slots that exactly fill the open seats"() {

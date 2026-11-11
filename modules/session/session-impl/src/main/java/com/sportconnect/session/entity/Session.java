@@ -68,7 +68,7 @@ public class Session {
     @Column(name = "sport_id", nullable = false)
     private Long sportId;
 
-    @Column(length = 200)
+    @Column(nullable = false, length = 200)
     private String title;
 
     @Column(columnDefinition = "TEXT")

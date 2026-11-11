@@ -132,7 +132,7 @@ class SessionSystemCommentIntegrationTest extends RedisBaseIT {
 
     /** A standalone, auto-approving session, so a join through the real endpoint lands on JOINED. */
     private Long createAutoApproveSession(Long postId) {
-        Session session = Session.builder()
+        Session session = Session.builder().title("Test session")
                 .groupId(null)
                 .isPublic(true)
                 .postId(postId)

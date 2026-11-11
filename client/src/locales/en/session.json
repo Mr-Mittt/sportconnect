@@ -274,7 +274,8 @@
     },
     "titleField": {
       "label": "Session title",
-      "placeholder": "e.g. Sunday pickup run"
+      "placeholder": "e.g. Sunday pickup run",
+      "default": "{{firstName}}'s session"
     },
     "location": {
       "label": "Location",
@@ -314,6 +315,7 @@
     "submit": "Create session",
     "validation": {
       "sport": "Sport is required.",
+      "title": "Give this session a title.",
       "startTime": "Start time is required.",
       "openSlot": "Open slot is required.",
       "endAfterStart": "The end must be after the start.",

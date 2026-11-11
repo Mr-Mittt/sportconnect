@@ -219,6 +219,7 @@ SESSION-45 moved statuses the same way A11 and A18 did: permission failures 400 
 | `SESSION_NOT_PARTICIPANT` | 409 | none | Leaving a session the caller has no active participant row in (moved from 400). |
 | `SESSION_CREATOR_CANNOT_LEAVE` | 400 | none | The creator of a standalone session calls leave (cancel is their way out). |
 | `SESSION_SPORT_REQUIRED` | 400 | none | Creating a standalone session without `sportId`. |
+| `SESSION_TITLE_REQUIRED` | 400 | none | Creating a session without a title, or updating one to a blank title (SESSION-49). |
 | `SESSION_LOCATION_SPORT_MISMATCH` | 400 | none | Create or update with a `locationId` whose sport differs from the session's. |
 | `SESSION_FEE_AMOUNT_REQUIRED` | 400 | none | `feeType` FIXED without `feeAmountVnd`. |
 | `SESSION_GENDER_SLOTS_EXCEED_OPEN` | 400 | `{requested, open}` | `maleSlots + femaleSlots` is more than the open seats (`capacity - initialSlot`), checked on the resulting values at create and update (SESSION-46). |

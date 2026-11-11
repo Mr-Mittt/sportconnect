@@ -46,11 +46,13 @@ const SESSION_CODES: Array<[string, number]> = [
   ['SESSION_SPORT_REQUIRED', 400],
   ['SESSION_LOCATION_SPORT_MISMATCH', 400],
   ['SESSION_FEE_AMOUNT_REQUIRED', 400],
+  // SESSION-49
+  ['SESSION_TITLE_REQUIRED', 400],
 ];
 
 describe('session error codes (SESSION-45)', () => {
-  it('covers all 14 SESSION-45 codes', () => {
-    expect(SESSION_CODES).toHaveLength(14);
+  it('covers all 14 SESSION-45 codes and the SESSION-49 title code', () => {
+    expect(SESSION_CODES).toHaveLength(15);
   });
 
   it.each(SESSION_CODES)('%s has en and vi copy and never falls back to the server prose', async (code, status) => {

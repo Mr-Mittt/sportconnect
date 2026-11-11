@@ -15,6 +15,7 @@ import com.sportconnect.user.api.dto.UserSearchResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -188,6 +189,15 @@ public interface UserService {
      * @return an active {@code languages.code}, or empty
      */
     Optional<String> findPreferredLanguageCode(UUID userId);
+
+    /**
+     * SESSION-49: {@link #findPreferredLanguageCode} for many users at once, so a caller that resolves a language per
+     * item (the group-session generation job) makes one lookup instead of one per item. Same order and the same
+     * rules; a user for whom none applies has no entry in the map. Ids that are not users are skipped.
+     *
+     * @return the active language code per user id; never null
+     */
+    Map<UUID, String> findPreferredLanguageCodes(Collection<UUID> userIds);
 
     /**
      * Check if user exists by username

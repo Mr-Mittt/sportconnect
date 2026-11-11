@@ -4081,6 +4081,7 @@ class GroupServiceImplSpec extends Specification {
         result.size() == 1
         result[0].groupId == testGroup.id
         result[0].ownerId == userId
+        result[0].groupName == testGroup.groupName
     }
 
     def "getGroupsWithAutoGenerateSessionsEnabled returns an empty list when nothing is enabled"() {

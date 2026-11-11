@@ -145,7 +145,7 @@ class SessionDiscoverIntegrationTest extends BaseIT {
      * {@code creatorId} on {@code sportId} by default, matching what {@code callerId}'s
      * profile/discover call is scoped to. */
     private Session.SessionBuilder sessionBuilder() {
-        return Session.builder()
+        return Session.builder().title("Test session")
                 .groupId(null)
                 .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())

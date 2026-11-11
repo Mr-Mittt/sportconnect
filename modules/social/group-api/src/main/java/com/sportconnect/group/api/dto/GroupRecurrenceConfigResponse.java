@@ -21,6 +21,8 @@ import java.util.UUID;
 public class GroupRecurrenceConfigResponse {
 
     private Long groupId;
+    /** SESSION-49: the group's name, for titling the sessions generated for it. */
+    private String groupName;
 
     private Long sportId;
 

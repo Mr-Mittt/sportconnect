@@ -128,7 +128,7 @@ class SessionDiscoverDateCountsIntegrationTest extends BaseIT {
     }
 
     private Session.SessionBuilder sessionBuilder() {
-        return Session.builder()
+        return Session.builder().title("Test session")
                 .groupId(null)
                 .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())

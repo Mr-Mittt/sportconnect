@@ -213,7 +213,7 @@ public class SessionServiceImpl implements SessionService {
         boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
         int initialSlot = request.getInitialSlot() != null ? request.getInitialSlot() : 0;
         validateGenderSlots(request.getMaleSlots(), request.getFemaleSlots(), request.getCapacity(), initialSlot);
-        String title = blankToNull(request.getTitle());
+        String title = requireTitle(request.getTitle());
         // SESSION-23: filter the submitted attributes against the sport's session schema (replace
         // semantics — the filtered map is the whole stored value). Null when none were supplied,
         // which also short-circuits the schema fetch for a session whose sport carries no schema.
@@ -223,7 +223,7 @@ public class SessionServiceImpl implements SessionService {
         // @Transactional method, so a failure here rolls back the whole session creation instead
         // of leaving a session with no comment-thread anchor. post-impl never sees a sessionId —
         // it hands back the new post's id, which becomes this session's own postId.
-        Long postId = postService.createSessionPost(userId, title != null ? "Session: " + title : "New session");
+        Long postId = postService.createSessionPost(userId, "Session: " + title);
 
         Session session = Session.builder()
                 .groupId(groupId)
@@ -493,7 +493,7 @@ public class SessionServiceImpl implements SessionService {
         }
 
         if (request.getTitle() != null) {
-            session.setTitle(blankToNull(request.getTitle()));
+            session.setTitle(requireTitle(request.getTitle()));
         }
         if (request.getDescription() != null) {
             session.setDescription(request.getDescription());
@@ -692,6 +692,15 @@ public class SessionServiceImpl implements SessionService {
     }
 
     /** Trims; a blank result is null. */
+    /** SESSION-49: the trimmed title; a missing or blank one is {@code SESSION_TITLE_REQUIRED} (400). */
+    private static String requireTitle(String value) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty()) {
+            throw new BadRequestException("SESSION_TITLE_REQUIRED", "A session needs a title", null);
+        }
+        return trimmed;
+    }
+
     private static String blankToNull(String value) {
         if (value == null) {
             return null;
@@ -1198,7 +1207,10 @@ public class SessionServiceImpl implements SessionService {
     @Override
     @Transactional(readOnly = true)
     public Map<Long, String> getSessionTitlesByIds(List<Long> sessionIds) {
+        // SESSION-49: the title is required again (V088), but a null one must never fail the whole caller (the
+        // notification list 500'd on one): a session without a title is simply left out of the map.
         return sessionRepository.findAllById(sessionIds).stream()
+                .filter(session -> session.getTitle() != null)
                 .collect(Collectors.toMap(Session::getId, Session::getTitle));
     }
 

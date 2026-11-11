@@ -1142,6 +1142,7 @@ public class GroupServiceImpl implements GroupService {
             }
             result.add(GroupRecurrenceConfigResponse.builder()
                     .groupId(group.getId())
+                    .groupName(group.getGroupName())
                     .sportId(group.getSportId())
                     .ownerId(ownerId)
                     .recurrenceDayOfWeek(group.getRecurrenceDayOfWeek())
