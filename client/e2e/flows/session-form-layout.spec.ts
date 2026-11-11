@@ -179,12 +179,15 @@ test('session form — closing the create form with unsent entries asks "Leave w
   await page.getByRole('button', { name: 'Create session' }).click();
   const createDialog = page.getByRole('dialog', { name: 'Create your session' });
 
-  // Nothing entered: Escape closes at once.
+  // Nothing entered: Escape closes at once. Wait for the dialog first: an Escape sent before it has
+  // mounted and taken focus is lost, which is a timing flake on a slow CI runner.
+  await expect(createDialog).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(createDialog).not.toBeVisible();
 
   // Something entered: Escape asks first, "Keep editing" keeps the form and its text.
   await page.getByRole('button', { name: 'Create session' }).click();
+  await expect(createDialog).toBeVisible();
   await createDialog.getByLabel(/^Session title/).fill('Do not lose me');
   await page.keyboard.press('Escape');
   const leaveDialog = page.getByRole('dialog', { name: 'Leave without saving?' });
