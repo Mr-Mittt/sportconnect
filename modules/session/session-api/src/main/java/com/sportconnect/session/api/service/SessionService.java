@@ -34,7 +34,10 @@ public interface SessionService {
      * <p>SESSION-24: {@code locationId} and {@code feeType} are both optional. Missing either (or
      * both) starts the session as {@code PREPARING} instead of {@code SCHEDULED} — see {@code
      * updateSession} for how it's completed, and {@code SessionStatus}'s own Javadoc for the full
-     * lifecycle.
+     * lifecycle. SESSION-46: the duration ({@code durationMinutes}) is part of that rule too, and
+     * a blank {@code title} is stored as null. {@code gameMood} is required; slots, when sent,
+     * must fit within {@code capacity - initialSlot} (400
+     * {@code SESSION_GENDER_SLOTS_EXCEED_OPEN}).
      *
      * <p>SESSION-23: when {@code request.attributes} is non-null it is filtered against the sport's
      * session attribute schema ({@code SportService.getSessionAttributeSchemaRaw}) — unknown /
@@ -184,8 +187,30 @@ public interface SessionService {
      * (as in {@link #createSession}) and stored wholesale, an explicit empty map clears the stored
      * attributes, and a null/omitted map leaves them untouched (and never fetches the schema, so a
      * non-attribute edit on a session whose sport was since deactivated still succeeds).
+     *
+     * <p>SESSION-46: only a {@code PREPARING} session can be edited — any other status is a
+     * 409 {@code SESSION_NOT_PREPARING}, checked before any field is applied. While
+     * {@code PREPARING} every field may change (sport and group stay fixed) and there is no
+     * automatic flip to {@code SCHEDULED}; see {@link #scheduleSession}. Null leaves a field;
+     * {@code maleSlots}/{@code femaleSlots} {@code 0} and an empty {@code feeNote} clear.
+     * {@code maleSlots + femaleSlots} must stay within {@code capacity - initialSlot} on the
+     * resulting values (400 {@code SESSION_GENDER_SLOTS_EXCEED_OPEN}). Changing
+     * {@code scheduledStart} without {@code durationMinutes} moves {@code scheduledEndAt} by the
+     * same amount; a sent {@code durationMinutes} wins; no end stays no end.
      */
     SessionResponse updateSession(Long sessionId, UUID userId, UpdateSessionRequest request);
+
+    /**
+     * SESSION-46 — moves a {@code PREPARING} session to {@code SCHEDULED}. Same gating as
+     * {@link #updateSession} (creator for standalone, owner/admin for group-linked).
+     *
+     * <p>Throws 409 {@code SESSION_NOT_PREPARING} unless the session is {@code PREPARING}, and
+     * 400 {@code SESSION_NOT_READY} (the missing names in {@code errorParams.missing}: {@code
+     * location}, {@code fee}, {@code duration}; {@code fee} also counts as missing for a
+     * {@code FIXED} fee without an amount) when anything is absent. The same rule decides the
+     * status {@link #createSession} starts with. Does not notify yet (NOTIF-10).
+     */
+    SessionResponse scheduleSession(Long sessionId, UUID userId);
 
     /**
      * Same gating as updateSession. A soft action — the row is kept with status=CANCELLED plus

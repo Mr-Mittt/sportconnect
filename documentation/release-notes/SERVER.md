@@ -7,14 +7,22 @@ writes a fresh template and uses the section as the release PR description. Vers
 ## Unreleased
 
 ### Changes
+- Sessions carry `maleSlots`, `femaleSlots` (informational open slots per gender), `gameMood` (1-10, required on create) and `feeNote`, on the create and update requests and on `SessionResponse` (SESSION-46).
+- A blank session title is stored as no title; the companion post text no longer reads "Session: null" (SESSION-46).
+- `PREPARING` is a real draft (SESSION-46): a session starts `PREPARING` unless location, fee and duration are all set; every field except sport and group is editable while `PREPARING`; `PUT /api/sessions/{id}` on any other status is now 409 `SESSION_NOT_PREPARING` (before, only location and fee were locked); the automatic `PREPARING` to `SCHEDULED` flip is gone and the host leaves the draft with the new `POST /api/sessions/{id}/schedule` (400 `SESSION_NOT_READY` lists what is missing). New error codes `SESSION_GENDER_SLOTS_EXCEED_OPEN` and `SESSION_NOT_READY`.
 
 ### Applied automatically
+- `V085` (`male_slots`, `female_slots`, both with a `>= 0` check), `V086` (`game_mood INTEGER NOT NULL DEFAULT 5` with a 1-10 check; existing rows become 5) and `V087` (`fee_note VARCHAR(300)`) run when the server starts. Each only adds a column, so they are quick on the current table size.
 
 ### Manual actions on the box
+- none
 
 ### Rollback
+- Roll the server image back as usual; the three new columns stay and the previous release ignores them, so no restore is needed.
+- A client older than CLIENT-SESSION-34 cannot complete a draft by filling in location and fee (the flip no longer happens) and gets 409 on edits to a `SCHEDULED` session. A new client against an old server has no Schedule endpoint. Roll the client back together with the server.
 
 ### Depends on
+- Client: CLIENT-SESSION-34 (form, Schedule button and en/vi copy for the new error codes). Ship the server and the client together.
 
 ## 0.2.0 — 2026-11-09
 

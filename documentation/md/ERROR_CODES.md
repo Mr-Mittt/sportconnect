@@ -215,12 +215,16 @@ SESSION-45 moved statuses the same way A11 and A18 did: permission failures 400 
 | `SESSION_CREATOR_REQUIRED` | 403 | none | Modifying, cancelling, approving or rejecting on a standalone session without being its creator (moved from 400). |
 | `SESSION_CANCELLED` | 409 | none | Join, approve or reject on a cancelled session (moved from 400). |
 | `SESSION_NOT_CANCELLABLE` | 409 | `{status}` | Cancelling a session that is already `COMPLETED` or `CANCELLED` (moved from 400). |
-| `SESSION_NOT_PREPARING` | 409 | none | Changing `locationId`/`feeType` once the session is past `PREPARING` (moved from 400). |
+| `SESSION_NOT_PREPARING` | 409 | `{status}` | `PUT /api/sessions/{id}` on a session that is not `PREPARING`: the whole call is refused, no field is editable once it is `SCHEDULED` or later (SESSION-46; before it only `locationId`/`feeType` were locked). Also `POST /api/sessions/{id}/schedule` on a session that is not `PREPARING`. |
 | `SESSION_NOT_PARTICIPANT` | 409 | none | Leaving a session the caller has no active participant row in (moved from 400). |
 | `SESSION_CREATOR_CANNOT_LEAVE` | 400 | none | The creator of a standalone session calls leave (cancel is their way out). |
 | `SESSION_SPORT_REQUIRED` | 400 | none | Creating a standalone session without `sportId`. |
 | `SESSION_LOCATION_SPORT_MISMATCH` | 400 | none | Create or update with a `locationId` whose sport differs from the session's. |
 | `SESSION_FEE_AMOUNT_REQUIRED` | 400 | none | `feeType` FIXED without `feeAmountVnd`. |
+| `SESSION_GENDER_SLOTS_EXCEED_OPEN` | 400 | `{requested, open}` | `maleSlots + femaleSlots` is more than the open seats (`capacity - initialSlot`), checked on the resulting values at create and update (SESSION-46). |
+| `SESSION_NOT_READY` | 400 | `{missing}` | `POST /api/sessions/{id}/schedule` on a `PREPARING` session that still lacks `location`, `fee` (no fee type, or `FIXED` without an amount) or `duration`; `missing` lists the names (SESSION-46). |
+
+A `gameMood` that is missing on create or outside 1-10 is the generic `VALIDATION_FAILED` with `errorParams.fields.gameMood` (SESSION-46, bean validation), not a session code.
 
 Deliberately **not coded** (user decision, SESSION-45): the technical validation 400s — session attributes too large or unserializable, an invalid `viewerZoneId`, and the 11 `SessionController` query-parameter checks on upcoming/history/discover/counts. They keep their English `message`, the client shows the generic copy, and each throw site logs a `warn` with the offending value. A sport or location missing on create/update surfaces the `SPORT_NOT_FOUND` code (§ sport) or the location module's own error (LOC-6). A deactivated caller gets no special answer from any session endpoint (U12 known gap, no check added). A deleted group makes join/modify/cancel/approve answer a 403 group code rather than `SESSION_NOT_FOUND`, because the group membership check fails first.
 

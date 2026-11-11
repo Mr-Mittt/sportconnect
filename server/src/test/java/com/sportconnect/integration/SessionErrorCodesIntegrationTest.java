@@ -119,7 +119,7 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
 
     private CreateSessionRequest.CreateSessionRequestBuilder createBody() {
         return CreateSessionRequest.builder()
-                .scheduledStart(Instant.now().plusSeconds(86400)).capacity(10);
+                .scheduledStart(Instant.now().plusSeconds(86400)).capacity(10).gameMood(5);
     }
 
     // -- 404: SESSION_NOT_FOUND / SESSION_JOIN_REQUEST_NOT_FOUND -------------------------------
@@ -284,6 +284,44 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
                         .content(toJson(UpdateSessionRequest.builder().locationId(2L).build())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_NOT_PREPARING"));
+    }
+
+    @Test
+    void update_titleOnAScheduledSession_is409SessionNotPreparing_soNothingIsEditableAnyMore() throws Exception {
+        Long sessionId = seedSession(null, SessionStatus.SCHEDULED);
+        authenticateAs(creatorId);
+        mockMvc.perform(put("/api/sessions/{id}", sessionId).contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(UpdateSessionRequest.builder().title("new").build())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_NOT_PREPARING"));
+    }
+
+    @Test
+    void schedule_aSessionThatIsNotPreparing_is409SessionNotPreparing() throws Exception {
+        Long sessionId = seedSession(null, SessionStatus.SCHEDULED);
+        authenticateAs(creatorId);
+        mockMvc.perform(post("/api/sessions/{id}/schedule", sessionId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_NOT_PREPARING"));
+    }
+
+    @Test
+    void schedule_asANonCreator_is403SessionCreatorRequired() throws Exception {
+        Long sessionId = seedSession(null, SessionStatus.PREPARING);
+        authenticateAs(outsiderId);
+        mockMvc.perform(post("/api/sessions/{id}/schedule", sessionId))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_CREATOR_REQUIRED"));
+    }
+
+    @Test
+    void schedule_aPreparingSessionWithoutADuration_is400SessionNotReadyWithTheMissingNames() throws Exception {
+        Long sessionId = seedSession(null, SessionStatus.PREPARING);
+        authenticateAs(creatorId);
+        mockMvc.perform(post("/api/sessions/{id}/schedule", sessionId))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_NOT_READY"))
+                .andExpect(jsonPath("$.errorParams.missing[0]").value("duration"));
     }
 
     @Test

@@ -130,6 +130,26 @@ public class Session {
     @Builder.Default
     private Boolean autoApprove = false;
 
+    /** SESSION-46 — informational open slots for male players; never enforced by joinSession.
+     * {@code maleSlots + femaleSlots <= capacity - initialSlot} (the rest mean "any gender").
+     * Null = not specified. */
+    @Column(name = "male_slots")
+    private Integer maleSlots;
+
+    /** SESSION-46 — same as {@link #maleSlots}, for female players. */
+    @Column(name = "female_slots")
+    private Integer femaleSlots;
+
+    /** SESSION-46 — 1 (for fun) to 10 (competitive). Existing and generated sessions: 5. */
+    @Column(name = "game_mood", nullable = false)
+    @Builder.Default
+    private Integer gameMood = 5;
+
+    /** SESSION-46 — free-text note about the fee; allowed for every fee type and kept when the
+     * fee type changes. Null = no note. */
+    @Column(name = "fee_note", length = 300)
+    private String feeNote;
+
     /** SESSION-23 — structured, sport-specific attributes for this session (e.g. "Balls provided?",
      * skill band). Keyed by the {@code /}-separated attribute path from the sport's session
      * attribute schema (A17). Written with replace semantics: {@code SessionServiceImpl} filters

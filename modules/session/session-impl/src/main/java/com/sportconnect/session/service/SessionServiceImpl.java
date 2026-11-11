@@ -200,17 +200,20 @@ public class SessionServiceImpl implements SessionService {
                 throw new BadRequestException("SESSION_LOCATION_SPORT_MISMATCH", "locationId does not match this session's sport", null);
             }
         }
-        SessionStatus initialStatus = (request.getLocationId() != null && request.getFeeType() != null)
-                ? SessionStatus.SCHEDULED
-                : SessionStatus.PREPARING;
-
         Instant scheduledEndAt = request.getDurationMinutes() != null
                 ? request.getScheduledStart().plus(Duration.ofMinutes(request.getDurationMinutes()))
                 : null;
 
         Long feeAmountVnd = resolveFeeAmountVnd(request.getFeeType(), request.getFeeAmountVnd());
+        // SESSION-46: the same readiness rule scheduleSession uses decides the starting status.
+        SessionStatus initialStatus = missingForScheduling(request.getLocationId(), request.getFeeType(),
+                feeAmountVnd, scheduledEndAt).isEmpty()
+                ? SessionStatus.SCHEDULED
+                : SessionStatus.PREPARING;
         boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
         int initialSlot = request.getInitialSlot() != null ? request.getInitialSlot() : 0;
+        validateGenderSlots(request.getMaleSlots(), request.getFemaleSlots(), request.getCapacity(), initialSlot);
+        String title = blankToNull(request.getTitle());
         // SESSION-23: filter the submitted attributes against the sport's session schema (replace
         // semantics — the filtered map is the whole stored value). Null when none were supplied,
         // which also short-circuits the schema fetch for a session whose sport carries no schema.
@@ -220,7 +223,7 @@ public class SessionServiceImpl implements SessionService {
         // @Transactional method, so a failure here rolls back the whole session creation instead
         // of leaving a session with no comment-thread anchor. post-impl never sees a sessionId —
         // it hands back the new post's id, which becomes this session's own postId.
-        Long postId = postService.createSessionPost(userId, "Session: " + request.getTitle());
+        Long postId = postService.createSessionPost(userId, title != null ? "Session: " + title : "New session");
 
         Session session = Session.builder()
                 .groupId(groupId)
@@ -229,7 +232,7 @@ public class SessionServiceImpl implements SessionService {
                 .sessionType(sessionType)
                 .createdBy(userId)
                 .sportId(sportId)
-                .title(request.getTitle())
+                .title(title)
                 .description(request.getDescription())
                 .locationId(request.getLocationId())
                 .locationNote(request.getLocationNote())
@@ -241,6 +244,10 @@ public class SessionServiceImpl implements SessionService {
                 .feeAmountVnd(feeAmountVnd)
                 .autoApprove(autoApprove)
                 .initialSlot(initialSlot)
+                .maleSlots(request.getMaleSlots())
+                .femaleSlots(request.getFemaleSlots())
+                .gameMood(request.getGameMood())
+                .feeNote(blankToNull(request.getFeeNote()))
                 .attributes(attributes)
                 .build();
 
@@ -478,16 +485,15 @@ public class SessionServiceImpl implements SessionService {
         Session session = findSessionOrThrow(sessionId);
         requireCanModify(session, userId);
 
-        // SESSION-24: locationId/feeType are only changeable while the session is PREPARING —
-        // once genuinely SCHEDULED (or beyond), they're immutable via this endpoint. Checked
-        // before applying any field so a rejected request leaves the session fully untouched.
-        if ((request.getLocationId() != null || request.getFeeType() != null)
-                && session.getStatus() != SessionStatus.PREPARING) {
-            throw new ConflictException("SESSION_NOT_PREPARING", "locationId/feeType can only be changed while the session is PREPARING", null);
+        // SESSION-46: PREPARING is the only editable state - the whole call is refused otherwise,
+        // before any field is applied, so a rejected request leaves the session untouched.
+        if (session.getStatus() != SessionStatus.PREPARING) {
+            throw new ConflictException("SESSION_NOT_PREPARING",
+                    "This session can no longer be edited", Map.of("status", session.getStatus().name()));
         }
 
         if (request.getTitle() != null) {
-            session.setTitle(request.getTitle());
+            session.setTitle(blankToNull(request.getTitle()));
         }
         if (request.getDescription() != null) {
             session.setDescription(request.getDescription());
@@ -503,6 +509,12 @@ public class SessionServiceImpl implements SessionService {
             session.setLocationNote(request.getLocationNote());
         }
         if (request.getScheduledStart() != null) {
+            // A start-only edit keeps the duration: the end moves by the same amount. A sent
+            // durationMinutes (below) overrides this; a session without an end stays without one.
+            if (session.getScheduledEndAt() != null && request.getDurationMinutes() == null) {
+                Duration shift = Duration.between(session.getScheduledStart(), request.getScheduledStart());
+                session.setScheduledEndAt(session.getScheduledEndAt().plus(shift));
+            }
             session.setScheduledStart(request.getScheduledStart());
         }
         if (request.getDurationMinutes() != null) {
@@ -517,13 +529,27 @@ public class SessionServiceImpl implements SessionService {
         if (request.getFeeAmountVnd() != null) {
             session.setFeeAmountVnd(request.getFeeAmountVnd());
         }
+        if (request.getFeeNote() != null) {
+            session.setFeeNote(blankToNull(request.getFeeNote()));
+        }
         if (request.getAutoApprove() != null) {
             session.setAutoApprove(request.getAutoApprove());
         }
         if (request.getInitialSlot() != null) {
             session.setInitialSlot(request.getInitialSlot());
         }
-        // SESSION-23: replace semantics — a non-null map is filtered and stored wholesale; a null
+        if (request.getMaleSlots() != null) {
+            session.setMaleSlots(request.getMaleSlots() == 0 ? null : request.getMaleSlots());
+        }
+        if (request.getFemaleSlots() != null) {
+            session.setFemaleSlots(request.getFemaleSlots() == 0 ? null : request.getFemaleSlots());
+        }
+        if (request.getGameMood() != null) {
+            session.setGameMood(request.getGameMood());
+        }
+        // Checked on the resulting values: capacity and initialSlot may have changed too.
+        validateGenderSlots(session.getMaleSlots(), session.getFemaleSlots(), session.getCapacity(), session.getInitialSlot());
+        // SESSION-23: replace semantics - a non-null map is filtered and stored wholesale; a null
         // (or omitted) map leaves the stored attributes untouched, so a plain title/time edit
         // never fetches the schema (and so never 404s on a since-deactivated sport). An explicit
         // empty map filters to empty and clears them.
@@ -531,15 +557,9 @@ public class SessionServiceImpl implements SessionService {
             session.setAttributes(resolveAttributes(request.getAttributes(), session.getSportId()));
         }
         // Re-resolved unconditionally so the FIXED/feeAmountVnd invariant holds regardless of
-        // which fee field (if either) this request touched — catches "switched to FIXED without
+        // which fee field (if either) this request touched - catches "switched to FIXED without
         // an amount" and clears a stale amount when switching away from FIXED.
         session.setFeeAmountVnd(resolveFeeAmountVnd(session.getFeeType(), session.getFeeAmountVnd()));
-
-        // SESSION-24: PREPARING -> SCHEDULED once both location and fee type are present.
-        if (session.getStatus() == SessionStatus.PREPARING
-                && session.getLocationId() != null && session.getFeeType() != null) {
-            session.setStatus(SessionStatus.SCHEDULED);
-        }
 
         Session saved = sessionRepository.save(session);
 
@@ -609,6 +629,75 @@ public class SessionServiceImpl implements SessionService {
             return candidateAmount;
         }
         return null;
+    }
+
+    /**
+     * SESSION-46 - moves a {@code PREPARING} session to {@code SCHEDULED}.
+     *
+     * <p>Flow: load, {@link #requireCanModify}, 409 {@code SESSION_NOT_PREPARING} unless
+     * {@code PREPARING}, 400 {@code SESSION_NOT_READY} listing what {@link #missingForScheduling}
+     * found, otherwise set {@code SCHEDULED}. No outbox event yet (NOTIF-10).
+     */
+    @Override
+    @Transactional
+    public SessionResponse scheduleSession(Long sessionId, UUID userId) {
+        Session session = findSessionOrThrow(sessionId);
+        requireCanModify(session, userId);
+        if (session.getStatus() != SessionStatus.PREPARING) {
+            throw new ConflictException("SESSION_NOT_PREPARING",
+                    "Only a session that is still being prepared can be scheduled",
+                    Map.of("status", session.getStatus().name()));
+        }
+        List<String> missing = missingForScheduling(session.getLocationId(), session.getFeeType(),
+                session.getFeeAmountVnd(), session.getScheduledEndAt());
+        if (!missing.isEmpty()) {
+            throw new BadRequestException("SESSION_NOT_READY",
+                    "The session is missing: " + String.join(", ", missing),
+                    Map.of("missing", missing));
+        }
+        session.setStatus(SessionStatus.SCHEDULED);
+        return toResponse(sessionRepository.save(session), userId);
+    }
+
+    /** SESSION-46 - what a session still lacks before it can be {@code SCHEDULED}: {@code location},
+     * {@code fee} (no fee type, or {@code FIXED} without an amount) and {@code duration} (no end).
+     * One rule for the status {@code createSession} starts with and for {@code scheduleSession}. */
+    private List<String> missingForScheduling(Long locationId, FeeType feeType, Long feeAmountVnd, Instant scheduledEndAt) {
+        List<String> missing = new ArrayList<>();
+        if (locationId == null) {
+            missing.add("location");
+        }
+        if (feeType == null || (feeType == FeeType.FIXED && feeAmountVnd == null)) {
+            missing.add("fee");
+        }
+        if (scheduledEndAt == null) {
+            missing.add("duration");
+        }
+        return missing;
+    }
+
+    /** SESSION-46 - {@code maleSlots + femaleSlots} (nulls count as 0) must fit in the open seats,
+     * {@code capacity - initialSlot}. 400 {@code SESSION_GENDER_SLOTS_EXCEED_OPEN} otherwise. */
+    private void validateGenderSlots(Integer maleSlots, Integer femaleSlots, Integer capacity, Integer initialSlot) {
+        int requested = (maleSlots != null ? maleSlots : 0) + (femaleSlots != null ? femaleSlots : 0);
+        if (requested == 0) {
+            return;
+        }
+        int open = capacity - (initialSlot != null ? initialSlot : 0);
+        if (requested > open) {
+            throw new BadRequestException("SESSION_GENDER_SLOTS_EXCEED_OPEN",
+                    "maleSlots + femaleSlots must not exceed the open slots (capacity - initialSlot)",
+                    Map.of("requested", requested, "open", Math.max(open, 0)));
+        }
+    }
+
+    /** Trims; a blank result is null. */
+    private static String blankToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     @Override
@@ -1294,6 +1383,10 @@ public class SessionServiceImpl implements SessionService {
                         .feeAmountVnd(session.getFeeAmountVnd())
                         .autoApprove(session.getAutoApprove())
                         .initialSlot(session.getInitialSlot())
+                        .maleSlots(session.getMaleSlots())
+                        .femaleSlots(session.getFemaleSlots())
+                        .gameMood(session.getGameMood())
+                        .feeNote(session.getFeeNote())
                         .callerParticipation(callerParticipations.get(session.getId()))
                         .likeCount(Optional.ofNullable(postLikeInfo.get(session.getPostId()))
                                 .map(PostLikeInfoResponse::getLikeCount).orElse(0L))

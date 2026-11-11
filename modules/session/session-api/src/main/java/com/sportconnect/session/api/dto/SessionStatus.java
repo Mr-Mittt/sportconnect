@@ -17,6 +17,11 @@ package com.sportconnect.session.api.dto;
  * the only path allowed to set {@code locationId}/{@code feeType} while the session is
  * {@code PREPARING} — once both are non-null, the session flips to {@code SCHEDULED}. If
  * {@code scheduledStart} passes while still {@code PREPARING}, the session is auto-cancelled.
+ *
+ * <p>SESSION-46 amends this: {@code PREPARING} is a real draft. Every detail is editable through
+ * {@code updateSession} while in it, and the only way out is the explicit {@code
+ * SessionService.scheduleSession} (no automatic flip any more), which needs location, fee and
+ * duration. In every other status {@code updateSession} is rejected outright.
  */
 public enum SessionStatus {
     PREPARING,

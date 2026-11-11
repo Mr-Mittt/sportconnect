@@ -77,6 +77,17 @@ public class SessionResponse {
 
     private Boolean autoApprove;
 
+    /** SESSION-46 — informational per-gender open slots; null = not specified. */
+    private Integer maleSlots;
+
+    private Integer femaleSlots;
+
+    /** SESSION-46 — 1 (for fun) to 10 (competitive). */
+    private Integer gameMood;
+
+    /** SESSION-46 — free-text fee note; null = none. */
+    private String feeNote;
+
     /** The calling user's own SessionParticipant row for this session (SESSION-9) — null if they
      * have none. userFullName/userAvatarUrl are left unset here (the caller already knows their
      * own identity); only status/rejectReason/createdAt/id are meaningful. Drives the client's

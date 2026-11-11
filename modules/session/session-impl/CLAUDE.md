@@ -38,7 +38,8 @@ GET    /api/sessions/group/{groupId}          paginated, private-group visibilit
 GET    /api/sessions/upcoming                 paginated (SESSION-27) — JOINED/INVITED, status PREPARING/SCHEDULED/ONGOING, standalone or group-linked; optional date + optional sportId (SESSION-43, absent = all sports, plain equality — no active-sport-profile gate); scheduledStart ASC + PREPARING->SCHEDULED->ONGOING tiebreak, caller's own Pageable sort ignored
 GET    /api/sessions/history                  paginated (SESSION-27) — required sportId (SESSION-43, plain equality) + exactly one of date (JOINED-only, CANCELLED/COMPLETED, scheduledStart DESC) or dateCount (distinct history dates + counts, before cursor)
 GET    /api/sessions/discover                 paginated (SESSION-25) — standalone, PREPARING/SCHEDULED/ONGOING (default all three) sessions gated to the caller's active sport profiles, excluding sessions they created or joined; optional title/locationId/minOpenSlots/feeType/maxFeeAmountVnd/date/startTimeFilter+startTime/status filters, all AND-combined; scheduledStart >= now() default lower bound unless date/startTimeFilter narrows it; scheduledStart ASC + open-slots ASC + createdAt ASC sort, caller's own Pageable sort ignored
-PUT    /api/sessions/{sessionId}               creator (standalone) or owner/admin (group)
+PUT    /api/sessions/{sessionId}               creator (standalone) or owner/admin (group); SESSION-46: only while PREPARING (409 SESSION_NOT_PREPARING otherwise), every field but sport and group
+POST   /api/sessions/{sessionId}/schedule      SESSION-46 — PREPARING -> SCHEDULED, same gating; 400 SESSION_NOT_READY unless location, fee and duration are set
 POST   /api/sessions/{sessionId}/cancel        same gating; soft — sets status=CANCELLED, never deletes; rejected if already COMPLETED/CANCELLED
 POST   /api/sessions/{sessionId}/join          rejected if the session is CANCELLED
 DELETE /api/sessions/{sessionId}/leave         JOINED->LEFT, or INVITED->LEFT ("decline")/REQUESTED->LEFT ("cancel my request") — SESSION-9
@@ -136,17 +137,30 @@ ownership-only), so there's nothing this module needs to wrap.
    `JOINED`-only leave). Batch call sites use `createSystemSessionComments` — one query and one
    `saveAll` for the whole batch, never a call per session.
 
-10. **SESSION-24 — `PREPARING` status.** `locationId`/`feeType` are the only fields
-    `updateSession` allows changing while the session is `PREPARING`; once genuinely `SCHEDULED`
-    (or beyond), both are immutable via this endpoint — a request touching either while not
-    `PREPARING` is a `BadRequestException`, checked before any field is applied. Completing both
-    flips the session to `SCHEDULED`; completing only one leaves it `PREPARING`. A `PREPARING`
-    session is fully joinable — identical to `SCHEDULED` everywhere else (join/leave/comment/like,
-    and `SessionEventsConsumer.ACTIVE_SESSION_STATUSES` in `notification-impl`). If
+10. **SESSION-24 / SESSION-46 — `PREPARING` is a real draft.** A session starts `PREPARING`
+    unless `locationId`, `feeType` (and the amount, for `FIXED`) **and** a duration
+    (`scheduledEndAt`) are all present; the private `missingForScheduling` helper is the one rule
+    for both the create-time status and `scheduleSession`, so the two cannot drift. While
+    `PREPARING`, `updateSession` may change every field except sport and group (title, description,
+    location, note, start, duration, capacity, fee, fee note, auto approve, initial slot, per-gender
+    slots, game mood, attributes). **In any other status the whole call is a 409
+    `SESSION_NOT_PREPARING`**, checked before any field is applied. There is no automatic flip to
+    `SCHEDULED`: the only way out is `POST /{id}/schedule` (`scheduleSession`: 409 unless
+    `PREPARING`, 400 `SESSION_NOT_READY` with `errorParams.missing`). A start-only edit keeps the
+    duration (the end moves by the same amount; a sent `durationMinutes` wins; no end stays no end).
+    A `PREPARING` session is fully joinable, identical to `SCHEDULED` elsewhere (join/leave/comment/
+    like, and `SessionEventsConsumer.ACTIVE_SESSION_STATUSES` in `notification-impl`). If
     `scheduledStart` passes while still `PREPARING`, `SessionGenerationJob.cancelUnpreparedSessions`
-    auto-cancels it (no real actor, `cancelledBy` stays null) — see that job's Javadoc. Every
-    successful `updateSession` call (regardless of which field changed) also fans out a
-    `session.details.updated` notification to the session's currently-`JOINED` participants.
+    auto-cancels it (no real actor, `cancelledBy` stays null). Every successful `updateSession`
+    fans out a `session.details.updated` notification to the currently-`JOINED` participants;
+    scheduling does not notify yet (NOTIF-10).
+    **New fields (SESSION-46):** `maleSlots`/`femaleSlots` (nullable, `>= 0`, informational like
+    `capacity`, never enforced on join; `male + female <= capacity - initialSlot`, 400
+    `SESSION_GENDER_SLOTS_EXCEED_OPEN`, checked on the resulting values; update: `0` clears, null
+    leaves), `gameMood` (1-10, required on create, `NOT NULL DEFAULT 5`; generated recurring
+    sessions get 5), `feeNote` (<= 300 chars, trimmed, blank stored as null, kept when the fee type
+    changes; update: empty string clears). A blank `title` is stored as null and the companion post
+    text falls back to `"New session"`.
 11. **Session filtering — check on every `Session` field change.** Whenever a field is added to
     `Session` (schema, entity, or `Create`/`UpdateSessionRequest`), check whether
     `GET /api/sessions/discover`'s search/filter query params (SESSION-25, and its follow-ups)

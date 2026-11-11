@@ -235,4 +235,9 @@
     <!-- U27: drop roles and user_roles; roles are Keycloak's since A37. -->
     <include file="db/changelog/changes/V084__drop_roles_and_user_roles.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-46: per-gender slots, game mood and fee note on sessions. -->
+    <include file="db/changelog/changes/V085__sessions_gender_slots.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V086__sessions_game_mood.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/V087__sessions_fee_note.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

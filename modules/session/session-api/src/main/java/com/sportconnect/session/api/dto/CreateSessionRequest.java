@@ -1,5 +1,6 @@
 package com.sportconnect.session.api.dto;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -62,6 +63,26 @@ public class CreateSessionRequest {
      * count when participantCount is reported. Omitted -> 0 (not mandatory like capacity/feeType). */
     @Min(value = 0, message = "initialSlot must be >= 0")
     private Integer initialSlot;
+
+    /** SESSION-46 — informational open slots for male players, {@code >= 0}. Together with
+     * {@code femaleSlots} must not exceed {@code capacity - initialSlot}
+     * (400 {@code SESSION_GENDER_SLOTS_EXCEED_OPEN}). Omitted = not specified. */
+    @Min(value = 0, message = "maleSlots must be >= 0")
+    private Integer maleSlots;
+
+    /** SESSION-46 — same as {@code maleSlots}, for female players. */
+    @Min(value = 0, message = "femaleSlots must be >= 0")
+    private Integer femaleSlots;
+
+    /** SESSION-46 — 1 (for fun) to 10 (competitive). Required. */
+    @NotNull(message = "gameMood is required")
+    @Min(value = 1, message = "gameMood must be between 1 and 10")
+    @Max(value = 10, message = "gameMood must be between 1 and 10")
+    private Integer gameMood;
+
+    /** SESSION-46 — note about the fee, any fee type; trimmed, blank stored as null. */
+    @Size(max = 300, message = "feeNote must not exceed 300 characters")
+    private String feeNote;
 
     /** Omitted → false (not mandatory like capacity/feeType). false = non-invited joiners land
      * in PENDING, awaiting creator/owner-admin approval. */
