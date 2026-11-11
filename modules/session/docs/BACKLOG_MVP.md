@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-10-06 (SESSION-45 done)
+**Last updated:** 2026-11-11 (SESSION-46, SESSION-47 filed)
 
 ---
 
@@ -25,6 +25,8 @@
 | 4 | [SESSION-29](MVP/SESSION-29_OLD_HISTORY_STORAGE_RETENTION_CONCERN.md) | Old `CANCELLED`/`COMPLETED` session storage — retention concern, documented only, no direction decided (revisit once there's real usage/storage data) | `TODO` |
 | 5 | [SESSION-41](MVP/SESSION-41_GENERATION_FAILURE_BACKSTOP.md) | No retry/backstop for a failed eager group-session generation attempt — SESSION-38's failure isolation leaves no periodic sweep to catch a missed group | `TODO` |
 | 6 | [SESSION-44](MVP/SESSION-44_REJECT_JOIN_AND_APPROVAL_ON_COMPLETED_SESSION.md) | `joinSession` (and approve/reject) reject only `CANCELLED`, not `COMPLETED` — a join or join request on a finished session succeeds (and notifies the creator); found during client CLIENT-SESSION-30 by code review, not yet reproduced live | `TODO` |
+| 7 | [SESSION-46](MVP/SESSION-46_SESSION_SLOTS_MOOD_FEE_NOTE_AND_PREPARING_EDIT_SCHEDULE.md) | Per-gender open slots, `gameMood` (1-10), `feeNote`, optional title, and a real `PREPARING` lifecycle: edit every field while `PREPARING`, explicit `POST .../schedule`, all edits locked once `SCHEDULED`; status at create needs location, fee and duration | `TODO` |
+| 8 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
 
 ---
 

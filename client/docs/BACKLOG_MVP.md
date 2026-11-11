@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-10-21 (AUTH-17 done)  
+**Last updated:** 2026-11-11 (CLIENT-SESSION-34, CLIENT-SESSION-35, GRP-12 filed)  
 
 ---
 
@@ -72,6 +72,9 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 2 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 5 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
 | 4 | [HF-21](MVP/HF-21_E2E_FLAKE_HOME_FEED_ESCAPE_POPOVER_NOT_REPRODUCED.md) | Home Feed Escape-popover e2e flake (`home-feed-journey.spec.ts:364`): flaky once in CI (2026-10-28), not reproduced in 30 local runs; split out of AUTH-20 — pick up when CI fails on it again, with that run's evidence | `TODO` |
+| 5 | [CLIENT-SESSION-34](MVP/CLIENT-SESSION-34_SESSION_FORM_SECTIONS_SLOTS_MOOD_EDIT_AND_READINESS.md) | Create/edit session form in five sections (What/When/Where/Who/Cost) with per-gender slots, game mood slider, end time with 1-minute pickers, fee note, optional title and duration, edit mode, "Are you ready?" and auto-approve popups, PREPARING banner for everyone and a Schedule button; depends on SESSION-46 | `TODO` |
+| 6 | [CLIENT-SESSION-35](MVP/CLIENT-SESSION-35_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from CLIENT-SESSION-34; depends on SESSION-47) | `TODO` |
+| 7 | [GRP-12](MVP/GRP-12_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence form: game mood for generated sessions (deferred from CLIENT-SESSION-34; depends on B22) | `TODO` |
 
 #### Removed / Deferred
 
