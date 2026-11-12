@@ -22,8 +22,8 @@
   "fee": {
     "type": {
       "FREE": "Miễn phí",
-      "SPLIT": "Chia đều chi phí",
-      "FIXED": "Số tiền cố định"
+      "SPLIT": "Phí chia đều",
+      "FIXED": "Phí cố định"
     },
     "pending": "Chưa có mức phí"
   },
@@ -98,7 +98,7 @@
       "trigger": "Phí",
       "clear": "Xóa bộ lọc phí",
       "legend": "Loại phí",
-      "maxAmount": "Số tiền tối đa",
+      "maxAmount": "Phí tối đa",
       "clearButton": "Xóa"
     },
     "location": {
@@ -138,7 +138,7 @@
       "before": "Trước",
       "after": "Sau",
       "trigger": "Giờ",
-      "clear": "Xóa bộ lọc giờ"
+      "clear": "Xóa bộ lọc thời gian"
     },
     "panelLabel": "Khám phá buổi chơi",
     "heading": "Khám phá",
@@ -178,18 +178,18 @@
     "viewDetails": "Xem chi tiết",
     "actionLabel": "{{title}} — {{action}}",
     "working": "Đang xử lý…",
-    "mood": "Không khí {{mood}}",
+    "mood": "Cường độ {{mood}}",
     "genderSplit": "Chỗ trống: {{split}}",
     "male": "nam",
     "female": "nữ"
   },
   "upcomingMatches": {
-    "label": "Trận sắp tới",
+    "label": "Buổi chơi sắp tới",
     "title": "Sắp tới",
     "seeAll": "Xem tất cả",
-    "empty": "Chưa có trận nào sắp tới.",
-    "join": "Tham gia trận",
-    "create": "Tạo trận"
+    "empty": "Chưa có buổi chơi nào sắp tới.",
+    "join": "Tham gia",
+    "create": "Tạo buổi chơi"
   },
   "detail": {
     "defaultTitle": "Buổi chơi",
@@ -198,9 +198,15 @@
     "unknownUser": "không rõ",
     "cancelledBy": "Đã bị hủy bởi {{name}}",
     "cancelledByOn": "Đã bị hủy bởi {{name}} vào {{time}}",
+    "autoCancelledOn": "Tự động hủy vào {{time}}",
+    "autoCancelledReason": "buổi chơi chưa được thiết lập xong đúng hạn.",
     "reason": "Lý do: {{reason}}",
+    "information": {
+      "title": "Thông tin buổi chơi"
+    },
     "players": {
       "label": "Người chơi",
+      "summaryLabel": "Người chơi",
       "heading": "Người chơi ({{value}})",
       "error": "Không thể tải danh sách người tham gia."
     },
@@ -236,11 +242,11 @@
     },
     "preparingBanner": {
       "lead": "Chủ trì vẫn đang chuẩn bị buổi chơi này.",
-      "body": "Một số thông tin, như địa điểm hoặc phí, có thể thay đổi. Buổi chơi sẽ tự động bị hủy nếu chưa được lên lịch trước khi bắt đầu."
+      "body": "Một số thông tin, như địa điểm hoặc phí, có thể thay đổi. Buổi chơi sẽ tự động bị hủy nếu chưa bổ sung đủ trước khi bắt đầu."
     },
     "stillMissing": "Còn thiếu:",
-    "markScheduled": "Đánh dấu đã lên lịch",
-    "markScheduledHint": "Dùng được khi không còn thông tin nào thiếu.",
+    "markScheduled": "Đánh dấu \"Sẵn sàng\"",
+    "markScheduledHint": "Bổ sung thông tin để trận đấu có thể \"Sẵn sàng\".",
     "scheduleError": "Không thể lên lịch buổi chơi. Vui lòng thử lại.",
     "saveError": "Không thể lưu thay đổi. Vui lòng thử lại.",
     "summary": {
@@ -252,12 +258,12 @@
       "minutes": "{{count}} phút",
       "location": "Địa điểm",
       "note": "Ghi chú",
-      "taken": "Đã có",
+      "taken": "Số lượng người chơi có sẵn (bao gồm chủ trì)",
       "open": "Chỗ trống",
       "male": "nam",
       "female": "nữ",
       "anyone": "bất kỳ ai",
-      "mood": "Không khí",
+      "mood": "Cường độ",
       "autoApprove": "Tự động duyệt",
       "yes": "Có",
       "no": "Không",
@@ -274,7 +280,7 @@
     },
     "titleField": {
       "label": "Tên buổi chơi",
-      "placeholder": "VD: Chơi giao lưu Chủ nhật",
+      "placeholder": "VD: Giao lưu Chủ nhật",
       "default": "Trận đấu của {{firstName}}"
     },
     "location": {
@@ -341,7 +347,7 @@
       "byGender": "Theo giới tính"
     },
     "mood": {
-      "label": "Không khí buổi chơi",
+      "label": "Cường độ buổi chơi",
       "ends": {
         "low": "Vui là chính",
         "mid": "Bình thường",

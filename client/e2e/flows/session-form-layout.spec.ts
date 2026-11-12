@@ -91,7 +91,9 @@ for (const width of widths) {
 
     await page.getByRole('button', { name: new RegExp(`Narrow ${width} — View details`) }).click();
     const dialog = page.getByRole('dialog', { name: `Narrow ${width}` });
-    await expect(dialog.getByText('The host is still preparing this session.')).toBeVisible();
+    // CLIENT-SESSION-37: the host gets "Still missing", not the viewer's "The host is still preparing" banner.
+    await expect(dialog.getByText('Still missing:')).toBeVisible();
+    await expect(dialog.getByText('The host is still preparing this session.')).toHaveCount(0);
     expect(await hasNoHorizontalOverflow(page)).toBe(true);
 
     // View mode: Edit is icon-only (its text span is hidden) but keeps its accessible name.

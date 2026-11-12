@@ -122,6 +122,12 @@ test('Matches journey', async ({ page }) => {
     // the creator already listed, and there is no Join step here any more. The Join mutation is
     // still covered e2e by step 9 (a Discover session) and step 5b's Accept-from-the-card.
     await expect(dialog.getByText('Players (1/10)')).toBeVisible();
+    // CLIENT-SESSION-37: the creator of a SCHEDULED session is a read-only viewer now — Session information and
+    // Players are both collapsed. Open Players to see the roster; the uppercase status is CSS only.
+    const sessionInfo = dialog.getByRole('button', { name: /Session information/ });
+    await expect(sessionInfo).toHaveAttribute('aria-expanded', 'false');
+    await expect(dialog.getByText('Jordan Lee', { exact: true })).toHaveCount(0);
+    await dialog.getByRole('button', { name: /Players \(1\/10\)/ }).click();
     // CLIENT-SESSION-30: 24h "start – end" in the header, and the approval mode ahead of the creator.
     await expect(dialog.getByText(/Sat, Aug 1 · 19:00 – 21:00/)).toBeVisible();
     await expect(dialog.getByText('Auto approval. Created by Jordan Lee')).toBeVisible();
@@ -535,7 +541,9 @@ test('Matches journey', async ({ page }) => {
     await page.getByRole('button', { name: /Needs setup — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Needs setup' });
     await expect(dialog.getByText('Preparing', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('The host is still preparing this session.')).toBeVisible();
+    // CLIENT-SESSION-37: the host sees what is still missing, not the viewer's "host is still preparing" banner.
+    await expect(dialog.getByText('Still missing:')).toBeVisible();
+    await expect(dialog.getByText('The host is still preparing this session.')).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Mark it scheduled' })).toBeDisabled();
 
     // Where: Edit is in the section header, Discard and Save replace it, the other Edit buttons lock.

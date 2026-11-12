@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { userEvent, within } from 'storybook/test';
 import type { Comment } from '@/features/feed/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
@@ -317,10 +318,34 @@ export const PreparingNotManager: Story = {
   args: { session: makeSession({ status: 'PREPARING', location: null, feeType: null }) },
 };
 
+/** CLIENT-SESSION-37: read-only mode with both sections opened (Session information, then Players). */
+export const ReadOnlyExpanded: Story = {
+  args: { session: makeSession({ capacity: 10, scheduledEndAt: '2026-08-01T20:30:00' }) },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole('button', { name: /Session information/ }));
+    await userEvent.click(await body.findByRole('button', { name: /^Players/ }));
+  },
+};
+
+/** CLIENT-SESSION-37: the system cancelled a never-scheduled session: "Auto-cancelled on <time>". */
+export const AutoCancelled: Story = {
+  args: {
+    session: makeSession({
+      status: 'CANCELLED',
+      cancelledBy: null,
+      cancelledByFullName: null,
+      cancelledAt: '2026-07-15T09:00:00',
+      cancelReason: 'Auto-cancelled — session setup was not completed before it started.',
+    }),
+  },
+};
+
 export const Cancelled: Story = {
   args: {
     session: makeSession({
       status: 'CANCELLED',
+      cancelledBy: 'user-1',
       cancelledByFullName: 'Jordan Lee',
       cancelledAt: '2026-07-15T09:00:00',
       cancelReason: 'Court unavailable due to maintenance.',

@@ -18,6 +18,9 @@ Visual regression no longer runs per PR: it is the manual workflow `client-visua
 | `session-detail-{not-joined, already-joined, invited, requested, approval-queue, discussion, cancelled, preparing}-*` at 375, 768, 1280 | CLIENT-SESSION-34 | changed: collapsed sections with a `field: value` summary; `preparing` also gains the warning banner |
 | `session-detail-*` (any whose fixture has no title) | SESSION-49 | probably unchanged: the fixtures have titles; confirm |
 | `app-discover-panel` baselines | CLIENT-SESSION-34 | only if one contains a session card (cards now show game mood and the gender split); not listed by the ticket, check |
+| `session-detail-{not-joined, already-joined, invited, requested, approval-queue, discussion, cancelled}-*` at 375, 768, 1280 | CLIENT-SESSION-37 | changed again: read-only mode (everything but the host of a `PREPARING` session) is one collapsed "Session information" section plus a collapsed "Players" section instead of six static blocks and an open roster; the status word is upper case |
+| `session-detail-preparing-*` | CLIENT-SESSION-37 | changed: only the status word (upper case); the host edit mode is untouched |
+| `home-feed-*`, `discover-modal-{default, time-popover, location-popover}-*`, `discover-panel-{default, multi-date, load-more}-*`, `discover-requested-*`, `discover-panel-*-popover-*` | CLIENT-SESSION-37 | probably changed: the session card's status word is upper case; only the ones whose page shows a session card (confirm: `discover-panel-empty-*`, `discover-modal-empty-*` and a home feed without sessions are unchanged) |
 | none | CLIENT-NOTIF-6 | no change: the sockets and the shared refresh draw nothing (no component or string changed) |
 | every other baseline | all | byte-identical; a diff there is a regression, not an update |
 

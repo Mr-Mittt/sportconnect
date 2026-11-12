@@ -146,7 +146,7 @@ describe('FriendsPage', () => {
 
     await waitFor(() => expect(screen.getByText('Priya Shah')).toBeInTheDocument());
     expect(screen.getByText('Hana Kim')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Upcoming matches' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Upcoming sessions' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Trending hashtags' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Group broadcasts' })).toBeInTheDocument();
     expect(screen.getByText('Select a friend to view their profile and chat.')).toBeInTheDocument();
@@ -325,7 +325,7 @@ describe('FriendsPage', () => {
     render(<FriendsPage />, { wrapper });
 
     await waitFor(() => expect(screen.getByText('Priya Shah')).toBeInTheDocument());
-    expect(screen.getByText('No upcoming matches.')).toBeInTheDocument();
+    expect(screen.getByText('No upcoming sessions.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Create a match' }));
     expect(await screen.findByRole('dialog', { name: 'Create your session' })).toBeInTheDocument();

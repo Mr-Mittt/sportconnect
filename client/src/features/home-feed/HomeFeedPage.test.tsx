@@ -646,7 +646,7 @@ describe('HomeFeedPage', () => {
     render(<HomeFeedPage />, { wrapper });
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
     expect(screen.queryAllByRole('button', { name: /view details/i })).toHaveLength(0);
-    expect(screen.getByText('No upcoming matches.')).toBeInTheDocument();
+    expect(screen.getByText('No upcoming sessions.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Create a match' }));
     expect(await screen.findByRole('dialog', { name: 'Create your session' })).toBeInTheDocument();

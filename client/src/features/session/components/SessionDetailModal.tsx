@@ -41,6 +41,7 @@ import { SessionCommentComposer } from './SessionCommentComposer';
 import { SessionCommentSection } from './SessionCommentSection';
 import { SessionReadinessDialog } from './SessionConfirmDialogs';
 import { SessionDetailSections, type CompletionFavorites } from './SessionDetailSections';
+import { SessionFormSection } from './SessionFormSection';
 import { missingForSession } from '../sessionReadiness';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 
@@ -176,7 +177,95 @@ function rosterQualifier(
   return null;
 }
 
-const PARTICIPATION_ACTION_ICON: Record<ParticipationActionKind, Icon> = {
+/** CLIENT-SESSION-37: the capacity bar under the Players header (nothing for an uncapped session). */
+function PlayersMeter({ session, rampColor }: { session: Session; rampColor: Parameters<typeof getRampFillClass>[0] }) {
+  if (session.capacity === UNCAPPED_CAPACITY) return null;
+  return (
+    <div className="h-1.25 overflow-hidden rounded-full bg-surface-1">
+      <div
+        className={cn('h-full rounded-full', getRampFillClass(rampColor))}
+        style={{ width: `${Math.min(100, (session.participantCount / session.capacity) * 100)}%` }}
+      />
+    </div>
+  );
+}
+
+function PlayersStatus({
+  isLoading,
+  isError,
+  loadingText,
+  errorText,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  loadingText: string;
+  errorText: string;
+}) {
+  return (
+    <>
+      {isLoading && <p className="text-2xs text-text-muted">{loadingText}</p>}
+      {isError && (
+        <p role="alert" className="text-2xs text-text-danger">
+          {errorText}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** The collapsed Players preview: decorative avatars, no names. */
+function PlayersAvatarStack({ participants }: { participants: SessionParticipant[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" aria-hidden="true">
+      {participants.map((participant) => (
+        <Avatar key={participant.id} className="border-hairline size-7 shrink-0 border-border" title={participant.userFullName}>
+          {participant.userAvatarUrl !== null && <AvatarImage src={participant.userAvatarUrl} alt="" />}
+          <AvatarFallback className="text-2xs">{initialsFor(participant.userFullName)}</AvatarFallback>
+        </Avatar>
+      ))}
+    </div>
+  );
+}
+
+/** The expanded Players roster: one chip per participant. */
+function PlayersRoster({
+  participants,
+  session,
+  currentUserId,
+  t,
+}: {
+  participants: SessionParticipant[];
+  session: Session;
+  currentUserId: string;
+  t: (key: string) => string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {participants.map((participant) => {
+        const qualifier = rosterQualifier(
+          participant.userId === session.createdBy,
+          participant.userId === currentUserId,
+          t,
+        );
+        return (
+          <div
+            key={participant.id}
+            className="border-hairline flex items-center gap-1.5 rounded-full border-border bg-surface-2 py-1 pr-2.5 pl-1"
+          >
+            <Avatar className="size-5.5 shrink-0">
+              {participant.userAvatarUrl !== null && <AvatarImage src={participant.userAvatarUrl} alt="" />}
+              <AvatarFallback className="text-2xs">{initialsFor(participant.userFullName)}</AvatarFallback>
+            </Avatar>
+            <span className="text-2xs whitespace-nowrap text-text-primary">{participant.userFullName}</span>
+            {qualifier !== null && <span className="text-2xs whitespace-nowrap text-text-muted">{qualifier}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const PARTICIPATION_ACTION_ICON:Record<ParticipationActionKind, Icon> = {
   JOIN: IconUserPlus,
   ACCEPT: IconCheck,
   CANCEL: IconX,
@@ -344,6 +433,8 @@ export function SessionDetailModal({
   const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [isPlayersCollapsed, setIsPlayersCollapsed] = useState(false);
+  /** Read-only mode only: its Players section starts collapsed. */
+  const [isPlayersOpen, setIsPlayersOpen] = useState(false);
   const [isApprovalCollapsed, setIsApprovalCollapsed] = useState(false);
 
   // SESSION-9/CLIENT-SESSION-9: derived from `session.callerParticipation`, not a lookup into
@@ -372,6 +463,20 @@ export function SessionDetailModal({
   const loadCategory = isError && loadError !== undefined ? getApiError(loadError).category : undefined;
   // CLIENT-SESSION-34: what a PREPARING session still needs before it can be scheduled.
   const missing = session !== undefined && session.status === 'PREPARING' ? missingForSession(session) : [];
+  // CLIENT-SESSION-37: everyone who cannot edit the session (a viewer, or the host once it is no longer
+  // PREPARING) gets the read-only mode: Session information and Players, both collapsed.
+  const readOnly = session !== undefined && !(canManage && session.status === 'PREPARING');
+  const playersHeading =
+    session === undefined
+      ? ''
+      : t('detail.players.heading', {
+          value:
+            session.capacity === UNCAPPED_CAPACITY
+              ? session.participantCount
+              : `${session.participantCount}/${session.capacity}`,
+        });
+  // CLIENT-SESSION-37: the system cancelled it (SESSION-24): no canceller, a cancel time.
+  const isAutoCancelled = session !== undefined && session.cancelledBy === null && session.cancelledAt !== null;
 
   return (
     <>
@@ -414,7 +519,7 @@ export function SessionDetailModal({
                 className={cn('size-1.5 shrink-0 rounded-full bg-current', SESSION_STATUS_CLASSES[session.status])}
                 aria-hidden="true"
               />
-              <span className={cn('font-medium', SESSION_STATUS_CLASSES[session.status])}>
+              <span className={cn('font-medium uppercase', SESSION_STATUS_CLASSES[session.status])}>
                 {getSessionStatusLabel(session.status)}
               </span>
               <span className="text-text-muted"> · {formatSessionHeaderDateTime(session.scheduledStart, session.scheduledEndAt)}</span>
@@ -439,30 +544,42 @@ export function SessionDetailModal({
               {session.status === 'CANCELLED' && (
                 <div className="border-hairline rounded-lg border-border bg-surface-1 p-2.5 text-2sm text-text-secondary">
                   <div>
-                    {session.cancelledAt !== null
-                      ? t('detail.cancelledByOn', {
-                          name: session.cancelledByFullName ?? t('detail.unknownUser'),
-                          time: formatStartTime(session.cancelledAt),
-                        })
-                      : t('detail.cancelledBy', {
-                          name: session.cancelledByFullName ?? t('detail.unknownUser'),
-                        })}
+                    {isAutoCancelled && session.cancelledAt !== null
+                      ? t('detail.autoCancelledOn', { time: formatStartTime(session.cancelledAt) })
+                      : session.cancelledAt !== null
+                        ? t('detail.cancelledByOn', {
+                            name: session.cancelledByFullName ?? t('detail.unknownUser'),
+                            time: formatStartTime(session.cancelledAt),
+                          })
+                        : t('detail.cancelledBy', {
+                            name: session.cancelledByFullName ?? t('detail.unknownUser'),
+                          })}
                   </div>
-                  {session.cancelReason !== null && session.cancelReason !== '' && (
-                    <div className="mt-1 text-2xs text-text-muted">{t('detail.reason', { reason: session.cancelReason })}</div>
+                  {/* An auto-cancel's stored reason is the server's English sentence: show client copy instead. */}
+                  {isAutoCancelled ? (
+                    <div className="mt-1 text-2xs text-text-muted">
+                      {t('detail.reason', { reason: t('detail.autoCancelledReason') })}
+                    </div>
+                  ) : (
+                    session.cancelReason !== null &&
+                    session.cancelReason !== '' && (
+                      <div className="mt-1 text-2xs text-text-muted">{t('detail.reason', { reason: session.cancelReason })}</div>
+                    )
                   )}
                 </div>
               )}
 
-              {/* CLIENT-SESSION-34: every viewer of a PREPARING session sees the warning; the host also
-                  sees what is still missing. */}
-              {session.status === 'PREPARING' && (
+              {/* CLIENT-SESSION-34: a viewer of a PREPARING session sees the warning. The host already knows
+                  it is theirs to prepare, so (CLIENT-SESSION-37) they get only what is still missing. */}
+              {session.status === 'PREPARING' && (!canManage || missing.length > 0) && (
                 <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-2xs leading-relaxed text-amber-800">
-                  <p>
-                    <strong>{t('detail.preparingBanner.lead')}</strong> {t('detail.preparingBanner.body')}
-                  </p>
-                  {canManage && missing.length > 0 && (
-                    <p className="mt-1">
+                  {!canManage && (
+                    <p>
+                      <strong>{t('detail.preparingBanner.lead')}</strong> {t('detail.preparingBanner.body')}
+                    </p>
+                  )}
+                  {canManage && (
+                    <p>
                       <strong>{t('detail.stillMissing')}</strong>{' '}
                       {missing.map((field) => t(`form.missingItem.${field}`)).join(', ')}
                     </p>
@@ -487,6 +604,45 @@ export function SessionDetailModal({
                 refChoiceSource={refChoiceSource}
               />
 
+              {/* CLIENT-SESSION-37: read-only mode — Players is a collapsed section like Session information. */}
+              {readOnly ? (
+                <section aria-label={t('detail.players.label')}>
+                  <SessionFormSection
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    title={playersHeading}
+                    open={isPlayersOpen}
+                    onOpenChange={setIsPlayersOpen}
+                    scrollIntoViewOnOpen
+                    summary={
+                      <div className="flex flex-col gap-1.5">
+                        <PlayersStatus
+                          isLoading={isParticipantsLoading}
+                          isError={isParticipantsError}
+                          loadingText={t('common.loading')}
+                          errorText={t('detail.players.error')}
+                        />
+                        {!isParticipantsLoading && !isParticipantsError && (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-2xs text-text-muted">{t('detail.players.summaryLabel')}:</span>
+                            <PlayersAvatarStack participants={participants} />
+                          </div>
+                        )}
+                      </div>
+                    }
+                  >
+                    <PlayersMeter session={session} rampColor={sport?.colorRamp} />
+                    <PlayersStatus
+                      isLoading={isParticipantsLoading}
+                      isError={isParticipantsError}
+                      loadingText={t('common.loading')}
+                      errorText={t('detail.players.error')}
+                    />
+                    {!isParticipantsLoading && !isParticipantsError && (
+                      <PlayersRoster participants={participants} session={session} currentUserId={currentUserId} t={t} />
+                    )}
+                  </SessionFormSection>
+                </section>
+              ) : (
               <section aria-label={t('detail.players.label')} className="flex flex-col gap-2">
                 <button
                   type="button"
@@ -510,76 +666,21 @@ export function SessionDetailModal({
                   />
                 </button>
 
-                {session.capacity !== UNCAPPED_CAPACITY && (
-                  <div className="h-1.25 overflow-hidden rounded-full bg-surface-1">
-                    <div
-                      className={cn('h-full rounded-full', getRampFillClass(sport?.colorRamp))}
-                      style={{
-                        width: `${Math.min(100, (session.participantCount / session.capacity) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                )}
-
-                {isParticipantsLoading && <p className="text-2xs text-text-muted">{t('common.loading')}</p>}
-                {isParticipantsError && (
-                  <p role="alert" className="text-2xs text-text-danger">
-                    {t('detail.players.error')}
-                  </p>
-                )}
-
+                <PlayersMeter session={session} rampColor={sport?.colorRamp} />
+                <PlayersStatus
+                  isLoading={isParticipantsLoading}
+                  isError={isParticipantsError}
+                  loadingText={t('common.loading')}
+                  errorText={t('detail.players.error')}
+                />
                 {!isParticipantsLoading && !isParticipantsError && isPlayersCollapsed && (
-                  <div className="flex flex-wrap items-center gap-1.5" aria-hidden="true">
-                    {participants.map((participant) => (
-                      <Avatar
-                        key={participant.id}
-                        className="border-hairline size-7 shrink-0 border-border"
-                        title={participant.userFullName}
-                      >
-                        {participant.userAvatarUrl !== null && (
-                          <AvatarImage src={participant.userAvatarUrl} alt="" />
-                        )}
-                        <AvatarFallback className="text-2xs">
-                          {initialsFor(participant.userFullName)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
-                  </div>
+                  <PlayersAvatarStack participants={participants} />
                 )}
-
                 {!isParticipantsLoading && !isParticipantsError && !isPlayersCollapsed && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {participants.map((participant) => {
-                      const qualifier = rosterQualifier(
-                        participant.userId === session.createdBy,
-                        participant.userId === currentUserId,
-                        t,
-                      );
-                      return (
-                        <div
-                          key={participant.id}
-                          className="border-hairline flex items-center gap-1.5 rounded-full border-border bg-surface-2 py-1 pr-2.5 pl-1"
-                        >
-                          <Avatar className="size-5.5 shrink-0">
-                            {participant.userAvatarUrl !== null && (
-                              <AvatarImage src={participant.userAvatarUrl} alt="" />
-                            )}
-                            <AvatarFallback className="text-2xs">
-                              {initialsFor(participant.userFullName)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-2xs whitespace-nowrap text-text-primary">
-                            {participant.userFullName}
-                          </span>
-                          {qualifier !== null && (
-                            <span className="text-2xs whitespace-nowrap text-text-muted">{qualifier}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <PlayersRoster participants={participants} session={session} currentUserId={currentUserId} t={t} />
                 )}
               </section>
+              )}
 
               {/* canJoinOrLeave also gates approve/reject, not just non-empty — the backend
                   rejects both once the session is CANCELLED (same reason cancelSession itself

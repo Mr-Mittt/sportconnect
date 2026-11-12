@@ -281,7 +281,7 @@ describe('App routing', () => {
 
     await waitFor(() => expect(screen.getByRole('group', { name: 'Sport filter' })).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByRole('article').length).toBeGreaterThan(0));
-    expect(screen.getByRole('region', { name: 'Upcoming matches' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Upcoming sessions' })).toBeInTheDocument();
   });
 
   it('renders the assembled Groups page on /groups for an authenticated user (FEED-4)', async () => {

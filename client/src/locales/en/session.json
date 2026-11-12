@@ -184,10 +184,10 @@
     "female": "female"
   },
   "upcomingMatches": {
-    "label": "Upcoming matches",
+    "label": "Upcoming sessions",
     "title": "Upcoming",
     "seeAll": "See all",
-    "empty": "No upcoming matches.",
+    "empty": "No upcoming sessions.",
     "join": "Join a match",
     "create": "Create a match"
   },
@@ -198,9 +198,15 @@
     "unknownUser": "unknown",
     "cancelledBy": "Cancelled by {{name}}",
     "cancelledByOn": "Cancelled by {{name}} on {{time}}",
+    "autoCancelledOn": "Auto-cancelled on {{time}}",
+    "autoCancelledReason": "the session setup was not completed in time.",
     "reason": "Reason: {{reason}}",
+    "information": {
+      "title": "Session information"
+    },
     "players": {
       "label": "Players",
+      "summaryLabel": "Players",
       "heading": "Players ({{value}})",
       "error": "Couldn't load participants."
     },
