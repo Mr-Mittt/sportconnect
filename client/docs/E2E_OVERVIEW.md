@@ -1223,7 +1223,7 @@ Every instance: freezes the clock (`page.clock.setFixedTime`, **before** any nav
 timestamps render deterministically) → waits for `document.fonts.ready` → full-page screenshot compared
 against `e2e/visual/__screenshots__/home-feed-{state}-{width}.png`.
 
-**Known, expected local noise:** baselines are **Linux-rendered** (via the `client-ci` workflow's
+**Known, expected local noise:** baselines are **Linux-rendered** (via the `client-visual` workflow's
 `update-baselines` dispatch). Running `pnpm test:visual` **locally on Windows will always show diffs**
 (sub-pixel font-rendering/anti-aliasing, typically 0.01–0.04 pixel ratio) — this is not a regression,
 it's been the documented behavior since HF-12. CI is the authoritative visual environment. Confirm a
@@ -1423,7 +1423,7 @@ every other spec's mockUser-authored fixtures already show) → waits for `docum
 (`edit-profile-modal` only) blurs the autofocused field first, same `CLIENT-SESSION-12` reasoning →
 screenshot compared against `e2e/visual/__screenshots__/profile-{state}-{width}.png`. Same
 known-Windows-noise caveat as every spec above: `pnpm test:visual` on a Windows host diffs these
-wholesale on font-rendering noise — the committed baselines are Linux-rendered via the `client-ci`
+wholesale on font-rendering noise — the committed baselines are Linux-rendered via the `client-visual`
 `update-baselines` dispatch. All 12 were CI-current as of SPORT-7 (which regenerated the 3
 `profile-settings-*` for schema v3's collapsible groups + nested `Rackets` sub-group; the other 9
 were confirmed byte-identical against that same artifact) — **CLIENT-REF-3 changed all 12 again,
@@ -1466,7 +1466,7 @@ at the same instant as every other visual spec, `document.fonts.ready` awaited, 
 against `e2e/visual/__screenshots__/{profile-settings-inactive,sport-status-confirm-deactivate,
 sport-status-confirm-reactivate,reactivate-nudge-sport-pill,reactivate-nudge-group,
 sport-switcher-muted-plain,sport-switcher-muted-selected}-{width}.png`. Same known-Windows-noise
-caveat as every spec above — Linux-rendered via the `client-ci` `update-baselines` dispatch.
+caveat as every spec above — Linux-rendered via the `client-visual` `update-baselines` dispatch.
 
 **CLIENT-REF-3 (2026-09-29):** `profile-settings-inactive-{375,768,1280}.png` changed too — this
 state screenshots `/profile` full-page, so it picks up the same `ProfileHeader` handle-line change
