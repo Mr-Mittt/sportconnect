@@ -166,3 +166,10 @@ be sent at all when the old address was never verified. U26 settles it at pickup
 **Source:** SESSION-46 scoping (`/ticket` session) — surfaced, not resolved on the spot.
 
 SESSION-46 makes `PREPARING` a fully editable draft that the host leaves with an explicit Schedule action. Should the people who already joined or requested a `PREPARING` session be told when the host schedules it ("the details are final")? Related: every successful edit while `PREPARING` already fans out `session.details.updated` to the joined participants, which may be chatty while a host edits several times; should those be throttled or batched until Schedule? Open: recipients (joined only, or also requested/invited), one notice or one per edit, and how it relates to NOTIF-7 (the auto-cancel of a `PREPARING` session that never got scheduled).
+
+### NOTIF-11 · A result record is added, changed or deleted in a session
+**Date added:** 2026-11-12
+**Status:** `CANDIDATE`
+**Source:** `/feature` game logging scoping (SESSION-50) — surfaced, not resolved on the spot.
+
+SESSION-50 lets any joined participant (or any group member in a group session) add, change and delete result records in an ONGOING or COMPLETED session. Should the other players in a record be told when a record naming them is added, changed or deleted ("a game with you was logged")? Open: whether it is noise during a busy session (a digest or only after the session ends), whether a deletion or edit made by someone else should notify the players it names, and who counts as the actor. SESSION-50 sends nothing.

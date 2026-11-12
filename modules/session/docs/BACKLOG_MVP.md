@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-11-11 (SESSION-46 done, SESSION-48 filed)
+**Last updated:** 2026-11-12 (SESSION-50..SESSION-60 filed: game logging / session results)
 
 ---
 
@@ -27,6 +27,17 @@
 | 6 | [SESSION-44](MVP/SESSION-44_REJECT_JOIN_AND_APPROVAL_ON_COMPLETED_SESSION.md) | `joinSession` (and approve/reject) reject only `CANCELLED`, not `COMPLETED` — a join or join request on a finished session succeeds (and notifies the creator); found during client CLIENT-SESSION-30 by code review, not yet reproduced live | `TODO` |
 | 7 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
 | 8 | [SESSION-48](MVP/SESSION-48_REMOVE_DESCRIPTION_FROM_THE_SESSION_API.md) | Remove description from the session API (deferred from CLIENT-SESSION-34; depends on it) | `TODO` |
+| 9 | [SESSION-50](MVP/SESSION-50_SESSION_RECORDS_LOG_EDIT_DELETE_GAMES.md) | Session result records: log, edit and delete games in a session (backend) | `TODO` |
+| 10 | [SESSION-51](MVP/SESSION-51_SESSION_THREAD_CHAT_COMMANDS_FOR_RESULTS.md) | Chat commands `:add`, `:del`, `:upd` in the session post thread | `TODO` |
+| 11 | [SESSION-52](MVP/SESSION-52_GUESTS_IN_SESSION_RESULTS.md) | Guests in session results (BA GU-1 to GU-4) | `TODO` |
+| 12 | [SESSION-53](MVP/SESSION-53_RESULT_STATISTICS.md) | Result statistics: per player, head-to-head, pair stats, scope (BA ST-1 to ST-7) | `TODO` |
+| 13 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Group leaderboards and the admin-set ranking order (BA LB-1 to LB-9) | `TODO` |
+| 14 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `TODO` |
+| 15 | [SESSION-56](MVP/SESSION-56_POINT_ADJUSTMENTS.md) | Admin point adjustments with a reason and history (BA AD-1 to AD-4) | `TODO` |
+| 16 | [SESSION-57](MVP/SESSION-57_RECORD_AUDIT_RETENTION_AND_RATE_LIMIT.md) | Session record audit: retention and rate limiting | `TODO` |
+| 17 | [SESSION-58](MVP/SESSION-58_PERFORMANCE_RECORDS_FOR_RUNNING_CYCLING_SWIMMING.md) | A RECORD kind for sports without a head-to-head result (running, cycling, swimming) | `TODO` |
+| 18 | [SESSION-59](MVP/SESSION-59_DRAWS_AND_BEST_OF_THREE_RESULTS.md) | Draws and best-of-three results | `TODO` |
+| 19 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
 
 ---
 
