@@ -371,7 +371,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     session_type VARCHAR(30) NOT NULL,
     created_by UUID NOT NULL,
     sport_id BIGINT NOT NULL,
-    title VARCHAR(200),
+    title VARCHAR(200) NOT NULL,
     description TEXT,
     -- SESSION-24 (V065): nullable in production — a session missing either this or fee_type
     -- starts PREPARING instead of SCHEDULED. This mirror was still NOT NULL until SESSION-27

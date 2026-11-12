@@ -1,0 +1,72 @@
+# Client visual regression, on demand (manual only).
+#
+# Kept out of client-ci on purpose: baselines are Linux-rendered and change in bursts, so a PR no
+# longer waits on them. The standing baseline ticket (CLIENT-SESSION-36 at the time of writing)
+# collects the baselines each client ticket expects to change; before a release the owner runs this
+# workflow on that ticket's branch, then applies the result with /updatebaseline.
+#
+#   update-baselines = false (default): diff the app against the committed baselines.
+#   update-baselines = true: regenerate them on Linux and upload the "visual-baselines" artifact
+#     (the whole client/e2e/visual/__screenshots__/ directory), which /updatebaseline consumes.
+#
+# Run it: Actions -> client-visual -> Run workflow -> pick the branch.
+name: client-visual
+
+on:
+  workflow_dispatch:
+    inputs:
+      update-baselines:
+        description: 'Regenerate visual baselines (Linux) and upload as artifact instead of diffing'
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    working-directory: client
+
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # reads packageManager from client/package.json
+        with:
+          package_json_file: client/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # The theme's baselines (auth-theme.spec) capture its built Storybook; the script installs
+      # the theme's own dependencies first.
+      - run: pnpm build-theme-storybook
+
+      - name: Visual regression
+        if: ${{ !inputs.update-baselines }}
+        run: pnpm test:visual
+
+      - name: Regenerate visual baselines
+        if: ${{ inputs.update-baselines }}
+        run: pnpm test:visual --update-snapshots
+
+      - name: Upload regenerated baselines
+        if: ${{ inputs.update-baselines }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines
+          path: client/e2e/visual/__screenshots__/
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-visual
+          path: client/playwright-report/
+          retention-days: 14

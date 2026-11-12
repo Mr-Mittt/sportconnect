@@ -104,8 +104,9 @@ function OverviewSection(props: SectionProps) {
   const t = useOverridableText('session', props.i18nOverridePrefix);
   const { session } = props;
   const [title, setTitle] = useState(session.title ?? '');
-  const changed = title.trim() !== (session.title ?? '');
-  // The server reads "" as "clear the title" (a null leaves it alone).
+  // SESSION-49: the title is required; a blank one cannot be saved (the server refuses it with SESSION_TITLE_REQUIRED).
+  const isBlank = title.trim() === '';
+  const changed = !isBlank && title.trim() !== (session.title ?? '');
   const save = () => props.onSave({ title: title.trim() });
   const { actions, errorLine } = useSectionFrame(props, changed, save);
   return (
@@ -135,6 +136,7 @@ function OverviewSection(props: SectionProps) {
             i18nOverridePrefix={props.i18nOverridePrefix}
             title={title}
             onTitleChange={setTitle}
+            showTitleError={isBlank}
           />
           {errorLine}
         </>

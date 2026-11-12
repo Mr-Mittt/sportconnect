@@ -1,11 +1,11 @@
 You are applying a CI-regenerated set of Playwright visual-regression baselines to the repo.
 Arguments: $ARGUMENTS — the path to the `visual-baselines` artifact downloaded from the
-`client-ci` workflow's `update-baselines` manual dispatch. It may be the `.zip` itself or an
+`client-visual` workflow's `update-baselines` manual dispatch. It may be the `.zip` itself or an
 already-extracted directory. If no path is given, ask for one before doing anything.
 
 Background: `pnpm test:visual` cannot produce a valid baseline on a Windows dev host (the
 documented font-rendering noise floor — see CLIENT-NOTIF-3 / HF-12..HF-20). The only correct
-baseline is the one CI renders on Linux via `pnpm test:visual --update-snapshots` and uploads as
+baseline is the one CI renders on Linux (the `client-visual` workflow, on demand, not part of `client-ci`) via `pnpm test:visual --update-snapshots` and uploads as
 the `visual-baselines` artifact (whole `client/e2e/visual/__screenshots__/` directory). This
 command takes that artifact, proves **only the expected baselines changed**, applies just those,
 commits, pushes, updates the ticket's paperwork, and deletes the artifact.

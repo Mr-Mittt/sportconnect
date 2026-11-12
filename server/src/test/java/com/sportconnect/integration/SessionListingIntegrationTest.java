@@ -93,7 +93,7 @@ class SessionListingIntegrationTest extends BaseIT {
     /** SESSION-43 — same as {@link #createSession(SessionStatus, LocalDateTime)} but for an
      * explicit sport, so the {@code sportId} filter tests can mix sports for one caller. */
     private Long createSession(SessionStatus status, LocalDateTime scheduledStart, Long sportId) {
-        Session session = Session.builder()
+        Session session = Session.builder().title("Test session")
                 .groupId(null)
                 .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())
@@ -122,7 +122,7 @@ class SessionListingIntegrationTest extends BaseIT {
 
     /** SESSION-43 — {@link #createSessionAtInstant(SessionStatus, Instant)} for an explicit sport. */
     private Long createSessionAtInstant(SessionStatus status, Instant scheduledStart, Long sportId) {
-        Session session = Session.builder()
+        Session session = Session.builder().title("Test session")
                 .groupId(null)
                 .isPublic(true)
                 .postId(postIdSeq.getAndIncrement())
@@ -145,7 +145,7 @@ class SessionListingIntegrationTest extends BaseIT {
      * prove {@code /upcoming}/{@code /history} include a group-linked session exactly like a
      * standalone one (neither endpoint filters on {@code groupId}). */
     private Long createGroupLinkedSession(SessionStatus status, LocalDateTime scheduledStart) {
-        Session session = Session.builder()
+        Session session = Session.builder().title("Test session")
                 .groupId(999L)
                 .isPublic(false)
                 .postId(postIdSeq.getAndIncrement())

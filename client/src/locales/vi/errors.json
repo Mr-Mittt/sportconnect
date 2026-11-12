@@ -158,6 +158,7 @@
     "SESSION_NOT_PARTICIPANT": "Bạn không còn tham gia buổi chơi này.",
     "SESSION_CREATOR_CANNOT_LEAVE": "Là người tạo, bạn không thể rời buổi chơi này. Hãy hủy buổi chơi.",
     "SESSION_SPORT_REQUIRED": "Hãy chọn môn thể thao cho buổi chơi.",
+    "SESSION_TITLE_REQUIRED": "Hãy đặt tên cho buổi chơi.",
     "SESSION_LOCATION_SPORT_MISMATCH": "Địa điểm này không dành cho môn của buổi chơi. Hãy chọn địa điểm khác.",
     "SESSION_FEE_AMOUNT_REQUIRED": "Hãy nhập mức phí.",
     "COUNTRY_NOT_FOUND": "Quốc gia này không khả dụng. Hãy chọn quốc gia khác.",

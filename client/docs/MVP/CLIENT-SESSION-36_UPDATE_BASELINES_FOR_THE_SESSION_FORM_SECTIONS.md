@@ -2,9 +2,9 @@
 
 **Status:** `TODO`
 **Type:** Testing · **Depends on:** CLIENT-SESSION-34 (pushed; its fixes up to `aa6e23d` are in) ·
-**Filed:** 2026-11-12, at the CLIENT-SESSION-34 CI fix: the ticket's own visual-regression expectation says these baselines change and wait for the `update-baselines` dispatch (a Windows host cannot render a valid baseline).
+**Filed:** 2026-11-12, at the CLIENT-SESSION-34 CI fix. **Standing ticket:** it stays open and collects the baselines each client ticket expects to change (add rows to the table below, with the ticket id); it is run and closed before the release, and a new baseline ticket is filed for the next one. Reason for filing: the ticket's own visual-regression expectation says these baselines change and wait for the `update-baselines` dispatch (a Windows host cannot render a valid baseline).
 
-Apply the baselines CI regenerates for the surfaces CLIENT-SESSION-34 changed, in one pass, the way AUTH-19 did for its topic. The owner runs `client-ci` with `update-baselines=true` (Actions, client-ci, Run workflow) on the branch after `aa6e23d`, downloads the `visual-baselines` artifact, and Claude applies it with `/updatebaseline`, which classifies every file by SHA-256 and shows the owner the set before anything is written.
+Apply the baselines CI regenerates for the surfaces CLIENT-SESSION-34 changed, in one pass, the way AUTH-19 did for its topic. The owner runs `client-visual` with `update-baselines=true` (Actions, client-visual, Run workflow; the visual diff left `client-ci` on 2026-11-12) on the branch after `aa6e23d`, downloads the `visual-baselines` artifact, and Claude applies it with `/updatebaseline`, which classifies every file by SHA-256 and shows the owner the set before anything is written.
 
 Expected set (from the CLIENT-SESSION-34 expectation line and its spec files; verify at pickup against `git diff master...HEAD -- client/`):
 

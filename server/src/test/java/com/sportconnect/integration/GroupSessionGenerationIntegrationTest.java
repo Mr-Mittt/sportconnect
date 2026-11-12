@@ -199,6 +199,9 @@ class GroupSessionGenerationIntegrationTest extends BaseIT {
         assertThat(created.get(0).getGroupId()).isEqualTo(groupId);
         assertThat(created.get(0).getSessionType()).isEqualTo(SessionType.GROUP_RECURRING);
         assertThat(created.get(0).getStatus()).isEqualTo(SessionStatus.SCHEDULED);
+        // SESSION-49: titled after the group (the owner has no stored language, so English), and a real NOT NULL insert
+        String groupName = groupRepository.findById(groupId).orElseThrow().getGroupName();
+        assertThat(created.get(0).getTitle()).isEqualTo(groupName + "'s session");
     }
 
     @Test
@@ -210,7 +213,7 @@ class GroupSessionGenerationIntegrationTest extends BaseIT {
         group.setRecurrenceLocationId(locationId);
         groupRepository.save(group);
 
-        sessionRepository.save(Session.builder()
+        sessionRepository.save(Session.builder().title("Test session")
                 .groupId(groupId)
                 .isPublic(false)
                 .postId(System.nanoTime())
@@ -308,13 +311,13 @@ class GroupSessionGenerationIntegrationTest extends BaseIT {
         groupB.setRecurrenceLocationId(locationId);
         groupRepository.save(groupB);
 
-        sessionRepository.save(Session.builder()
+        sessionRepository.save(Session.builder().title("Test session")
                 .groupId(groupAId).isPublic(false).postId(System.nanoTime())
                 .sessionType(SessionType.GROUP_RECURRING).createdBy(ownerId).sportId(sportId)
                 .locationId(locationId).scheduledStart(Instant.now().minusSeconds(3600))
                 .scheduledEndAt(Instant.now().minusSeconds(1)).status(SessionStatus.ONGOING)
                 .build());
-        sessionRepository.save(Session.builder()
+        sessionRepository.save(Session.builder().title("Test session")
                 .groupId(groupBId).isPublic(false).postId(System.nanoTime())
                 .sessionType(SessionType.GROUP_RECURRING).createdBy(ownerId).sportId(sportId)
                 .locationId(locationId).scheduledStart(Instant.now().minusSeconds(3600))

@@ -105,7 +105,7 @@ class SessionPreparingLifecycleIntegrationTest extends RedisBaseIT {
     }
 
     private CreateSessionRequest.CreateSessionRequestBuilder createBody() {
-        return CreateSessionRequest.builder().sportId(sportId)
+        return CreateSessionRequest.builder().title("Test session").sportId(sportId)
                 .scheduledStart(Instant.now().plusSeconds(86400)).capacity(10).gameMood(5);
     }
 
@@ -123,7 +123,7 @@ class SessionPreparingLifecycleIntegrationTest extends RedisBaseIT {
     void create_withoutLocationOrDuration_startsPreparing_andPersistsTheNewColumns() throws Exception {
         authenticateAs(creatorId);
         mockMvc.perform(post("/api/sessions").contentType(MediaType.APPLICATION_JSON)
-                        .content(toJson(createBody().title("   ").maleSlots(2).femaleSlots(3).gameMood(7)
+                        .content(toJson(createBody().title("  Friday game  ").maleSlots(2).femaleSlots(3).gameMood(7)
                                 .feeNote("  bring cash  ").build())))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.status").value("PREPARING"))
@@ -131,16 +131,41 @@ class SessionPreparingLifecycleIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.data.maleSlots").value(2))
                 .andExpect(jsonPath("$.data.femaleSlots").value(3))
                 .andExpect(jsonPath("$.data.feeNote").value("bring cash"))
-                .andExpect(jsonPath("$.data.title").doesNotExist());
+                .andExpect(jsonPath("$.data.title").value("Friday game"));
 
         Session stored = sessionRepository.findAll().get(0);
         assertThat(stored.getGameMood()).isEqualTo(7);
         assertThat(stored.getMaleSlots()).isEqualTo(2);
         assertThat(stored.getFemaleSlots()).isEqualTo(3);
         assertThat(stored.getFeeNote()).isEqualTo("bring cash");
-        assertThat(stored.getTitle()).isNull();
-        // the real companion post exists with the fixed fallback text, not "Session: null"
-        assertThat(postRepository.findById(stored.getPostId()).orElseThrow().getContent()).isEqualTo("New session");
+        assertThat(stored.getTitle()).isEqualTo("Friday game");
+        // SESSION-49: the title is required, so the real companion post always carries it
+        assertThat(postRepository.findById(stored.getPostId()).orElseThrow().getContent()).isEqualTo("Session: Friday game");
+    }
+
+    @Test
+    void create_withoutATitle_is400SessionTitleRequired_andCreatesNothing() throws Exception {
+        authenticateAs(creatorId);
+        for (String blank : new String[] {null, "", "   "}) {
+            mockMvc.perform(post("/api/sessions").contentType(MediaType.APPLICATION_JSON)
+                            .content(toJson(createBody().title(blank).build())))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("SESSION_TITLE_REQUIRED"));
+        }
+        assertThat(sessionRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void update_toABlankTitle_is400SessionTitleRequired_andKeepsTheTitle() throws Exception {
+        authenticateAs(creatorId);
+        Long sessionId = createViaApi(createBody().build());
+
+        mockMvc.perform(put("/api/sessions/" + sessionId).contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(UpdateSessionRequest.builder().title("   ").build())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_TITLE_REQUIRED"));
+
+        assertThat(sessionRepository.findById(sessionId).orElseThrow().getTitle()).isEqualTo("Test session");
     }
 
     @Test
@@ -278,7 +303,7 @@ class SessionPreparingLifecycleIntegrationTest extends RedisBaseIT {
     @Test
     void schedule_asADeactivatedCreator_isRefusedByTheRealJwtFilterBeforeAnythingRuns() throws Exception {
         UUID inactiveId = createUserWithRoles(false, "USER");
-        Long sessionId = sessionRepository.save(Session.builder()
+        Long sessionId = sessionRepository.save(Session.builder().title("Test session")
                 .groupId(null).isPublic(true)
                 .postId(postRepository.save(Post.builder()
                         .userId(inactiveId).groupId(null)

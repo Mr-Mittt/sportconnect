@@ -28,24 +28,38 @@ interface CommonProps {
 interface OverviewFieldsProps extends CommonProps {
   title: string;
   onTitleChange: (next: string) => void;
+  /** Show the "title is required" line (a refused Create, or a blank title while editing). */
+  showTitleError?: boolean;
   /** The sport control — a select in the create form; the detail modal passes none (sport is fixed). */
   sportField?: ReactNode;
 }
 
-/** The Overview section: the sport (create only) and the optional title. */
-export function OverviewFields({ title, onTitleChange, sportField, idPrefix, i18nOverridePrefix }: OverviewFieldsProps) {
+/** The Overview section: the sport (create only) and the title, which every session needs (SESSION-49). */
+export function OverviewFields({
+  title,
+  onTitleChange,
+  showTitleError = false,
+  sportField,
+  idPrefix,
+  i18nOverridePrefix,
+}: OverviewFieldsProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
       {sportField !== undefined && <div className="sm:col-span-3">{sportField}</div>}
       <div className={sportField !== undefined ? 'sm:col-span-7' : 'sm:col-span-10'}>
-        <Label htmlFor={`${idPrefix}-title`}>{t('create.titleField.label')}</Label>
+        <Label htmlFor={`${idPrefix}-title`}>
+          {t('create.titleField.label')}
+          <RequiredMark />
+        </Label>
         <Input
           id={`${idPrefix}-title`}
           value={title}
           onChange={(event) => onTitleChange(event.target.value)}
           placeholder={t('create.titleField.placeholder')}
+          aria-invalid={showTitleError || undefined}
         />
+        {showTitleError && <p className="mt-1 text-2xs text-text-danger">{t('create.validation.title')}</p>}
       </div>
     </div>
   );

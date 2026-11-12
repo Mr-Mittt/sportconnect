@@ -13,6 +13,7 @@ import com.sportconnect.session.repository.SessionRepository
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest
 import com.sportconnect.social.post.api.service.CommentService
 import com.sportconnect.social.post.api.service.PostService
+import com.sportconnect.user.api.service.UserService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
@@ -34,17 +35,19 @@ class SessionGenerationServiceSpec extends Specification {
     SessionOutboxWriter sessionOutboxWriter = Mock()
     CommentService commentService = Mock()
     PostService postService = Mock()
+    UserService userService = Mock()
 
     @Subject
     SessionGenerationService service = new SessionGenerationService(
             sessionRepository, groupService, locationService, sessionOutboxEventRepository, sessionOutboxWriter,
-            commentService, postService)
+            commentService, postService, userService)
 
     def setup() {
         // SESSION-38: every successful generateForConfigs session creation now creates a companion
         // SESSION_POST first — lenient default so tests that aren't specifically about this don't
         // each need to stub it themselves, same convention as SessionServiceImplSpec's setup().
         postService.createSessionPost(_, _) >> 999L
+        userService.findPreferredLanguageCodes(_) >> [:]
     }
 
     def "generateForConfigs skips a group with an incomplete recurrence rule"() {
@@ -78,6 +81,48 @@ class SessionGenerationServiceSpec extends Specification {
         1 * locationService.getLocationsByIds([5L]) >> [:]
         1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> true
         0 * sessionRepository.save(_)
+    }
+
+    def "generateForConfigs titles the session after the group in the owner's language, from one batch lookup (SESSION-49)"() {
+        given:
+        def viOwner = UUID.randomUUID()
+        def enOwner = UUID.randomUUID()
+        def configs = [
+                GroupRecurrenceConfigResponse.builder().groupId(1L).groupName("Nhóm A").sportId(1L).ownerId(viOwner)
+                        .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0)).recurrenceLocationId(5L).build(),
+                GroupRecurrenceConfigResponse.builder().groupId(2L).groupName("Group B").sportId(1L).ownerId(enOwner)
+                        .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0)).recurrenceLocationId(5L).build()]
+        def saved = []
+
+        when:
+        service.generateForConfigs(configs)
+
+        then:
+        1 * locationService.getLocationsByIds([5L]) >> [:]
+        1 * userService.findPreferredLanguageCodes({ it as Set == [viOwner, enOwner] as Set }) >> [(viOwner): "vi"]
+        2 * sessionRepository.existsByGroupIdAndScheduledStart(_, _ as Instant) >> false
+        1 * postService.createSessionPost(viOwner, "Session: Trận đấu của nhóm Nhóm A") >> 11L
+        1 * postService.createSessionPost(enOwner, "Session: Group B's session") >> 12L
+        2 * sessionRepository.save({ Session s -> saved << s.title; true }) >> { Session s -> s }
+        saved as Set == ["Trận đấu của nhóm Nhóm A", "Group B's session"] as Set
+    }
+
+    def "generatedTitle follows the language, falls back to English and fits the column (SESSION-49)"() {
+        expect:
+        SessionGenerationService.generatedTitle(name, lang) == expected
+
+        where:
+        name      | lang | expected
+        "Group A" | "en" | "Group A's session"
+        "Nhóm A"  | "vi" | "Trận đấu của nhóm Nhóm A"
+        "Group A" | null | "Group A's session"
+        "Group A" | "fr" | "Group A's session"
+        " Pad "   | "en" | "Pad's session"
+    }
+
+    def "generatedTitle is cut to the 200 characters the column holds (SESSION-49)"() {
+        expect:
+        SessionGenerationService.generatedTitle("x" * 300, "en").length() == 200
     }
 
     def "generateForConfigs creates a session copying the recurrence config"() {

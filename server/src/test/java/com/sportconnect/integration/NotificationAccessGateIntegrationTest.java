@@ -2,6 +2,11 @@ package com.sportconnect.integration;
 
 import com.sportconnect.notification.entity.Notification;
 import com.sportconnect.notification.repository.NotificationRepository;
+import com.sportconnect.session.api.dto.SessionStatus;
+import com.sportconnect.session.api.dto.SessionType;
+import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.repository.SessionRepository;
+import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +33,9 @@ class NotificationAccessGateIntegrationTest extends BaseIT {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private SessionRepository sessionRepository;
 
     private Notification createNotification(UUID recipientId) {
         Notification notification = Notification.builder()
@@ -93,5 +101,33 @@ class NotificationAccessGateIntegrationTest extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.errorCode").doesNotExist())
                 .andExpect(jsonPath("$.data.content").isEmpty());
+    }
+
+    /**
+     * SESSION-49: the list resolves each session notification's title through the session domain. It used to 500 for
+     * the whole page when one referenced session had no title; titles are required again, so the page is a 200 and the
+     * entity title comes through.
+     */
+    @Test
+    void list_withASessionNotification_returns200WithTheSessionsTitle() throws Exception {
+        UUID recipientId = UUID.randomUUID();
+        Long sessionId = sessionRepository.save(Session.builder().title("Friday game")
+                .isPublic(true).postId(System.nanoTime()).sessionType(SessionType.STANDALONE)
+                .createdBy(UUID.randomUUID()).sportId(1L).scheduledStart(Instant.now().plusSeconds(86400))
+                .status(SessionStatus.PREPARING).capacity(10).initialSlot(0).autoApprove(true).build()).getId();
+        notificationRepository.save(Notification.builder()
+                .recipientUserId(recipientId).type("session.participant.joined")
+                .entityType("SESSION").entityId(String.valueOf(sessionId)).isRead(false).build());
+        authenticateAs(recipientId);
+
+        try {
+            mockMvc.perform(get("/api/notifications"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.content[0].entityTitle").value("Friday game"));
+        } finally {
+            // Leave no session behind for the other integration classes that share this database.
+            notificationRepository.deleteAll();
+            sessionRepository.deleteById(sessionId);
+        }
     }
 }

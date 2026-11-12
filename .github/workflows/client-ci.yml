@@ -1,17 +1,9 @@
-# Client CI — lint, typecheck, unit, e2e (incl. a11y gate), visual regression, plus (AUTH-15) the
-# Keycloak login theme: its checks in `test`, its real-Keycloak e2e in `keycloak-e2e`.
-# HF-10b: make the visual check a *required* status on PRs touching client/**
-# (GitHub → Settings → Branches → require "client-ci / test").
+# Client CI — lint, typecheck, unit, e2e (incl. a11y gate), plus (AUTH-15) the Keycloak login
+# theme: its checks in `test`, its real-Keycloak e2e in `keycloak-e2e`.
 #
-# Baseline bootstrap (one-time, and after any intended visual change):
-# committed screenshots are OS-specific; CI runs Linux. Run this workflow
-# manually (Actions → client-ci → Run workflow) with update-baselines=true,
-# download the "visual-baselines" artifact, replace
-# client/e2e/visual/__screenshots__/ with its contents, and commit.
-#
-# A update-baselines=true dispatch runs ONLY the regenerate + upload path —
-# lint / typecheck / unit / e2e / visual-diff are skipped, so a baseline
-# refresh can't be blocked by an unrelated failure or a flaky e2e run.
+# Visual regression is NOT here: it runs on demand in client-visual.yml (manual dispatch), which also
+# regenerates the Linux baselines (artifact "visual-baselines", applied with /updatebaseline). The
+# theme Storybook is still built here because the theme a11y gate (test:theme) uses it.
 name: client-ci
 
 on:
@@ -40,11 +32,6 @@ on:
       - 'infra/scripts/build-keycloak-theme.sh'
       - 'infra/scripts/run-keycloak-e2e.sh'
   workflow_dispatch:
-    inputs:
-      update-baselines:
-        description: 'Regenerate visual baselines (Linux) and upload as artifact instead of diffing'
-        type: boolean
-        default: false
 
 defaults:
   run:
@@ -68,30 +55,20 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # lint / typecheck / unit / e2e are skipped on a baseline-regen dispatch
-      # (update-baselines=true) — that run does only regenerate + upload below.
-      # `inputs.update-baselines` is empty (falsy) for push / pull_request, so
-      # these run normally there.
       - run: pnpm lint
-        if: ${{ !inputs.update-baselines }}
 
       - run: pnpm exec tsc -b
-        if: ${{ !inputs.update-baselines }}
 
       - run: pnpm test
-        if: ${{ !inputs.update-baselines }}
 
       - run: pnpm exec playwright install --with-deps chromium
 
       - run: pnpm e2e
-        if: ${{ !inputs.update-baselines }}
 
       # AUTH-15: the Keycloak login theme (client/keycloak-theme) is its own package. Its lint,
-      # typecheck and unit tests run first (skipped on a baseline-regen dispatch, like the client's
-      # own); its Storybook is built on every run because the theme's visual baselines and the
-      # theme a11y gate both capture it. The theme JAR itself is built in the keycloak-e2e job.
+      # typecheck and unit tests run first; its Storybook is built on every run because the theme
+      # a11y gate captures it. The theme JAR itself is built in the keycloak-e2e job.
       - name: Theme lint, typecheck, unit
-        if: ${{ !inputs.update-baselines }}
         working-directory: client/keycloak-theme
         run: |
           pnpm install --frozen-lockfile
@@ -102,23 +79,7 @@ jobs:
       - run: pnpm build-theme-storybook
 
       - name: Theme a11y / overflow / Tab order
-        if: ${{ !inputs.update-baselines }}
         run: pnpm test:theme
-
-      - name: Visual regression
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.update-baselines) }}
-        run: pnpm test:visual
-
-      - name: Regenerate visual baselines (bootstrap)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update-baselines }}
-        run: pnpm test:visual --update-snapshots
-
-      - name: Upload regenerated baselines
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update-baselines }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: visual-baselines
-          path: client/e2e/visual/__screenshots__/
 
       - name: Upload Playwright report on failure
         if: failure()
@@ -131,10 +92,9 @@ jobs:
   # AUTH-15: the redirect e2e against a real Keycloak carrying the SportConnect theme. The script
   # builds the theme JAR (JDK + Maven; ubuntu-latest ships Maven, setup-java pins the JDK), starts a
   # throwaway Keycloak container with the committed realm import and runs `pnpm e2e:keycloak`.
-  # Skipped on a baseline-regen dispatch. The same script runs locally:
+  # The same script runs locally:
   # infra/scripts/run-keycloak-e2e.sh
   keycloak-e2e:
-    if: ${{ !inputs.update-baselines }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

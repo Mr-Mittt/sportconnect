@@ -110,7 +110,7 @@ class SessionAccessGateIntegrationTest extends BaseIT {
     }
 
     private Long createSession(Long groupId, boolean isPublic) {
-        Session session = Session.builder()
+        Session session = Session.builder().title("Test session")
                 .groupId(groupId)
                 .isPublic(isPublic)
                 .postId(postIdSeq.getAndIncrement())

@@ -446,6 +446,10 @@ export const sessionHandlers: HttpHandler[] = [
     if (!isOffsetAware(body.scheduledStart)) {
       return HttpResponse.json(apiError('scheduledStart must include a UTC offset'), { status: 400 });
     }
+    // SESSION-49: the title is required again (mirrors the backend's SESSION_TITLE_REQUIRED).
+    if ((body.title ?? '').trim() === '') {
+      return HttpResponse.json(apiError('A session needs a title', 'SESSION_TITLE_REQUIRED'), { status: 400 });
+    }
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const initialSlot = body.initialSlot ?? 0;
     const created: Session = {
@@ -456,7 +460,7 @@ export const sessionHandlers: HttpHandler[] = [
       createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
       sportId: body.sportId ?? mockLocation.sportId,
       sportName: mockLocation.sportName,
-      title: body.title ?? null,
+      title: body.title.trim(),
       description: body.description ?? null,
       location: body.locationId !== undefined ? mockLocation : null,
       locationNote: body.locationNote ?? null,
@@ -772,6 +776,10 @@ export const sessionHandlers: HttpHandler[] = [
     if (body.scheduledStart !== undefined && !isOffsetAware(body.scheduledStart)) {
       return HttpResponse.json(apiError('scheduledStart must include a UTC offset'), { status: 400 });
     }
+    // SESSION-49: a blank title is refused (mirrors SESSION_TITLE_REQUIRED); an omitted one leaves it alone.
+    if (body.title !== undefined && body.title.trim() === '') {
+      return HttpResponse.json(apiError('A session needs a title', 'SESSION_TITLE_REQUIRED'), { status: 400 });
+    }
     // SESSION-46: any edit is refused unless the session is still PREPARING.
     if (existing.status !== 'PREPARING') {
       return HttpResponse.json(
@@ -808,7 +816,7 @@ export const sessionHandlers: HttpHandler[] = [
     }
     const updated: Session = {
       ...existing,
-      ...(body.title !== undefined && { title: body.title.trim() === '' ? null : body.title }),
+      ...(body.title !== undefined && { title: body.title.trim() }),
       ...(body.description !== undefined && { description: body.description }),
       location: resolvedLocation,
       ...(body.locationNote !== undefined && { locationNote: body.locationNote }),

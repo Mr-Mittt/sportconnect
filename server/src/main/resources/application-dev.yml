@@ -15,7 +15,7 @@ spring:
     password: sa
   
   jpa:
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
@@ -69,7 +69,7 @@ logging:
     com.sportconnect: DEBUG
     org.springframework.web: DEBUG
     org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
+    org.hibernate.SQL: WARN
 
 app:
   cookie:

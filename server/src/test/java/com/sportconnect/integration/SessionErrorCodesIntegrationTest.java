@@ -100,7 +100,7 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
     }
 
     private Long seedSession(Long sessionGroupId, SessionStatus status) {
-        return sessionRepository.save(Session.builder()
+        return sessionRepository.save(Session.builder().title("Test session")
                 .groupId(sessionGroupId)
                 .isPublic(sessionGroupId == null)
                 .postId(postIdSeq.getAndIncrement())

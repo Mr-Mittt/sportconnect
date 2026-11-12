@@ -11,6 +11,8 @@ writes a fresh template and uses the section as the release PR description. Vers
 - CLIENT-SESSION-34: the create-session form is now five collapsible sections (Overview, When, Where, Who, Cost) plus the sport's Session detail, with an end time that follows the duration, one-minute time pickers, a game mood slider, "Who can join" (Anyone / By gender with male and female slots), a fee note, and an "Are you ready?" confirmation before a session is created. Title and duration are optional; the description field is gone.
 - CLIENT-SESSION-34: the session detail modal shows the same sections, collapsed with a `field: value` summary. On a Preparing session every viewer sees a warning banner; the host edits one section at a time (Edit, Save, Discard in the section header) and leaves the draft with "Mark it scheduled", which also opens by itself when the last missing field is saved. Session cards show the game mood and the gender split. Auto approve now asks for confirmation, and closing the create form with unsent entries asks "Leave without saving?" (a value the sport's schema fills in by itself is not an unsent entry, so an untouched form closes at once).
 
+- SESSION-49: the session title is required and pre-filled in the create form (en `<first name>'s session`, vi `Trận đấu của <first name>`); a blank title shows an inline error and blocks Create, and the detail editor cannot save a blank title.
+
 ### Applied automatically
 
 - A new client image replaces the old one with the next deploy; nothing else changes on the box.

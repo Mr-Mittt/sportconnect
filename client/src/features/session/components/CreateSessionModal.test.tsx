@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAuthStore } from '@/app/authStore';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
@@ -117,7 +118,32 @@ async function createAndConfirm(user: ReturnType<typeof userEvent.setup>) {
   await user.click(go);
 }
 
+/** SESSION-49: the title is pre-filled from the signed-in user's first name, so a test types over it. */
+const DEFAULT_TITLE = "Jordan's session";
+
+async function replaceTitle(user: ReturnType<typeof userEvent.setup>, value: string) {
+  const field = screen.getByLabelText(/^Session title/);
+  await user.clear(field);
+  await user.type(field, value);
+}
+
 describe('CreateSessionModal', () => {
+  beforeEach(() => {
+    useAuthStore.getState().setSession(
+      {
+        id: 'user-1',
+        email: 'jordan@example.com',
+        firstName: 'Jordan',
+        lastName: 'Lee',
+        username: 'jordan',
+        phoneNumber: null,
+        avatarUrl: null,
+        roles: ['USER'],
+      },
+      'access-token',
+    );
+  });
+
   it('has no mode toggle — the form is always the standalone sport picker', () => {
     render(<CreateSessionModal {...baseProps} />);
     expect(screen.queryByRole('group', { name: 'Session type' })).not.toBeInTheDocument();
@@ -333,7 +359,7 @@ describe('CreateSessionModal', () => {
     const user = userEvent.setup();
     render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday game');
+    await replaceTitle(user, 'Sunday game');
     await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '8');
     expect(screen.getByLabelText(/^Session title/)).toHaveValue('Sunday game');
@@ -341,7 +367,7 @@ describe('CreateSessionModal', () => {
     await user.selectOptions(screen.getByLabelText(/^Sport/), 'tennis');
 
     expect(screen.getByLabelText(/^Sport/)).toHaveValue('tennis');
-    expect(screen.getByLabelText(/^Session title/)).toHaveValue('');
+    expect(screen.getByLabelText(/^Session title/)).toHaveValue(DEFAULT_TITLE);
     expect(screen.getByLabelText(/^Duration \(min\)/)).toHaveValue(null);
     expect(screen.getByLabelText(/^Open slot/)).toHaveValue(null);
     // "Starts at" re-pre-fills for the new sport (SessionStartTimePicker is re-keyed on the
@@ -474,7 +500,7 @@ describe('CreateSessionModal', () => {
       const onSubmit = vi.fn();
       render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
 
-      await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+      await replaceTitle(user, 'Sunday run');
       await pickAnyStartTime(user);
       await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
       await user.type(screen.getByLabelText(/^Open slot/), '10');
@@ -502,7 +528,7 @@ describe('CreateSessionModal', () => {
     expect(screen.getByRole('checkbox', { name: 'Free' })).not.toBeChecked();
 
     await user.clear(screen.getByLabelText('Fixed amount'));
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await replaceTitle(user, 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
@@ -569,7 +595,7 @@ describe('CreateSessionModal', () => {
     await user.click(screen.getByRole('button', { name: 'Create session' }));
     expect(onSubmit).not.toHaveBeenCalled();
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await replaceTitle(user, 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
@@ -590,7 +616,7 @@ describe('CreateSessionModal', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await replaceTitle(user, 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
@@ -652,7 +678,7 @@ describe('CreateSessionModal', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await replaceTitle(user, 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText('Taken slot'), '3');
@@ -675,7 +701,7 @@ describe('CreateSessionModal', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await replaceTitle(user, 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
@@ -796,7 +822,7 @@ describe('CreateSessionModal', () => {
       />,
     );
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+    await replaceTitle(user, 'Sunday run');
     await pickAnyStartTime(user);
     await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
@@ -859,8 +885,8 @@ describe('CreateSessionModal', () => {
     });
   });
 
-  describe('CLIENT-SESSION-34: title and duration are optional', () => {
-    it('submits without a title or a duration (both omitted from the payload)', async () => {
+  describe('SESSION-49: the title is required and pre-filled; the duration is optional', () => {
+    it('submits the pre-filled title and omits the duration from the payload', async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();
       render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
@@ -868,19 +894,33 @@ describe('CreateSessionModal', () => {
       await user.type(screen.getByLabelText(/^Open slot/), '10');
       await createAndConfirm(user);
       const payload = onSubmit.mock.calls[0][0];
-      expect(payload.title).toBeUndefined();
+      expect(payload.title).toBe(DEFAULT_TITLE);
       expect(payload.durationMinutes).toBeUndefined();
     });
 
-    it('a title of only spaces is treated as no title', async () => {
+    it('a blank title blocks Create, shows the error and focuses the field', async () => {
       const user = userEvent.setup();
       const onSubmit = vi.fn();
       render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await user.clear(screen.getByLabelText(/^Session title/));
       await user.type(screen.getByLabelText(/^Session title/), '   ');
       await pickAnyStartTime(user);
       await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.getByText('Give this session a title.')).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Session title/)).toHaveFocus();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('trims the title it sends', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await replaceTitle(user, '  Sunday run  ');
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
       await createAndConfirm(user);
-      expect(onSubmit.mock.calls[0][0].title).toBeUndefined();
+      expect(onSubmit.mock.calls[0][0].title).toBe('Sunday run');
     });
   });
 
@@ -1093,7 +1133,7 @@ describe('CreateSessionModal', () => {
     it('the summary follows what was filled in', async () => {
       const user = userEvent.setup();
       render(<CreateSessionModal {...baseProps} activeSport="basketball" selectedLocation={location} />);
-      await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+      await replaceTitle(user, 'Sunday run');
       await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
       await user.type(screen.getByLabelText(/^Open slot/), '6');
       await user.click(screen.getByRole('checkbox', { name: 'Free' }));
@@ -1261,7 +1301,7 @@ describe('CreateSessionModal', () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
       render(<CreateSessionModal {...baseProps} onClose={onClose} />);
-      await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+      await replaceTitle(user, 'Sunday run');
       await user.keyboard('{Escape}');
       expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
       expect(onClose).not.toHaveBeenCalled();
@@ -1286,18 +1326,17 @@ describe('CreateSessionModal', () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
       render(<CreateSessionModal {...baseProps} onClose={onClose} />);
-      await user.type(screen.getByLabelText(/^Session title/), 'x');
+      await replaceTitle(user, 'x');
       await user.keyboard('{Escape}');
       await user.keyboard('{Escape}');
       expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
       expect(onClose).not.toHaveBeenCalled();
     });
 
-    it('a title of only spaces is not an entry; a chosen location, a fee, a mood and an invitee each are', async () => {
+    it('the pre-filled title is not an entry; a chosen location, a fee, a mood and an invitee each are', async () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
       const { rerender } = render(<CreateSessionModal {...baseProps} onClose={onClose} />);
-      await user.type(screen.getByLabelText(/^Session title/), '   ');
       await user.keyboard('{Escape}');
       expect(onClose).toHaveBeenCalledTimes(1);
       onClose.mockClear();

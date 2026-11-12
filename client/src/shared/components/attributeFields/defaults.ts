@@ -43,3 +43,21 @@ export function collectDefaultValues(schema: ResolvedSportAttributeSchema): Reco
   walk(schema.groups, '');
   return defaults;
 }
+
+/**
+ * Whether `values` holds anything the user entered, as opposed to what `SportAttributesFields` seeded
+ * from the schema defaults on its own. Use this, never `Object.keys(values).length > 0` or a plain
+ * comparison with the stored map, for every "is this form dirty / can it be saved" decision on an
+ * attribute map: the seed arrives by itself once the schema has loaded, so on a slow machine an
+ * untouched form already differs from where it started. A value counts when it has no default or
+ * differs from its default; a `null` schema (not loaded, or the sport has none) seeds nothing.
+ */
+export function hasEditedAttributeValues(
+  schema: ResolvedSportAttributeSchema | null,
+  values: Record<string, unknown>,
+): boolean {
+  const defaults = schema === null ? {} : collectDefaultValues(schema);
+  return Object.entries(values).some(
+    ([path, value]) => !(path in defaults) || JSON.stringify(defaults[path]) !== JSON.stringify(value),
+  );
+}

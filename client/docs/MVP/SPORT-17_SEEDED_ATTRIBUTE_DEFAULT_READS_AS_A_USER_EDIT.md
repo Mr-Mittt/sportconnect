@@ -13,7 +13,7 @@ Two hosts, from reading the code (neither reproduced, no schema in the repo has 
 - **Profile editor**: `isSportProfileDraftDirty` (`features/profile/sportProfileEditDraft.ts`) compares `draft.attributes` with the saved ones. A seeded default would enable Save on an untouched tab and make `useUnsavedChangesGuard` ask before leaving or switching sport.
 - **Session detail edit section**: `DetailSection.canSave` (`SessionDetailSections.tsx`) compares the schema-trimmed values with the stored ones, so Save would light up in an untouched section whose stored map lacks that path. The summary read view is not affected.
 
-The create-session form is already fixed: `collectDefaultValues` (`attributeFields/defaults.ts`) lists what the schema seeds, and the form counts a value only if it differs from its default or has none.
+The create-session form is already fixed: `hasEditedAttributeValues(schema, values)` (`attributeFields/defaults.ts`, built on `collectDefaultValues`, which lists what the schema seeds) counts a value only if it differs from its default or has none; the two hosts above can call it. The rule is also written in `client/CLAUDE.md` (Component conventions).
 
 ## Fix direction (decide at pickup)
 
