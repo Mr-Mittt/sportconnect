@@ -178,7 +178,7 @@
     "viewDetails": "Xem chi tiết",
     "actionLabel": "{{title}} — {{action}}",
     "working": "Đang xử lý…",
-    "mood": "Không khí {{mood}}",
+    "mood": "Cường độ {{mood}}",
     "genderSplit": "Chỗ trống: {{split}}",
     "male": "nam",
     "female": "nữ"
@@ -242,7 +242,7 @@
     },
     "preparingBanner": {
       "lead": "Chủ trì vẫn đang chuẩn bị buổi chơi này.",
-      "body": "Một số thông tin, như địa điểm hoặc phí, có thể thay đổi. Buổi chơi sẽ tự động bị hủy nếu chưa được lên lịch trước khi bắt đầu."
+      "body": "Một số thông tin, như địa điểm hoặc phí, có thể thay đổi. Buổi chơi sẽ tự động bị hủy nếu chưa bổ sung đủ trước khi bắt đầu."
     },
     "stillMissing": "Còn thiếu:",
     "markScheduled": "Đánh dấu \"Sẵn sàng\"",
@@ -347,7 +347,7 @@
       "byGender": "Theo giới tính"
     },
     "mood": {
-      "label": "Không khí buổi chơi",
+      "label": "Cường độ buổi chơi",
       "ends": {
         "low": "Vui là chính",
         "mid": "Bình thường",
