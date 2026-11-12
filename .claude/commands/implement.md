@@ -82,10 +82,15 @@ After implementation:
    cd client && npm start
    ```
 6. If any `client/e2e/**` spec file was added, removed, or had a test added/removed/materially
-   changed, run the relevant Playwright project (`pnpm e2e` and/or `pnpm test:visual`) and **update
+   changed, run the relevant Playwright project (`pnpm e2e`; `pnpm test:visual` is not run here, visual
+   regression is on demand through `client-visual`) and **update
    `client/docs/E2E_OVERVIEW.md`'s catalog to match** (directory listing in §3, per-file test table in
    §6) before calling this done — that doc is the living reference for every e2e test case and easily
    goes stale silently otherwise.
+7. If the diff touches `client/**` (components, locales, `client/e2e/mocks/**`, tokens), whatever the module,
+   derive which visual baselines can change from the diff and record them in the open `BASELINE-UPDATE-<n>`
+   ticket (see `/workon` Phase 5 step 4). Re-derive after any later fix (an e2e or mock edit, a review or CI
+   fix) and once more right before the commit.
 
 Report what was tested and whether it passed. Flag any failures before moving on.
 

@@ -82,18 +82,52 @@ const NO_RETRY_URLS = [
   '/auth/reactivate/cancel',
 ];
 
-// Shared across concurrent 401s so a page that fires several authenticated
-// requests at once (all with the same stale token) triggers exactly one
-// /auth/refresh call. The backend rotates the refresh token on every use and
-// revokes the old one — a second, independent refresh call racing the first
-// would read the same cookie and lose that race with a 401 of its own.
+// Shared by every caller that needs a fresh access token (the 401 handler, the notification socket,
+// the chat socket), so a page that asks several times at once triggers exactly one /auth/refresh
+// call. Refresh-token rotation is off in this realm (`revokeRefreshToken` off, auth A26/A28), so
+// concurrent refreshes would succeed anyway, but one call is cheaper and stays correct if rotation
+// is ever switched on (a second call would then read the already-revoked cookie and get a 401).
 let refreshPromise: Promise<string> | null = null;
 
+/** True when `error` is the backend definitively refusing the refresh (a 4xx): the session is over.
+ * A 5xx or no response at all (Keycloak or the network down) says nothing about the session. */
+export function isDefiniteRefusal(error: unknown): boolean {
+  const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+  return status !== undefined && status < 500;
+}
+
 async function refreshAccessToken(): Promise<string> {
-  const response = await apiClient.post<ApiResponse<AuthResult>>('/auth/refresh');
-  const result = response.data.data;
-  useAuthStore.getState().setSession(result.user, result.accessToken);
-  return result.accessToken;
+  const tokenAtStart = useAuthStore.getState().accessToken;
+  try {
+    const response = await apiClient.post<ApiResponse<AuthResult>>('/auth/refresh');
+    const result = response.data.data;
+    useAuthStore.getState().setSession(result.user, result.accessToken);
+    return result.accessToken;
+  } catch (error) {
+    // Only a definite refusal ends the session (AUTH-14), and only if the store still holds the token
+    // this refresh started from: if anything renewed the session meanwhile, this late failure must
+    // not sign the user out of a session that is fine (CLIENT-NOTIF-6).
+    if (isDefiniteRefusal(error) && useAuthStore.getState().accessToken === tokenAtStart) {
+      useAuthStore.getState().clearSession();
+    }
+    throw error;
+  }
+}
+
+/**
+ * Refreshes the access token through the httpOnly refresh cookie and stores the new session. Every
+ * caller shares one in-flight request, so any number of components (REST 401s, the notification
+ * socket, the chat socket) asking at once make a single `/auth/refresh` call. Resolves with the new
+ * token. On failure it rejects with the original error; a definite refusal (4xx, see
+ * {@link isDefiniteRefusal}) has already cleared the session, any other failure keeps it.
+ */
+export function refreshSession(): Promise<string> {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
 }
 
 /**
@@ -133,24 +167,13 @@ export async function handleResponseError(
 
   originalRequest._retry = true;
 
-  if (!refreshPromise) {
-    refreshPromise = refreshAccessToken().finally(() => {
-      refreshPromise = null;
-    });
-  }
-
   try {
-    const accessToken = await refreshPromise;
+    const accessToken = await refreshSession();
     originalRequest.headers.set('Authorization', `Bearer ${accessToken}`);
     return client.request(originalRequest);
-  } catch (refreshError) {
-    // AUTH-14: a refresh that failed because Keycloak or the backend could not answer (5xx, e.g. 503
-    // SERVICE_UNAVAILABLE, or no response at all) says nothing about the session — keep it.
-    // Only a definite refusal ends the session.
-    const status = axios.isAxiosError(refreshError) ? refreshError.response?.status : undefined;
-    if (status !== undefined && status < 500) {
-      useAuthStore.getState().clearSession();
-    }
+  } catch {
+    // refreshSession already ended the session on a definite refusal and kept it otherwise
+    // (AUTH-14, CLIENT-NOTIF-6); the caller gets the original 401.
     return Promise.reject(error);
   }
 }
