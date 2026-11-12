@@ -735,11 +735,30 @@ describe('SessionDetailModal', () => {
       initialSlot: 0,
     });
 
-    it('shows the amber PREPARING banner to every viewer, host or not', () => {
+    it('shows the amber PREPARING banner to a viewer, not to the host (who sees only what is missing)', () => {
       const { rerender } = render(<SessionDetailModal {...baseProps} canManage={false} session={preparing} />);
       expect(screen.getByText('The host is still preparing this session.')).toBeInTheDocument();
+      expect(screen.getByText(/It is cancelled automatically if it is not scheduled/)).toBeInTheDocument();
       rerender(<SessionDetailModal {...baseProps} canManage session={preparing} />);
-      expect(screen.getByText('The host is still preparing this session.')).toBeInTheDocument();
+      expect(screen.queryByText('The host is still preparing this session.')).not.toBeInTheDocument();
+      expect(screen.queryByText(/It is cancelled automatically if it is not scheduled/)).not.toBeInTheDocument();
+      expect(screen.getByText('Still missing:')).toBeInTheDocument();
+    });
+
+    it('the host of a PREPARING session with nothing missing sees no banner at all', () => {
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={makeSession({
+            status: 'PREPARING',
+            scheduledEndAt: '2026-08-01T20:30:00',
+            feeType: 'FREE',
+          })}
+        />,
+      );
+      expect(screen.queryByText('Still missing:')).not.toBeInTheDocument();
+      expect(screen.queryByText('The host is still preparing this session.')).not.toBeInTheDocument();
     });
 
     it('shows no banner on a SCHEDULED session', () => {

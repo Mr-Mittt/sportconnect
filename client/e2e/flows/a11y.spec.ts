@@ -25,7 +25,7 @@ async function loadHomeFeed(page: import('@playwright/test').Page, width: number
   // also wait for it to actually finish loading, so the overflow/axe checks
   // below exercise the fully-loaded page consistently rather than racing
   // Feed's (null-rendering) loading state.
-  await expect(page.getByRole('region', { name: 'Upcoming matches' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Upcoming sessions' })).toBeVisible();
   await expect(page.getByRole('article').first()).toBeVisible();
 }
 

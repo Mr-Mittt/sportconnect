@@ -215,7 +215,7 @@ describe('ProfilePage', () => {
     render(<ProfilePage />, { wrapper });
 
     await waitFor(() => expect(screen.getByText('Football post')).toBeInTheDocument());
-    expect(screen.getByRole('region', { name: 'Upcoming matches' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Upcoming sessions' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Trending hashtags' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Group broadcasts' })).toBeInTheDocument();
 

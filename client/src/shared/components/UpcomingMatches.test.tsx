@@ -121,7 +121,7 @@ describe('UpcomingMatches', () => {
 it('disables the empty-state Join/Create CTAs until the sports list is known (PROFILE-12)', () => {    renderMatches({ matches: [], isSportsReady: false });    expect(screen.getByRole('button', { name: 'Join a match' })).toBeDisabled();    expect(screen.getByRole('button', { name: 'Create a match' })).toBeDisabled();  });  it('enables the empty-state Join/Create CTAs by default', () => {    renderMatches({ matches: [] });    expect(screen.getByRole('button', { name: 'Join a match' })).toBeEnabled();    expect(screen.getByRole('button', { name: 'Create a match' })).toBeEnabled();  });
   it('renders the empty state for a sport with no matches', () => {
     renderMatches({ matches: matches.filter((m) => m.sportId !== SPORT_ID.tennis), activeSport: 'tennis' });
-    expect(screen.getByText('No upcoming matches.')).toBeInTheDocument();
+    expect(screen.getByText('No upcoming sessions.')).toBeInTheDocument();
     expect(screen.queryAllByRole('button', { name: /View details/ })).toHaveLength(0);
     // Header and "See all" survive the empty state (mockup parity)
     expect(screen.getByText('Upcoming')).toBeInTheDocument();

@@ -20,7 +20,7 @@ describe('session libs — Vietnamese', () => {
   it('translates fee labels, including the pending state', async () => {
     await i18n.changeLanguage('vi');
     expect(getFeeTypeLabel('FREE')).toBe('Miễn phí');
-    expect(getFeeTypeLabel('SPLIT')).toBe('Chia đều chi phí');
+    expect(getFeeTypeLabel('SPLIT')).toBe('Phí chia đều');
     expect(formatFeeDisplay(null, null)).toBe('Chưa có mức phí');
     expect(formatFeeDisplay('FIXED', 150000)).toBe('150 000 ₫'); // currency formatting is locale-neutral
   });

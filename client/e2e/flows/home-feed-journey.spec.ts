@@ -75,7 +75,7 @@ import { expect, test } from '../mocks/test.ts';
  */
 
 test('Home Feed journey', async ({ page }) => {
-  const upcoming = page.getByRole('region', { name: 'Upcoming matches' });
+  const upcoming = page.getByRole('region', { name: 'Upcoming sessions' });
   const trending = page.getByRole('region', { name: 'Trending hashtags' });
   const broadcasts = page.getByRole('region', { name: 'Group broadcasts' });
   const matchCtas = upcoming.getByRole('button', { name: /view details/i });
@@ -229,7 +229,7 @@ test('Home Feed — the "Join a match" modal\'s Time filter popover is actually 
   await seedEmptyUpcomingMatchesOnNextLoad(mockSessionId);
   await seedAuthenticatedSession(page);
 
-  await expect(page.getByText('No upcoming matches.')).toBeVisible();
+  await expect(page.getByText('No upcoming sessions.')).toBeVisible();
   await page.getByRole('button', { name: 'Join a match' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Discover today session' });

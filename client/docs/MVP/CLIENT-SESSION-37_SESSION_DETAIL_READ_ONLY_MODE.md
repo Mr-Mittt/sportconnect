@@ -44,6 +44,8 @@ No backend change: every field is already on `SessionResponse` and in the partic
 - The static branch and the `collapsible` prop of `SessionFormSection` were deleted (nothing used them any more), with their tests.
 - i18n (en and vi): `detail.information.title`, `detail.players.summaryLabel`, `detail.autoCancelledOn`, `detail.autoCancelledReason`.
 
+**Scope change 2026-11-12 (owner review).** The host of a `PREPARING` session no longer sees the viewer's banner ("The host is still preparing this session." and its body); they see only the amber "Still missing: ..." line, and nothing at all when nothing is missing. A viewer keeps the full banner. The owner also reworded some en and vi strings (the Upcoming label and empty text, the vi fee types, "Mark it scheduled" hint); the tests that pinned the old strings were adapted (`UpcomingMatches`, `FriendsPage`, `HomeFeedPage`, `ProfilePage`, `App`, `sessionLibsI18n`, `a11y`, `home-feed-journey`).
+
 **Deltas.** A `SCHEDULED` session's creator is a read-only viewer now (matches-journey step 3 was updated: the roster shows after opening Players). The `Cancelled` story needed `cancelledBy`, otherwise it reads as an auto-cancel.
 
 **Tests.** `SessionDetailModal.test.tsx` 80 and the 24 files in `src/features/session/components` (375 tests) pass; `tsc -b` and eslint are clean. Five requirement mutations were killed (auto-cancel detection off, no `uppercase`, `readOnly` always false, Players open by default, Session information open by default). Stories: `ReadOnlyExpanded`, `AutoCancelled`; `Cancelled` fixed.

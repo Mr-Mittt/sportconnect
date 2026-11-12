@@ -569,15 +569,17 @@ export function SessionDetailModal({
                 </div>
               )}
 
-              {/* CLIENT-SESSION-34: every viewer of a PREPARING session sees the warning; the host also
-                  sees what is still missing. */}
-              {session.status === 'PREPARING' && (
+              {/* CLIENT-SESSION-34: a viewer of a PREPARING session sees the warning. The host already knows
+                  it is theirs to prepare, so (CLIENT-SESSION-37) they get only what is still missing. */}
+              {session.status === 'PREPARING' && (!canManage || missing.length > 0) && (
                 <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-2xs leading-relaxed text-amber-800">
-                  <p>
-                    <strong>{t('detail.preparingBanner.lead')}</strong> {t('detail.preparingBanner.body')}
-                  </p>
-                  {canManage && missing.length > 0 && (
-                    <p className="mt-1">
+                  {!canManage && (
+                    <p>
+                      <strong>{t('detail.preparingBanner.lead')}</strong> {t('detail.preparingBanner.body')}
+                    </p>
+                  )}
+                  {canManage && (
+                    <p>
                       <strong>{t('detail.stillMissing')}</strong>{' '}
                       {missing.map((field) => t(`form.missingItem.${field}`)).join(', ')}
                     </p>

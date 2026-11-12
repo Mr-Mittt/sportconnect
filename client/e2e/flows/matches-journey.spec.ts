@@ -541,7 +541,9 @@ test('Matches journey', async ({ page }) => {
     await page.getByRole('button', { name: /Needs setup — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Needs setup' });
     await expect(dialog.getByText('Preparing', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('The host is still preparing this session.')).toBeVisible();
+    // CLIENT-SESSION-37: the host sees what is still missing, not the viewer's "host is still preparing" banner.
+    await expect(dialog.getByText('Still missing:')).toBeVisible();
+    await expect(dialog.getByText('The host is still preparing this session.')).toHaveCount(0);
     await expect(dialog.getByRole('button', { name: 'Mark it scheduled' })).toBeDisabled();
 
     // Where: Edit is in the section header, Discard and Save replace it, the other Edit buttons lock.
