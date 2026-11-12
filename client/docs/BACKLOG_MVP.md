@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-12 (CLIENT-NOTIF-6 and CLIENT-SESSION-37 done; BASELINE-UPDATE-1 and SPORT-17 filed)  
+**Last updated:** 2026-11-12 (CLIENT-SESSION-38..CLIENT-SESSION-48 filed: game logging / session results)
 
 ---
 
@@ -77,6 +77,17 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 9 | [BASELINE-UPDATE-1](MVP/BASELINE-UPDATE-1_VISUAL_BASELINES_FOR_THIS_RELEASE.md) | Standing ticket: the visual baselines each client ticket of this release expects to change (now CLIENT-SESSION-34 and SESSION-49), regenerated through the `client-visual` workflow and `/updatebaseline` before the release; then closed and `BASELINE-UPDATE-2` filed | `TODO` |
 | 10 | [SPORT-17](MVP/SPORT-17_SEEDED_ATTRIBUTE_DEFAULT_READS_AS_A_USER_EDIT.md) | A schema default seeded by `SportAttributesFields` reads as a user edit in the profile editor and the session detail edit section (same defect as the create-session form fixed in CLIENT-SESSION-34; attributes customise each sport app-wide, so audit every host) | `TODO` |
 | 11 | [ACCOUNT-8](MVP/ACCOUNT-8_REQUIRE_FIRST_NAME_IN_ACCOUNT_SETTINGS.md) | First name is required when editing the profile in account settings (from SESSION-49; pairs with auth A38) | `TODO` |
+| 12 | [CLIENT-SESSION-38](MVP/CLIENT-SESSION-38_SESSION_DETAIL_RESULT_SECTION_AND_DIALOG.md) | Session detail: collapsible Result section and nested edit dialog | `TODO` |
+| 13 | [CLIENT-SESSION-39](MVP/CLIENT-SESSION-39_THREAD_COMMAND_HINTS_AND_REPLIES.md) | Session thread: command hints and command results | `TODO` |
+| 14 | [CLIENT-SESSION-40](MVP/CLIENT-SESSION-40_GUESTS_IN_THE_RESULT_DIALOG.md) | Add a guest and pick guests in the result dialog | `TODO` |
+| 15 | [CLIENT-SESSION-41](MVP/CLIENT-SESSION-41_RESULT_STATISTICS_SCREENS.md) | Statistics screens: player totals and head-to-head | `TODO` |
+| 16 | [CLIENT-SESSION-42](MVP/CLIENT-SESSION-42_GROUP_LEADERBOARD_SCREENS.md) | Group leaderboard screens and the ranking-order settings | `TODO` |
+| 17 | [CLIENT-SESSION-43](MVP/CLIENT-SESSION-43_SEASON_KPI_AND_RECAP_SCREENS.md) | Season management, KPI progress and the season recap | `TODO` |
+| 18 | [CLIENT-SESSION-44](MVP/CLIENT-SESSION-44_POINT_ADJUSTMENT_SCREENS.md) | Point adjustment dialog and adjustment history | `TODO` |
+| 19 | [CLIENT-SESSION-45](MVP/CLIENT-SESSION-45_RECENT_PLAYERS_AND_PAIRINGS_SHORTCUTS.md) | Result dialog: recent players and previous pairings as shortcuts (BA GL-8) | `TODO` |
+| 20 | [CLIENT-SESSION-46](MVP/CLIENT-SESSION-46_OFFLINE_QUEUE_FOR_RESULT_CHANGES.md) | Keep a result change made offline and send it when the connection returns (BA GL-9) | `TODO` |
+| 21 | [CLIENT-SESSION-47](MVP/CLIENT-SESSION-47_DUPLICATE_RESULT_WARNING.md) | Warn when the same players and winner were logged moments ago (BA open question 3) | `TODO` |
+| 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
 
 #### Removed / Deferred
 

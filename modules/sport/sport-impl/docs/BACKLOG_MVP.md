@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `modules/sport/sport-impl`  
-**Last updated:** 2026-10-05 (A25 done)  
+**Last updated:** 2026-11-12 (A26..A26 filed: game logging / session results)
 
 ---
 
@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [A14](MVP/A14_ATTRIBUTE_VALUE_SUGGESTIONS_AND_SEARCH_SCOPE.md) | Attribute-value suggestions + `searchScope` — typeahead pooled from what users already typed, so free text converges *before* an Equipment catalogue exists; results carry an optional `id` from day one so the client never changes when it does. **Postponed at 2026-08-25 pickup** — the aggregation strategy needs more design investigation before implementation (see the ticket's own Investigation notes) | `TODO` |
 | 2 | [A24](MVP/A24_ATTRIBUTE_LABEL_LOCALE_PREFERS_STORED_LANGUAGE.md) | Attribute-label locale prefers the caller's explicitly stored language over `Accept-Language` (I18N_READINESS I18N-3). Needs U16 (`user` backlog) and client CLIENT-I18N-1. Part of `documentation/md/REFERENCE_DATA_DESIGN.md` | `TODO` |
+| 3 | [A26](MVP/A26_RESULT_SCHEMA_ADMIN_EDITOR.md) | Admin screen to edit a sport's result schema | `TODO` |
 
 ---
 
