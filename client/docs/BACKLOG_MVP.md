@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-11 (CLIENT-SESSION-34 done)  
+**Last updated:** 2026-11-12 (CLIENT-SESSION-36 filed)  
 
 ---
 
@@ -75,6 +75,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 5 | [HF-21](MVP/HF-21_E2E_FLAKE_HOME_FEED_ESCAPE_POPOVER_NOT_REPRODUCED.md) | Home Feed Escape-popover e2e flake (`home-feed-journey.spec.ts:364`): flaky once in CI (2026-10-28), not reproduced in 30 local runs; split out of AUTH-20 — pick up when CI fails on it again, with that run's evidence | `TODO` |
 | 7 | [CLIENT-SESSION-35](MVP/CLIENT-SESSION-35_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from CLIENT-SESSION-34; depends on SESSION-47) | `TODO` |
 | 8 | [GRP-12](MVP/GRP-12_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence form: game mood for generated sessions (deferred from CLIENT-SESSION-34; depends on B22) | `TODO` |
+| 9 | [CLIENT-SESSION-36](MVP/CLIENT-SESSION-36_UPDATE_BASELINES_FOR_THE_SESSION_FORM_SECTIONS.md) | Update the visual baselines for the session form sections (create-session and session-detail modals, possibly the discover panel) through the `update-baselines` dispatch and `/updatebaseline` (deferred from CLIENT-SESSION-34) | `TODO` |
 
 #### Removed / Deferred
 
