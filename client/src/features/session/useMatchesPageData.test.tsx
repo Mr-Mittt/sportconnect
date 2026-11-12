@@ -80,6 +80,10 @@ function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'status'
     feeType: 'FREE',
     feeAmountVnd: null,
     initialSlot: 0,
+    maleSlots: null,
+    femaleSlots: null,
+    gameMood: 5,
+    feeNote: null,
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
@@ -438,6 +442,7 @@ describe('useMatchesPageData', () => {
     act(() =>
       result.current.submitCreate({
         sportId: 6,
+        gameMood: 5,
         locationId: 1,
         scheduledStart: '2026-08-01T19:00:00',
         capacity: 10,
@@ -448,6 +453,7 @@ describe('useMatchesPageData', () => {
     await waitFor(() =>
       expect(postSpy).toHaveBeenCalledWith('/sessions', {
         sportId: 6,
+        gameMood: 5,
         locationId: 1,
         scheduledStart: '2026-08-01T19:00:00',
         capacity: 10,

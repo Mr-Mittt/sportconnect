@@ -77,6 +77,7 @@ describe('useCreateSessionModalData — create error does not survive close (CLI
     act(() =>
       result.current.submitCreate({
         sportId: 5,
+        gameMood: 5,
         title: 'Sunday game',
         locationId: 1,
         scheduledStart: '2026-09-01T10:00:00',
@@ -151,6 +152,7 @@ describe('useCreateSessionModalData — session attributes (CLIENT-SESSION-15)',
     act(() =>
       result.current.submitCreate({
         sportId: 1,
+        gameMood: 5,
         title: 'Sunday game',
         locationId: 1,
         scheduledStart: '2026-09-01T10:00:00',
@@ -176,6 +178,7 @@ describe('useCreateSessionModalData — session attributes (CLIENT-SESSION-15)',
     act(() =>
       result.current.submitCreate({
         sportId: 1,
+        gameMood: 5,
         title: 'Sunday game',
         locationId: 1,
         scheduledStart: '2026-09-01T10:00:00',

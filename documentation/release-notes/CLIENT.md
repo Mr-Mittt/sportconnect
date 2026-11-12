@@ -8,13 +8,24 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Changes
 
+- CLIENT-SESSION-34: the create-session form is now five collapsible sections (Overview, When, Where, Who, Cost) plus the sport's Session detail, with an end time that follows the duration, one-minute time pickers, a game mood slider, "Who can join" (Anyone / By gender with male and female slots), a fee note, and an "Are you ready?" confirmation before a session is created. Title and duration are optional; the description field is gone.
+- CLIENT-SESSION-34: the session detail modal shows the same sections, collapsed with a `field: value` summary. On a Preparing session every viewer sees a warning banner; the host edits one section at a time (Edit, Save, Discard in the section header) and leaves the draft with "Mark it scheduled", which also opens by itself when the last missing field is saved. Session cards show the game mood and the gender split. Auto approve now asks for confirmation, and closing the create form with unsent entries asks "Leave without saving?" (a value the sport's schema fills in by itself is not an unsent entry, so an untouched form closes at once).
+
 ### Applied automatically
+
+- A new client image replaces the old one with the next deploy; nothing else changes on the box.
 
 ### Manual actions on the box
 
+- none
+
 ### Rollback
 
+- Redeploy the previous client image. A Preparing session created with the new form stays editable only through the new endpoints, so roll the client back only together with the server (see Depends on).
+
 ### Depends on
+
+- SERVER SESSION-46: the per-gender slots, game mood and fee note fields, the Preparing-only edit rule, and `POST /api/sessions/{id}/schedule` (migrations V085 to V087). Ship the server first or together; an older server rejects the new fields and has no schedule endpoint.
 
 ## 0.1.1 — 2026-11-02
 

@@ -95,6 +95,10 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     feeType: 'FREE',
     feeAmountVnd: null,
     initialSlot: 0,
+    maleSlots: null,
+    femaleSlots: null,
+    gameMood: 5,
+    feeNote: null,
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
@@ -160,9 +164,16 @@ const baseProps = {
   onOpenCompletionLocationPicker: () => {},
   completionLocationPicker: inertLocationPicker,
   completionFavorites: { locations: [], isLoading: false, onSelect: () => {} },
-  onCompleteSession: () => {},
-  isCompletingSession: false,
-  isCompleteSessionError: false,
+  onClearCompletionLocation: () => {},
+  refChoiceSource: null,
+  onUpdateSession: () => {},
+  isUpdatingSession: false,
+  isUpdateSessionError: false,
+  isScheduleConfirmOpen: false,
+  onScheduleConfirmOpenChange: () => {},
+  onSchedule: () => {},
+  isScheduling: false,
+  isScheduleError: false,
   onJoin: () => {},
   isJoining: false,
   isJoinError: false,
@@ -233,15 +244,15 @@ describe('SessionDetailModal', () => {
     expect(screen.getByText("Couldn't load this session.")).toBeInTheDocument();
   });
 
-  it('renders status, location, description, and creator', () => {
+  it('renders status, location and creator (the description is no longer shown, CLIENT-SESSION-34)', () => {
     render(<SessionDetailModal {...baseProps} />);
     expect(screen.getByText('Scheduled')).toBeInTheDocument();
     // CLIENT-SESSION-10: header status row always shows weekday + date + time (design reference),
     // distinct from formatStartTime's relative "Today"/"Tomorrow" shorthand used elsewhere.
     expect(screen.getByText(/Sat, Aug 1 · 19:00/)).toBeInTheDocument();
+    // Collapsed Where summary: "Location: Riverside Courts".
     expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
-    expect(screen.getByText('12 River Rd')).toBeInTheDocument();
-    expect(screen.getByText('Casual 5v5, all levels welcome.')).toBeInTheDocument();
+    expect(screen.queryByText('Casual 5v5, all levels welcome.')).not.toBeInTheDocument();
     // CLIENT-SESSION-30: the approval mode leads the creator line (makeSession → autoApprove false).
     expect(screen.getByText('Need host approval. Created by Jordan Lee')).toBeInTheDocument();
   });
@@ -262,21 +273,33 @@ describe('SessionDetailModal', () => {
     expect(screen.getByText(/Sat, Aug 1 · 19:00 – Sun, Aug 2 · 01:00/)).toBeInTheDocument();
   });
 
-  it('shows a Get Directions link with the right href when coordinates exist', () => {
-    render(<SessionDetailModal {...baseProps} />);
+  async function openWhere() {
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Where' }));
+  }
+
+  // Sections only expand for the host of a PREPARING session (everyone else gets static summaries).
+  const hostPreparing = makeSession({ status: 'PREPARING' });
+
+  it('shows the address and a Get Directions link with the right href once Where is expanded (host, Preparing)', async () => {
+    render(<SessionDetailModal {...baseProps} canManage session={hostPreparing} />);
+    await openWhere();
+    expect(screen.getByText('12 River Rd')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Get Directions/ })).toHaveAttribute(
       'href',
       'https://www.google.com/maps/dir/?api=1&destination=21.0285,105.8542',
     );
   });
 
-  it('omits Get Directions when the location has no coordinates', () => {
+  it('omits Get Directions when the location has no coordinates', async () => {
     render(
       <SessionDetailModal
         {...baseProps}
-        session={makeSession({ location: { ...location, latitude: null, longitude: null } })}
+        canManage
+        session={makeSession({ status: 'PREPARING', location: { ...location, latitude: null, longitude: null } })}
       />,
     );
+    await openWhere();
     expect(screen.queryByRole('link', { name: /Get Directions/ })).not.toBeInTheDocument();
   });
 
@@ -613,22 +636,30 @@ describe('SessionDetailModal', () => {
     ],
   };
 
-  it('renders the read-only session attribute summary when a schema and stored attributes are both present', () => {
+  it('shows the session attributes as a collapsed "field: value" row, and in full once expanded (host, Preparing)', async () => {
+    const user = userEvent.setup();
     render(
       <SessionDetailModal
         {...baseProps}
-        session={makeSession({ attributes: { 'match/format': 'Doubles' } })}
+        canManage
+        session={makeSession({ status: 'PREPARING', attributes: { 'match/format': 'Doubles' } })}
         sessionAttributeSchema={attributeSchema}
       />,
     );
+    expect(screen.getByText('Format:').parentElement).toHaveTextContent('Format: Doubles');
+    await user.click(screen.getByRole('button', { name: 'Session detail' }));
     const section = screen.getByRole('region', { name: 'Session detail' });
-    expect(within(section).getByText('Format')).toBeInTheDocument();
     expect(within(section).getByText('Doubles')).toBeInTheDocument();
-    // Read-only — no field controls inside it.
+    // Not in edit mode — no field controls inside it.
     expect(within(section).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  it('omits the summary when the sport has no session schema', () => {
+  it('shows "..." for an attribute with no stored value', () => {
+    render(<SessionDetailModal {...baseProps} sessionAttributeSchema={attributeSchema} />);
+    expect(within(screen.getByText('Format:').parentElement as HTMLElement).getByText('...')).toBeInTheDocument();
+  });
+
+  it('omits the Session detail section when the sport has no session schema', () => {
     render(
       <SessionDetailModal
         {...baseProps}
@@ -636,92 +667,444 @@ describe('SessionDetailModal', () => {
         sessionAttributeSchema={null}
       />,
     );
-    expect(screen.queryByRole('region', { name: 'Session detail' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Session detail' })).not.toBeInTheDocument();
   });
 
-  it('omits the summary when the session carries no attributes', () => {
-    render(<SessionDetailModal {...baseProps} sessionAttributeSchema={attributeSchema} />);
-    expect(screen.queryByRole('region', { name: 'Session detail' })).not.toBeInTheDocument();
+  it('the host can edit the session attributes while PREPARING (replace-wholesale payload)', async () => {
+    const user = userEvent.setup();
+    const onUpdateSession = vi.fn();
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        canManage
+        session={makeSession({ status: 'PREPARING', attributes: { 'match/format': 'Doubles' } })}
+        sessionAttributeSchema={attributeSchema}
+        onUpdateSession={onUpdateSession}
+      />,
+    );
+    await user.click(screen.getAllByRole('button', { name: 'Edit' })[5]);
+    const field = screen.getByLabelText('Format');
+    await user.clear(field);
+    await user.type(field, 'Singles');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onUpdateSession).toHaveBeenCalledWith({ attributes: { 'match/format': 'Singles' } }, expect.any(Function));
   });
 
-  describe('CLIENT-SESSION-21: PREPARING completion (SESSION-24)', () => {
-    it('shows the completion surface for the manager of a PREPARING session', () => {
+  describe('CLIENT-SESSION-34: PREPARING banner, sections, per-section edit and scheduling', () => {
+    const preparing = makeSession({
+      status: 'PREPARING',
+      location: null,
+      feeType: null,
+      scheduledEndAt: null,
+      capacity: 10,
+      initialSlot: 0,
+    });
+    const ready = makeSession({
+      status: 'PREPARING',
+      scheduledEndAt: '2026-08-01T20:30:00',
+      capacity: 10,
+      initialSlot: 0,
+    });
+
+    it('shows the amber PREPARING banner to every viewer, host or not', () => {
+      const { rerender } = render(<SessionDetailModal {...baseProps} canManage={false} session={preparing} />);
+      expect(screen.getByText('The host is still preparing this session.')).toBeInTheDocument();
+      rerender(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      expect(screen.getByText('The host is still preparing this session.')).toBeInTheDocument();
+    });
+
+    it('shows no banner on a SCHEDULED session', () => {
+      render(<SessionDetailModal {...baseProps} canManage session={makeSession({ status: 'SCHEDULED' })} />);
+      expect(screen.queryByText('The host is still preparing this session.')).not.toBeInTheDocument();
+    });
+
+    it('lists what is still missing for the host only', () => {
+      const { rerender } = render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      expect(screen.getByText('Still missing:')).toBeInTheDocument();
+      expect(screen.getByText(/location, fee, duration/)).toBeInTheDocument();
+      rerender(<SessionDetailModal {...baseProps} canManage={false} session={preparing} />);
+      expect(screen.queryByText('Still missing:')).not.toBeInTheDocument();
+    });
+
+    it('puts the "Missing: ..." chips on the section that owns the gap', () => {
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      expect(screen.getByText('Missing: duration')).toBeInTheDocument();
+      expect(screen.getByText('Missing: location')).toBeInTheDocument();
+      expect(screen.getByText('Missing: fee')).toBeInTheDocument();
+    });
+
+    it('collapsed sections read "field: value", with "..." for a missing value', () => {
+      render(<SessionDetailModal {...baseProps} session={preparing} />);
+      const where = screen.getByText('Location:').parentElement as HTMLElement;
+      expect(within(where).getByText('...')).toBeInTheDocument();
+      const fee = screen.getByText('Fee:').parentElement as HTMLElement;
+      expect(within(fee).getByText('...')).toBeInTheDocument();
+      expect(screen.getByText('Title:').parentElement).toHaveTextContent('Title: Sunday pickup run');
+    });
+
+    it('shows the open slot as "6 (anyone)" or with the gender split', () => {
+      const { rerender } = render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 7, initialSlot: 0 })} />);
+      expect(screen.getByText('Open:').parentElement).toHaveTextContent('Open: 6 (anyone)');
+      rerender(
+        <SessionDetailModal
+          {...baseProps}
+          session={makeSession({ capacity: 9, initialSlot: 0, maleSlots: 4, femaleSlots: 4 })}
+        />,
+      );
+      expect(screen.getByText('Open:').parentElement).toHaveTextContent('Open: 8 (4 male - 4 female)');
+    });
+
+    it('shows the game mood with its level word', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ gameMood: 9 })} />);
+      expect(screen.getByText('Mood:').parentElement).toHaveTextContent('Mood: 9 · Competitive');
+    });
+
+    it('gives only the host of a PREPARING session Edit buttons', () => {
+      const { rerender } = render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(5);
+      rerender(<SessionDetailModal {...baseProps} canManage={false} session={preparing} />);
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      rerender(<SessionDetailModal {...baseProps} canManage session={makeSession({ status: 'SCHEDULED' })} />);
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+    });
+
+    it('Edit swaps itself for Discard and Save in the same header, and disables the other Edit buttons', async () => {
+      const user = userEvent.setup();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[2]);
+      expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+      const remaining = screen.getAllByRole('button', { name: 'Edit' });
+      expect(remaining).toHaveLength(4);
+      remaining.forEach((button) => expect(button).toBeDisabled());
+    });
+
+    it('Where: Save stays disabled until a location is picked, then saves only the location', async () => {
+      const user = userEvent.setup();
+      const onUpdateSession = vi.fn();
+      const { rerender } = render(
+        <SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />,
+      );
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[2]);
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      rerender(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={preparing}
+          selectedCompletionLocation={location}
+          onUpdateSession={onUpdateSession}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onUpdateSession).toHaveBeenCalledWith({ locationId: location.id }, expect.any(Function));
+    });
+
+    it('Discard leaves edit mode, drops the picked location and brings Edit back', async () => {
+      const user = userEvent.setup();
+      const onClearCompletionLocation = vi.fn();
       render(
         <SessionDetailModal
           {...baseProps}
           canManage
-          session={makeSession({ status: 'PREPARING', location: null, feeType: null })}
+          session={preparing}
+          onClearCompletionLocation={onClearCompletionLocation}
         />,
       );
-      expect(screen.getByRole('region', { name: 'Complete session setup' })).toBeInTheDocument();
-      expect(screen.getByText(/Location and Fee/)).toBeInTheDocument();
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[2]);
+      await user.click(screen.getByRole('button', { name: 'Discard' }));
+      expect(onClearCompletionLocation).toHaveBeenCalled();
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(5);
     });
 
-    it('hides the completion surface for a non-manager, even while PREPARING', () => {
+    it('the onDone callback handed to onUpdateSession ends the edit', async () => {
+      const user = userEvent.setup();
+      const onUpdateSession = vi.fn((_payload: unknown, onDone: () => void) => onDone());
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={preparing}
+          selectedCompletionLocation={location}
+          onUpdateSession={onUpdateSession}
+        />,
+      );
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[2]);
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    });
+
+    it('Overview: clearing the title saves an empty string (the server clears it)', async () => {
+      const user = userEvent.setup();
+      const onUpdateSession = vi.fn();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      await user.clear(screen.getByLabelText('Session title'));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onUpdateSession).toHaveBeenCalledWith({ title: '' }, expect.any(Function));
+    });
+
+    it('When: a new duration is saved as durationMinutes only', async () => {
+      const user = userEvent.setup();
+      const onUpdateSession = vi.fn();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[1]);
+      await user.type(screen.getByLabelText('Duration (min)'), '90');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onUpdateSession).toHaveBeenCalledWith({ durationMinutes: 90 }, expect.any(Function));
+    });
+
+    it('Cost: picking Free and a note saves feeType and feeNote, and a blank note saves "" to clear', async () => {
+      const user = userEvent.setup();
+      const onUpdateSession = vi.fn();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[4]);
+      await user.click(screen.getByLabelText('Free'));
+      await user.type(screen.getByLabelText('Fee note'), 'Cash');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onUpdateSession).toHaveBeenCalledWith({ feeType: 'FREE', feeNote: 'Cash' }, expect.any(Function));
+    });
+
+    it('Cost: a fixed fee needs its amount before Save is enabled', async () => {
+      const user = userEvent.setup();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[4]);
+      await user.type(screen.getByPlaceholderText('VND'), '5');
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+      await user.clear(screen.getByPlaceholderText('VND'));
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+
+    it('Who: "By gender" with a male count saves the split, the mood and auto approve together', async () => {
+      const user = userEvent.setup();
+      const onUpdateSession = vi.fn();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+      expect(screen.getByLabelText('Taken slot')).toHaveValue(1);
+      expect(screen.getByLabelText('Open slot')).toHaveValue(9);
+      await user.click(screen.getByLabelText('By gender'));
+      await user.click(screen.getByLabelText('Male slot'));
+      await user.type(screen.getByLabelText('Male slots'), '3');
+      fireEvent.change(screen.getByRole('slider', { name: 'Game mood' }), { target: { value: '8' } });
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onUpdateSession).toHaveBeenCalledWith(
+        { capacity: 10, initialSlot: 0, maleSlots: 3, femaleSlots: 0, gameMood: 8, autoApprove: false },
+        expect.any(Function),
+      );
+    });
+
+    it('Who: male + female over the open slots shows the error and blocks Save', async () => {
+      const user = userEvent.setup();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+      await user.click(screen.getByLabelText('By gender'));
+      await user.click(screen.getByLabelText('Male slot'));
+      await user.click(screen.getByLabelText('Female slot'));
+      await user.type(screen.getByLabelText('Male slots'), '8');
+      await user.type(screen.getByLabelText('Female slots'), '2');
+      expect(screen.getByText("Male and female slots can't be more than the open slots.")).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    });
+
+    it('Who: switching back to "Anyone" clears the split (saved as 0)', async () => {
+      const user = userEvent.setup();
+      const onUpdateSession = vi.fn();
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={{ ...preparing, maleSlots: 2, femaleSlots: 1 }}
+          onUpdateSession={onUpdateSession}
+        />,
+      );
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+      await user.click(screen.getByLabelText('Anyone'));
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(onUpdateSession).toHaveBeenCalledWith(
+        expect.objectContaining({ maleSlots: 0, femaleSlots: 0 }),
+        expect.any(Function),
+      );
+    });
+
+    it('Who: ticking auto approve asks first, "Turn on" checks it and "Cancel" leaves it unchecked', async () => {
+      const user = userEvent.setup();
+      render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+      const box = screen.getByRole('checkbox', { name: 'Auto approve join request' });
+      await user.click(box);
+      expect(box).not.toBeChecked();
+      expect(screen.getByText('Turn on auto approve?')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(box).not.toBeChecked();
+      await user.click(box);
+      await user.click(screen.getByRole('button', { name: 'Turn on' }));
+      expect(box).toBeChecked();
+      await user.click(box);
+      expect(box).not.toBeChecked();
+      expect(screen.queryByText('Turn on auto approve?')).not.toBeInTheDocument();
+    });
+
+    it('a coded save failure shows its own line inside the section being edited', async () => {
+      const user = userEvent.setup();
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={preparing}
+          isUpdateSessionError
+          updateSessionErrorText="Male and female slots can't be more than the open slots."
+        />,
+      );
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+      expect(screen.getByRole('alert')).toHaveTextContent("Male and female slots can't be more than the open slots.");
+    });
+
+    it('"Mark it scheduled" is disabled while anything is missing and hidden for a non-host', () => {
+      const { rerender } = render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+      expect(screen.getByRole('button', { name: 'Mark it scheduled' })).toBeDisabled();
+      rerender(<SessionDetailModal {...baseProps} canManage={false} session={preparing} />);
+      expect(screen.queryByRole('button', { name: 'Mark it scheduled' })).not.toBeInTheDocument();
+      rerender(<SessionDetailModal {...baseProps} canManage session={makeSession({ status: 'SCHEDULED' })} />);
+      expect(screen.queryByRole('button', { name: 'Mark it scheduled' })).not.toBeInTheDocument();
+    });
+
+    it('"Mark it scheduled" opens the confirmation when nothing is missing', async () => {
+      const user = userEvent.setup();
+      const onScheduleConfirmOpenChange = vi.fn();
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          canManage
+          session={ready}
+          onScheduleConfirmOpenChange={onScheduleConfirmOpenChange}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Mark it scheduled' }));
+      expect(onScheduleConfirmOpenChange).toHaveBeenCalledWith(true);
+    });
+
+    it('the confirmation popup (complete variant) schedules on "Let\'s go" and closes on "Let me check again"', async () => {
+      const user = userEvent.setup();
+      const onSchedule = vi.fn();
+      const onScheduleConfirmOpenChange = vi.fn();
+      const props = {
+        ...baseProps,
+        canManage: true,
+        session: ready,
+        onSchedule,
+        onScheduleConfirmOpenChange,
+      };
+      // Opened after the modal is up, as in the app (a popup mounted in the very first render would
+      // be aria-hidden by the modal's own focus trap).
+      const { rerender } = render(<SessionDetailModal {...props} />);
+      rerender(<SessionDetailModal {...props} isScheduleConfirmOpen />);
+      expect(screen.getByText('Are you ready?')).toBeInTheDocument();
+      expect(screen.getByText(/Its details can't be edited after that/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: "Let's go" }));
+      expect(onSchedule).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByRole('button', { name: 'Let me check again' }));
+      expect(onScheduleConfirmOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('a failed schedule shows its line in the popup', () => {
+      const props = { ...baseProps, canManage: true, session: ready };
+      const { rerender } = render(<SessionDetailModal {...props} />);
+      rerender(
+        <SessionDetailModal
+          {...props}
+          isScheduleConfirmOpen
+          isScheduleError
+          scheduleErrorText="This session still needs a location, a fee and a duration before it can be scheduled."
+        />,
+      );
+      expect(screen.getByRole('alert')).toHaveTextContent('still needs a location');
+    });
+
+    it('still treats PREPARING as joinable for anyone', () => {
+      render(<SessionDetailModal {...baseProps} session={preparing} />);
+      expect(screen.getByText('Preparing')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Join' })).toBeInTheDocument();
+    });
+  });
+
+  describe('collapsible sections only where the session can be edited', () => {
+    const sectionNames = ['Overview', 'When', 'Where', 'Who', 'Cost'];
+    const toggles = () =>
+      screen.queryAllByRole('button').filter((button) => button.hasAttribute('aria-expanded') &&
+        sectionNames.some((name) => (button.textContent ?? '').startsWith(name)));
+
+    it('the host of a Preparing session gets collapsible sections', () => {
+      render(<SessionDetailModal {...baseProps} canManage session={makeSession({ status: 'PREPARING' })} />);
+      expect(toggles()).toHaveLength(5);
+    });
+
+    it('a viewer gets static sections: title, warning and summary, no toggle and no Edit — even while Preparing', () => {
       render(
         <SessionDetailModal
           {...baseProps}
           canManage={false}
-          session={makeSession({ status: 'PREPARING', location: null, feeType: null })}
+          session={makeSession({ status: 'PREPARING', location: null, scheduledEndAt: null })}
         />,
       );
-      expect(screen.queryByRole('region', { name: 'Complete session setup' })).not.toBeInTheDocument();
+      expect(toggles()).toHaveLength(0);
+      expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+      // Still on screen: each section's title, the "Missing" warning and the summary row.
+      for (const name of sectionNames) expect(screen.getByText(name, { exact: true })).toBeInTheDocument();
+      expect(screen.getByText('Missing: location')).toBeInTheDocument();
+      expect(screen.getByText('Missing: duration')).toBeInTheDocument();
+      expect(screen.getByText('Title:').parentElement).toHaveTextContent('Title: Sunday pickup run');
+      expect(screen.getByText('Location:')).toBeInTheDocument();
     });
 
-    it('hides the completion surface once the session is SCHEDULED, even for the manager', () => {
-      render(<SessionDetailModal {...baseProps} canManage session={makeSession({ status: 'SCHEDULED' })} />);
-      expect(screen.queryByRole('region', { name: 'Complete session setup' })).not.toBeInTheDocument();
+    it.each(['SCHEDULED', 'ONGOING', 'COMPLETED', 'CANCELLED'] as const)(
+      'the host of a %s session gets static sections too (not editable any more)',
+      (status) => {
+        render(<SessionDetailModal {...baseProps} canManage session={makeSession({ status })} />);
+        expect(toggles()).toHaveLength(0);
+        expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+        expect(screen.getByText('Fee:').parentElement).toHaveTextContent('Fee: Free');
+        expect(screen.getByText('Mood:').parentElement).toHaveTextContent('Mood: 5 · Normal');
+      },
+    );
+
+    it.each(['CANCELLED', 'COMPLETED', 'SCHEDULED'] as const)(
+      'a %s session that lacks its location, fee or duration still shows the warning beside the section title',
+      (status) => {
+        render(
+          <SessionDetailModal
+            {...baseProps}
+            canManage
+            session={makeSession({ status, location: null, feeType: null, scheduledEndAt: null })}
+          />,
+        );
+        expect(screen.getByText('Missing: location')).toBeInTheDocument();
+        expect(screen.getByText('Missing: fee')).toBeInTheDocument();
+        expect(screen.getByText('Missing: duration')).toBeInTheDocument();
+        // The warning chips are information only: no banner, no Edit, no Mark it scheduled.
+        expect(screen.queryByText('The host is still preparing this session.')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Mark it scheduled' })).not.toBeInTheDocument();
+      },
+    );
+
+    it('a complete session shows no warning', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T20:30:00' })} />);
+      expect(screen.queryByText(/^Missing:/)).not.toBeInTheDocument();
     });
 
-    it('names only the field still missing when just one is null', () => {
+    it('a static Session detail section still shows its summary, with "..." where empty', () => {
       render(
         <SessionDetailModal
           {...baseProps}
-          canManage
-          session={makeSession({ status: 'PREPARING', location: null, feeType: 'FREE' })}
+          canManage={false}
+          session={makeSession({ attributes: { 'match/format': 'Doubles' } })}
+          sessionAttributeSchema={attributeSchema}
         />,
       );
-      expect(screen.getByText('Location', { selector: 'strong' })).toBeInTheDocument();
-    });
-
-    it('shows Preparing as the status label, with PREPARING treated as an active/joinable session', () => {
-      render(
-        <SessionDetailModal
-          {...baseProps}
-          session={makeSession({ status: 'PREPARING', location: null, feeType: null })}
-        />,
-      );
-      expect(screen.getByText('Preparing')).toBeInTheDocument();
-      // CLIENT-SESSION-21's own correction: getParticipationAction (not canJoinOrLeave) is the
-      // real gate on this button — PREPARING must clear it, same as SCHEDULED/ONGOING.
-      expect(screen.getByRole('button', { name: 'Join' })).toBeInTheDocument();
-    });
-
-    it('Save calls onCompleteSession with only the location field when Location is the only one missing', async () => {
-      const user = userEvent.setup();
-      const onCompleteSession = vi.fn();
-      render(
-        <SessionDetailModal
-          {...baseProps}
-          canManage
-          session={makeSession({ status: 'PREPARING', location: null, feeType: 'FREE' })}
-          selectedCompletionLocation={location}
-          onCompleteSession={onCompleteSession}
-        />,
-      );
-      await user.click(screen.getByRole('button', { name: 'Save' }));
-      expect(onCompleteSession).toHaveBeenCalledWith({ locationId: location.id });
-    });
-
-    it('Save is disabled until a value is picked for the only missing field', () => {
-      render(
-        <SessionDetailModal
-          {...baseProps}
-          canManage
-          session={makeSession({ status: 'PREPARING', location: null, feeType: 'FREE' })}
-        />,
-      );
-      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+      expect(screen.getByText('Format:').parentElement).toHaveTextContent('Format: Doubles');
+      expect(screen.queryByRole('button', { name: 'Session detail' })).not.toBeInTheDocument();
     });
   });
 });

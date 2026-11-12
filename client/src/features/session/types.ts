@@ -38,6 +38,13 @@ export interface CreateSessionPayload {
   initialSlot?: number;
   /** Omitted -> backend defaults to false (non-invited joiners land in REQUESTED). */
   autoApprove?: boolean;
+  /** SESSION-46: seats for men / women among the open ones; omitted or 0 = not specified. */
+  maleSlots?: number;
+  femaleSlots?: number;
+  /** SESSION-46: 1 to 10, required by the server (the form always sends it, default 5). */
+  gameMood: number;
+  /** SESSION-46: at most 300 characters. */
+  feeNote?: string;
   /** Pre-creates an INVITED participant row per id, bypassing the approval gate once that user
    * joins. The caller's own id and duplicates are silently deduped backend-side. Omitted/empty
    * -> no invitees. */
@@ -62,6 +69,16 @@ export interface UpdateSessionPayload {
   feeType?: FeeType;
   feeAmountVnd?: number;
   initialSlot?: number;
+  autoApprove?: boolean;
+  /** SESSION-46: a non-null value replaces, `0` clears the slots. */
+  maleSlots?: number;
+  femaleSlots?: number;
+  /** SESSION-46: 1 to 10. */
+  gameMood?: number;
+  /** SESSION-46: a non-null value replaces, `""` clears. */
+  feeNote?: string;
+  /** SESSION-23: replaces the stored attributes wholesale; an explicit empty map clears them. */
+  attributes?: Record<string, unknown>;
 }
 
 export interface CancelSessionPayload {

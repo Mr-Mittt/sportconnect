@@ -54,6 +54,10 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     feeType: 'FREE',
     feeAmountVnd: null,
     initialSlot: 0,
+    maleSlots: null,
+    femaleSlots: null,
+    gameMood: 5,
+    feeNote: null,
     autoApprove: false,
     likeCount: 0,
     isLikedByCurrentUser: false,
@@ -406,5 +410,58 @@ describe('SessionCard time line (CLIENT-SESSION-30)', () => {
   it('adds the end date when the session ends on another day', () => {
     renderCard(makeSession({ scheduledStart: '2026-08-01T22:00:00', scheduledEndAt: '2026-08-02T01:00:00' }));
     expect(screen.getByText(/22:00 – Aug 2, 01:00/)).toBeInTheDocument();
+  });
+});
+
+describe('SessionCard game mood and gender split (CLIENT-SESSION-34)', () => {
+  const renderCard = (overrides: Partial<Session>, size?: 'compact' | 'full') =>
+    render(
+      <SessionCard
+        session={makeSession(overrides)}
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+        size={size}
+      />,
+    );
+
+  it('shows the mood number next to the participant count, with the full wording as its name', () => {
+    renderCard({ gameMood: 9 });
+    const badge = screen.getByLabelText('Game mood 9 · Competitive');
+    expect(badge).toHaveTextContent('9');
+    expect(badge).toHaveAttribute('title', '9 · Competitive');
+  });
+
+  it('tints the badge by level with the mood tokens', () => {
+    const { unmount } = renderCard({ gameMood: 2 });
+    expect(screen.getByLabelText(/Game mood 2/).className).toContain('bg-mood-low');
+    unmount();
+    const second = renderCard({ gameMood: 5 });
+    expect(screen.getByLabelText(/Game mood 5/).className).toContain('bg-mood-mid');
+    second.unmount();
+    renderCard({ gameMood: 10 });
+    expect(screen.getByLabelText(/Game mood 10/).className).toContain('bg-mood-high');
+  });
+
+  it('shows the gender split of the open seats on the full card', () => {
+    renderCard({ maleSlots: 4, femaleSlots: 4 });
+    expect(screen.getByText('Open: 4 male - 4 female')).toBeInTheDocument();
+  });
+
+  it('shows nothing about gender when none is reserved, and not on the compact card', () => {
+    const { unmount } = renderCard({ maleSlots: null, femaleSlots: null });
+    expect(screen.queryByText(/Open:/)).not.toBeInTheDocument();
+    unmount();
+    renderCard({ maleSlots: 2, femaleSlots: 1 }, 'compact');
+    expect(screen.queryByText(/Open:/)).not.toBeInTheDocument();
+    // …but the mood badge is on both sizes.
+    expect(screen.getByLabelText(/Game mood 5/)).toBeInTheDocument();
+  });
+
+  it('a title-less session shows the "<Sport> session" fallback title', () => {
+    renderCard({ title: null });
+    expect(screen.getByText('Basketball session')).toBeInTheDocument();
   });
 });

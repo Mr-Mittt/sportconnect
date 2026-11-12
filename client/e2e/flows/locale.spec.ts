@@ -158,7 +158,7 @@ test('Matches page renders Vietnamese copy under a stored vi locale', async ({ p
   const dialog = page.getByRole('dialog', { name: 'Tạo buổi chơi của bạn' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Tạo buổi chơi', exact: true }).click();
-  await expect(dialog.getByText('Vui lòng nhập tên buổi chơi.')).toBeVisible();
+  await expect(dialog.getByText('Vui lòng nhập số chỗ trống.')).toBeVisible();
 });
 
 /**

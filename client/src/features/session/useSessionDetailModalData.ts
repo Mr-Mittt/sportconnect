@@ -6,18 +6,22 @@ import { useFavoriteLocations } from '@/features/location/hooks/useFavoriteLocat
 import { useUnfavoriteLocation } from '@/features/location/hooks/useUnfavoriteLocation';
 import { useLocationPickerData } from '@/features/location/useLocationPickerData';
 import { useSessionAttributeSchema } from '@/shared/hooks/useSessionAttributeSchema';
+import { useRawMySportProfiles } from '@/shared/hooks/useRawMySportProfiles';
 import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import type { Location } from '@/shared/types/location';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useLikeSession } from './hooks/useLikeSession';
 import { useRejectParticipant } from './hooks/useRejectParticipant';
 import { useRequestedParticipants } from './hooks/useRequestedParticipants';
+import { useScheduleSession } from './hooks/useScheduleSession';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
 import { useUnlikeSession } from './hooks/useUnlikeSession';
 import { useUpdateSession } from './hooks/useUpdateSession';
+import { missingForSession } from './sessionReadiness';
 import { isSessionDialogError, useSessionErrorGuard } from './sessionErrors';
 import type { UpdateSessionPayload } from './types';
 import { useSessionCommentsData } from './useSessionCommentsData';
@@ -80,10 +84,10 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
   // CLIENT-SESSION-8: the detail dialog's Discussion section.
   const sessionCommentsData = useSessionCommentsData(sessionId ?? undefined, isDetailOpen);
 
-  // CLIENT-SESSION-21 (SESSION-24): a PREPARING session's own creator/owner-admin completes its
-  // still-missing location and/or fee via SessionPreparingCompletion. Location picking reuses the
-  // exact same LocationPicker + favorites plumbing CreateSessionModal already owns, just scoped to
-  // this already-known session (no sport-switch dance needed — the sport never changes here).
+  // CLIENT-SESSION-21 (SESSION-24) / CLIENT-SESSION-34: a PREPARING session's own creator/owner-admin
+  // edits it section by section in the detail modal (`SessionDetailSections`). The Where editor's
+  // location picking reuses the exact same LocationPicker + favorites plumbing CreateSessionModal
+  // already owns, just scoped to this already-known session (the sport never changes here).
   const sessionSportId = sessionQuery.data?.sportId;
   const [selectedCompletionLocation, setSelectedCompletionLocation] = useState<Location | null>(null);
   const [isCompletionLocationPickerOpen, setIsCompletionLocationPickerOpen] = useState(false);
@@ -130,13 +134,40 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
       completionFavoriteLocationMutation.isPending || completionUnfavoriteLocationMutation.isPending,
   };
   const updateSessionMutation = useUpdateSession();
-  const onCompleteSession = (payload: UpdateSessionPayload) => {
+  const scheduleMutation = useScheduleSession();
+  // CLIENT-SESSION-34: the "Are you ready?" popup (complete variant) that confirms "Mark it
+  // scheduled". Opened by the button, and by itself when a save leaves nothing missing.
+  const [isScheduleConfirmOpen, setIsScheduleConfirmOpen] = useState(false);
+  /**
+   * Saves one section's fields (`PUT`). `onDone` runs on success (the section leaves edit mode and the
+   * picked location is dropped). When this save was what completed the session — something was missing
+   * before and nothing is after — the schedule confirmation opens by itself.
+   */
+  const onUpdateSession = (payload: UpdateSessionPayload, onDone: () => void) => {
     if (sessionId === null) return;
+    const hadMissing = sessionQuery.data !== undefined && missingForSession(sessionQuery.data).length > 0;
     updateSessionMutation.mutate(
       { sessionId, payload },
-      { onSuccess: () => setSelectedCompletionLocation(null) },
+      {
+        onSuccess: (updated) => {
+          setSelectedCompletionLocation(null);
+          onDone();
+          if (hadMissing && updated.status === 'PREPARING' && missingForSession(updated).length === 0) {
+            setIsScheduleConfirmOpen(true);
+          }
+        },
+      },
     );
   };
+  const onSchedule = () => {
+    if (sessionId === null) return;
+    scheduleMutation.mutate(sessionId, { onSuccess: () => setIsScheduleConfirmOpen(false) });
+  };
+  const rawProfiles = useRawMySportProfiles();
+  // CLIENT-SESSION-34: the `#ref` fields of the Session detail editor take their choices from the
+  // creator's own profile for the session's sport (the create form does the same).
+  const refChoiceSource: Record<string, unknown> | null =
+    rawProfiles.data?.find((profile) => profile.sportId === sessionSportId && profile.isActive)?.attributes ?? null;
 
   // CLIENT-SESSION-16: the resolved session attribute schema for this session's sport, so the
   // modal can render the session's stored `attributes` read-only. `null` (not an error) when the
@@ -168,6 +199,8 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
       // CLIENT-SESSION-21: same reasoning — a failed/half-picked completion on session A must
       // not surface (or leave a stale chosen location) when this dialog reopens for session B.
       updateSessionMutation.reset();
+      scheduleMutation.reset();
+      setIsScheduleConfirmOpen(false);
       setSelectedCompletionLocation(null);
     },
     selectedSession: sessionQuery.data,
@@ -183,15 +216,27 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
     isParticipantsError: participantsQuery.isError,
     currentUserId: currentUserId ?? '',
     canManage,
-    // CLIENT-SESSION-21 (SESSION-24): the PREPARING-completion flow — SessionPreparingCompletion
-    // renders only when the caller passes `canManage && selectedSession.status === 'PREPARING'`.
+    // CLIENT-SESSION-21 (SESSION-24) / CLIENT-SESSION-34: the Where editor's picked location — the
+    // sections get Edit buttons only for `canManage && selectedSession.status === 'PREPARING'`.
     selectedCompletionLocation,
     onOpenCompletionLocationPicker: () => setIsCompletionLocationPickerOpen(true),
     completionLocationPicker,
     completionFavorites,
-    onCompleteSession,
-    isCompletingSession: updateSessionMutation.isPending,
-    isCompleteSessionError: updateSessionMutation.isError && !isSessionDialogError(updateSessionMutation.error),
+    onClearCompletionLocation: () => setSelectedCompletionLocation(null),
+    /** Named apart from the create hook's `refChoiceSource`: `useMatchesPageData` spreads both. */
+    detailRefChoiceSource: refChoiceSource,
+    /** CLIENT-SESSION-34: saves one section of a PREPARING session (the detail's per-section Edit). */
+    onUpdateSession,
+    isUpdatingSession: updateSessionMutation.isPending,
+    isUpdateSessionError: updateSessionMutation.isError && !isSessionDialogError(updateSessionMutation.error),
+    updateSessionErrorText: getCodedErrorMessage(updateSessionMutation.error),
+    /** CLIENT-SESSION-34: "Mark it scheduled" (SESSION-46's `POST /schedule`) and its confirmation popup. */
+    isScheduleConfirmOpen,
+    onScheduleConfirmOpenChange: setIsScheduleConfirmOpen,
+    onSchedule,
+    isScheduling: scheduleMutation.isPending,
+    isScheduleError: scheduleMutation.isError && !isSessionDialogError(scheduleMutation.error),
+    scheduleErrorText: getCodedErrorMessage(scheduleMutation.error),
     onJoin: () => sessionId !== null && joinMutation.mutate(sessionId),
     isJoining: joinMutation.isPending,
     isJoinError: joinMutation.isError && !isSessionDialogError(joinMutation.error),

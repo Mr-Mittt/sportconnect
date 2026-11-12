@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SportHub - session form, sections, popups and PREPARING detail (CLIENT-SESSION-34 draft, not an approved baseline)</title>
+<style>
+  /* Tokens: client/src/index.css carried over 1:1, light only (same convention as every file in
+     this folder). New in this draft: --mood-low / --mood-mid / --mood-high (game mood track and
+     accent). Nothing else is new. */
+  :root {
+    --surface-0:#f7f7f4; --surface-1:#f1efe8; --surface-2:#ffffff;
+    --text-primary:#1a1a18; --text-secondary:#5f5e5a; --text-muted:#6e6d66;
+    --text-accent:#185fa5; --text-danger:#a32d2d; --text-success:#15803d;
+    --bg-accent:#e6f1fb; --accent-solid:#185fa5;
+    --border:rgba(44,44,42,.12); --border-strong:rgba(44,44,42,.24); --border-accent:#378add;
+    --overlay:rgba(26,26,24,.55);
+    --amber-50:#fbf1de; --amber-800:#7a4f06;
+    --mood-low:#15803d; --mood-mid:#b7791f; --mood-high:#a32d2d;
+    --shadow-card:0 1px 3px rgba(44,44,42,.08),0 20px 48px rgba(44,44,42,.16);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--surface-0);color:var(--text-primary);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px}
+  button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+  .note{max-width:1180px;margin:20px auto 0;padding:12px 16px;background:var(--amber-50);color:var(--amber-800);border-radius:10px;font-size:13px;line-height:1.5}
+  h1{max-width:1180px;margin:20px auto 4px;padding:0 16px;font-size:18px}
+  h2{max-width:1180px;margin:34px auto 10px;padding:0 16px;font-size:15px;color:var(--text-secondary);font-weight:600}
+  .row{max-width:1180px;margin:0 auto;padding:0 16px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+  .cap{font-size:12px;color:var(--text-muted);margin:0 0 8px}
+  .col{display:flex;flex-direction:column}
+
+  /* ---- modal frame ---- */
+  .modal{background:var(--surface-2);border-radius:16px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;overflow:hidden;width:640px;max-width:100%}
+  .modal.narrow{width:560px}
+  .modal.phone{width:375px}
+  .mh{padding:12px 16px;border-bottom:.5px solid var(--border);text-align:center;font-weight:600;font-size:14px;position:relative}
+  .mh .x{position:absolute;right:14px;top:10px;color:var(--text-muted)}
+  .mb{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+  .mf{padding:12px 16px;border-top:.5px solid var(--border);display:flex;justify-content:flex-end;gap:10px;align-items:center}
+
+  /* ---- sections ---- */
+  .sec{border:.5px solid var(--border);border-radius:12px;overflow:hidden}
+  .sh{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface-1);font-size:12px;font-weight:600;color:var(--text-secondary)}
+  .sh .chev{margin-left:auto;color:var(--text-muted);font-size:11px}
+  .sh .pencil{margin-left:auto;display:inline-flex;align-items:center;gap:4px;border:.5px solid var(--border-strong);background:var(--surface-2);border-radius:999px;padding:3px 9px;font-size:11px;color:var(--text-secondary);cursor:pointer}
+  .chip{background:var(--amber-50);color:var(--amber-800);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:500}
+  .sb{padding:12px;display:flex;flex-direction:column;gap:10px}
+  .g{display:grid;gap:10px}
+  .g10{grid-template-columns:repeat(10,1fr)}
+  .s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}.s7{grid-column:span 7}.s8{grid-column:span 8}.s10{grid-column:span 10}
+  label,.lbl{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px}
+  .req{color:var(--text-danger)}
+  .in{width:100%;border:.5px solid var(--border-strong);background:var(--surface-2);border-radius:8px;padding:7px 10px;min-height:34px}
+  .in.muted{color:var(--text-muted)}
+  .pick{display:flex;gap:6px}
+  .help{font-size:11px;color:var(--text-muted);margin-top:4px}
+  .err{font-size:11px;color:var(--text-danger);margin-top:4px}
+  .seg{display:inline-flex;border:.5px solid var(--border-strong);border-radius:8px;overflow:hidden}
+  .seg span{padding:6px 12px;font-size:12px;border-right:.5px solid var(--border)}
+  .seg span:last-child{border-right:0}
+  .seg .on{background:var(--bg-accent);color:var(--text-accent);font-weight:600}
+  .btn{border-radius:8px;padding:7px 14px;border:.5px solid var(--border-strong);background:var(--surface-2);font-weight:500;cursor:pointer}
+  .btn.p{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff}
+  .btn.dis{opacity:.45;cursor:default}
+  .btn.sm{padding:4px 10px;font-size:12px}
+  .cb{display:flex;align-items:center;gap:8px;font-size:13px}
+  .cb i{width:16px;height:16px;border:1px solid var(--border-strong);border-radius:4px;display:inline-block}
+  .cb i.on{background:var(--accent-solid);border-color:var(--accent-solid)}
+  .sub{font-size:11px;color:var(--text-muted)}
+
+  /* ---- mood slider ---- */
+  .mood{display:flex;flex-direction:column;gap:4px}
+  .mood .track{height:8px;border-radius:999px;background:linear-gradient(to right,var(--mood-low),var(--mood-mid),var(--mood-high));position:relative}
+  .mood .knob{position:absolute;top:50%;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid var(--text-primary);transform:translate(-50%,-50%)}
+  .mood .ends{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted)}
+  .mood .top{display:flex;align-items:center;gap:10px}
+  .mood .val{font-weight:700;font-size:14px;min-width:92px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .badge-mood{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:999px;padding:2px 8px;color:#fff}
+  .m-low{background:var(--mood-low)}.m-mid{background:var(--mood-mid)}.m-high{background:var(--mood-high)}
+
+  /* ---- popups ---- */
+  .scrim{background:var(--overlay);border-radius:16px;padding:40px 24px;display:flex;align-items:center;justify-content:center}
+  .pop{background:var(--surface-2);border-radius:14px;box-shadow:var(--shadow-card);padding:16px;width:360px;max-width:100%}
+  .pop h3{margin:0 0 6px;font-size:14px}
+  .pop p{margin:0 0 10px;font-size:13px;color:var(--text-secondary);line-height:1.45}
+  .pop ul{margin:0 0 12px 18px;padding:0;font-size:13px}
+  .pop .btns{display:flex;justify-content:flex-end;gap:8px}
+
+  /* ---- detail ---- */
+  .banner{background:var(--amber-50);color:var(--amber-800);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5}
+  .banner b{font-weight:600}
+  .kv{display:flex;gap:8px;font-size:13px}
+  .kv .k{width:92px;color:var(--text-muted);flex-shrink:0}
+  .kv .miss{color:var(--amber-800);font-style:italic}
+
+  /* ---- card ---- */
+  .card{width:300px;border:.5px solid var(--border);border-radius:12px;padding:12px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px;font-size:12px}
+  .card .t{font-weight:600;font-size:13px}
+  .card .d{display:flex;gap:6px;color:var(--text-secondary)}
+  .card .fr{display:flex;justify-content:space-between;color:var(--text-secondary);align-items:center}
+
+  /* narrow 2-digit pickers (hour, minute) */
+  .in.n2{flex:none;width:54px;padding:7px 4px;text-align:center}
+  .pick .in:first-child:not(.n2){flex:1}
+  /* collapsible section header + collapsed summary + header actions */
+  .sh .chev{margin-left:0;margin-right:2px;width:10px}
+  .sh .act{margin-left:auto;display:flex;gap:6px}
+  .ib{display:inline-flex;align-items:center;gap:5px;border:.5px solid var(--border-strong);background:var(--surface-2);border-radius:999px;padding:3px 10px;font-size:11px;font-weight:500;color:var(--text-secondary);cursor:pointer}
+  .ib.pri{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff}
+  .ib.off{opacity:.4;cursor:default}
+  .modal.phone .ib{width:28px;height:28px;padding:0;justify-content:center}
+  .modal.phone .ib .txt{display:none}
+  .sum{display:flex;flex-wrap:wrap;gap:3px 14px;padding:8px 12px;font-size:12px}
+  .sum .k{color:var(--text-muted)}
+  .sum .miss,.miss{color:var(--amber-800);font-style:italic}
+
+  /* who can join: radios + gender checkboxes with narrow numeric inputs */
+  .rd{display:inline-flex;align-items:center;gap:6px;margin-right:18px;font-size:13px}
+  .rd i{width:16px;height:16px;border:1px solid var(--border-strong);border-radius:50%;display:inline-block}
+  .rd i.on{border:5px solid var(--accent-solid)}
+  .gen{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;margin-top:8px;padding-left:2px}
+  .gen .in.n2{min-height:30px;padding:5px 4px}
+  .gen .cb.off{opacity:.5}
+
+  /* radios in a column; the gender sub-options hang under "By gender" */
+  .rds{display:flex;flex-direction:column;gap:8px}
+  .rds .rd{margin-right:0}
+  .rds .gen{margin-top:0;margin-left:22px;padding-left:12px;border-left:2px solid var(--border)}
+</style>
+</head>
+<body>
+
+<h1>Session form, popups, PREPARING detail — CLIENT-SESSION-34 draft</h1>
+<div class="note">
+  <b>Draft for review, not an approved baseline.</b> Light-only, tokens as in <code>client/src/index.css</code>; the only new
+  tokens are <code>--mood-low / --mood-mid / --mood-high</code>. Sections: <b>A</b> create form · <b>B</b> same form at 375px ·
+  <b>C</b> three popups · <b>D</b> PREPARING detail for the host, with <b>per-section pencil editing</b> · <b>E</b> PREPARING detail for
+  everyone else · <b>F</b> SCHEDULED detail and card with the new fields.
+</div>
+
+<!-- ============================ A ============================ -->
+<h2>A · Create session (desktop, all five sections open, first attempt to Create with gaps)</h2>
+<div class="row">
+<div class="modal">
+  <div class="mh">Create your session<span class="x">✕</span></div>
+  <div class="mb">
+
+    <div class="sec">
+      <div class="sh">Overview <span class="sub" style="font-weight:400">sport and title</span><span class="chev">▾</span></div>
+      <div class="sb">
+        <div class="g g10">
+          <div class="s2"><label>Sport <span class="req">*</span></label><div class="in">Badminton ▾</div></div>
+          <div class="s8"><label>Session title</label><div class="in muted">Optional — e.g. Sunday pickup run</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sh">When <span class="chip">Missing: duration</span><span class="chev">▾</span></div>
+      <div class="sb">
+        <div class="g g10">
+          <div class="s5"><span class="lbl">Starts at <span class="req">*</span></span>
+            <div class="pick"><div class="in">Today ▾</div><div class="in n2">19 ▾</div><div class="in n2">07 ▾</div></div></div>
+          <div class="s2"><label>Duration (min)</label><div class="in muted">e.g. 90</div></div>
+          <div class="s3"><span class="lbl">Ends at</span>
+            <div class="pick"><div class="in">Today ▾</div><div class="in n2">20 ▾</div><div class="in n2">37 ▾</div></div></div>
+        </div>
+        <div class="help">Edit duration and the end follows; edit the end and the duration follows; move the start and the duration stays. The end may fall on the next day.</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sh">Where <span class="chip">Missing: location</span><span class="chev">▾</span></div>
+      <div class="sb">
+        <div class="g g10">
+          <div class="s7"><span class="lbl">Location</span><div class="pick"><div class="in muted">Choose a location ▾</div></div></div>
+          <div class="s3"><label>Location note</label><div class="in muted">e.g. Court 3</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sh">Who<span class="chev">▾</span></div>
+      <div class="sb">
+        <div class="g g10">
+          <div class="s2"><label>Taken slot</label><div class="in muted">1</div></div>
+          <div class="s2"><label>Open slot <span class="req">*</span></label><div class="in">6</div></div>
+        </div>
+        <div>
+          <span class="lbl">Who can join</span>
+          <div class="rds">
+            <span class="rd"><i></i>Anyone</span>
+            <span class="rd"><i class="on"></i>By gender</span>
+            <div class="gen">
+              <span class="cb"><i class="on"></i>Male slot</span><span class="in n2">2</span>
+              <span class="cb" style="margin-left:10px"><i class="on"></i>Female slot</span><span class="in n2">1</span>
+            </div>
+          </div>
+          <div class="help">6 open: 2 male + 1 female, 3 for anyone. Male + female can't be more than the open slots.</div>
+        </div>
+        <div class="mood">
+          <span class="lbl">Game mood</span>
+          <div class="top"><div style="flex:1"><div class="track"><div class="knob" style="left:44.4%"></div></div></div><div class="val">5 · Normal</div></div>
+          <div class="ends"><span>1 · For fun</span><span>Normal</span><span>Competitive · 10</span></div>
+        </div>
+        <div class="cb"><i></i>Auto approve join request</div>
+        <div><span class="lbl">Invite your friend</span><div class="in muted">Search friends by name…</div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sh">Cost <span class="chip">Missing: fee</span><span class="chev">▾</span></div>
+      <div class="sb">
+        <div><span class="lbl">Fee</span>
+          <div class="seg"><span>Free</span><span>Split cost</span><span>Fixed amount</span></div></div>
+        <div><label>Fee note</label><div class="in muted">e.g. Cash at the door, includes shuttlecocks</div><div class="help" style="text-align:right">0/300</div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sh">Session detail <span class="sub" style="font-weight:400">sport specific, only when the sport has them</span><span class="chev">▾</span></div>
+      <div class="sb">
+        <div class="g g10">
+          <div class="s5"><label>Level</label><div class="in">Intermediate ▾</div></div>
+          <div class="s5"><label>Format</label><div class="in muted">Doubles ▾</div></div>
+        </div>
+        <div class="help">The sport's session attributes, as today. The section is hidden for a sport with none.</div>
+      </div>
+    </div>
+  </div>
+  <div class="mf"><button class="btn p">Create session</button></div>
+</div>
+
+<div class="col" style="max-width:420px;gap:10px">
+  <p class="cap">Notes</p>
+  <div class="sub" style="font-size:12px;line-height:1.6">
+    • All five sections open by default, one scroll, one submit; no wizard.<br>
+    • The amber chip is information, not an error (text carries the meaning). Red asterisk stays for what is needed to create: sport, start, open slot.<br>
+    • "(optional)" is gone from every label; unmarked means optional. Title and duration are optional now.<br>
+    • The old footer line "will be created as Preparing" is gone: clicking Create opens the readiness popup (C2/C3).<br>
+    • Game mood always has a value (default 5); an untouched slider counts as the answer. The number sits beside the slider, colour is only an accent.<br>
+    • Who can join: <b>Anyone</b> (default) or <b>By gender</b>, radios stacked in a column. By gender unlocks two checkboxes, Male slot and Female slot, each with its own two-digit number input (smaller than Open slot); a ticked box with a number reserves that many of the open slots, and male + female over the open slots shows a red line. Switching back to Anyone clears both.<br>
+    • <b>Session detail</b> (the sport's session attributes) stays, as the last section, only for a sport that has a session schema. Description is gone from the form.<br>
+    • Overview holds only sport and title for now (sport is fixed after creation, so only the title is editable in the detail).
+  </div>
+</div>
+</div>
+
+<!-- ============================ B ============================ -->
+<h2>B · Create session at 375px (rows stack to one column; nothing overflows)</h2>
+<div class="row">
+<div class="modal phone">
+  <div class="mh">Create your session<span class="x">✕</span></div>
+  <div class="mb">
+    <div class="sec"><div class="sh">Overview<span class="chev">▾</span></div>
+      <div class="sb"><div><label>Sport <span class="req">*</span></label><div class="in">Badminton ▾</div></div><div><label>Session title</label><div class="in muted">Optional</div></div></div></div>
+    <div class="sec"><div class="sh">When <span class="chip">Missing: duration</span><span class="chev">▾</span></div>
+      <div class="sb"><div><span class="lbl">Starts at <span class="req">*</span></span><div class="pick"><div class="in">Today ▾</div><div class="in n2">19 ▾</div><div class="in n2">07 ▾</div></div></div>
+        <div class="pick"><div style="flex:1"><label>Duration</label><div class="in muted">90</div></div><div style="flex:2"><span class="lbl">Ends at</span><div class="pick"><div class="in">Today</div><div class="in n2">20</div><div class="in n2">37</div></div></div></div></div></div>
+    <div class="sec"><div class="sh">Who<span class="chev">▾</span></div>
+      <div class="sb"><div class="pick"><div style="flex:1"><label>Taken</label><div class="in">1</div></div><div style="flex:1"><label>Open *</label><div class="in">5</div></div></div>
+        <div><span class="lbl">Who can join</span><div class="rds"><span class="rd"><i class="on"></i>Anyone</span><span class="rd"><i></i>By gender</span>
+            <div class="gen"><span class="cb off"><i></i>Male slot</span><span class="in n2" style="opacity:.4">&nbsp;</span><span class="cb off"><i></i>Female slot</span><span class="in n2" style="opacity:.4">&nbsp;</span></div></div>
+          <div class="help">Male and female slots unlock when "By gender" is chosen.</div></div>
+        <div class="mood"><span class="lbl">Game mood</span><div class="top"><div style="flex:1"><div class="track"><div class="knob" style="left:66%"></div></div></div><div class="val">7 · Normal</div></div><div class="ends"><span>1 · For fun</span><span>Normal</span><span>Competitive · 10</span></div></div></div></div>
+  </div>
+  <div class="mf"><button class="btn p">Create session</button></div>
+</div>
+</div>
+
+<!-- ============================ C ============================ -->
+<h2>C · Popups (sibling dialogs, centred, nothing pre-focused, Escape cancels)</h2>
+<div class="row">
+  <div class="col"><p class="cap">C1 · Tick "Auto approve" (unticking opens nothing)</p>
+    <div class="scrim"><div class="pop"><h3>Turn on auto approve?</h3><p>Everyone can join without your review. You can turn it off again while the session is still being prepared.</p>
+      <div class="btns"><button class="btn sm">Cancel</button><button class="btn sm p">Turn on</button></div></div></div></div>
+
+  <div class="col"><p class="cap">C2 · Create, something is missing</p>
+    <div class="scrim"><div class="pop"><h3>Are you ready?</h3><p>This information is still missing, so the session will be <b>Preparing</b> until you complete it:</p>
+      <ul><li>Location</li><li>Fee</li><li>Duration</li></ul>
+      <div class="btns"><button class="btn sm">Continue editing</button><button class="btn sm p">Create preparing session</button></div></div></div></div>
+
+  <div class="col"><p class="cap">C3 · Create complete; also the confirm for "Mark it scheduled", opened automatically when the last missing field is saved</p>
+    <div class="scrim"><div class="pop"><h3>Are you ready?</h3><p>The session is ready to be <b>Scheduled</b>. Its details can't be edited after that. Are you ready?</p>
+      <div class="btns"><button class="btn sm">Let me check again</button><button class="btn sm p">Let's go</button></div></div></div></div>
+</div>
+
+<!-- ============================ D ============================ -->
+<h2>D · PREPARING detail, host: collapsible sections, summary when collapsed, Edit in the section header</h2>
+<div class="row">
+
+<div class="col"><p class="cap">D1 · Desktop, nothing editing. "When" is expanded (read view); the other four are collapsed and show "field: value".</p>
+<div class="modal narrow">
+  <div class="mh">🏸 Sunday pickup run<span class="x">✕</span>
+    <div style="font-weight:400;font-size:12px;color:var(--amber-800);margin-top:2px">● Preparing · Sun 19:07 – 20:37</div></div>
+  <div class="mb">
+    <div class="banner"><b>The host is still preparing this session.</b> Some details, such as the location or fee, may change. It is cancelled automatically if it is not scheduled before it starts.<br><b>Still missing:</b> Location, Fee</div>
+
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Overview<span class="act"><button class="ib"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Sport:</span> Badminton</span><span><span class="k">Title:</span> Sunday pickup run</span></div></div>
+
+    <div class="sec"><div class="sh"><span class="chev">▾</span>When<span class="act"><button class="ib"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sb"><div class="kv"><span class="k">Starts</span><span>Sun 19:07</span></div><div class="kv"><span class="k">Duration</span><span>90 min</span></div><div class="kv"><span class="k">Ends</span><span>Sun 20:37</span></div></div></div>
+
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Where <span class="chip">Missing: location</span><span class="act"><button class="ib"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Location:</span> <span class="miss">...</span></span><span><span class="k">Note:</span> <span class="miss">...</span></span></div></div>
+
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Who<span class="act"><button class="ib"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Taken:</span> 1</span><span><span class="k">Open:</span> 6 (2 male - 1 female)</span><span><span class="k">Mood:</span> 5 · Normal</span><span><span class="k">Auto approve:</span> No</span></div></div>
+
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Cost <span class="chip">Missing: fee</span><span class="act"><button class="ib"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Fee:</span> <span class="miss">...</span></span><span><span class="k">Fee note:</span> <span class="miss">...</span></span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Session detail<span class="act"><button class="ib"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Level:</span> Intermediate</span><span><span class="k">Format:</span> <span class="miss">...</span></span></div></div>
+  </div>
+  <div class="mf" style="justify-content:space-between"><span class="sub">Available once nothing is missing.</span><button class="btn p dis">Mark it scheduled</button></div>
+</div></div>
+
+<div class="col"><p class="cap">D2 · Desktop, "Where" expanded in edit mode: Discard and Save replace Edit in that header. The other Edit buttons are disabled meanwhile.</p>
+<div class="modal narrow">
+  <div class="mh">🏸 Sunday pickup run<span class="x">✕</span>
+    <div style="font-weight:400;font-size:12px;color:var(--amber-800);margin-top:2px">● Preparing · Sun 19:07 – 20:37</div></div>
+  <div class="mb">
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Overview<span class="act"><button class="ib off"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Sport:</span> Badminton</span><span><span class="k">Title:</span> Sunday pickup run</span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>When<span class="act"><button class="ib off"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Starts:</span> Sun 19:07</span><span><span class="k">Duration:</span> 90 min</span><span><span class="k">Ends:</span> Sun 20:37</span></div></div>
+
+    <div class="sec" style="border-color:var(--border-accent)"><div class="sh"><span class="chev">▾</span>Where <span class="chip">Missing: location</span>
+        <span class="act"><button class="ib"><span class="ico">✕</span><span class="txt">Discard</span></button><button class="ib pri"><span class="ico">✓</span><span class="txt">Save</span></button></span></div>
+      <div class="sb"><div class="g g10"><div class="s7"><span class="lbl">Location</span><div class="in muted">Choose a location ▾</div></div><div class="s3"><label>Location note</label><div class="in muted">e.g. Court 3</div></div></div></div></div>
+
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Who<span class="act"><button class="ib off"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Taken:</span> 1</span><span><span class="k">Open:</span> 5 (anyone)</span><span><span class="k">Mood:</span> 5 · Normal</span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Cost <span class="chip">Missing: fee</span><span class="act"><button class="ib off"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Fee:</span> <span class="miss">...</span></span><span><span class="k">Fee note:</span> <span class="miss">...</span></span></div></div>
+  </div>
+</div></div>
+
+<div class="col"><p class="cap">D3 · 375px: header actions are icon-only (aria-labelled Edit / Discard / Save); summaries wrap. "Who" in edit mode.</p>
+<div class="modal phone">
+  <div class="mh">🏸 Sunday pickup run<span class="x">✕</span>
+    <div style="font-weight:400;font-size:12px;color:var(--amber-800);margin-top:2px">● Preparing · Sun 19:07</div></div>
+  <div class="mb">
+    <div class="sec"><div class="sh"><span class="chev">▸</span>When<span class="act"><button class="ib off"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Starts:</span> Sun 19:07</span><span><span class="k">Duration:</span> 90 min</span><span><span class="k">Ends:</span> Sun 20:37</span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Where <span class="chip">Missing: location</span><span class="act"><button class="ib off"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Location:</span> <span class="miss">...</span></span><span><span class="k">Note:</span> <span class="miss">...</span></span></div></div>
+
+    <div class="sec" style="border-color:var(--border-accent)"><div class="sh"><span class="chev">▾</span>Who
+        <span class="act"><button class="ib" aria-label="Discard"><span class="ico">✕</span><span class="txt">Discard</span></button><button class="ib pri" aria-label="Save"><span class="ico">✓</span><span class="txt">Save</span></button></span></div>
+      <div class="sb">
+        <div class="pick"><div style="flex:1"><label>Taken</label><div class="in">1</div></div><div style="flex:1"><label>Open</label><div class="in">5</div></div></div>
+        <div><span class="lbl">Who can join</span><div class="rds"><span class="rd"><i></i>Anyone</span><span class="rd"><i class="on"></i>By gender</span>
+            <div class="gen"><span class="cb"><i class="on"></i>Male slot</span><span class="in n2">2</span><span class="cb"><i class="on"></i>Female slot</span><span class="in n2">1</span></div></div></div>
+        <div class="mood"><span class="lbl">Game mood</span><div class="top"><div style="flex:1"><div class="track"><div class="knob" style="left:44.4%"></div></div></div><div class="val">5 · Normal</div></div><div class="ends"><span>1 · For fun</span><span>Normal</span><span>Competitive · 10</span></div></div>
+        <div class="cb"><i></i>Auto approve join request</div>
+      </div></div>
+
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Cost <span class="chip">Missing: fee</span><span class="act"><button class="ib off"><span class="ico">✎</span><span class="txt">Edit</span></button></span></div>
+      <div class="sum"><span><span class="k">Fee:</span> <span class="miss">...</span></span></div></div>
+  </div>
+</div></div>
+
+<div class="col" style="max-width:340px"><p class="cap">Notes</p>
+  <div class="sub" style="font-size:12px;line-height:1.65">
+    • Sections are collapsible. Collapsed, a section shows its fields as <code>field: value</code>, in a wrapping row; a missing value reads <code>...</code> (amber).<br>
+    • The Edit button sits in the section header and only exists on a PREPARING session, for the host. Clicking it also expands the section.<br>
+    • In edit mode the same spot shows Discard and Save (icon only at 375px). Save sends only that section's fields; Discard drops the draft.<br>
+    • Expanding a section scrolls the modal body just enough that the whole section is visible (nearest-edge scroll); a section taller than the modal aligns its top.<br>
+    • Expanded sections let the host set a missing value and change an existing one, as long as the session is PREPARING.<br>
+    • The other Edit buttons are disabled while one section is editing (D2).<br>
+    • <b>Mark it scheduled</b> is the footer button (disabled until nothing is missing). It opens popup C3; "Let's go" calls <code>POST /schedule</code>. When the host saves the last missing field, C3 opens by itself.
+  </div>
+</div>
+</div>
+
+<h2>D4 · The scroll-into-view rule: the host expands "Cost" near the bottom; the body scrolls so the section ends at the bottom edge</h2>
+<div class="row">
+<div class="modal narrow" style="height:360px">
+  <div class="mh">🏸 Sunday pickup run<span class="x">✕</span></div>
+  <div class="mb" style="overflow:hidden;justify-content:flex-end;flex:1">
+    <div class="sub" style="text-align:center">↑ earlier sections scrolled out of view ↑</div>
+    <div class="sec" style="border-color:var(--border-accent)"><div class="sh"><span class="chev">▾</span>Cost <span class="chip">Missing: fee</span>
+        <span class="act"><button class="ib"><span class="ico">✕</span><span class="txt">Discard</span></button><button class="ib pri"><span class="ico">✓</span><span class="txt">Save</span></button></span></div>
+      <div class="sb"><div><span class="lbl">Fee</span><div class="seg"><span>Free</span><span>Split cost</span><span class="on">Fixed amount</span></div> <span class="in n2" style="display:inline-block;width:110px;margin-left:8px">120000</span></div>
+        <div><label>Fee note</label><div class="in muted">e.g. Cash at the door</div><div class="help" style="text-align:right">0/300</div></div></div></div>
+  </div>
+  <div class="mf" style="justify-content:space-between"><span class="sub">Available once nothing is missing.</span><button class="btn p dis">Mark it scheduled</button></div>
+</div>
+</div>
+
+<!-- ============================ E ============================ -->
+<h2>E · PREPARING detail, everyone else: same collapsible sections, no Edit, no Schedule</h2>
+<div class="row">
+<div class="modal narrow">
+  <div class="mh">🏸 Sunday pickup run<span class="x">✕</span>
+    <div style="font-weight:400;font-size:12px;color:var(--amber-800);margin-top:2px">● Preparing · Sun 19:07 – 20:37</div></div>
+  <div class="mb">
+    <div class="banner"><b>The host is still preparing this session.</b> Some details, such as the location or fee, may change. It is cancelled automatically if it is not scheduled before it starts.</div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>When</div><div class="sum"><span><span class="k">Starts:</span> Sun 19:07</span><span><span class="k">Duration:</span> 90 min</span><span><span class="k">Ends:</span> Sun 20:37</span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Where</div><div class="sum"><span><span class="k">Location:</span> <span class="miss">...</span></span><span><span class="k">Note:</span> <span class="miss">...</span></span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Who</div><div class="sum"><span><span class="k">Players:</span> 1/6</span><span><span class="k">Open:</span> 5 (2 male - 1 female)</span><span><span class="k">Mood:</span> 5 · Normal</span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Cost</div><div class="sum"><span><span class="k">Fee:</span> <span class="miss">...</span></span><span><span class="k">Fee note:</span> <span class="miss">...</span></span></div></div>
+    <div class="sec"><div class="sh"><span class="chev">▸</span>Session detail</div><div class="sum"><span><span class="k">Level:</span> Intermediate</span><span><span class="k">Format:</span> <span class="miss">...</span></span></div></div>
+  </div>
+  <div class="mf"><button class="btn p">Join</button></div>
+</div>
+</div>
+
+<!-- ============================ F ============================ -->
+<h2>F · SCHEDULED: detail shows the new fields, card shows mood and slots when there is room</h2>
+<div class="row">
+<div class="modal narrow">
+  <div class="mh">🏸 Sunday pickup run<span class="x">✕</span>
+    <div style="font-weight:400;font-size:12px;color:var(--text-success);margin-top:2px">● Scheduled · Sun 19:07 – 20:37</div></div>
+  <div class="mb">
+    <div class="kv"><span class="k">Where</span><span>Hoa Lu Sports Hall · Court 3</span></div>
+    <div class="kv"><span class="k">Players</span><span>3/6 · open 3 (2 male - 1 female)</span></div>
+    <div class="kv"><span class="k">Game mood</span><span class="badge-mood m-high">8 · Competitive</span></div>
+    <div class="kv"><span class="k">Fee</span><span>120,000 VND · Cash at the door, includes shuttlecocks</span></div>
+  </div>
+</div>
+
+<div class="col" style="gap:10px"><p class="cap">Session card (full size)</p>
+  <div class="card"><div class="t">Sunday pickup run <span style="float:right;font-weight:500;color:var(--text-success);font-size:11px">Scheduled</span></div>
+    <div class="d">🕖 19:07 – 20:37</div><div class="d">📍 Hoa Lu Sports Hall</div>
+    <div class="fr"><span>120,000 VND</span><span>3/6 · <span class="badge-mood m-high">8</span></span></div>
+    <div class="sub">Open 3 (2 male - 1 female)</div></div>
+  <p class="cap" style="margin-top:8px">No title, no slots set</p>
+  <div class="card"><div class="t">Badminton session <span style="float:right;font-weight:500;color:var(--amber-800);font-size:11px">Preparing</span></div>
+    <div class="d">🕖 19:07 – 20:37</div><div class="d">📍 Location to be confirmed</div>
+    <div class="fr"><span>Fee to be confirmed</span><span>1/6 · <span class="badge-mood m-mid">5 · Normal</span></span></div></div>
+</div>
+</div>
+
+<div style="height:40px"></div>
+</body>
+</html>

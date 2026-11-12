@@ -315,6 +315,10 @@ describe('App routing', () => {
       if (url === '/users/me/preferences') {
         return preferencesResponse;
       }
+      // CLIENT-SESSION-34: the create-session modal also fetches the (session-)attribute schema; null = none.
+      if (url.endsWith('attribute-schema')) {
+        return { data: { success: true, message: '', data: null, timestamp: '' } };
+      }
       if (url === '/groups/user/1') {
         return {
           data: {
@@ -443,6 +447,10 @@ describe('App routing', () => {
       // CLIENT-I18N-1: useSyncUserLocale (RootLayout) fetches this unconditionally too.
       if (url === '/users/me/preferences') {
         return preferencesResponse;
+      }
+      // CLIENT-SESSION-34: the create-session modal also fetches the (session-)attribute schema; null = none.
+      if (url.endsWith('attribute-schema')) {
+        return { data: { success: true, message: '', data: null, timestamp: '' } };
       }
       if (url === '/groups/user/1') {
         return {

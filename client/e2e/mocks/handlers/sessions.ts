@@ -430,6 +430,11 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd?: number;
       initialSlot?: number;
       autoApprove?: boolean;
+      // SESSION-46
+      maleSlots?: number;
+      femaleSlots?: number;
+      gameMood: number;
+      feeNote?: string;
       inviteeIds?: string[];
       // CLIENT-SESSION-15 / SESSION-23: path-keyed session attributes. The real backend filters
       // these against the sport's session schema; this mock stores what it's sent.
@@ -456,9 +461,19 @@ export const sessionHandlers: HttpHandler[] = [
       location: body.locationId !== undefined ? mockLocation : null,
       locationNote: body.locationNote ?? null,
       scheduledStart: body.scheduledStart,
-      scheduledEndAt: null,
-      // SESSION-24: missing either -> PREPARING instead of SCHEDULED.
-      status: body.locationId !== undefined && body.feeType !== undefined ? 'SCHEDULED' : 'PREPARING',
+      scheduledEndAt:
+        body.durationMinutes !== undefined
+          ? new Date(new Date(body.scheduledStart).getTime() + body.durationMinutes * 60_000).toISOString()
+          : null,
+      // SESSION-24 / SESSION-46: a session starts PREPARING unless location, fee (and a FIXED fee's
+      // amount) and duration are all set.
+      status:
+        body.locationId !== undefined &&
+        body.feeType !== undefined &&
+        (body.feeType !== 'FIXED' || body.feeAmountVnd !== undefined) &&
+        body.durationMinutes !== undefined
+          ? 'SCHEDULED'
+          : 'PREPARING',
       cancelReason: null,
       cancelledBy: null,
       cancelledByFullName: null,
@@ -474,6 +489,11 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
       initialSlot,
       autoApprove: body.autoApprove ?? false,
+      // SESSION-46: 0 is stored as 0 on create (the real server only clears on update).
+      maleSlots: body.maleSlots ?? null,
+      femaleSlots: body.femaleSlots ?? null,
+      gameMood: body.gameMood,
+      feeNote: body.feeNote?.trim() ? body.feeNote.trim() : null,
       attributes: body.attributes ?? null,
       likeCount: 0,
       isLikedByCurrentUser: false,
@@ -742,42 +762,108 @@ export const sessionHandlers: HttpHandler[] = [
       feeType?: Session['feeType'];
       feeAmountVnd?: number;
       initialSlot?: number;
+      autoApprove?: boolean;
+      maleSlots?: number;
+      femaleSlots?: number;
+      gameMood?: number;
+      feeNote?: string;
+      attributes?: Record<string, unknown>;
     };
     if (body.scheduledStart !== undefined && !isOffsetAware(body.scheduledStart)) {
       return HttpResponse.json(apiError('scheduledStart must include a UTC offset'), { status: 400 });
     }
-    // SESSION-24: locationId/feeType are mutable via this endpoint only while PREPARING.
-    if ((body.locationId !== undefined || body.feeType !== undefined) && existing.status !== 'PREPARING') {
+    // SESSION-46: any edit is refused unless the session is still PREPARING.
+    if (existing.status !== 'PREPARING') {
       return HttpResponse.json(
-        apiError('Location and fee are immutable once the session is no longer being prepared', 'SESSION_NOT_PREPARING'),
+        apiError('Session can no longer be edited', 'SESSION_NOT_PREPARING', { status: existing.status }),
         { status: 409 },
+      );
+    }
+    // SESSION-46: null leaves, 0 clears; the resulting seats must fit in the open ones.
+    const nextMale =
+      body.maleSlots === undefined ? existing.maleSlots : body.maleSlots === 0 ? null : body.maleSlots;
+    const nextFemale =
+      body.femaleSlots === undefined ? existing.femaleSlots : body.femaleSlots === 0 ? null : body.femaleSlots;
+    const nextCapacity = body.capacity ?? existing.capacity;
+    const nextInitial = body.initialSlot ?? existing.initialSlot;
+    const open = nextCapacity - (nextInitial + 1);
+    const requested = (nextMale ?? 0) + (nextFemale ?? 0);
+    if (requested > 0 && requested > open) {
+      return HttpResponse.json(
+        apiError('Gender slots exceed the open seats', 'SESSION_GENDER_SLOTS_EXCEED_OPEN', { requested, open }),
+        { status: 400 },
       );
     }
     const resolvedLocation = body.locationId !== undefined ? mockLocation : existing.location;
     const resolvedFeeType = body.feeType ?? existing.feeType;
+    const startMs = new Date(body.scheduledStart ?? existing.scheduledStart).getTime();
+    // SESSION-46: a new duration sets the end from the (possibly new) start; a start-only edit shifts
+    // the existing end by the same delta.
+    let scheduledEndAt = existing.scheduledEndAt;
+    if (body.durationMinutes !== undefined) {
+      scheduledEndAt = new Date(startMs + body.durationMinutes * 60_000).toISOString();
+    } else if (body.scheduledStart !== undefined && existing.scheduledEndAt !== null) {
+      const delta = startMs - new Date(existing.scheduledStart).getTime();
+      scheduledEndAt = new Date(new Date(existing.scheduledEndAt).getTime() + delta).toISOString();
+    }
     const updated: Session = {
       ...existing,
-      ...(body.title !== undefined && { title: body.title }),
+      ...(body.title !== undefined && { title: body.title.trim() === '' ? null : body.title }),
       ...(body.description !== undefined && { description: body.description }),
       location: resolvedLocation,
       ...(body.locationNote !== undefined && { locationNote: body.locationNote }),
       ...(body.scheduledStart !== undefined && { scheduledStart: body.scheduledStart }),
+      scheduledEndAt,
       ...(body.capacity !== undefined && { capacity: body.capacity }),
       feeType: resolvedFeeType,
       feeAmountVnd: resolvedFeeType === 'FIXED' ? (body.feeAmountVnd ?? existing.feeAmountVnd) : null,
       ...(body.initialSlot !== undefined && { initialSlot: body.initialSlot }),
-      // SESSION-24: completing both while PREPARING flips it to SCHEDULED; completing only one
-      // leaves it PREPARING.
-      status:
-        existing.status === 'PREPARING' && resolvedLocation !== null && resolvedFeeType !== null
-          ? 'SCHEDULED'
-          : existing.status,
+      ...(body.autoApprove !== undefined && { autoApprove: body.autoApprove }),
+      maleSlots: nextMale,
+      femaleSlots: nextFemale,
+      ...(body.gameMood !== undefined && { gameMood: body.gameMood }),
+      ...(body.feeNote !== undefined && { feeNote: body.feeNote.trim() === '' ? null : body.feeNote }),
+      ...(body.attributes !== undefined && { attributes: body.attributes }),
+      // SESSION-46: no automatic flip any more — only `POST /schedule` leaves PREPARING.
       updatedAt: new Date().toISOString(),
     };
     session.sessionsState = session.sessionsState.map((candidate) =>
       candidate.id === sessionId ? updated : candidate,
     );
     return HttpResponse.json(apiResponse(withCallerParticipation(session, updated), 'Session updated successfully'));
+  }),
+
+  // SESSION-46: the one way out of PREPARING. 409 unless PREPARING; 400 SESSION_NOT_READY listing
+  // what is still missing (location, fee, duration).
+  http.post('/api/sessions/:sessionId/schedule', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
+    if (!existing) {
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
+    }
+    if (existing.status !== 'PREPARING') {
+      return HttpResponse.json(
+        apiError('Session is not being prepared', 'SESSION_NOT_PREPARING', { status: existing.status }),
+        { status: 409 },
+      );
+    }
+    const missing: string[] = [];
+    if (existing.location === null) missing.push('location');
+    if (existing.feeType === null || (existing.feeType === 'FIXED' && existing.feeAmountVnd === null)) {
+      missing.push('fee');
+    }
+    if (existing.scheduledEndAt === null) missing.push('duration');
+    if (missing.length > 0) {
+      return HttpResponse.json(apiError('Session is not ready', 'SESSION_NOT_READY', { missing }), { status: 400 });
+    }
+    const scheduled: Session = { ...existing, status: 'SCHEDULED', updatedAt: new Date().toISOString() };
+    session.sessionsState = session.sessionsState.map((candidate) =>
+      candidate.id === sessionId ? scheduled : candidate,
+    );
+    return HttpResponse.json(apiResponse(withCallerParticipation(session, scheduled), 'Session scheduled'));
   }),
 
   http.post('/api/sessions/:sessionId/cancel', async ({ request, params }) => {

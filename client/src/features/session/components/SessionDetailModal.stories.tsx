@@ -84,6 +84,10 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     feeType: 'FREE',
     feeAmountVnd: null,
     initialSlot: 0,
+    maleSlots: null,
+    femaleSlots: null,
+    gameMood: 5,
+    feeNote: null,
     autoApprove: false,
     likeCount: 2,
     isLikedByCurrentUser: false,
@@ -170,9 +174,16 @@ const meta = {
     onOpenCompletionLocationPicker: () => {},
     completionLocationPicker: inertLocationPicker,
   completionFavorites: { locations: [], isLoading: false, onSelect: () => {} },
-    onCompleteSession: () => {},
-    isCompletingSession: false,
-    isCompleteSessionError: false,
+    onClearCompletionLocation: () => {},
+    refChoiceSource: null,
+    onUpdateSession: () => {},
+    isUpdatingSession: false,
+    isUpdateSessionError: false,
+    isScheduleConfirmOpen: false,
+    onScheduleConfirmOpenChange: () => {},
+    onSchedule: () => {},
+    isScheduling: false,
+    isScheduleError: false,
     onJoin: () => {},
     isJoining: false,
     isJoinError: false,
@@ -254,10 +265,44 @@ export const Completed: Story = {
   args: { session: makeSession({ status: 'COMPLETED' }) },
 };
 
+/** CLIENT-SESSION-34: the host's view — banner, "Still missing", amber chips, Edit in each section header, a disabled "Mark it scheduled". */
 export const PreparingMissingBoth: Story = {
   args: {
     canManage: true,
-    session: makeSession({ status: 'PREPARING', location: null, feeType: null }),
+    session: makeSession({ status: 'PREPARING', location: null, feeType: null, scheduledEndAt: null }),
+  },
+};
+
+/** CLIENT-SESSION-34: nothing missing — "Mark it scheduled" is enabled. */
+export const PreparingReadyToSchedule: Story = {
+  args: {
+    canManage: true,
+    session: makeSession({ status: 'PREPARING', scheduledEndAt: '2026-08-01T20:30:00' }),
+  },
+};
+
+/** CLIENT-SESSION-34: the "Are you ready?" confirmation (complete variant), as opened by the button or by the last save. */
+export const ScheduleConfirmation: Story = {
+  args: {
+    canManage: true,
+    isScheduleConfirmOpen: true,
+    session: makeSession({ status: 'PREPARING', scheduledEndAt: '2026-08-01T20:30:00' }),
+  },
+};
+
+/** CLIENT-SESSION-34: a SCHEDULED session with a gender split, a competitive mood and a fee note. */
+export const WithSlotsMoodAndFeeNote: Story = {
+  args: {
+    session: makeSession({
+      capacity: 9,
+      initialSlot: 0,
+      maleSlots: 4,
+      femaleSlots: 4,
+      gameMood: 9,
+      feeType: 'FIXED',
+      feeAmountVnd: 120000,
+      feeNote: 'Cash at the door, includes shuttlecocks',
+    }),
   },
 };
 

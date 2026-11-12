@@ -41,17 +41,20 @@ function offenders(): string[] {
     .map((file) => relative(SRC, file).split(sep).join('/'));
 }
 
+// Walks the whole src tree synchronously: fine alone, but over the 5 s default when the full suite runs in parallel.
+const SCAN_TIMEOUT_MS = 30_000;
+
 describe('no raw HTTP error reads outside the shared classifier', () => {
   it('only the allowlisted files read a raw error status or body', () => {
     const unexpected = offenders().filter((file) => !(file in ALLOWED));
 
     expect(unexpected).toEqual([]);
-  });
+  }, SCAN_TIMEOUT_MS);
 
   it('has no stale allowlist entries (a migrated file must leave the list)', () => {
     const present = new Set(offenders());
     const stale = Object.keys(ALLOWED).filter((file) => !present.has(file));
 
     expect(stale).toEqual([]);
-  });
+  }, SCAN_TIMEOUT_MS);
 });

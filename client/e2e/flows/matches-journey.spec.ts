@@ -253,23 +253,31 @@ test('Matches journey', async ({ page }) => {
     // Starts at (Date/Hour/Minute) is left on its own default (Today/one-hour-from-now/:00) —
     // CLIENT-SESSION-2 pre-fills it on open, so there's nothing to fill in here anymore.
     await createDialog.getByLabel(/^Session title/).fill('New pickup game');
-    await createDialog.getByLabel(/^Duration in minutes/).fill('90');
+    await createDialog.getByLabel(/^Duration \(min\)/).fill('90');
     await createDialog.getByLabel(/^Open slot/).fill('10');
     // CLIENT-SESSION-21: Fee has no default anymore (SESSION-24) — check "Free" explicitly so
     // this session lands SCHEDULED, not PREPARING (the PREPARING path is covered by its own
     // journey, step 11 below).
     await createDialog.getByRole('checkbox', { name: 'Free' }).check();
 
-    // CLIENT-SESSION-4: invite a friend (dismissible badge) and check auto-approve (reveals the
-    // inline warning, no separate confirm step).
+    // CLIENT-SESSION-4: invite a friend (dismissible badge) and turn on auto-approve — CLIENT-SESSION-34:
+    // ticking it opens a confirmation, "Turn on" is what checks the box.
     await createDialog.getByLabel('Search friends to invite').fill(mockFriend.fullName);
     await createDialog.getByRole('button', { name: new RegExp(mockFriend.fullName) }).click();
     await expect(createDialog.getByText(mockFriend.fullName, { exact: true })).toBeVisible();
     const autoApproveCheckbox = createDialog.getByRole('checkbox', { name: 'Auto approve join request' });
-    await autoApproveCheckbox.check();
-    await expect(createDialog.getByText('Everyone can join without your review.')).toBeVisible();
+    await autoApproveCheckbox.click();
+    // (The confirmation hides the form behind it, so the box is asserted again once it closes.)
+    const autoApproveDialog = page.getByRole('dialog', { name: 'Turn on auto approve?' });
+    await expect(autoApproveDialog.getByText('Everyone can join without your review.')).toBeVisible();
+    await autoApproveDialog.getByRole('button', { name: 'Turn on' }).click();
+    await expect(autoApproveCheckbox).toBeChecked();
 
     await createDialog.getByRole('button', { name: 'Create session' }).click();
+    // Location, fee and duration are all set, so the "Are you ready?" popup is the complete variant.
+    const readyDialog = page.getByRole('dialog', { name: 'Are you ready?' });
+    await expect(readyDialog.getByText(/Its details can't be edited after that/)).toBeVisible();
+    await readyDialog.getByRole('button', { name: "Let's go" }).click();
 
     await expect(createDialog).not.toBeVisible();
     await expect(page.getByText('New pickup game')).toBeVisible();
@@ -333,7 +341,10 @@ test('Matches journey', async ({ page }) => {
     await page.getByRole('menuitem', { name: mockLocation.name }).click();
     await expect(createDialog.getByText(mockLocation.name)).toBeVisible();
 
+    // A location is chosen, so closing the form asks first (CLIENT-SESSION-34); this step is done with it.
     await createDialog.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('dialog', { name: 'Leave without saving?' }).getByRole('button', { name: 'Leave' }).click();
+    await expect(createDialog).not.toBeVisible();
   });
 
   // mockDiscoverableSession ("Weekend 5-a-side") is Badminton — switch back from Pickleball.
@@ -394,11 +405,12 @@ test('Matches journey', async ({ page }) => {
     // as chips, a `SINGLE` `#ref` (`match/racketBrand`) and an own node (`match/format`) as plain
     // values — proving `SessionAttributesSummary` maps a `#ref` node's stored shape onto the right
     // render type by `cardinality`, not its inherited scalar `type`.
-    const detailSummary = dialog.getByRole('region', { name: 'Session detail' });
-    await expect(detailSummary.getByText('Yonex Astrox 99')).toBeVisible();
-    await expect(detailSummary.getByText('Li-Ning Axforce 90')).toBeVisible();
-    await expect(detailSummary.getByText('Yonex', { exact: true })).toBeVisible();
-    await expect(detailSummary.getByText('Doubles')).toBeVisible();
+    // CLIENT-SESSION-34: this viewer cannot edit the session, so its sections are static (no toggle):
+    // the "Session detail" section shows the stored attributes as a `field: value` summary row.
+    await expect(dialog.getByRole('button', { name: 'Session detail' })).toHaveCount(0);
+    await expect(dialog).toContainText('Yonex Astrox 99, Li-Ning Axforce 90');
+    await expect(dialog).toContainText('Yonex');
+    await expect(dialog).toContainText('Doubles');
 
     await dialog.getByRole('button', { name: 'Join' }).click();
     // CLIENT-SESSION-30: an auto-approve session → the "joined" pop-up opens on top of the detail.
@@ -502,35 +514,54 @@ test('Matches journey', async ({ page }) => {
     await expect(page.getByText('Sunday pickup run')).toBeVisible();
   });
 
-  await test.step('11. create without location/fee shows the Preparing warning; completing both via the detail modal flips it to Scheduled (CLIENT-SESSION-21, SESSION-24)', async () => {
+  await test.step('11. create without location/fee asks "Are you ready?" and lands Preparing; the host fills the gaps section by section and the last save opens the schedule confirmation (CLIENT-SESSION-34)', async () => {
     await page.getByRole('button', { name: 'Create session' }).click();
     const createDialog = page.getByRole('dialog', { name: 'Create your session' });
     await createDialog.getByLabel(/^Sport/).selectOption('pickleball');
     await createDialog.getByLabel(/^Session title/).fill('Needs setup');
-    await createDialog.getByLabel(/^Duration in minutes/).fill('60');
+    await createDialog.getByLabel(/^Duration \(min\)/).fill('60');
     await createDialog.getByLabel(/^Open slot/).fill('6');
 
-    await expect(createDialog.getByText(/will be created as/)).toBeVisible();
+    // The amber chips say what is missing; Create opens the incomplete "Are you ready?" popup.
+    await expect(createDialog.getByText('Missing: location')).toBeVisible();
+    await expect(createDialog.getByText('Missing: fee')).toBeVisible();
     await createDialog.getByRole('button', { name: 'Create session' }).click();
+    const readyDialog = page.getByRole('dialog', { name: 'Are you ready?' });
+    await expect(readyDialog.getByText('Location', { exact: true })).toBeVisible();
+    await expect(readyDialog.getByText('Fee', { exact: true })).toBeVisible();
+    await readyDialog.getByRole('button', { name: 'Create preparing session' }).click();
     await expect(createDialog).not.toBeVisible();
 
     await page.getByRole('button', { name: /Needs setup — View details/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Needs setup' });
-    await expect(dialog.getByText('Preparing')).toBeVisible();
-    const completion = dialog.getByRole('region', { name: 'Complete session setup' });
-    await expect(completion.getByText('Location and Fee', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Preparing', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('The host is still preparing this session.')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Mark it scheduled' })).toBeDisabled();
 
-    // CLIENT-SESSION-23: the completion form's location control is the same favorites dropdown
-    // the create form has. Step 8 favorited this location (Pickleball), so it's a quick pick here.
-    await completion.getByRole('button', { name: 'Choose location' }).click();
+    // Where: Edit is in the section header, Discard and Save replace it, the other Edit buttons lock.
+    await dialog.getByRole('button', { name: 'Edit' }).nth(2).click();
+    await expect(dialog.getByRole('button', { name: 'Discard' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Edit' }).first()).toBeDisabled();
+    // CLIENT-SESSION-23: the favorites dropdown — step 8 favorited this location (Pickleball).
+    await dialog.getByRole('button', { name: 'Choose location' }).click();
     await page.getByRole('menuitem', { name: mockLocation.name }).click();
-    await expect(completion.getByText(mockLocation.name)).toBeVisible();
+    await expect(dialog.getByText(mockLocation.name)).toBeVisible();
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog.getByRole('button', { name: 'Save' })).toHaveCount(0);
+    // Location is in, the fee is not: no confirmation yet.
+    await expect(page.getByRole('dialog', { name: 'Are you ready?' })).toHaveCount(0);
 
-    await completion.getByRole('checkbox', { name: 'Free' }).check();
-    await completion.getByRole('button', { name: 'Save' }).click();
+    // Cost: the last gap. Saving it opens the schedule confirmation by itself.
+    await dialog.getByRole('button', { name: 'Edit' }).nth(4).click();
+    await dialog.getByRole('checkbox', { name: 'Free' }).check();
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    const scheduleDialog = page.getByRole('dialog', { name: 'Are you ready?' });
+    await expect(scheduleDialog.getByText(/Its details can't be edited after that/)).toBeVisible();
+    await scheduleDialog.getByRole('button', { name: "Let's go" }).click();
 
-    await expect(dialog.getByText('Scheduled')).toBeVisible();
-    await expect(dialog.getByRole('region', { name: 'Complete session setup' })).not.toBeVisible();
+    await expect(dialog.getByText('Scheduled', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('The host is still preparing this session.')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Edit' })).toHaveCount(0);
   });
 });
 
@@ -608,7 +639,8 @@ test('Matches — Session detail #ref attributes render, and land in the create 
   await page.getByRole('button', { name: 'Create session' }).click();
   const createDialog = page.getByRole('dialog', { name: 'Create your session' });
   await createDialog.getByLabel(/^Sport/).selectOption('badminton');
-  await createDialog.getByRole('button', { name: 'Session detail' }).click();
+  // CLIENT-SESSION-34: "Session detail" is the last section and is open by default (no click needed).
+  await expect(createDialog.getByRole('button', { name: 'Session detail' })).toHaveAttribute('aria-expanded', 'true');
 
   // LIST `#ref` — one checkbox per racket model on the creator's profile
   // (fixture: gear/racketModels = two entries).
@@ -637,9 +669,14 @@ test('Matches — Session detail #ref attributes render, and land in the create 
   await locationDialog.getByRole('button', { name: 'Search' }).click();
   await locationDialog.getByText(mockBadmintonLocation.name, { exact: true }).click();
   await expect(createDialog.getByText(mockBadmintonLocation.name)).toBeVisible();
-  await createDialog.getByLabel(/^Duration in minutes/).fill('60');
+  await createDialog.getByLabel(/^Duration \(min\)/).fill('60');
   await createDialog.getByLabel(/^Open slot/).fill('4');
   await createDialog.getByRole('button', { name: 'Create session' }).click();
+  // No fee picked, so the incomplete "Are you ready?" popup (a Preparing session) is what asks.
+  await page
+    .getByRole('dialog', { name: 'Are you ready?' })
+    .getByRole('button', { name: 'Create preparing session' })
+    .click();
 
   await expect(createDialog).not.toBeVisible();
   await expect(page.getByText('Ref payload session')).toBeVisible();

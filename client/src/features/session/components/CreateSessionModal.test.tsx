@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { FriendUser } from '@/features/friends/types';
@@ -107,6 +107,16 @@ async function pickAnyStartTime(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByLabelText('Minute'), '00');
 }
 
+/** Clicks "Create session", then confirms the "Are you ready?" popup (CLIENT-SESSION-34) — "Let's go"
+ * when nothing is missing, "Create preparing session" otherwise. */
+async function createAndConfirm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Create session' }));
+  const go =
+    screen.queryByRole('button', { name: "Let's go" }) ??
+    screen.getByRole('button', { name: 'Create preparing session' });
+  await user.click(go);
+}
+
 describe('CreateSessionModal', () => {
   it('has no mode toggle — the form is always the standalone sport picker', () => {
     render(<CreateSessionModal {...baseProps} />);
@@ -184,11 +194,31 @@ describe('CreateSessionModal', () => {
     expect(screen.getByLabelText(/^Sport/)).toHaveValue('football');
   });
 
-  it('"Session basic information" is open by default; "Session detail" is absent when the sport has no session schema', () => {
+  it('has five sections (Overview, When, Where, Who, Cost), all open by default; "Session detail" is absent when the sport has no session schema', () => {
     render(<CreateSessionModal {...baseProps} />);
+    for (const name of [/^Overview/, /^When/, /^Where/, /^Who/, /^Cost/]) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-expanded', 'true');
+    }
     expect(screen.getByLabelText(/^Sport/)).toBeVisible();
     // CLIENT-SESSION-15: no session schema -> the whole "Session detail" section is not rendered.
     expect(screen.queryByRole('button', { name: 'Session detail' })).not.toBeInTheDocument();
+  });
+
+  it('a section collapses and opens again from its header', async () => {
+    const user = userEvent.setup();
+    render(<CreateSessionModal {...baseProps} />);
+    const cost = screen.getByRole('button', { name: /^Cost/ });
+    await user.click(cost);
+    expect(cost).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByLabelText('Fee note')).not.toBeInTheDocument();
+    await user.click(cost);
+    expect(screen.getByLabelText('Fee note')).toBeVisible();
+  });
+
+  it('no field label says "(optional)" any more, and Description is gone from the form', () => {
+    render(<CreateSessionModal {...baseProps} />);
+    expect(screen.queryByText(/\(optional\)/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Description/)).not.toBeInTheDocument();
   });
 
   describe('Session detail — session attributes (CLIENT-SESSION-15)', () => {
@@ -206,16 +236,14 @@ describe('CreateSessionModal', () => {
       ],
     };
 
-    it('renders SportAttributesFields under "Session detail" when a session schema is present', async () => {
-      const user = userEvent.setup();
+    it('renders SportAttributesFields under "Session detail" when a session schema is present', () => {
       render(<CreateSessionModal {...baseProps} sessionAttributeSchema={schema} />);
-      await user.click(screen.getByRole('button', { name: 'Session detail' }));
+      expect(screen.getByRole('button', { name: 'Session detail' })).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByLabelText('Racket brand')).toBeInTheDocument();
       expect(screen.getByLabelText('Format')).toBeInTheDocument();
     });
 
-    it('shows a pre-filled attribute value from sessionAttributeValues', async () => {
-      const user = userEvent.setup();
+    it('shows a pre-filled attribute value from sessionAttributeValues', () => {
       render(
         <CreateSessionModal
           {...baseProps}
@@ -223,7 +251,6 @@ describe('CreateSessionModal', () => {
           sessionAttributeValues={{ 'match/racketBrand': 'Yonex' }}
         />,
       );
-      await user.click(screen.getByRole('button', { name: 'Session detail' }));
       expect(screen.getByLabelText('Racket brand')).toHaveValue('Yonex');
     });
 
@@ -237,7 +264,6 @@ describe('CreateSessionModal', () => {
           onSessionAttributeChange={onSessionAttributeChange}
         />,
       );
-      await user.click(screen.getByRole('button', { name: 'Session detail' }));
       await user.type(screen.getByLabelText('Format'), 'D');
       expect(onSessionAttributeChange).toHaveBeenLastCalledWith('match/format', 'D');
     });
@@ -308,7 +334,7 @@ describe('CreateSessionModal', () => {
     render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
 
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday game');
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '8');
     expect(screen.getByLabelText(/^Session title/)).toHaveValue('Sunday game');
 
@@ -316,7 +342,7 @@ describe('CreateSessionModal', () => {
 
     expect(screen.getByLabelText(/^Sport/)).toHaveValue('tennis');
     expect(screen.getByLabelText(/^Session title/)).toHaveValue('');
-    expect(screen.getByLabelText(/^Duration in minutes/)).toHaveValue(null);
+    expect(screen.getByLabelText(/^Duration \(min\)/)).toHaveValue(null);
     expect(screen.getByLabelText(/^Open slot/)).toHaveValue(null);
     // "Starts at" re-pre-fills for the new sport (SessionStartTimePicker is re-keyed on the
     // sport) — the reset clears `scheduledStart`, and without the re-key it would stay empty
@@ -337,11 +363,14 @@ describe('CreateSessionModal', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create session' }));
 
-    expect(screen.getByText('Title is required.')).toBeInTheDocument();
-    // CLIENT-SESSION-21: Location is no longer a required field (SESSION-24) — no error for it.
-    expect(screen.queryByText('Location is required.')).not.toBeInTheDocument();
-    expect(screen.getByText('Duration is required.')).toBeInTheDocument();
+    // CLIENT-SESSION-34: only sport, start time and open slot are required to create — the title
+    // and the duration are optional now, and so are location and fee (SESSION-24).
     expect(screen.getByText('Open slot is required.')).toBeInTheDocument();
+    expect(screen.queryByText('Title is required.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Duration is required.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Location is required.')).not.toBeInTheDocument();
+    // …and no readiness popup for an invalid form.
+    expect(screen.queryByText('Are you ready?')).not.toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -352,38 +381,92 @@ describe('CreateSessionModal', () => {
     expect(screen.getByLabelText('Fixed amount')).toHaveValue('');
   });
 
-  describe('CLIENT-SESSION-21: PREPARING warning (SESSION-24)', () => {
-    it('shows the Preparing warning when both Location and Fee are unset', () => {
+  describe('CLIENT-SESSION-34: "Missing" chips and the "Are you ready?" popup', () => {
+    it('shows an amber chip on the section that owns each gap: duration, location, fee', () => {
       render(<CreateSessionModal {...baseProps} />);
-      expect(screen.getByText(/will be created as/)).toBeInTheDocument();
-      expect(screen.getByText('Preparing')).toBeInTheDocument();
+      expect(screen.getByText('Missing: duration')).toBeInTheDocument();
+      expect(screen.getByText('Missing: location')).toBeInTheDocument();
+      expect(screen.getByText('Missing: fee')).toBeInTheDocument();
     });
 
-    it('shows the warning when only Location is missing', async () => {
+    it('each chip goes away once its gap is filled', async () => {
       const user = userEvent.setup();
+      const { rerender } = render(<CreateSessionModal {...baseProps} />);
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+      expect(screen.queryByText('Missing: duration')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+      expect(screen.queryByText('Missing: fee')).not.toBeInTheDocument();
+      expect(screen.getByText('Missing: location')).toBeInTheDocument();
+      rerender(<CreateSessionModal {...baseProps} selectedLocation={location} />);
+      expect(screen.queryByText('Missing: location')).not.toBeInTheDocument();
+    });
+
+    it('no longer shows the old "will be created as Preparing" footer line', () => {
       render(<CreateSessionModal {...baseProps} />);
-      // Free is a valid explicit pick, but Location is still unset.
-      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
-      expect(screen.getByText(/will be created as/)).toBeInTheDocument();
-    });
-
-    it('shows the warning when only Fee is missing', () => {
-      render(<CreateSessionModal {...baseProps} selectedLocation={location} />);
-      expect(screen.getByText(/will be created as/)).toBeInTheDocument();
-    });
-
-    it('hides the warning once both Location and Fee are set', async () => {
-      const user = userEvent.setup();
-      render(<CreateSessionModal {...baseProps} selectedLocation={location} />);
-      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
       expect(screen.queryByText(/will be created as/)).not.toBeInTheDocument();
     });
 
-    it('renders in the footer, next to "Create session" — always visible, not scrolled with the form body', () => {
-      render(<CreateSessionModal {...baseProps} />);
-      const warning = screen.getByText(/will be created as/);
-      const createButton = screen.getByRole('button', { name: 'Create session' });
-      expect(warning.parentElement).toBe(createButton.parentElement);
+    it('incomplete: lists what is missing and offers "Continue editing" / "Create preparing session"', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+      expect(screen.getByText('Are you ready?')).toBeInTheDocument();
+      const list = screen.getByRole('list');
+      expect(within(list).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Location',
+        'Fee',
+        'Duration',
+      ]);
+      // Nothing is sent until the popup is confirmed.
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Continue editing' }));
+      expect(screen.queryByText('Are you ready?')).not.toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      await user.click(screen.getByRole('button', { name: 'Create preparing session' }));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ locationId: undefined, feeType: undefined }));
+    });
+
+    it('names only what is still missing', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" />);
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(within(screen.getByRole('list')).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+        'Fee',
+      ]);
+    });
+
+    it('complete: warns the details cannot be edited afterwards, "Let me check again" goes back, "Let\'s go" submits', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" onSubmit={onSubmit} />,
+      );
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+
+      expect(screen.getByText(/Its details can't be edited after that/)).toBeInTheDocument();
+      expect(screen.queryByRole('list')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Let me check again' }));
+      expect(onSubmit).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      await user.click(screen.getByRole('button', { name: "Let's go" }));
+      expect(onSubmit).toHaveBeenCalledTimes(1);
     });
 
     it('submits with locationId/feeType omitted when both are left blank', async () => {
@@ -393,9 +476,9 @@ describe('CreateSessionModal', () => {
 
       await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
       await pickAnyStartTime(user);
-      await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
       await user.type(screen.getByLabelText(/^Open slot/), '10');
-      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      await createAndConfirm(user);
 
       expect(onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({ locationId: undefined, feeType: undefined }),
@@ -421,9 +504,9 @@ describe('CreateSessionModal', () => {
     await user.clear(screen.getByLabelText('Fixed amount'));
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    await createAndConfirm(user);
 
     // Clearing the amount cleared the FIXED selection too, so this submits with feeType
     // undefined (PREPARING), not FIXED with a missing amount.
@@ -465,10 +548,10 @@ describe('CreateSessionModal', () => {
     render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
 
     await user.click(screen.getByRole('button', { name: 'Create session' }));
-    expect(screen.getByText('Title is required.')).toBeInTheDocument();
+    expect(screen.getByText('Open slot is required.')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
-    expect(screen.queryByText('Title is required.')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/^Open slot/), '10');
+    expect(screen.queryByText('Open slot is required.')).not.toBeInTheDocument();
   });
 
   it('submits once every required field is filled in, after an initial invalid attempt', async () => {
@@ -488,9 +571,9 @@ describe('CreateSessionModal', () => {
 
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    await createAndConfirm(user);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
@@ -509,16 +592,15 @@ describe('CreateSessionModal', () => {
 
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    await createAndConfirm(user);
 
     // scheduledStart's date half is "today" per the real clock (the Date select's "Today"
     // option) — asserted by shape, not value, so this test isn't coupled to which day it runs.
     expect(onSubmit).toHaveBeenCalledWith({
       sportId: 6,
       title: 'Sunday run',
-      description: undefined,
       locationId: 1,
       locationNote: undefined,
       // CLIENT-SESSION-24: offset-aware (`Z` or `±HH:MM`) — a bare local datetime is a 400.
@@ -531,8 +613,13 @@ describe('CreateSessionModal', () => {
       // PREPARING), not the old FREE default.
       feeType: undefined,
       feeAmountVnd: undefined,
+      feeNote: undefined,
       initialSlot: 0,
       autoApprove: false,
+      // CLIENT-SESSION-34: nothing reserved by gender; the mood slider's untouched default is sent.
+      maleSlots: undefined,
+      femaleSlots: undefined,
+      gameMood: 5,
       inviteeIds: undefined,
     });
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('groupId');
@@ -567,10 +654,10 @@ describe('CreateSessionModal', () => {
 
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText('Taken slot'), '3');
     await user.type(screen.getByLabelText(/^Open slot/), '4');
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    await createAndConfirm(user);
 
     // initialSlot = Taken slot(3) - 1 (the creator's own auto-joined row already accounts for 1).
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ capacity: 7, initialSlot: 2 }));
@@ -590,10 +677,10 @@ describe('CreateSessionModal', () => {
 
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
     await user.type(screen.getByLabelText('Fixed amount'), '50000');
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    await createAndConfirm(user);
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ feeType: 'FIXED', feeAmountVnd: 50000 }),
@@ -604,7 +691,7 @@ describe('CreateSessionModal', () => {
     const user = userEvent.setup();
     render(<CreateSessionModal {...baseProps} />);
 
-    const duration = screen.getByLabelText(/^Duration in minutes/);
+    const duration = screen.getByLabelText(/^Duration \(min\)/);
     await user.type(duration, 'a1b2c3');
     expect(duration).toHaveValue(123);
 
@@ -643,7 +730,7 @@ describe('CreateSessionModal', () => {
     const user = userEvent.setup();
     render(<CreateSessionModal {...baseProps} />);
 
-    const duration = screen.getByLabelText(/^Duration in minutes/);
+    const duration = screen.getByLabelText(/^Duration \(min\)/);
     await user.click(duration);
     await user.paste('90 mins');
     expect(duration).toHaveValue(null);
@@ -711,41 +798,598 @@ describe('CreateSessionModal', () => {
 
     await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
     await pickAnyStartTime(user);
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
+    await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
     await user.type(screen.getByLabelText(/^Open slot/), '10');
     await user.type(screen.getByLabelText('Search friends to invite'), 'Priya Shah');
     await user.click(screen.getByRole('button', { name: /Priya Shah/ }));
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    await createAndConfirm(user);
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ inviteeIds: ['friend-1'] }));
   });
 
-  it('"Auto approve join request" defaults unchecked, and reveals a warning once checked', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-    render(
-      <CreateSessionModal
-        {...baseProps}
-        selectedLocation={location}
-        activeSport="basketball"
-        onSubmit={onSubmit}
-      />,
-    );
+  describe('CLIENT-SESSION-34: auto approve asks first', () => {
+    it('defaults unchecked; ticking opens the confirmation instead of checking, "Cancel" leaves it unchecked', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      const checkbox = screen.getByRole('checkbox', { name: 'Auto approve join request' });
+      expect(checkbox).not.toBeChecked();
+      // The inline hint under the checkbox is gone.
+      expect(screen.queryByText('Everyone can join without your review.', { selector: 'p.text-2xs' })).not.toBeInTheDocument();
 
-    const checkbox = screen.getByRole('checkbox', { name: 'Auto approve join request' });
-    expect(checkbox).not.toBeChecked();
-    expect(screen.queryByText('Everyone can join without your review.')).not.toBeInTheDocument();
+      await user.click(checkbox);
+      expect(checkbox).not.toBeChecked();
+      expect(screen.getByText('Turn on auto approve?')).toBeInTheDocument();
 
-    await user.click(checkbox);
-    expect(checkbox).toBeChecked();
-    expect(screen.getByText('Everyone can join without your review.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByText('Turn on auto approve?')).not.toBeInTheDocument();
+      expect(checkbox).not.toBeChecked();
+    });
 
-    await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
-    await pickAnyStartTime(user);
-    await user.type(screen.getByLabelText(/^Duration in minutes/), '90');
-    await user.type(screen.getByLabelText(/^Open slot/), '10');
-    await user.click(screen.getByRole('button', { name: 'Create session' }));
+    it('"Turn on" checks it and the payload carries autoApprove; unticking opens nothing', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" onSubmit={onSubmit} />,
+      );
+      const checkbox = screen.getByRole('checkbox', { name: 'Auto approve join request' });
+      await user.click(checkbox);
+      await user.click(screen.getByRole('button', { name: 'Turn on' }));
+      expect(checkbox).toBeChecked();
 
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ autoApprove: true }));
+      await user.click(checkbox);
+      expect(checkbox).not.toBeChecked();
+      expect(screen.queryByText('Turn on auto approve?')).not.toBeInTheDocument();
+
+      await user.click(checkbox);
+      await user.click(screen.getByRole('button', { name: 'Turn on' }));
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await createAndConfirm(user);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ autoApprove: true }));
+    });
+
+    it('Escape on the confirmation cancels it', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      const checkbox = screen.getByRole('checkbox', { name: 'Auto approve join request' });
+      await user.click(checkbox);
+      await user.keyboard('{Escape}');
+      expect(screen.queryByText('Turn on auto approve?')).not.toBeInTheDocument();
+      expect(checkbox).not.toBeChecked();
+    });
+  });
+
+  describe('CLIENT-SESSION-34: title and duration are optional', () => {
+    it('submits without a title or a duration (both omitted from the payload)', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await createAndConfirm(user);
+      const payload = onSubmit.mock.calls[0][0];
+      expect(payload.title).toBeUndefined();
+      expect(payload.durationMinutes).toBeUndefined();
+    });
+
+    it('a title of only spaces is treated as no title', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await user.type(screen.getByLabelText(/^Session title/), '   ');
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await createAndConfirm(user);
+      expect(onSubmit.mock.calls[0][0].title).toBeUndefined();
+    });
+  });
+
+  describe('CLIENT-SESSION-34: start, duration and end follow each other', () => {
+    it('a duration derives the end', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+      expect(screen.getByLabelText('Ends at: hour')).toHaveValue('20');
+      expect(screen.getByLabelText('Ends at: minute')).toHaveValue('30');
+    });
+
+    it('an end past midnight lands on the next day', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      await user.selectOptions(screen.getByLabelText('Date'), 'Today');
+      await user.selectOptions(screen.getByLabelText('Hour'), '23');
+      await user.selectOptions(screen.getByLabelText('Minute'), '30');
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+      expect(screen.getByLabelText('Ends at: hour')).toHaveValue('01');
+      expect(screen.getByLabelText('Ends at: minute')).toHaveValue('00');
+      expect(screen.getByLabelText('Ends at: date')).not.toHaveValue((screen.getByLabelText('Date') as HTMLSelectElement).value);
+    });
+
+    it('an end picked by hand derives the duration', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      await pickAnyStartTime(user);
+      await user.selectOptions(screen.getByLabelText('Ends at: date'), 'Today');
+      await user.selectOptions(screen.getByLabelText('Ends at: hour'), '21');
+      await user.selectOptions(screen.getByLabelText('Ends at: minute'), '15');
+      expect(screen.getByLabelText(/^Duration \(min\)/)).toHaveValue(135);
+    });
+
+    it('moving the start keeps the duration and moves the end', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+      await user.selectOptions(screen.getByLabelText('Hour'), '20');
+      expect(screen.getByLabelText(/^Duration \(min\)/)).toHaveValue(90);
+      expect(screen.getByLabelText('Ends at: hour')).toHaveValue('21');
+      expect(screen.getByLabelText('Ends at: minute')).toHaveValue('30');
+    });
+
+    it('an end that is not after the start shows an error, clears the duration and blocks Create', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await user.selectOptions(screen.getByLabelText('Ends at: date'), 'Today');
+      await user.selectOptions(screen.getByLabelText('Ends at: hour'), '18');
+      await user.selectOptions(screen.getByLabelText('Ends at: minute'), '00');
+      expect(screen.getByText('The end must be after the start.')).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Duration \(min\)/)).toHaveValue(null);
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.queryByText('Are you ready?')).not.toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('the minute pickers step by one minute', () => {
+      render(<CreateSessionModal {...baseProps} />);
+      // 60 minutes plus the placeholder option.
+      expect(screen.getByLabelText('Minute').querySelectorAll('option')).toHaveLength(61);
+      expect(screen.getByLabelText('Ends at: minute').querySelectorAll('option')).toHaveLength(61);
+    });
+  });
+
+  describe('CLIENT-SESSION-34: who can join (by gender)', () => {
+    it('defaults to Anyone, with the gender slots locked until "By gender" is chosen', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      expect(screen.getByRole('radio', { name: 'Anyone' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Male slot' })).toBeDisabled();
+      expect(screen.getByRole('checkbox', { name: 'Female slot' })).toBeDisabled();
+      await user.click(screen.getByRole('radio', { name: 'By gender' }));
+      expect(screen.getByRole('checkbox', { name: 'Male slot' })).toBeEnabled();
+      expect(screen.getByRole('checkbox', { name: 'Female slot' })).toBeEnabled();
+      // A number input is locked until its own box is ticked.
+      expect(screen.getByLabelText('Male slots')).toBeDisabled();
+      await user.click(screen.getByRole('checkbox', { name: 'Male slot' }));
+      expect(screen.getByLabelText('Male slots')).toBeEnabled();
+    });
+
+    it('sends the male and female slots, and nothing when Anyone is chosen', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" onSubmit={onSubmit} />,
+      );
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '8');
+      await user.click(screen.getByRole('radio', { name: 'By gender' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Male slot' }));
+      await user.type(screen.getByLabelText('Male slots'), '4');
+      await user.click(screen.getByRole('checkbox', { name: 'Female slot' }));
+      await user.type(screen.getByLabelText('Female slots'), '3');
+      await createAndConfirm(user);
+      expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ maleSlots: 4, femaleSlots: 3 }));
+
+      // Back to Anyone clears both.
+      await user.click(screen.getByRole('radio', { name: 'Anyone' }));
+      expect(screen.getByLabelText('Male slots')).toHaveValue(null);
+      await createAndConfirm(user);
+      const payload = onSubmit.mock.calls[1][0];
+      expect(payload.maleSlots).toBeUndefined();
+      expect(payload.femaleSlots).toBeUndefined();
+    });
+
+    it('male + female over the open slots shows an error and blocks Create', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '5');
+      await user.click(screen.getByRole('radio', { name: 'By gender' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Male slot' }));
+      await user.type(screen.getByLabelText('Male slots'), '4');
+      await user.click(screen.getByRole('checkbox', { name: 'Female slot' }));
+      await user.type(screen.getByLabelText('Female slots'), '2');
+      expect(screen.getByText("Male and female slots can't be more than the open slots.")).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.queryByText('Are you ready?')).not.toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it('exactly the open slots is fine', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+      await user.type(screen.getByLabelText(/^Open slot/), '6');
+      await user.click(screen.getByRole('radio', { name: 'By gender' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Male slot' }));
+      await user.type(screen.getByLabelText('Male slots'), '4');
+      await user.click(screen.getByRole('checkbox', { name: 'Female slot' }));
+      await user.type(screen.getByLabelText('Female slots'), '2');
+      expect(screen.queryByText("Male and female slots can't be more than the open slots.")).not.toBeInTheDocument();
+    });
+  });
+
+  describe('CLIENT-SESSION-34: game mood', () => {
+    it('starts at 5 · Normal, labelled, with the number beside the control', () => {
+      render(<CreateSessionModal {...baseProps} />);
+      const slider = screen.getByRole('slider', { name: 'Game mood' });
+      expect(slider).toHaveValue('5');
+      expect(slider).toHaveAttribute('aria-valuetext', '5 · Normal');
+      expect(screen.getByText('5 · Normal')).toBeInTheDocument();
+      expect(screen.getByText(/For fun/)).toBeInTheDocument();
+      expect(screen.getByText(/Competitive/)).toBeInTheDocument();
+    });
+
+    it('moving it changes the number, the level word and the payload', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" onSubmit={onSubmit} />,
+      );
+      fireEvent.change(screen.getByRole('slider', { name: 'Game mood' }), { target: { value: '9' } });
+      expect(screen.getByText('9 · Competitive')).toBeInTheDocument();
+      fireEvent.change(screen.getByRole('slider', { name: 'Game mood' }), { target: { value: '2' } });
+      expect(screen.getByText('2 · For fun')).toBeInTheDocument();
+      fireEvent.change(screen.getByRole('slider', { name: 'Game mood' }), { target: { value: '9' } });
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await createAndConfirm(user);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ gameMood: 9 }));
+    });
+  });
+
+  describe('CLIENT-SESSION-34: fee note', () => {
+    it('counts characters out of 300 and stops at 300', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      expect(screen.getByText('0/300')).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Fee note'), 'Cash');
+      expect(screen.getByText('4/300')).toBeInTheDocument();
+      expect(screen.getByLabelText('Fee note')).toHaveAttribute('maxlength', '300');
+    });
+
+    it('sends the trimmed note, and omits a blank one', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" onSubmit={onSubmit} />,
+      );
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await user.type(screen.getByLabelText('Fee note'), '  Cash at the door ');
+      await createAndConfirm(user);
+      expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ feeNote: 'Cash at the door' }));
+
+      await user.clear(screen.getByLabelText('Fee note'));
+      await user.type(screen.getByLabelText('Fee note'), '   ');
+      await createAndConfirm(user);
+      expect(onSubmit.mock.calls[1][0].feeNote).toBeUndefined();
+    });
+  });
+
+  describe('CLIENT-SESSION-34: collapsed sections always show their summary, and opening one scrolls it into view', () => {
+    it('a collapsed section shows its "field: value" row even when nothing is filled in ("...")', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      await user.click(screen.getByRole('button', { name: /^Cost/ }));
+      const fee = screen.getByText('Fee:').parentElement as HTMLElement;
+      expect(within(fee).getByText('...')).toBeInTheDocument();
+      expect(within(screen.getByText('Fee note:').parentElement as HTMLElement).getByText('...')).toBeInTheDocument();
+    });
+
+    it('the summary follows what was filled in', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" selectedLocation={location} />);
+      await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+      await user.type(screen.getByLabelText(/^Open slot/), '6');
+      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+      for (const name of [/^Overview/, /^When/, /^Where/, /^Who/, /^Cost/]) {
+        await user.click(screen.getByRole('button', { name }));
+      }
+      expect(screen.getByText('Title:').parentElement).toHaveTextContent('Title: Sunday run');
+      expect(screen.getByText('Sport:').parentElement).toHaveTextContent('Sport: Basketball');
+      expect(screen.getByText('Duration:').parentElement).toHaveTextContent('Duration: 90 min');
+      expect(screen.getByText('Location:').parentElement).toHaveTextContent('Location: Riverside Courts');
+      expect(screen.getByText('Open:').parentElement).toHaveTextContent('Open: 6 (anyone)');
+      expect(screen.getByText('Mood:').parentElement).toHaveTextContent('Mood: 5 · Normal');
+      expect(screen.getByText('Fee:').parentElement).toHaveTextContent('Fee: Free');
+    });
+
+    it('the summary shows the gender split', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+      await user.type(screen.getByLabelText(/^Open slot/), '8');
+      await user.click(screen.getByRole('radio', { name: 'By gender' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Male slot' }));
+      await user.type(screen.getByLabelText('Male slots'), '4');
+      await user.click(screen.getByRole('checkbox', { name: 'Female slot' }));
+      await user.type(screen.getByLabelText('Female slots'), '4');
+      await user.click(screen.getByRole('button', { name: /^Who/ }));
+      expect(screen.getByText('Open:').parentElement).toHaveTextContent('Open: 8 (4 male - 4 female)');
+    });
+
+    it('the Session detail summary lists its attributes, "..." where empty', async () => {
+      const user = userEvent.setup();
+      const schema: ResolvedSportAttributeSchema = {
+        groups: [
+          {
+            key: 'match',
+            label: 'Match details',
+            isAvailable: true,
+            attributes: [
+              { key: 'format', label: 'Format', type: 'STRING', isAvailable: true },
+              { key: 'racketBrand', label: 'Racket brand', type: 'STRING', isAvailable: true },
+            ],
+          },
+        ],
+      };
+      render(
+        <CreateSessionModal
+          {...baseProps}
+          sessionAttributeSchema={schema}
+          sessionAttributeValues={{ 'match/format': 'Doubles' }}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Session detail' }));
+      expect(screen.getByText('Format:').parentElement).toHaveTextContent('Format: Doubles');
+      expect(within(screen.getByText('Racket brand:').parentElement as HTMLElement).getByText('...')).toBeInTheDocument();
+    });
+
+    it('opening a collapsed section scrolls it into view', async () => {
+      const user = userEvent.setup();
+      const scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+      try {
+        render(<CreateSessionModal {...baseProps} />);
+        const cost = screen.getByRole('button', { name: /^Cost/ });
+        await user.click(cost);
+        scrollIntoView.mockClear();
+        await user.click(cost);
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' });
+      } finally {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+  });
+
+  describe('CLIENT-SESSION-34: the Who section flags the open slot, which is needed to create', () => {
+    it('shows "Missing: open slot" until the open slot is filled in', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      expect(screen.getByText('Missing: open slot')).toBeInTheDocument();
+      await user.type(screen.getByLabelText(/^Open slot/), '6');
+      expect(screen.queryByText('Missing: open slot')).not.toBeInTheDocument();
+    });
+
+    it('uses the 70vh height for the sectioned form (not the 60vh default)', () => {
+      render(<CreateSessionModal {...baseProps} />);
+      expect(screen.getByRole('dialog').style.height).toBe('70vh');
+    });
+  });
+
+  it('opening the form does not scroll any section into view (it stays on top)', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(<CreateSessionModal {...baseProps} />);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  describe('CLIENT-SESSION-34: a refused Create takes the user to the first blocking field', () => {
+    it('focuses and scrolls to the open slot when it is missing', async () => {
+      const user = userEvent.setup();
+      const scrollIntoView = vi.fn();
+      Element.prototype.scrollIntoView = scrollIntoView;
+      try {
+        render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+        scrollIntoView.mockClear();
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        expect(screen.getByLabelText(/^Open slot/)).toHaveFocus();
+        expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' });
+      } finally {
+        delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+
+    it('opens the Who section first if the user had collapsed it, then focuses the open slot', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+      await user.click(screen.getByRole('button', { name: /^Who/ }));
+      expect(screen.queryByLabelText(/^Open slot/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.getByLabelText(/^Open slot/)).toHaveFocus();
+    });
+
+    it('focuses it again on a second refused click', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      await user.click(screen.getByRole('button', { name: /^Cost/ })); // moves focus elsewhere
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.getByLabelText(/^Open slot/)).toHaveFocus();
+    });
+
+    it('focuses the male count when male + female exceed the open slots', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+      await user.type(screen.getByLabelText(/^Open slot/), '3');
+      await user.click(screen.getByRole('radio', { name: 'By gender' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Male slot' }));
+      await user.type(screen.getByLabelText('Male slots'), '5');
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.getByLabelText('Male slots')).toHaveFocus();
+    });
+
+    it('does not move focus when Create is accepted (the popup opens instead)', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" />);
+      await user.type(screen.getByLabelText(/^Open slot/), '3');
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.getByText('Are you ready?')).toBeInTheDocument();
+      expect(document.getElementById('create-session-open-slots')).not.toHaveFocus();
+    });
+  });
+
+  describe('CLIENT-SESSION-34: closing with unsent entries asks first', () => {
+    it('closes straight away when nothing was entered', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<CreateSessionModal {...baseProps} onClose={onClose} />);
+      await user.keyboard('{Escape}');
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+    });
+
+    it('asks "Leave without saving?" instead of closing once something was entered; Keep editing stays', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<CreateSessionModal {...baseProps} onClose={onClose} />);
+      await user.type(screen.getByLabelText(/^Session title/), 'Sunday run');
+      await user.keyboard('{Escape}');
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+      expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByLabelText(/^Session title/)).toHaveValue('Sunday run');
+    });
+
+    it('"Leave" closes the form', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<CreateSessionModal {...baseProps} onClose={onClose} />);
+      await user.type(screen.getByLabelText(/^Open slot/), '4');
+      await user.keyboard('{Escape}');
+      await user.click(screen.getByRole('button', { name: 'Leave' }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('Escape on the question itself keeps editing (it does not leave)', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<CreateSessionModal {...baseProps} onClose={onClose} />);
+      await user.type(screen.getByLabelText(/^Session title/), 'x');
+      await user.keyboard('{Escape}');
+      await user.keyboard('{Escape}');
+      expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('a title of only spaces is not an entry; a chosen location, a fee, a mood and an invitee each are', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      const { rerender } = render(<CreateSessionModal {...baseProps} onClose={onClose} />);
+      await user.type(screen.getByLabelText(/^Session title/), '   ');
+      await user.keyboard('{Escape}');
+      expect(onClose).toHaveBeenCalledTimes(1);
+      onClose.mockClear();
+
+      rerender(<CreateSessionModal {...baseProps} onClose={onClose} selectedLocation={location} />);
+      await user.keyboard('{Escape}');
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+      rerender(<CreateSessionModal {...baseProps} onClose={onClose} selectedLocation={null} />);
+
+      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+      await user.keyboard('{Escape}');
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+
+      fireEvent.change(screen.getByRole('slider', { name: 'Game mood' }), { target: { value: '8' } });
+      await user.keyboard('{Escape}');
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+      fireEvent.change(screen.getByRole('slider', { name: 'Game mood' }), { target: { value: '5' } });
+
+      await user.type(screen.getByLabelText('Search friends to invite'), 'Priya Shah');
+      await user.click(screen.getByRole('button', { name: /Priya Shah/ }));
+      await user.keyboard('{Escape}');
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('a session attribute that was filled in counts too', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<CreateSessionModal {...baseProps} onClose={onClose} sessionAttributeValues={{ 'match/format': 'D' }} />);
+      await user.keyboard('{Escape}');
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+    });
+
+    describe('a schema default that the form seeded by itself is not an entry', () => {
+      const schemaWithDefault: ResolvedSportAttributeSchema = {
+        groups: [
+          {
+            key: 'match',
+            label: 'Match details',
+            isAvailable: true,
+            attributes: [{ key: 'format', label: 'Format', type: 'STRING', isAvailable: true, defaultValue: 'Doubles' }],
+          },
+        ],
+      };
+
+      it('closes straight away when the only value is the default the schema seeded', async () => {
+        const user = userEvent.setup();
+        const onClose = vi.fn();
+        render(
+          <CreateSessionModal
+            {...baseProps}
+            onClose={onClose}
+            sessionAttributeSchema={schemaWithDefault}
+            sessionAttributeValues={{ 'match/format': 'Doubles' }}
+          />,
+        );
+        await user.keyboard('{Escape}');
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+      });
+
+      it('asks once the user changed that value, or filled one that has no default', async () => {
+        const user = userEvent.setup();
+        const onClose = vi.fn();
+        const { rerender } = render(
+          <CreateSessionModal
+            {...baseProps}
+            onClose={onClose}
+            sessionAttributeSchema={schemaWithDefault}
+            sessionAttributeValues={{ 'match/format': 'Singles' }}
+          />,
+        );
+        await user.keyboard('{Escape}');
+        expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+        rerender(
+          <CreateSessionModal
+            {...baseProps}
+            onClose={onClose}
+            sessionAttributeSchema={schemaWithDefault}
+            sessionAttributeValues={{ 'match/format': 'Doubles', 'match/racketBrand': 'Yonex' }}
+          />,
+        );
+        await user.keyboard('{Escape}');
+        expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+        expect(onClose).not.toHaveBeenCalled();
+      });
+    });
   });
 });

@@ -1,4 +1,3 @@
-import type { ComponentProps } from 'react';
 import { useEffect, useState } from 'react';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
 import type { FriendUser } from '@/features/friends/types';
@@ -11,24 +10,41 @@ import { IconX } from '@tabler/icons-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { cn } from '@/shared/lib/utils';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { Select } from '@/shared/ui/select';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
 import { RequiredMark } from '@/shared/components/RequiredMark';
-import { getSessionStatusLabel } from '@/shared/lib/sessionStatus';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
+import { collectDefaultValues } from '@/shared/components/attributeFields/defaults';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
+import { formatFeeDisplay } from '@/shared/lib/feeType';
+import { formatGameMood, GAME_MOOD_DEFAULT } from '@/shared/lib/gameMood';
+import { genderSplitText } from '@/shared/lib/sessionSlots';
+import { formatStartTime } from '@/shared/lib/startTime';
+import { buildAttributeSummary } from '../sessionAttributeSummary';
+import { missingForScheduling } from '../sessionReadiness';
+import { useSessionTimeFields } from '../sessionFormTime';
 import type { CreateSessionPayload } from '../types';
-import { FeeTypeFields } from './FeeTypeFields';
-import { LocationFavoritesDropdown } from './LocationFavoritesDropdown';
-import { SessionStartTimePicker } from './SessionStartTimePicker';
+import { useSessionWhoFields } from '../useSessionWhoFields';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { AutoApproveConfirmDialog, LeaveWithoutSavingDialog, SessionReadinessDialog } from './SessionConfirmDialogs';
+import { SectionSummary, SessionFormSection, type SectionSummaryItem } from './SessionFormSection';
+import { CostFields, OverviewFields, WhenFields, WhereFields, WhoFields } from './SessionSectionFields';
 
 const INVITE_SEARCH_MIN_LENGTH = 3;
+
+type SectionKey = 'overview' | 'when' | 'where' | 'who' | 'cost' | 'detail';
+const ALL_SECTIONS_OPEN: Record<SectionKey, boolean> = {
+  overview: true,
+  when: true,
+  where: true,
+  who: true,
+  cost: true,
+  detail: true,
+};
 
 function initialsFor(fullName: string): string {
   return fullName
@@ -38,52 +54,6 @@ function initialsFor(fullName: string): string {
     .join('')
     .slice(0, 2)
     .toUpperCase();
-}
-
-const ALLOWED_DIGITS_ONLY_KEYS = new Set([
-  'Backspace',
-  'Delete',
-  'Tab',
-  'Escape',
-  'Enter',
-  'ArrowLeft',
-  'ArrowRight',
-  'ArrowUp',
-  'ArrowDown',
-  'Home',
-  'End',
-]);
-
-/** Shared by every numeric field in this form (Duration, Taken/Open slot) — blocks any keystroke
- * that isn't a digit or a navigation/edit key. A native `type="number"` input still accepts
- * `e`/`+`/`-`/`.` from the keyboard, so `type="number"` alone isn't enough. (The Fixed-amount
- * field's own copy of this guard moved to `FeeTypeFields.tsx` along with the rest of the fee UI —
- * CLIENT-SESSION-21.) */
-function handleDigitsOnlyKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-  if (event.ctrlKey || event.metaKey || event.altKey || ALLOWED_DIGITS_ONLY_KEYS.has(event.key)) {
-    return;
-  }
-  if (!/^[0-9]$/.test(event.key)) {
-    event.preventDefault();
-  }
-}
-
-/** Duration/Taken slot/Open slot — a plain `type="number"` input, paste-guarded: a number input
- * doesn't validate a pasted string at all (pasting "abc" leaves it showing "abc" until blur), so
- * this rejects the whole paste unless the full clipboard text is purely digits. */
-function DigitsOnlyInput(props: ComponentProps<typeof Input>) {
-  return (
-    <Input
-      {...props}
-      type="number"
-      onKeyDown={handleDigitsOnlyKeyDown}
-      onPaste={(event) => {
-        if (!/^[0-9]+$/.test(event.clipboardData.getData('text'))) {
-          event.preventDefault();
-        }
-      }}
-    />
-  );
 }
 
 /** CLIENT-SESSION-4's "Invite your friend" — client-side fullname filter (3+ characters) over the
@@ -182,35 +152,6 @@ function InviteFriendField({
   );
 }
 
-/** "Auto approve join request" — unchecked by default (matches the backend's new-session
- * default). Checking it reveals an inline warning immediately, no separate confirm step (user
- * decision) and no nested Dialog — same reasoning as `InviteFriendField` above. */
-function AutoApproveField({
-  checked,
-  onChange,
-  i18nOverridePrefix,
-}: {
-  checked: boolean;
-  onChange: (next: boolean) => void;
-  i18nOverridePrefix?: string;
-}) {
-  const t = useOverridableText('session', i18nOverridePrefix);
-  return (
-    <div className="flex flex-col gap-1">
-      <label className="flex cursor-pointer items-center gap-2 text-2sm text-text-primary select-none">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-          className="size-4 cursor-pointer rounded border-border-strong"
-        />
-        {t('create.autoApprove.label')}
-      </label>
-      {checked && <p className="text-2xs text-text-muted">{t('create.autoApprove.hint')}</p>}
-    </div>
-  );
-}
-
 interface CreateSessionModalProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
@@ -288,81 +229,27 @@ interface CreateSessionModalProps {
 }
 
 /**
- * CLIENT-SESSION-2's redesign of CLIENT-SESSION-1's session-creation form — standalone-only (the
- * group/standalone mode toggle is gone; group-linked session creation has no UI until the group
- * recurrence-config settings surface ships), two collapsible sections ("Session basic
- * information", open by default; "Session detail", collapsed, a "Coming soon" placeholder for a
- * later profile-derived-prefill ticket) styled after the Friends page rail's own section headers
- * (`FriendSection` — small `text-2xs`/`text-text-secondary` trigger label, not a bold heading),
- * sport pre-selected from context, now-required title/duration, and the new
- * `SessionStartTimePicker` (three independent Date/Hour/Minute selects) in place of the old native
- * `datetime-local` input. Four rows on a widened `max-w-2xl` modal (user decision on every split):
- * Sport(2)/Title(8); Location(7, selected-name + button on one line)/Location note(3);
- * "Starts at"(7)/Duration(3); "Taken slot"+"Open slot" as one flex pair(5)/Fee(5, CLIENT-SESSION-3);
- * Description alone, full width. CLIENT-SESSION-5 turns the location field's button into
- * `LocationFavoritesDropdown`, a real Radix `DropdownMenu` — a first attempt at this during
- * CLIENT-SESSION-2 was reverted after appearing to "never open at all" live; the real cause
- * (found and fixed here) was that a default-`modal` DropdownMenu nested inside this modal's own
- * Dialog aria-hides the entire parent Dialog when it opens (both portal to `document.body` as
- * siblings, and DropdownMenu's own `hideOthers()` treats everything outside itself, including the
- * Dialog, as "other") — `modal={false}` on the nested menu fixes this with no loss of Escape/
- * outside-click dismissal, confirmed via a real browser interaction test. See
- * `LocationFavoritesDropdown`'s own doc comment for the full mechanism.
+ * The create-session form (CLIENT-SESSION-1 .. 34). CLIENT-SESSION-34 turns it into five collapsible
+ * sections, all open by default, one scroll and one submit button (no wizard): **Overview** (sport,
+ * title), **When** (starts at, duration, ends at), **Where** (location with favourites, note),
+ * **Who** (taken and open slot, Anyone / By gender with the male and female slots, game mood, auto
+ * approve, invite friends) and **Cost** (fee, fee note), then the sport's **Session detail**
+ * attributes when it has any. Each header shows an amber "Missing: ..." chip for what is still needed
+ * to schedule (location, fee, duration) — information, not an error; red asterisks stay on what is
+ * needed to create (sport, start time, open slot). Title and duration are optional.
  *
- * CLIENT-SESSION-3's capacity input is split into "Taken slot" (optional) and "Open slot"
- * (required) — the backend's single `capacity` field is their sum, computed at submit time;
- * nothing enforces this split server-side (`capacity` is informational/display-only, never
- * checked by `joinSession`), it's purely how the creator thinks about the number. "Taken slot"
- * means the creator (and whoever's already with them) — it defaults to **1**, not 0, when left
- * blank, since the creator auto-joins the session they're creating and so always occupies at
- * least one slot (user decision: "Taken slot empty, Open slot 5" -> capacity 6, shown as "1/6";
- * "Taken slot 3, Open slot 4" -> capacity 7, shown as "3/7"). A small live summary
- * (`{effectiveTaken}/{capacity}`) renders under the two inputs so the creator can see this before
- * submitting. The real backend now has its own `initialSlot` field (participants already
- * accounted for outside the app, folded into the reported `participantCount` on top of the real
- * JOINED count) — this modal sends `initialSlot = effectiveTakenSlots - 1` (the creator's own
- * auto-joined row already accounts for 1 of "Taken slot"'s count, so it isn't double-added). Fee
- * (`FeeTypeFields`) is a checkbox each for Free/Split cost plus a label+input for Fixed amount
- * (not a 3-way button/select group) — typing into the amount input is what selects `FIXED`;
- * checking Free/Split cost clears it.
+ * Linked time fields: the start, the duration and the end follow each other (`useSessionTimeFields`,
+ * minute-precise pickers). The Who draft lives in `useSessionWhoFields`. Ticking "Auto approve" opens
+ * `AutoApproveConfirmDialog` instead of checking the box. "Create session" validates, then opens the
+ * "Are you ready?" popup (`SessionReadinessDialog`) — the incomplete variant lists what is missing and
+ * creates a Preparing session on confirm; the complete variant warns that a Scheduled session can't be
+ * edited afterwards. Both popups and the nested `LocationPicker` are siblings of the form's `Dialog`.
  *
- * CLIENT-SESSION-4 adds two more full-width rows after Fee, still inside "Session basic
- * information" (per the ticket's own dependency note — it extends that section, not "Session
- * detail", which stays the unrelated "Coming soon" placeholder): `InviteFriendField` (a
- * client-side fullname filter over the full `useFriends()` list, no new search endpoint, feeding
- * `inviteeIds`) and `AutoApproveField` (unchecked by default, matching the backend's own
- * new-session default; checking it reveals an inline warning with no separate confirm step).
- * Neither uses a Popover/DropdownMenu — both silently failed to open the first time something
- * portaled tried to nest inside this modal's own Dialog (see the location-dropdown and
- * wheel-picker notes above) — so both are plain conditional `<div>`s instead, same idiom as
- * `SessionDetailModal`'s cancel-reason reveal.
- *
- * "Create session" is always clickable (user decision) rather than disabled until every required
- * field (marked with a red `*`) is filled — clicking it while invalid sets `hasAttemptedSubmit`
- * instead of submitting, which turns on a per-field error message for whichever required fields
- * are still empty; each one clears on its own the moment that field becomes valid, since they're
- * recomputed from current state every render rather than tracked as separate "touched" flags.
- * Presentational and controlled per
- * client/CLAUDE.md: the parent owns `useCreateSession()`/`useLocationPickerData()`, passing
- * `onSubmit`/`isSubmitting`/`isError` and the full `locationPicker` prop bundle down.
- *
- * Owns its own transient form field state locally (sport, title, description, locationNote,
- * scheduledStart, durationMinutes, both sections' open/closed state) — same "owns its own
- * transient state, remounted via a changing `key` prop on each open" precedent `CreateGroupModal`
- * uses, rather than a setState-in-effect reset. `selectedLocation` is the one field that can't be
- * local state, since the callback that sets it (`useLocationPickerData`'s `onSelect`) lives at
- * the page level, not in this component.
- *
- * CLIENT-SESSION-21 (SESSION-24): Location and Fee are no longer required — `feeType` now starts
- * `undefined` (no FREE default) instead of always carrying a value, each of the three fee
- * checkboxes/the amount input toggles back to `undefined` when unset (not just switching between
- * options), and neither field blocks `isValid`/submit anymore. Leaving either blank creates the
- * session `PREPARING` instead of `SCHEDULED`; an amber informational banner (`willBePreparing`)
- * says so, distinct from the red required-field errors since it isn't one — pinned in the footer
- * next to "Create session" (user decision, so it stays visible regardless of scroll position),
- * not the scrollable body. `FeeTypeFields` (and its digit-input helpers) moved out to their own
- * file so `SessionPreparingCompletion` can reuse the same fee UI for completing a `PREPARING`
- * session later.
+ * Presentational and controlled per client/CLAUDE.md: the parent owns `useCreateSession()`,
+ * `useLocationPickerData()` and the attribute draft, passing `onSubmit`/`isSubmitting`/`isError` and
+ * the `locationPicker` bundle down. The form's own fields are local state, remounted by a changing
+ * `key` on each open, and reset as a whole when the sport changes (the session schema, favourites and
+ * location search are sport-scoped — `seededForSport` below, same render-phase pattern as before).
  */
 export function CreateSessionModal({
   isOpen,
@@ -400,9 +287,7 @@ export function CreateSessionModal({
   const t = useOverridableText('session', i18nOverridePrefix);
   const sportKeys = Object.keys(sportsByKey) as SportKey[];
   // Prefers the hosting page's active SportSwitcher pill; otherwise falls back to the caller's
-  // first sport profile (in sportsByKey's own order) — covers both "exactly one profile" and
-  // "2+ profiles with 'All' selected" the same way, rather than leaving the field blank in the
-  // latter case. Only stays blank when the caller has no sport profiles at all.
+  // first sport profile (in sportsByKey's own order). Only stays blank when the caller has none.
   const initialSport: SportKey | '' =
     activeSport !== undefined && activeSport !== 'all'
       ? activeSport
@@ -411,141 +296,245 @@ export function CreateSessionModal({
         : '';
 
   const [selectedSport, setSelectedSport] = useState<SportKey | ''>(initialSport);
-  // Derived at render time rather than synced via an effect+setState (which would cascade an
-  // extra render every time). This Dialog stays mounted while the caller adds their first sport
-  // (see AddSportFields' own doc comment) — `sportKeys` transitions from empty to non-empty
-  // *without* this component remounting, so `selectedSport`'s useState initializer above never
-  // re-runs on its own; falling back to `initialSport` (recomputed fresh from current props every
-  // render) here is what actually picks a sport once one becomes available, without ever
-  // clobbering a sport the caller already picked themselves (that only happens while
-  // `selectedSport` is still '').
+  // Derived at render time: this Dialog stays mounted while the caller adds their first sport, so
+  // `selectedSport`'s initializer never re-runs; falling back to `initialSport` picks one up without
+  // ever clobbering a sport the caller already picked.
   const displaySport: SportKey | '' = selectedSport !== '' ? selectedSport : initialSport;
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
   const [locationNote, setLocationNote] = useState('');
-  const [scheduledStart, setScheduledStart] = useState('');
-  const [durationMinutes, setDurationMinutes] = useState('');
-  const [takenSlots, setTakenSlots] = useState('');
-  const [openSlots, setOpenSlots] = useState('');
-  // CLIENT-SESSION-21: no default — undefined means "not picked yet", which SESSION-24 now
-  // treats as a valid, intentional choice (the session is created PREPARING instead of
-  // SCHEDULED), not just an unfinished form.
+  const time = useSessionTimeFields({ start: '', duration: '' });
+  const who = useSessionWhoFields({
+    taken: '',
+    open: '',
+    maleSlots: null,
+    femaleSlots: null,
+    gameMood: GAME_MOOD_DEFAULT,
+    autoApprove: false,
+  });
+  // CLIENT-SESSION-21: no default — undefined means "not picked yet", a valid choice (PREPARING).
   const [feeType, setFeeType] = useState<FeeType | undefined>(undefined);
   const [feeAmountVnd, setFeeAmountVnd] = useState('');
+  const [feeNote, setFeeNote] = useState('');
   const [selectedInvitees, setSelectedInvitees] = useState<FriendUser[]>([]);
-  const [autoApprove, setAutoApprove] = useState(false);
-  const [isBasicInfoOpen, setIsBasicInfoOpen] = useState(true);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
-  /** Set on the first submit attempt while the form is still invalid — from then on, each
-   * required field shows its own error message for as long as it stays unfilled (auto-clears the
-   * moment that specific field becomes valid, since these are recomputed from current state on
-   * every render, not tracked as separate per-field "touched" flags). */
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>(ALL_SECTIONS_OPEN);
+  const [isAutoApproveConfirmOpen, setIsAutoApproveConfirmOpen] = useState(false);
+  const [isReadinessOpen, setIsReadinessOpen] = useState(false);
+  const [isLeaveOpen, setIsLeaveOpen] = useState(false);
+  /** Set on the first submit attempt while the form is still invalid — from then on each required
+   * field shows its own message for as long as it stays unfilled (recomputed every render). */
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   const effectiveSportId = displaySport !== '' ? sportIdForKey(displaySport) : undefined;
 
-  // CLIENT-SESSION-15 (scope change, user decision): a Sport change resets the whole form — every
-  // field goes back to its default, as if the modal had been reopened for the new sport (the
-  // session schema, favourite locations and location search are all sport-scoped, so a half-filled
-  // form must not carry from sport A into sport B). Render-phase state adjustment, the same
-  // `seededFrom` pattern `useSportProfileSettingsTabData` / `SportFieldsForm` use — no effect, no
-  // extra render. Keyed on `displaySport` (the sport *key* string, derived purely from
-  // `selectedSport`/`initialSport`), NOT `effectiveSportId` — the latter round-trips through
-  // `sportIdForKey`, which returns `undefined` whenever the catalog store is mid-refetch
-  // (`openCreateModal` refetches it), so keying on it made the reset thrash and wipe just-typed
-  // fields mid-flow. `SessionStartTimePicker` is re-keyed on the same value so its on-open
-  // "default to now + 1h" pre-fill actually re-runs for the new sport. The hook-owned pieces
-  // (chosen location, attributes draft) reset in parallel via `onEffectiveSportChange` below.
+  // CLIENT-SESSION-15 (scope change): a Sport change resets the whole form, as if reopened for the new
+  // sport. Keyed on the sport *key* string, not `effectiveSportId` (which flickers to `undefined`
+  // while the catalog store refetches). The start picker is re-keyed on the same value so its "now +
+  // 1h" default re-runs. The hook-owned pieces (chosen location, attributes draft) reset in parallel
+  // via `onEffectiveSportChange` below.
   const [seededForSport, setSeededForSport] = useState(displaySport);
   if (displaySport !== seededForSport) {
     setSeededForSport(displaySport);
     setTitle('');
-    setDescription('');
     setLocationNote('');
-    setScheduledStart('');
-    setDurationMinutes('');
-    setTakenSlots('');
-    setOpenSlots('');
+    time.setDuration('');
+    time.setStart('');
+    who.setTaken('');
+    who.setOpen('');
+    who.setWhoCanJoin('ANYONE');
+    who.setGameMood(GAME_MOOD_DEFAULT);
+    who.setAutoApprove(false);
     setFeeType(undefined);
     setFeeAmountVnd('');
+    setFeeNote('');
     setSelectedInvitees([]);
-    setAutoApprove(false);
     setHasAttemptedSubmit(false);
-    setIsBasicInfoOpen(true);
-    setIsDetailOpen(false);
+    setOpenSections(ALL_SECTIONS_OPEN);
   }
 
-  // CLIENT-SESSION-5: report the effective sportId up on every change (including the initial
-  // pre-selected value) so the parent can scope the favorites dropdown's query — this field
-  // itself stays local state, only its current value is mirrored upward.
+  // CLIENT-SESSION-5: report the effective sportId up so the parent can scope the favourites query.
   useEffect(() => {
     onEffectiveSportChange(effectiveSportId);
-    // onEffectiveSportChange deliberately excluded below: it's a stable page-level callback
-    // (setState), not something that should retrigger this effect if the parent happens to pass
-    // a new function identity across renders.
+    // onEffectiveSportChange deliberately excluded: a stable page-level callback, not a trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveSportId]);
 
   const isFeeAmountRequired = feeType === 'FIXED';
 
-  // "Taken slot" means the creator (and whoever's already with them) — it defaults to 1, not 0,
-  // when left blank, since the creator always auto-joins the session they're creating.
-  const effectiveTakenSlots = takenSlots === '' ? 1 : Number(takenSlots);
-  const effectiveOpenSlots = openSlots === '' ? 0 : Number(openSlots);
-  const capacity = effectiveTakenSlots + effectiveOpenSlots;
-  // The backend's initialSlot is folded onto the real (auto-joined creator) participant row, so
-  // it's "Taken slot" minus the creator's own already-real row — 0 when Taken slot is blank.
-  const initialSlot = effectiveTakenSlots - 1;
+  // Anything entered that "Create session" has not sent yet. The start time is not counted: it is
+  // pre-filled (now + 1h) and re-filled for a new sport, so it says nothing about the user's edits.
+  // The Session detail section seeds the schema's defaults into the values by itself once the schema
+  // has loaded (SportAttributesFields), so a value equal to its default is not something the user entered.
+  const attributeDefaults = sessionAttributeSchema !== null ? collectDefaultValues(sessionAttributeSchema) : {};
+  const hasEditedAttributes = Object.entries(sessionAttributeValues).some(
+    ([path, value]) => !(path in attributeDefaults) || JSON.stringify(attributeDefaults[path]) !== JSON.stringify(value),
+  );
+  const isDirty =
+    title.trim() !== '' ||
+    locationNote.trim() !== '' ||
+    time.duration !== '' ||
+    time.end !== '' ||
+    who.taken !== '' ||
+    who.open !== '' ||
+    who.whoCanJoin !== 'ANYONE' ||
+    who.gameMood !== GAME_MOOD_DEFAULT ||
+    who.autoApprove ||
+    feeType !== undefined ||
+    feeAmountVnd !== '' ||
+    feeNote.trim() !== '' ||
+    selectedInvitees.length > 0 ||
+    selectedLocation !== null ||
+    hasEditedAttributes;
 
-  // CLIENT-SESSION-21 / SESSION-24: Location and Fee are no longer required to submit — leaving
-  // either blank is now a valid, intentional way to create a PREPARING session that gets
-  // completed later via SessionPreparingCompletion. `isValid` (and the red-asterisk required
-  // fields it still gates) covers everything that's genuinely still mandatory.
+  // Required to create: sport, start time and open slot (server rule unchanged); the end must be
+  // after the start and the gender seats must fit in the open ones.
   const isValid =
     effectiveSportId !== undefined &&
-    scheduledStart !== '' &&
-    title.trim() !== '' &&
-    durationMinutes !== '' &&
-    openSlots !== '';
+    time.start !== '' &&
+    who.open !== '' &&
+    !time.isEndInvalid &&
+    !who.genderOverOpen;
 
-  // Drives the "will be created as Preparing" warning below — SESSION-24's own condition for
-  // landing in PREPARING instead of SCHEDULED.
-  const willBePreparing = selectedLocation === null || feeType === undefined;
+  // What is still needed to schedule — drives the amber chips and the readiness popup's list.
+  const missing = missingForScheduling({
+    hasLocation: selectedLocation !== null,
+    feeType,
+    hasFeeAmount: feeAmountVnd !== '',
+    hasDuration: time.duration !== '',
+  });
 
-  const submit = () => {
-    if (!isValid || effectiveSportId === undefined) {
+  // The collapsed sections' `field: value` rows — always shown, "..." where nothing is filled in yet.
+  const yes = t('detail.summary.yes');
+  const split = genderSplitText(who.maleSlots > 0 ? who.maleSlots : null, who.femaleSlots > 0 ? who.femaleSlots : null, {
+    male: t('detail.summary.male'),
+    female: t('detail.summary.female'),
+  });
+  const summaries: Record<SectionKey, SectionSummaryItem[]> = {
+    overview: [
+      { label: t('detail.summary.sport'), value: displaySport !== '' ? sportsByKey[displaySport]?.label : null },
+      { label: t('detail.summary.title'), value: title.trim() },
+    ],
+    when: [
+      { label: t('detail.summary.starts'), value: time.start !== '' ? formatStartTime(toOffsetAwareIso(time.start)) : null },
+      {
+        label: t('detail.summary.duration'),
+        value: time.duration !== '' ? t('detail.summary.minutes', { count: Number(time.duration) }) : null,
+      },
+      { label: t('detail.summary.ends'), value: time.end !== '' ? formatStartTime(toOffsetAwareIso(time.end)) : null },
+    ],
+    where: [
+      { label: t('detail.summary.location'), value: selectedLocation?.name },
+      { label: t('detail.summary.note'), value: locationNote.trim() },
+    ],
+    who: [
+      { label: t('detail.summary.taken'), value: String(who.effectiveTaken) },
+      {
+        label: t('detail.summary.open'),
+        value: who.open === '' ? null : `${who.openCount} (${split === '' ? t('detail.summary.anyone') : split})`,
+      },
+      { label: t('detail.summary.mood'), value: formatGameMood(who.gameMood) },
+      { label: t('detail.summary.autoApprove'), value: who.autoApprove ? yes : t('detail.summary.no') },
+    ],
+    cost: [
+      {
+        label: t('detail.summary.fee'),
+        value:
+          feeType === undefined
+            ? null
+            : formatFeeDisplay(feeType, feeType === 'FIXED' && feeAmountVnd !== '' ? Number(feeAmountVnd) : null),
+      },
+      { label: t('detail.summary.feeNote'), value: feeNote.trim() },
+    ],
+    detail:
+      sessionAttributeSchema !== null
+        ? buildAttributeSummary(sessionAttributeSchema, sessionAttributeValues).map((entry) => ({
+            label: entry.label,
+            value: entry.text,
+          }))
+        : [],
+  };
+
+  const setSection = (key: SectionKey, open: boolean) =>
+    setOpenSections((current) => ({ ...current, [key]: open }));
+
+  /** The id of the first field that blocks Create, in form order — the one to scroll to and focus. */
+  const firstInvalidFieldId = (): string | undefined => {
+    if (effectiveSportId === undefined) return 'create-session-sport';
+    if (who.open === '') return 'create-session-open-slots';
+    if (who.genderOverOpen) {
+      return who.maleSlots >= who.femaleSlots ? 'create-session-male-slots' : 'create-session-female-slots';
+    }
+    return undefined;
+  };
+
+  // Set by a refused Create; the effect below runs once the sections are open (the target may sit in a
+  // section the user collapsed) and the error lines have rendered. `n` makes a repeated click re-fire.
+  const [focusRequest, setFocusRequest] = useState<{ id: string; n: number } | null>(null);
+  useEffect(() => {
+    if (focusRequest === null) return;
+    const element = document.getElementById(focusRequest.id);
+    if (element !== null) {
+      if (typeof element.scrollIntoView === 'function') element.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      element.focus({ preventScroll: true });
+    }
+  }, [focusRequest]);
+
+  const requestSubmit = () => {
+    if (!isValid) {
       setHasAttemptedSubmit(true);
+      // Reveal a section that holds an error even if the user collapsed it.
+      setOpenSections(ALL_SECTIONS_OPEN);
+      // …then take the user to the first field that blocks Create (usually the open slot) and focus it.
+      const id = firstInvalidFieldId();
+      if (id !== undefined) setFocusRequest((current) => ({ id, n: (current?.n ?? 0) + 1 }));
       return;
     }
+    setIsReadinessOpen(true);
+  };
+
+  const submit = () => {
+    setIsReadinessOpen(false);
+    if (effectiveSportId === undefined) return;
     onSubmit({
       sportId: effectiveSportId,
-      title: title.trim(),
-      description: description.trim() || undefined,
+      title: title.trim() || undefined,
       locationId: selectedLocation?.id,
       locationNote: locationNote.trim() || undefined,
       // CLIENT-SESSION-24: offset-aware — backend SESSION-33 requires an Instant.
-      scheduledStart: toOffsetAwareIso(scheduledStart),
-      durationMinutes: Number(durationMinutes),
-      // The backend's `capacity` is a single total — "Taken slot"/"Open slot" is a UI-only split
-      // for creators who think in those terms.
-      capacity,
+      scheduledStart: toOffsetAwareIso(time.start),
+      durationMinutes: time.duration !== '' ? Number(time.duration) : undefined,
+      // The backend's `capacity` is a single total — "Taken slot"/"Open slot" is a UI-only split.
+      capacity: who.capacity,
       feeType,
       feeAmountVnd: isFeeAmountRequired ? Number(feeAmountVnd) : undefined,
-      initialSlot,
-      autoApprove,
+      feeNote: feeNote.trim() || undefined,
+      initialSlot: who.initialSlot,
+      autoApprove: who.autoApprove,
+      maleSlots: who.maleSlots > 0 ? who.maleSlots : undefined,
+      femaleSlots: who.femaleSlots > 0 ? who.femaleSlots : undefined,
+      gameMood: who.gameMood,
       inviteeIds: selectedInvitees.length > 0 ? selectedInvitees.map((friend) => friend.id) : undefined,
     });
   };
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      {/* Closing (click outside, Escape, the X) with unsent entries asks first. A successful create closes
+          through the page's own handler, so it never asks. */}
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (open) return;
+          if (isDirty) setIsLeaveOpen(true);
+          else onClose();
+        }}
+      >
         {/* The gated "add a sport first" view (see sportKeys.length === 0 below) is a compact
-            3-field form — sized like the standalone AddSportModal (max-w-md, shrink-to-fit)
-            instead of this form's own wide/fixed-height treatment, so its "Add sport" button
-            sits right at the bottom of the modal instead of floating above dead space. */}
+            3-field form — sized like the standalone AddSportModal (max-w-md, shrink-to-fit). */}
         <DialogContent
           fixedHeight={sportKeys.length > 0}
+          // CLIENT-SESSION-34: the sectioned form is long, so it is taller than the 60vh default (and, on a
+          // page that anchors modals below its pill row, still capped by the space left below the anchor).
+          fixedHeightVh={70}
           className={sportKeys.length > 0 ? 'max-w-2xl' : 'max-w-md'}
         >
           <DialogHeader title={t('create.title')} className="border-hairline-b border-border px-4 py-3" />
@@ -561,279 +550,234 @@ export function CreateSessionModal({
             />
           ) : (
             <>
-          <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-4 py-3.5">
-            <Collapsible open={isBasicInfoOpen} onOpenChange={setIsBasicInfoOpen}>
-              <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
-                <span className="text-2xs font-medium text-text-secondary">{t('create.basicInfo')}</span>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="flex flex-col gap-3.5 pt-3">
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
-                  <div className="sm:col-span-2">
-                    <Label htmlFor="create-session-sport">
-                      {t('create.sport.label')}
-                      <RequiredMark />
-                    </Label>
-                    <Select
-                      id="create-session-sport"
-                      aria-required="true"
-                      value={displaySport}
-                      onChange={(event) => setSelectedSport(event.target.value as SportKey)}
-                    >
-                      <option value="" disabled>
-                        {t('create.sport.placeholder')}
-                      </option>
-                      {Object.values(sportsByKey).map((sport) => (
-                        <option key={sport.key} value={sport.key}>
-                          {sport.label}
-                        </option>
-                      ))}
-                    </Select>
-                    {hasAttemptedSubmit && effectiveSportId === undefined && (
-                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.sport')}</p>
-                    )}
-                  </div>
-
-                  <div className="sm:col-span-8">
-                    <Label htmlFor="create-session-title">
-                      {t('create.titleField.label')}
-                      <RequiredMark />
-                    </Label>
-                    <Input
-                      id="create-session-title"
-                      aria-required="true"
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                      placeholder={t('create.titleField.placeholder')}
-                    />
-                    {hasAttemptedSubmit && title.trim() === '' && (
-                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.title')}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
-                  <div className="sm:col-span-7">
-                    {/* Not a <Label> — it doesn't associate with a form control, it introduces the
-                        display/button pair below (same reasoning as jsx-a11y flagging an
-                        unassociated <label>). */}
-                    <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      {t('create.location.label')}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      {selectedLocation !== null && (
-                        <span className="min-w-0 flex-1 truncate text-2sm text-text-primary">
-                          {selectedLocation.name}
-                        </span>
-                      )}
-                      <LocationFavoritesDropdown
-                        selectedLocation={selectedLocation}
-                        favorites={favoriteLocations}
-                        isFavoritesLoading={isFavoriteLocationsLoading}
-                        disabled={effectiveSportId === undefined}
-                        onSelectFavorite={onSelectLocation}
-                        onOpenLocationPicker={() =>
-                          effectiveSportId !== undefined && onOpenLocationPicker(effectiveSportId)
-                        }
-                      />
-                    </div>
-                    {effectiveSportId === undefined && (
-                      <p className="mt-1 text-2xs text-text-muted">{t('create.location.pickSportFirst')}</p>
-                    )}
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <Label htmlFor="create-session-location-note">{t('create.locationNote.label')}</Label>
-                    <Input
-                      id="create-session-location-note"
-                      value={locationNote}
-                      onChange={(event) => setLocationNote(event.target.value)}
-                      placeholder={t('create.locationNote.placeholder')}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
-                  <div className="sm:col-span-7">
-                    {/* Not a <Label> — three independent selects (Date/Hour/Minute), each with
-                        its own aria-label, sit under this one heading; same reasoning as
-                        Location's span above. */}
-                    <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      {t('create.startsAt.label')}
-                      <RequiredMark />
-                    </span>
-                    {/* Re-keyed on the sport so a Sport change (which resets `scheduledStart` to
-                        `''` above) re-mounts this and re-runs its on-open "default to now + 1h"
-                        pre-fill — otherwise the reset would leave "Starts at" permanently empty. */}
-                    <SessionStartTimePicker
-                      key={displaySport}
-                      value={scheduledStart}
-                      onChange={setScheduledStart}
-                    />
-                    {hasAttemptedSubmit && scheduledStart === '' && (
-                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.startTime')}</p>
-                    )}
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <Label htmlFor="create-session-duration">
-                      {t('create.duration.label')}
-                      <RequiredMark />
-                    </Label>
-                    <DigitsOnlyInput
-                      id="create-session-duration"
-                      aria-required="true"
-                      min={0}
-                      value={durationMinutes}
-                      onChange={(event) => setDurationMinutes(event.target.value)}
-                      placeholder={t('create.duration.placeholder')}
-                    />
-                    {hasAttemptedSubmit && durationMinutes === '' && (
-                      <p className="mt-1 text-2xs text-text-danger">{t('create.validation.duration')}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
-                  <div className="sm:col-span-5">
-                    <div className="flex gap-3.5">
-                      <div className="flex-1">
-                        <Label htmlFor="create-session-taken-slots">{t('create.takenSlot.label')}</Label>
-                        <DigitsOnlyInput
-                          id="create-session-taken-slots"
-                          min={0}
-                          value={takenSlots}
-                          onChange={(event) => setTakenSlots(event.target.value)}
-                          placeholder={t('create.slots.placeholder')}
-                        />
-                      </div>
-
-                      <div className="flex-1">
-                        <Label htmlFor="create-session-open-slots">
-                          {t('create.openSlot.label')}
+              <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-3.5">
+                <SessionFormSection
+                  title={t('form.sections.overview')}
+                  open={openSections.overview}
+                  onOpenChange={(open) => setSection('overview', open)}
+                  summary={<SectionSummary items={summaries.overview} />}
+                  scrollIntoViewOnOpen
+                >
+                  <OverviewFields
+                    idPrefix="create-session"
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    title={title}
+                    onTitleChange={setTitle}
+                    sportField={
+                      <>
+                        <Label htmlFor="create-session-sport">
+                          {t('create.sport.label')}
                           <RequiredMark />
                         </Label>
-                        <DigitsOnlyInput
-                          id="create-session-open-slots"
+                        <Select
+                          id="create-session-sport"
                           aria-required="true"
-                          min={0}
-                          value={openSlots}
-                          onChange={(event) => setOpenSlots(event.target.value)}
-                          placeholder={t('create.slots.placeholder')}
-                        />
-                        {hasAttemptedSubmit && openSlots === '' && (
-                          <p className="mt-1 text-2xs text-text-danger">{t('create.validation.openSlot')}</p>
+                          value={displaySport}
+                          onChange={(event) => setSelectedSport(event.target.value as SportKey)}
+                        >
+                          <option value="" disabled>
+                            {t('create.sport.placeholder')}
+                          </option>
+                          {Object.values(sportsByKey).map((sport) => (
+                            <option key={sport.key} value={sport.key}>
+                              {sport.label}
+                            </option>
+                          ))}
+                        </Select>
+                        {hasAttemptedSubmit && effectiveSportId === undefined && (
+                          <p className="mt-1 text-2xs text-text-danger">{t('create.validation.sport')}</p>
                         )}
-                      </div>
-                    </div>
-                    <p className="mt-1.5 text-2xs text-text-muted">
-                      {t('create.slotsSummary', { taken: effectiveTakenSlots, capacity })}
-                    </p>
-                  </div>
-
-                  <div className="sm:col-span-5">
-                    <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                      {t('create.fee.label')}
-                    </span>
-                    <FeeTypeFields
-                      value={feeType}
-                      onChange={setFeeType}
-                      amount={feeAmountVnd}
-                      onAmountChange={setFeeAmountVnd}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-                    {t('create.invite.label')}
-                  </span>
-                  <InviteFriendField
-                    i18nOverridePrefix={i18nOverridePrefix}
-                    friends={friends}
-                    isFriendsLoading={isFriendsLoading}
-                    selected={selectedInvitees}
-                    onSelect={(friend) => setSelectedInvitees((prev) => [...prev, friend])}
-                    onRemove={(friendId) =>
-                      setSelectedInvitees((prev) => prev.filter((friend) => friend.id !== friendId))
+                      </>
                     }
                   />
-                </div>
+                </SessionFormSection>
 
-                <AutoApproveField
-                  checked={autoApprove}
-                  onChange={setAutoApprove}
-                  i18nOverridePrefix={i18nOverridePrefix}
-                />
-
-                <div>
-                  <Label htmlFor="create-session-description">{t('create.description.label')}</Label>
-                  <textarea
-                    id="create-session-description"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    rows={3}
-                    placeholder={t('create.description.placeholder')}
-                    className="w-full resize-none rounded-lg border-hairline border-border-strong bg-surface-2 px-3 py-2.5 text-sm text-text-primary outline-none placeholder:text-text-muted focus-visible:border-border-accent focus-visible:ring-3 focus-visible:ring-bg-accent"
+                <SessionFormSection
+                  title={t('form.sections.when')}
+                  open={openSections.when}
+                  onOpenChange={(open) => setSection('when', open)}
+                  summary={<SectionSummary items={summaries.when} />}
+                  scrollIntoViewOnOpen
+                  missing={missing.filter((field) => field === 'duration')}
+                >
+                  <WhenFields
+                    idPrefix="create-session"
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    time={time}
+                    startPickerKey={displaySport}
+                    showStartError={hasAttemptedSubmit}
                   />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+                </SessionFormSection>
 
-            {/* CLIENT-SESSION-15: sport-specific session attributes (A17 schema). CLIENT-SESSION-17
-                Part B: `#ref` nodes render as single-/multi-select sourced from the creator's
-                profile (`refChoiceSource`). Hidden entirely when the chosen sport has no session
-                schema. */}
-            {sessionAttributeSchema !== null && (
-              <Collapsible open={isDetailOpen} onOpenChange={setIsDetailOpen} className="border-hairline-t border-border pt-3">
-                <CollapsibleTrigger className="border-hairline-b justify-center gap-1.5 border-border px-1.75 py-1.5">
-                  <span className="text-2xs font-medium text-text-secondary">{t('create.detail')}</span>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-3">
-                  <SportAttributesFields
-                    schema={sessionAttributeSchema}
-                    values={sessionAttributeValues}
-                    onChange={onSessionAttributeChange}
-                    refChoiceSource={refChoiceSource}
-                    refDraftOptions={refDraftOptions}
-                    onAddRefDraftOption={onAddRefDraftOption}
-                    refBaseSchema={refBaseSchema}
+                <SessionFormSection
+                  title={t('form.sections.where')}
+                  open={openSections.where}
+                  onOpenChange={(open) => setSection('where', open)}
+                  summary={<SectionSummary items={summaries.where} />}
+                  scrollIntoViewOnOpen
+                  missing={missing.filter((field) => field === 'location')}
+                >
+                  <WhereFields
+                    idPrefix="create-session"
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    location={selectedLocation}
+                    favorites={favoriteLocations}
+                    isFavoritesLoading={isFavoriteLocationsLoading}
+                    pickerDisabled={effectiveSportId === undefined}
+                    pickSportFirst={effectiveSportId === undefined}
+                    onSelectFavorite={onSelectLocation}
+                    onOpenPicker={() => effectiveSportId !== undefined && onOpenLocationPicker(effectiveSportId)}
+                    note={locationNote}
+                    onNoteChange={setLocationNote}
                   />
-                </CollapsibleContent>
-              </Collapsible>
-            )}
+                </SessionFormSection>
 
-            {isError && (
-              <p role="alert" className="text-2sm text-text-danger">
-                {errorText ?? t('create.error')}
-              </p>
-            )}
-          </div>
-          <div className="border-hairline-t flex items-center justify-end gap-3 border-border px-4 py-3">
-            {/* CLIENT-SESSION-21 / SESSION-24: informational, not a validation error — leaving
-                Location and/or Fee blank is a valid choice, so this uses the app's reserved
-                warning tokens (amber), not the red danger-text style the required-field errors
-                use. Pinned in the footer (not the scrollable body) so it stays visible regardless
-                of scroll position, same reasoning as the submit button itself. */}
-            {willBePreparing && (
-              <p className="flex-1 text-2xs text-amber-800">
-                {t('create.preparingPrefix')} <strong>{getSessionStatusLabel('PREPARING')}</strong>{' '}
-                {t('create.preparingSuffix', { scheduled: getSessionStatusLabel('SCHEDULED') })}
-              </p>
-            )}
-            <Button
-              variant="primary"
-              onClick={submit}
-              disabled={isSubmitting}
-              className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
-            >
-              {isSubmitting ? t('create.creating') : t('create.submit')}
-            </Button>
-          </div>
+                <SessionFormSection
+                  title={t('form.sections.who')}
+                  open={openSections.who}
+                  missing={who.open === '' ? ['openSlot'] : []}
+                  onOpenChange={(open) => setSection('who', open)}
+                  summary={<SectionSummary items={summaries.who} />}
+                  scrollIntoViewOnOpen
+                >
+                  <WhoFields
+                    idPrefix="create-session"
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    taken={who.taken}
+                    onTakenChange={who.setTaken}
+                    open={who.open}
+                    onOpenChange={who.setOpen}
+                    openRequired
+                    showOpenError={hasAttemptedSubmit}
+                    whoCanJoin={who.whoCanJoin}
+                    onWhoCanJoinChange={who.setWhoCanJoin}
+                    maleChecked={who.maleChecked}
+                    onMaleCheckedChange={who.setMaleChecked}
+                    male={who.male}
+                    onMaleChange={who.setMale}
+                    femaleChecked={who.femaleChecked}
+                    onFemaleCheckedChange={who.setFemaleChecked}
+                    female={who.female}
+                    onFemaleChange={who.setFemale}
+                    genderOverOpen={who.genderOverOpen}
+                    gameMood={who.gameMood}
+                    onGameMoodChange={who.setGameMood}
+                    autoApprove={who.autoApprove}
+                    // Ticking asks for confirmation first; unticking just unticks.
+                    onAutoApproveChange={(next) =>
+                      next ? setIsAutoApproveConfirmOpen(true) : who.setAutoApprove(false)
+                    }
+                    slotsSummary={t('create.slotsSummary', { taken: who.effectiveTaken, capacity: who.capacity })}
+                    extra={
+                      <div>
+                        <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
+                          {t('create.invite.label')}
+                        </span>
+                        <InviteFriendField
+                          i18nOverridePrefix={i18nOverridePrefix}
+                          friends={friends}
+                          isFriendsLoading={isFriendsLoading}
+                          selected={selectedInvitees}
+                          onSelect={(friend) => setSelectedInvitees((prev) => [...prev, friend])}
+                          onRemove={(friendId) =>
+                            setSelectedInvitees((prev) => prev.filter((friend) => friend.id !== friendId))
+                          }
+                        />
+                      </div>
+                    }
+                  />
+                </SessionFormSection>
+
+                <SessionFormSection
+                  title={t('form.sections.cost')}
+                  open={openSections.cost}
+                  onOpenChange={(open) => setSection('cost', open)}
+                  summary={<SectionSummary items={summaries.cost} />}
+                  scrollIntoViewOnOpen
+                  missing={missing.filter((field) => field === 'fee')}
+                >
+                  <CostFields
+                    idPrefix="create-session"
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    feeType={feeType}
+                    onFeeTypeChange={setFeeType}
+                    feeAmount={feeAmountVnd}
+                    onFeeAmountChange={setFeeAmountVnd}
+                    feeNote={feeNote}
+                    onFeeNoteChange={setFeeNote}
+                  />
+                </SessionFormSection>
+
+                {/* CLIENT-SESSION-15: sport-specific session attributes (A17 schema). CLIENT-SESSION-17
+                    Part B: `#ref` nodes render as single-/multi-select sourced from the creator's
+                    profile (`refChoiceSource`). Hidden entirely when the chosen sport has no session
+                    schema. */}
+                {sessionAttributeSchema !== null && (
+                  <SessionFormSection
+                    title={t('create.detail')}
+                    open={openSections.detail}
+                    onOpenChange={(open) => setSection('detail', open)}
+                  summary={<SectionSummary items={summaries.detail} />}
+                  scrollIntoViewOnOpen
+                  >
+                    <SportAttributesFields
+                      schema={sessionAttributeSchema}
+                      values={sessionAttributeValues}
+                      onChange={onSessionAttributeChange}
+                      refChoiceSource={refChoiceSource}
+                      refDraftOptions={refDraftOptions}
+                      onAddRefDraftOption={onAddRefDraftOption}
+                      refBaseSchema={refBaseSchema}
+                    />
+                  </SessionFormSection>
+                )}
+
+                {isError && (
+                  <p role="alert" className="text-2sm text-text-danger">
+                    {errorText ?? t('create.error')}
+                  </p>
+                )}
+              </div>
+              <div className="border-hairline-t flex items-center justify-end gap-3 border-border px-4 py-3">
+                <Button
+                  variant="primary"
+                  onClick={requestSubmit}
+                  disabled={isSubmitting}
+                  className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
+                >
+                  {isSubmitting ? t('create.creating') : t('create.submit')}
+                </Button>
+              </div>
             </>
           )}
         </DialogContent>
       </Dialog>
       <LocationPicker {...locationPicker} />
+      <AutoApproveConfirmDialog
+        i18nOverridePrefix={i18nOverridePrefix}
+        isOpen={isAutoApproveConfirmOpen}
+        onCancel={() => setIsAutoApproveConfirmOpen(false)}
+        onConfirm={() => {
+          who.setAutoApprove(true);
+          setIsAutoApproveConfirmOpen(false);
+        }}
+      />
+      <LeaveWithoutSavingDialog
+        i18nOverridePrefix={i18nOverridePrefix}
+        isOpen={isLeaveOpen}
+        onStay={() => setIsLeaveOpen(false)}
+        onLeave={() => {
+          setIsLeaveOpen(false);
+          onClose();
+        }}
+      />
+      <SessionReadinessDialog
+        i18nOverridePrefix={i18nOverridePrefix}
+        isOpen={isReadinessOpen}
+        missing={missing}
+        onBack={() => setIsReadinessOpen(false)}
+        onConfirm={submit}
+      />
     </>
   );
 }

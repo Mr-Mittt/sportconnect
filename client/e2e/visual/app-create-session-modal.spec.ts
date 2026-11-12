@@ -55,7 +55,7 @@ for (const width of breakpoints) {
     await expect(dialog.getByText(mockLocation.name)).toBeVisible();
 
     await dialog.getByLabel(/^Session title/).fill('New pickup game');
-    await dialog.getByLabel(/^Duration in minutes/).fill('90');
+    await dialog.getByLabel(/^Duration \(min\)/).fill('90');
     await dialog.getByLabel(/^Open slot/).fill('10');
     await page.evaluate('document.activeElement && document.activeElement.blur()');
     await page.evaluate('document.fonts.ready');
