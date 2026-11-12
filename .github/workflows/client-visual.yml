@@ -1,7 +1,7 @@
 # Client visual regression, on demand (manual only).
 #
 # Kept out of client-ci on purpose: baselines are Linux-rendered and change in bursts, so a PR no
-# longer waits on them. The standing baseline ticket (CLIENT-SESSION-36 at the time of writing)
+# longer waits on them. The standing baseline ticket (BASELINE-UPDATE-1 at the time of writing)
 # collects the baselines each client ticket expects to change; before a release the owner runs this
 # workflow on that ticket's branch, then applies the result with /updatebaseline.
 #
