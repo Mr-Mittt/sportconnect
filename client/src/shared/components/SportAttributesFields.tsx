@@ -18,6 +18,7 @@ import { normalizeLayout, pickLayoutId } from './attributeFields/layout';
 import { ListField } from './attributeFields/ListField';
 import { NumberField } from './attributeFields/NumberField';
 import { RefField } from './attributeFields/RefField';
+import { collectDefaultValues, isAttributeVisible, isGroupAvailable, joinPath } from './attributeFields/defaults';
 import { findAttributeByPath } from './attributeFields/refFieldLayouts';
 import { StringField } from './attributeFields/StringField';
 
@@ -77,18 +78,6 @@ export interface SportAttributesFieldsProps {
   refBaseSchema?: ResolvedSportAttributeSchema | null;
 }
 
-function isGroupAvailable(group: ResolvedSportAttributeGroup): boolean {
-  // SPORT-15: `hidden` suppresses the whole subtree in the editor, the same as a soft delete —
-  // the stored values under it are untouched (a `hidden` group is code-managed data).
-  return group.isAvailable !== false && group.hidden !== true;
-}
-
-function isAttributeVisible(attribute: ResolvedSportAttributeDefinition): boolean {
-  // SPORT-15: `hidden` ⇒ no input (value is code-written, e.g. a `Reference.url`). `hidden` wins
-  // over any required flag (C11 rejects both upstream; this must not crash on a bad schema).
-  return attribute.isAvailable !== false && attribute.hidden !== true;
-}
-
 /**
  * Whether a group contributes anything to render: it must be available (v3/A19 — parent-wins at
  * every depth, so an unavailable group is empty regardless of its subtree) *and* have either a
@@ -98,11 +87,6 @@ function groupHasVisibleContent(group: ResolvedSportAttributeGroup): boolean {
   if (!isGroupAvailable(group)) return false;
   if (group.attributes.some(isAttributeVisible)) return true;
   return (group.groups ?? []).some(groupHasVisibleContent);
-}
-
-/** Full `/`-separated path of a child node — `''` prefix (a root group) yields the bare key. */
-function joinPath(prefix: string, key: string): string {
-  return prefix === '' ? key : `${prefix}/${key}`;
 }
 
 const KNOWN_TYPES = new Set<string>([
@@ -151,21 +135,10 @@ export function SportAttributesFields({
   refBaseSchema,
 }: SportAttributesFieldsProps) {
   useEffect(() => {
-    const seedDefaults = (groups: ResolvedSportAttributeGroup[], prefix: string) => {
-      for (const group of groups) {
-        if (!isGroupAvailable(group)) continue;
-        const groupPath = joinPath(prefix, group.key);
-        for (const attribute of group.attributes) {
-          if (!isAttributeVisible(attribute)) continue;
-          if (attribute.defaultValue === undefined || attribute.defaultValue === null) continue;
-          const attributePath = joinPath(groupPath, attribute.key);
-          if (values[attributePath] !== undefined) continue;
-          onChange(attributePath, attribute.defaultValue);
-        }
-        seedDefaults(group.groups ?? [], groupPath);
-      }
-    };
-    seedDefaults(schema.groups, '');
+    for (const [attributePath, defaultValue] of Object.entries(collectDefaultValues(schema))) {
+      if (values[attributePath] !== undefined) continue;
+      onChange(attributePath, defaultValue);
+    }
     // Seed defaults once per fetched schema, not on every `values`/`onChange` identity change —
     // `values[attributePath] !== undefined` above is what actually stops this from re-firing
     // once the caller's state reflects the seeded value.

@@ -182,8 +182,15 @@ test('session form — closing the create form with unsent entries asks "Leave w
   // Nothing entered: Escape closes at once. Wait for the dialog first: an Escape sent before it has
   // mounted and taken focus is lost, which is a timing flake on a slow CI runner.
   await expect(createDialog).toBeVisible();
+  // The Session detail section seeds the schema's default ("Format: Doubles") once the schema has loaded.
+  // That is not something the user entered, so it must not make the form ask. Wait for it, so this runs
+  // the way a slow CI runner does (schema already loaded) on every machine.
+  await expect(createDialog.getByLabel('Format')).toHaveValue('Doubles');
   await page.keyboard.press('Escape');
-  await expect(createDialog).not.toBeVisible();
+  // `createDialog` is a role locator, and a role locator skips aria-hidden content. If "Leave without
+  // saving?" had opened on top of the form, the form would count as "not visible" and this would pass
+  // while the page stayed covered. Assert that no dialog of any kind is left.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 
   // Something entered: Escape asks first, "Keep editing" keeps the form and its text.
   await page.getByRole('button', { name: 'Create session' }).click();

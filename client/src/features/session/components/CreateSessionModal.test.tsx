@@ -1334,5 +1334,62 @@ describe('CreateSessionModal', () => {
       await user.keyboard('{Escape}');
       expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
     });
+
+    describe('a schema default that the form seeded by itself is not an entry', () => {
+      const schemaWithDefault: ResolvedSportAttributeSchema = {
+        groups: [
+          {
+            key: 'match',
+            label: 'Match details',
+            isAvailable: true,
+            attributes: [{ key: 'format', label: 'Format', type: 'STRING', isAvailable: true, defaultValue: 'Doubles' }],
+          },
+        ],
+      };
+
+      it('closes straight away when the only value is the default the schema seeded', async () => {
+        const user = userEvent.setup();
+        const onClose = vi.fn();
+        render(
+          <CreateSessionModal
+            {...baseProps}
+            onClose={onClose}
+            sessionAttributeSchema={schemaWithDefault}
+            sessionAttributeValues={{ 'match/format': 'Doubles' }}
+          />,
+        );
+        await user.keyboard('{Escape}');
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(screen.queryByText('Leave without saving?')).not.toBeInTheDocument();
+      });
+
+      it('asks once the user changed that value, or filled one that has no default', async () => {
+        const user = userEvent.setup();
+        const onClose = vi.fn();
+        const { rerender } = render(
+          <CreateSessionModal
+            {...baseProps}
+            onClose={onClose}
+            sessionAttributeSchema={schemaWithDefault}
+            sessionAttributeValues={{ 'match/format': 'Singles' }}
+          />,
+        );
+        await user.keyboard('{Escape}');
+        expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+        rerender(
+          <CreateSessionModal
+            {...baseProps}
+            onClose={onClose}
+            sessionAttributeSchema={schemaWithDefault}
+            sessionAttributeValues={{ 'match/format': 'Doubles', 'match/racketBrand': 'Yonex' }}
+          />,
+        );
+        await user.keyboard('{Escape}');
+        expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+        expect(onClose).not.toHaveBeenCalled();
+      });
+    });
   });
 });
