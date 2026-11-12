@@ -100,6 +100,7 @@ Shared, cross-page pieces (`TopBar`, `NavTabs`, `SportSwitcher`, design tokens, 
 - Build on shadcn/ui primitives (Button, Card, Avatar, Badge, Dialog, etc.) rather than hand-rolling each one per feature — restyle via tokens, don't fork the behavior.
 - Every interactive element (button, pill, link) is reachable by keyboard and has a visible focus state — not a per-page decision, a baseline requirement everywhere.
 - Icon-only buttons always get `aria-label`. Decorative icons always get `aria-hidden="true"`.
+- **"Is this form dirty / can it be saved" on a sport-attribute map goes through `hasEditedAttributeValues(schema, values)`** (`shared/components/attributeFields/defaults.ts`), never `Object.keys(values).length > 0` or a plain comparison with the stored map. `SportAttributesFields` seeds each schema `defaultValue` into the values by itself once the schema loads, so an untouched form already differs from where it started, on a slow machine only (found in CI, CLIENT-SESSION-34; the profile editor and the session detail section still to fix, SPORT-17).
 
 ## Data layer convention
 

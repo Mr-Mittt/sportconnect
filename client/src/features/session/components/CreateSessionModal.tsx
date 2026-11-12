@@ -17,7 +17,7 @@ import { Select } from '@/shared/ui/select';
 import { AddSportFields, type AddSportProfileSubmission } from '@/shared/components/AddSportFields';
 import { RequiredMark } from '@/shared/components/RequiredMark';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
-import { collectDefaultValues } from '@/shared/components/attributeFields/defaults';
+import { hasEditedAttributeValues } from '@/shared/components/attributeFields/defaults';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
@@ -367,12 +367,6 @@ export function CreateSessionModal({
 
   // Anything entered that "Create session" has not sent yet. The start time is not counted: it is
   // pre-filled (now + 1h) and re-filled for a new sport, so it says nothing about the user's edits.
-  // The Session detail section seeds the schema's defaults into the values by itself once the schema
-  // has loaded (SportAttributesFields), so a value equal to its default is not something the user entered.
-  const attributeDefaults = sessionAttributeSchema !== null ? collectDefaultValues(sessionAttributeSchema) : {};
-  const hasEditedAttributes = Object.entries(sessionAttributeValues).some(
-    ([path, value]) => !(path in attributeDefaults) || JSON.stringify(attributeDefaults[path]) !== JSON.stringify(value),
-  );
   const isDirty =
     title.trim() !== defaultTitle ||
     locationNote.trim() !== '' ||
@@ -388,7 +382,7 @@ export function CreateSessionModal({
     feeNote.trim() !== '' ||
     selectedInvitees.length > 0 ||
     selectedLocation !== null ||
-    hasEditedAttributes;
+    hasEditedAttributeValues(sessionAttributeSchema, sessionAttributeValues);
 
   // Required to create: sport, start time and open slot (server rule unchanged); the end must be
   // after the start and the gender seats must fit in the open ones.
