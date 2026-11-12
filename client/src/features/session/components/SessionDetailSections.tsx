@@ -552,7 +552,7 @@ interface InformationSectionProps {
 /**
  * CLIENT-SESSION-37: the read-only mode's one section. Everything the six editable sections show (Overview,
  * When, Where, Who, Cost and the sport's Session detail) as flat fields, no sub-headings: collapsed (the
- * default) it is the `field: value` summary, expanded one label/value row per field. Same bordered card,
+ * default) it is the `field: value` summary, one line per group, expanded one label/value row per field. Same bordered card,
  * border flick and amber "Missing: ..." chip as the other modes' sections.
  */
 function InformationSection({ i18nOverridePrefix, session, missing, schema }: InformationSectionProps) {
@@ -566,21 +566,32 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
   const fee = session.feeType === null ? null : formatFeeDisplay(session.feeType, session.feeAmountVnd);
   const attributes = schema == null ? [] : buildAttributeSummary(schema, session.attributes ?? {});
 
-  const summary: SectionSummaryItem[] = [
-    { label: t('detail.summary.sport'), value: session.sportName },
-    { label: t('detail.summary.title'), value: session.title },
-    { label: t('detail.summary.starts'), value: formatStartTime(session.scheduledStart) },
-    { label: t('detail.summary.duration'), value: durationText },
-    { label: t('detail.summary.ends'), value: session.scheduledEndAt === null ? null : formatStartTime(session.scheduledEndAt) },
-    { label: t('detail.summary.location'), value: location?.name },
-    { label: t('detail.summary.note'), value: session.locationNote },
-    { label: t('detail.summary.taken'), value: String(session.initialSlot + 1) },
-    { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
-    { label: t('detail.summary.mood'), value: formatGameMood(session.gameMood) },
-    { label: t('detail.summary.autoApprove'), value: session.autoApprove ? yes : no },
-    { label: t('detail.summary.fee'), value: fee },
-    { label: t('detail.summary.feeNote'), value: session.feeNote },
-    ...attributes.map((entry) => ({ label: entry.label, value: entry.text })),
+  // One line per group (Overview, When, Where, Who, Cost, then the sport's Session detail) while collapsed.
+  const summaryGroups: SectionSummaryItem[][] = [
+    [
+      { label: t('detail.summary.sport'), value: session.sportName },
+      { label: t('detail.summary.title'), value: session.title },
+    ],
+    [
+      { label: t('detail.summary.starts'), value: formatStartTime(session.scheduledStart) },
+      { label: t('detail.summary.duration'), value: durationText },
+      { label: t('detail.summary.ends'), value: session.scheduledEndAt === null ? null : formatStartTime(session.scheduledEndAt) },
+    ],
+    [
+      { label: t('detail.summary.location'), value: location?.name },
+      { label: t('detail.summary.note'), value: session.locationNote },
+    ],
+    [
+      { label: t('detail.summary.taken'), value: String(session.initialSlot + 1) },
+      { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
+      { label: t('detail.summary.mood'), value: formatGameMood(session.gameMood) },
+      { label: t('detail.summary.autoApprove'), value: session.autoApprove ? yes : no },
+    ],
+    [
+      { label: t('detail.summary.fee'), value: fee },
+      { label: t('detail.summary.feeNote'), value: session.feeNote },
+    ],
+    ...(attributes.length > 0 ? [attributes.map((entry) => ({ label: entry.label, value: entry.text }))] : []),
   ];
 
   return (
@@ -591,7 +602,13 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
       onOpenChange={setOpen}
       missing={missing}
       scrollIntoViewOnOpen
-      summary={<SectionSummary items={summary} />}
+      summary={
+        <div className="flex flex-col gap-0.5">
+          {summaryGroups.map((items) => (
+            <SectionSummary key={items[0].label} items={items} />
+          ))}
+        </div>
+      }
     >
       <ViewRow label={t('detail.summary.sport')}>{session.sportName}</ViewRow>
       <ViewRow label={t('detail.summary.title')}>{session.title ?? '...'}</ViewRow>

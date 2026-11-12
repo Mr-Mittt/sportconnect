@@ -613,7 +613,6 @@ export function SessionDetailModal({
                     scrollIntoViewOnOpen
                     summary={
                       <div className="flex flex-col gap-1.5">
-                        <PlayersMeter session={session} rampColor={sport?.colorRamp} />
                         <PlayersStatus
                           isLoading={isParticipantsLoading}
                           isError={isParticipantsError}

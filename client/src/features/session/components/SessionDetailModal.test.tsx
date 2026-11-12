@@ -1092,6 +1092,18 @@ describe('SessionDetailModal', () => {
       expect(screen.getByText('Location:')).toBeInTheDocument();
     });
 
+    it('collapsed Session information breaks the line for each group', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T20:30:00' })} />);
+      const lineOf = (label: string) => screen.getByText(`${label}:`).parentElement?.parentElement as HTMLElement;
+      // Same line within a group, a different line from the next group.
+      expect(lineOf('Sport')).toBe(lineOf('Title'));
+      expect(lineOf('Starts')).toBe(lineOf('Ends'));
+      expect(lineOf('Taken')).toBe(lineOf('Auto approve'));
+      expect(lineOf('Fee')).toBe(lineOf('Fee note'));
+      const lines = ['Sport', 'Starts', 'Location', 'Taken', 'Fee'].map(lineOf);
+      expect(new Set(lines).size).toBe(5);
+    });
+
     it('expanding Session information lists every field as its own row, with no sub-headings', () => {
       render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T20:30:00' })} />);
       fireEvent.click(informationToggle());
@@ -1107,10 +1119,13 @@ describe('SessionDetailModal', () => {
       const toggle = screen.getByRole('button', { name: /Players \(1\/10\)/ });
       expect(toggle).toHaveAttribute('aria-expanded', 'false');
       expect(screen.getByText('Players:')).toBeInTheDocument();
+      // Collapsed: just the avatars, no capacity bar (it shows once opened).
+      expect(document.querySelector('[class~="h-1.25"]')).toBeNull();
       expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument();
       fireEvent.click(toggle);
       expect(toggle).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
+      expect(document.querySelector('[class~="h-1.25"]')).not.toBeNull();
     });
 
     it.each(['SCHEDULED', 'ONGOING', 'COMPLETED', 'CANCELLED'] as const)(
