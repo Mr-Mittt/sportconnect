@@ -15,6 +15,8 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 - CLIENT-NOTIF-6: the live notification socket and the chat socket no longer keep retrying with an expired access token. Each connect attempt sends the current token; a refused connection refreshes it once (one shared refresh for the whole app) and reconnects, and a refresh that is refused for good stops the socket. A refresh that arrives late can no longer sign the user out.
 
+- CLIENT-SESSION-37: anyone who cannot edit a session (not the host, or the session is no longer Preparing) now sees the detail modal as two collapsed sections, "Session information" (all the fields) and "Players" (the avatars), instead of six blocks. A session the system cancelled reads "Auto-cancelled on <time>" instead of "Cancelled by unknown", and the session status is shown in upper case.
+
 ### Applied automatically
 
 - A new client image replaces the old one with the next deploy; nothing else changes on the box.

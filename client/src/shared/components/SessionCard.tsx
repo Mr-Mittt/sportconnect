@@ -128,7 +128,7 @@ export function SessionCard({
         <div className={s.title} title={title}>
           {title}
         </div>
-        <span className={cn('shrink-0 text-2xs font-medium', SESSION_STATUS_CLASSES[session.status])}>
+        <span className={cn('shrink-0 text-2xs font-medium uppercase', SESSION_STATUS_CLASSES[session.status])}>
           {getSessionStatusLabel(session.status)}
         </span>
       </div>

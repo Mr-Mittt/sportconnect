@@ -303,9 +303,11 @@ describe('SessionDetailModal', () => {
     expect(screen.queryByRole('link', { name: /Get Directions/ })).not.toBeInTheDocument();
   });
 
-  it('renders the participants list', () => {
+  it('renders the participants list (read-only mode: Players is collapsed until opened)', () => {
     render(<SessionDetailModal {...baseProps} />);
     expect(screen.getByText('Players (1)')).toBeInTheDocument();
+    expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Players \(1\)/ }));
     expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
   });
 
@@ -459,6 +461,7 @@ describe('SessionDetailModal', () => {
         {...baseProps}
         session={makeSession({
           status: 'CANCELLED',
+          cancelledBy: 'user-1',
           cancelledByFullName: 'Jordan Lee',
           cancelledAt: '2026-07-15T09:00:00',
           cancelReason: 'Court unavailable.',
@@ -467,6 +470,32 @@ describe('SessionDetailModal', () => {
     );
     expect(screen.getByText(/Cancelled by Jordan Lee/)).toBeInTheDocument();
     expect(screen.getByText('Reason: Court unavailable.')).toBeInTheDocument();
+  });
+
+  // CLIENT-SESSION-37: the system's cancel has no canceller.
+  it('an auto-cancelled session reads "Auto-cancelled on <time>", with client copy for the reason, never "unknown"', () => {
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({
+          status: 'CANCELLED',
+          cancelledBy: null,
+          cancelledByFullName: null,
+          cancelledAt: '2026-07-15T09:00:00',
+          cancelReason: 'Auto-cancelled — session setup was not completed before it started.',
+        })}
+      />,
+    );
+    expect(screen.getByText(/^Auto-cancelled on /)).toBeInTheDocument();
+    expect(screen.queryByText(/Cancelled by/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/unknown/)).not.toBeInTheDocument();
+    expect(screen.getByText('Reason: the session setup was not completed in time.')).toBeInTheDocument();
+    expect(screen.queryByText(/Auto-cancelled — session setup/)).not.toBeInTheDocument();
+  });
+
+  it('the session status is drawn in upper case (CSS, the text itself is unchanged)', () => {
+    render(<SessionDetailModal {...baseProps} />);
+    expect(screen.getByText('Scheduled')).toHaveClass('uppercase');
   });
 
   it('falls back to "{sportName} session" for a null title', () => {
@@ -604,8 +633,8 @@ describe('SessionDetailModal', () => {
     expect(screen.queryByRole('img', { name: 'Basketball' })).not.toBeInTheDocument();
   });
 
-  it('Players section: collapsing swaps the roster chips for a decorative avatar-stack preview, capacity meter always shows', () => {
-    render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 10 })} />);
+  it('Players section (host edit mode): collapsing swaps the roster chips for a decorative avatar-stack preview, capacity meter always shows', () => {
+    render(<SessionDetailModal {...baseProps} canManage session={makeSession({ capacity: 10, status: 'PREPARING' })} />);
     const toggle = screen.getByText('Players (1/10)');
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
@@ -1035,6 +1064,7 @@ describe('SessionDetailModal', () => {
 
   describe('collapsible sections only where the session can be edited', () => {
     const sectionNames = ['Overview', 'When', 'Where', 'Who', 'Cost'];
+    const informationToggle = () => screen.getByRole('button', { name: /Session information/ });
     const toggles = () =>
       screen.queryAllByRole('button').filter((button) => button.hasAttribute('aria-expanded') &&
         sectionNames.some((name) => (button.textContent ?? '').startsWith(name)));
@@ -1044,7 +1074,7 @@ describe('SessionDetailModal', () => {
       expect(toggles()).toHaveLength(5);
     });
 
-    it('a viewer gets static sections: title, warning and summary, no toggle and no Edit — even while Preparing', () => {
+    it('a viewer gets the read-only mode: one collapsed "Session information" section, no per-field sections, no Edit — even while Preparing', () => {
       render(
         <SessionDetailModal
           {...baseProps}
@@ -1054,12 +1084,33 @@ describe('SessionDetailModal', () => {
       );
       expect(toggles()).toHaveLength(0);
       expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
-      // Still on screen: each section's title, the "Missing" warning and the summary row.
-      for (const name of sectionNames) expect(screen.getByText(name, { exact: true })).toBeInTheDocument();
-      expect(screen.getByText('Missing: location')).toBeInTheDocument();
-      expect(screen.getByText('Missing: duration')).toBeInTheDocument();
+      expect(informationToggle()).toHaveAttribute('aria-expanded', 'false');
+      for (const name of sectionNames) expect(screen.queryByText(name, { exact: true })).not.toBeInTheDocument();
+      // Collapsed: the one chip and the whole `field: value` summary.
+      expect(screen.getByText(/^Missing: location, duration$/)).toBeInTheDocument();
       expect(screen.getByText('Title:').parentElement).toHaveTextContent('Title: Sunday pickup run');
       expect(screen.getByText('Location:')).toBeInTheDocument();
+    });
+
+    it('expanding Session information lists every field as its own row, with no sub-headings', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T20:30:00' })} />);
+      fireEvent.click(informationToggle());
+      expect(informationToggle()).toHaveAttribute('aria-expanded', 'true');
+      for (const label of ['Sport', 'Title', 'Starts', 'Duration', 'Ends', 'Location', 'Note', 'Taken', 'Open', 'Mood', 'Auto approve', 'Fee', 'Fee note']) {
+        expect(screen.getAllByText(label, { exact: true }).length).toBeGreaterThan(0);
+      }
+      expect(screen.getByText('Free')).toBeInTheDocument();
+    });
+
+    it('Players is its own read-only section: collapsed by default with the avatar preview, expanded shows the roster', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 10 })} />);
+      const toggle = screen.getByRole('button', { name: /Players \(1\/10\)/ });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByText('Players:')).toBeInTheDocument();
+      expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument();
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
     });
 
     it.each(['SCHEDULED', 'ONGOING', 'COMPLETED', 'CANCELLED'] as const)(
@@ -1083,10 +1134,8 @@ describe('SessionDetailModal', () => {
             session={makeSession({ status, location: null, feeType: null, scheduledEndAt: null })}
           />,
         );
-        expect(screen.getByText('Missing: location')).toBeInTheDocument();
-        expect(screen.getByText('Missing: fee')).toBeInTheDocument();
-        expect(screen.getByText('Missing: duration')).toBeInTheDocument();
-        // The warning chips are information only: no banner, no Edit, no Mark it scheduled.
+        expect(screen.getByText('Missing: location, fee, duration')).toBeInTheDocument();
+        // The warning chip is information only: no banner, no Edit, no Mark it scheduled.
         expect(screen.queryByText('The host is still preparing this session.')).not.toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Mark it scheduled' })).not.toBeInTheDocument();
       },

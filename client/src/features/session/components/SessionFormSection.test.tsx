@@ -134,38 +134,6 @@ describe('SessionFormSection layout', () => {
   });
 });
 
-describe('SessionFormSection collapsible={false}', () => {
-  it('is a static block: title, chip and summary always shown, no toggle, no body, no actions', () => {
-    render(
-      <SessionFormSection
-        title="Where"
-        open={false}
-        onOpenChange={() => {}}
-        collapsible={false}
-        missing={['location']}
-        summary={<SectionSummary items={[{ label: 'Location', value: null }]} />}
-        actions={<button type="button">Edit</button>}
-      >
-        <p>section body</p>
-      </SessionFormSection>,
-    );
-    expect(screen.getByText('Where')).toBeInTheDocument();
-    expect(screen.getByText('Missing: location')).toBeInTheDocument();
-    expect(screen.getByText('Location:')).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.queryByText('section body')).not.toBeInTheDocument();
-  });
-
-  it('shows the summary even when it is empty', () => {
-    render(
-      <SessionFormSection title="Cost" open onOpenChange={() => {}} collapsible={false} summary={<SectionSummary items={[]} />}>
-        x
-      </SessionFormSection>,
-    );
-    expect(screen.getByText('...')).toBeInTheDocument();
-  });
-});
-
 describe('SessionFormSection border flick', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -215,15 +183,6 @@ describe('SessionFormSection border flick', () => {
       </SessionFormSection>,
     );
     expect((container.firstChild as HTMLElement).className).toContain('section-flick');
-  });
-
-  it('does not flick a static (non-collapsible) section', () => {
-    const { container } = render(
-      <SessionFormSection title="A" open onOpenChange={() => {}} collapsible={false} scrollIntoViewOnMount>
-        x
-      </SessionFormSection>,
-    );
-    expect((container.firstChild as HTMLElement).className).not.toContain('section-flick');
   });
 });
 

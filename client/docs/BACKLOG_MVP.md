@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-12 (CLIENT-NOTIF-6 done; BASELINE-UPDATE-1 and SPORT-17 filed)  
+**Last updated:** 2026-11-12 (CLIENT-NOTIF-6 and CLIENT-SESSION-37 done; BASELINE-UPDATE-1 and SPORT-17 filed)  
 
 ---
 
@@ -133,6 +133,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 27 | [CLIENT-SESSION-37](MVP/CLIENT-SESSION-37_SESSION_DETAIL_READ_ONLY_MODE.md) | Session detail read-only mode (not the host, or not `PREPARING`): one collapsed "Session information" section and a collapsed "Players" section (avatars when collapsed) on the same bordered card as the other modes; "Auto-cancelled on <time>" for a system cancel; upper-case session status. 5 requirement mutations killed, scoped Vitest and e2e green; `session-detail-*` baselines pending in `BASELINE-UPDATE-1` | `DONE` (2026-11-12) |
 | 26 | [CLIENT-NOTIF-6](MVP/CLIENT-NOTIF-6_LIVE_SOCKET_RECONNECTS_WITH_A_STALE_TOKEN.md) | Live notification and chat sockets send the token the store holds on every connect attempt and, when a connection is refused, refresh once through one shared `refreshSession()` before reconnecting; a refresh that loses a race can no longer sign the user out | `DONE` (2026-11-12) |
 | 25 | [CLIENT-SESSION-34](MVP/CLIENT-SESSION-34_SESSION_FORM_SECTIONS_SLOTS_MOOD_EDIT_AND_READINESS.md) | Create form in collapsible sections (Overview, When, Where, Who, Cost, Session detail) with linked start/duration/end (one-minute pickers), "Who can join" (Anyone / By gender), game mood slider, fee note, optional title and duration, "Are you ready?" and auto-approve confirmations; detail modal with the same sections, per-section Edit / Save / Discard on a Preparing session, a banner for every viewer and "Mark it scheduled" (auto-opened when the last gap is saved). Description removed from the client (SESSION-48 filed). 19 requirement mutations killed, scoped Vitest 1519+ and 53 e2e green | `DONE` (2026-11-11) |
 | 24 | [AUTH-20](MVP/AUTH-20_E2E_FLAKE_COMPLETE_PROFILE_DIALOG_IN_OWN_REDIRECT_TESTS.md) | Fix the e2e flakes of the INFRA-4 merge's CI run (2026-10-29): `/register` and the stored-locale test build their own Keycloak redirect, so the "Complete your profile" dialog hid the page (new `skipCompleteProfileDialog` helper); `matches-journey` matched the Pickleball pill with a substring `'All'` locator (now `exact: true`); the Home Feed Escape-popover flake did not reproduce and is HF-21 | `DONE` |

@@ -35,13 +35,6 @@ interface SessionFormSectionProps {
    * sections all mount open, and scrolling each into view on mount would leave it on the last one.
    */
   scrollIntoViewOnMount?: boolean;
-  /**
-   * `false`: not collapsible — the section is a static block: its title, the amber "Missing: ..." chip and
-   * the `field: value` summary, always shown, with no toggle, no body and no actions. The detail modal
-   * uses this for everyone who cannot edit the session (a viewer, or the host once it is no longer
-   * Preparing); only the create form and a host's Preparing session get collapsible sections.
-   */
-  collapsible?: boolean;
   children: ReactNode;
 }
 
@@ -67,7 +60,6 @@ export function SessionFormSection({
   isEditing = false,
   scrollIntoViewOnOpen = false,
   scrollIntoViewOnMount = false,
-  collapsible = true,
   children,
   i18nOverridePrefix,
 }: SessionFormSectionProps) {
@@ -107,18 +99,6 @@ export function SessionFormSection({
         })}
       </span>
     ) : null;
-
-  if (!collapsible) {
-    return (
-      <div className="border-hairline shrink-0 overflow-hidden rounded-xl border-border">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 bg-surface-1 px-3 py-2 text-2xs font-semibold text-text-secondary">
-          <span>{title}</span>
-          {chip}
-        </div>
-        {summary !== undefined && <div className="px-3 py-2">{summary}</div>}
-      </div>
-    );
-  }
 
   return (
     <div

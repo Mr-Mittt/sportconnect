@@ -119,7 +119,6 @@ function OverviewSection(props: SectionProps) {
       actions={actions}
       scrollIntoViewOnOpen
       scrollIntoViewOnMount
-      collapsible={props.canEdit}
       summary={
         <SectionSummary
           items={[
@@ -187,7 +186,6 @@ function WhenSection(props: SectionProps) {
       actions={actions}
       scrollIntoViewOnOpen
       scrollIntoViewOnMount
-      collapsible={props.canEdit}
       summary={
         <SectionSummary
           items={[
@@ -254,7 +252,6 @@ function WhereSection(props: WhereSectionProps) {
       actions={actions}
       scrollIntoViewOnOpen
       scrollIntoViewOnMount
-      collapsible={props.canEdit}
       summary={
         <SectionSummary
           items={[
@@ -363,7 +360,6 @@ function WhoSection(props: SectionProps) {
         actions={actions}
         scrollIntoViewOnOpen
       scrollIntoViewOnMount
-      collapsible={props.canEdit}
         summary={<SectionSummary items={summary} />}
       >
         {props.isEditing ? (
@@ -454,7 +450,6 @@ function CostSection(props: SectionProps) {
       actions={actions}
       scrollIntoViewOnOpen
       scrollIntoViewOnMount
-      collapsible={props.canEdit}
       summary={
         <SectionSummary
           items={[
@@ -519,7 +514,6 @@ function DetailSection(props: DetailSectionProps) {
       actions={actions}
       scrollIntoViewOnOpen
       scrollIntoViewOnMount
-      collapsible={props.canEdit}
       summary={
         <SectionSummary items={entries.map((entry) => ({ label: entry.label, value: entry.text }))} />
       }
@@ -542,6 +536,105 @@ function DetailSection(props: DetailSectionProps) {
       ) : (
         <SessionAttributesSummary schema={schema} values={stored} refBaseSchema={props.refBaseSchema} hideHeading />
       )}
+    </SessionFormSection>
+  );
+}
+
+/* ------------------------------------------------- Read-only: Session information */
+
+interface InformationSectionProps {
+  i18nOverridePrefix?: string;
+  session: Session;
+  missing: MissingField[];
+  schema: ResolvedSportAttributeSchema | null | undefined;
+}
+
+/**
+ * CLIENT-SESSION-37: the read-only mode's one section. Everything the six editable sections show (Overview,
+ * When, Where, Who, Cost and the sport's Session detail) as flat fields, no sub-headings: collapsed (the
+ * default) it is the `field: value` summary, expanded one label/value row per field. Same bordered card,
+ * border flick and amber "Missing: ..." chip as the other modes' sections.
+ */
+function InformationSection({ i18nOverridePrefix, session, missing, schema }: InformationSectionProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
+  const [open, setOpen] = useState(false);
+  const duration = sessionDuration(session);
+  const durationText = duration === '' ? null : t('detail.summary.minutes', { count: Number(duration) });
+  const location = session.location;
+  const yes = t('detail.summary.yes');
+  const no = t('detail.summary.no');
+  const fee = session.feeType === null ? null : formatFeeDisplay(session.feeType, session.feeAmountVnd);
+  const attributes = schema == null ? [] : buildAttributeSummary(schema, session.attributes ?? {});
+
+  const summary: SectionSummaryItem[] = [
+    { label: t('detail.summary.sport'), value: session.sportName },
+    { label: t('detail.summary.title'), value: session.title },
+    { label: t('detail.summary.starts'), value: formatStartTime(session.scheduledStart) },
+    { label: t('detail.summary.duration'), value: durationText },
+    { label: t('detail.summary.ends'), value: session.scheduledEndAt === null ? null : formatStartTime(session.scheduledEndAt) },
+    { label: t('detail.summary.location'), value: location?.name },
+    { label: t('detail.summary.note'), value: session.locationNote },
+    { label: t('detail.summary.taken'), value: String(session.initialSlot + 1) },
+    { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
+    { label: t('detail.summary.mood'), value: formatGameMood(session.gameMood) },
+    { label: t('detail.summary.autoApprove'), value: session.autoApprove ? yes : no },
+    { label: t('detail.summary.fee'), value: fee },
+    { label: t('detail.summary.feeNote'), value: session.feeNote },
+    ...attributes.map((entry) => ({ label: entry.label, value: entry.text })),
+  ];
+
+  return (
+    <SessionFormSection
+      i18nOverridePrefix={i18nOverridePrefix}
+      title={t('detail.information.title')}
+      open={open}
+      onOpenChange={setOpen}
+      missing={missing}
+      scrollIntoViewOnOpen
+      summary={<SectionSummary items={summary} />}
+    >
+      <ViewRow label={t('detail.summary.sport')}>{session.sportName}</ViewRow>
+      <ViewRow label={t('detail.summary.title')}>{session.title ?? '...'}</ViewRow>
+      <ViewRow label={t('detail.summary.starts')}>{formatSessionHeaderDateTime(session.scheduledStart, null)}</ViewRow>
+      <ViewRow label={t('detail.summary.duration')}>{durationText ?? '...'}</ViewRow>
+      <ViewRow label={t('detail.summary.ends')}>
+        {session.scheduledEndAt === null ? '...' : formatStartTime(session.scheduledEndAt)}
+      </ViewRow>
+      <ViewRow label={t('detail.summary.location')}>
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {/* SESSION-24: null on a PREPARING session created without a location. */}
+            <span>{location?.name ?? t('card.locationPending')}</span>
+            {location !== null && location.latitude !== null && location.longitude !== null && (
+              <a
+                href={directionsUrl(location.latitude, location.longitude)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-2sm font-medium text-text-accent hover:underline"
+              >
+                {t('detail.getDirections')}
+              </a>
+            )}
+          </div>
+          {location?.address !== null && location?.address !== undefined && (
+            <div className="text-2xs text-text-muted">{location.address}</div>
+          )}
+        </div>
+      </ViewRow>
+      <ViewRow label={t('detail.summary.note')}>{session.locationNote ?? '...'}</ViewRow>
+      <ViewRow label={t('detail.summary.taken')}>{session.initialSlot + 1}</ViewRow>
+      <ViewRow label={t('detail.summary.open')}>{whoSummaryOpen(session, t)}</ViewRow>
+      <ViewRow label={t('detail.summary.mood')}>
+        <MoodBadge mood={session.gameMood} />
+      </ViewRow>
+      <ViewRow label={t('detail.summary.autoApprove')}>{session.autoApprove ? yes : no}</ViewRow>
+      <ViewRow label={t('detail.summary.fee')}>{fee ?? '...'}</ViewRow>
+      <ViewRow label={t('detail.summary.feeNote')}>{session.feeNote ?? '...'}</ViewRow>
+      {attributes.map((entry) => (
+        <ViewRow key={entry.label} label={entry.label}>
+          {entry.text ?? '...'}
+        </ViewRow>
+      ))}
     </SessionFormSection>
   );
 }
@@ -571,6 +664,9 @@ interface SessionDetailSectionsProps {
 }
 
 /**
+ * CLIENT-SESSION-37: for anyone who cannot edit (`canEdit` false) it is the read-only mode: one collapsed
+ * "Session information" section, see `InformationSection`. Otherwise, as follows.
+ *
  * CLIENT-SESSION-34: the detail modal's five sections (Overview, When, Where, Who, Cost) plus the
  * sport's Session detail, each collapsible (collapsed by default, showing `field: value`). On a
  * PREPARING session the host gets an Edit button in each header: it expands the section and turns it
@@ -645,6 +741,18 @@ export function SessionDetailSections({
 
   // Unique per section (sibling keys must be): `where-view`, then `where-edit-3` while it is edited.
   const keyFor = (key: SectionKey) => `${key}-${editing === key ? `edit-${editGeneration}` : 'view'}`;
+
+  // CLIENT-SESSION-37: read-only mode (not the host of a PREPARING session): one collapsed section.
+  if (!canEdit) {
+    return (
+      <InformationSection
+        i18nOverridePrefix={i18nOverridePrefix}
+        session={session}
+        missing={missing}
+        schema={sessionAttributeSchema}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-1.25">

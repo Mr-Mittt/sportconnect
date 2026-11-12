@@ -198,9 +198,15 @@
     "unknownUser": "không rõ",
     "cancelledBy": "Đã bị hủy bởi {{name}}",
     "cancelledByOn": "Đã bị hủy bởi {{name}} vào {{time}}",
+    "autoCancelledOn": "Tự động hủy vào {{time}}",
+    "autoCancelledReason": "buổi chơi chưa được thiết lập xong đúng hạn.",
     "reason": "Lý do: {{reason}}",
+    "information": {
+      "title": "Thông tin buổi chơi"
+    },
     "players": {
       "label": "Người chơi",
+      "summaryLabel": "Người chơi",
       "heading": "Người chơi ({{value}})",
       "error": "Không thể tải danh sách người tham gia."
     },
