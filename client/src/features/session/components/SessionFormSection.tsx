@@ -1,7 +1,7 @@
 import { IconCheck, IconPencil, IconX } from '@tabler/icons-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/shared/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
+import { Collapsible, CollapsibleChevron, CollapsibleContent, CollapsibleLabelTrigger } from '@/shared/ui/collapsible';
 import { cn } from '@/shared/lib/utils';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import type { MissingField } from '../sessionReadiness';
@@ -23,6 +23,9 @@ interface SessionFormSectionProps {
   missing?: SectionMissing[];
   /** Shown under the header while the section is collapsed (`field: value` pairs). */
   summary?: ReactNode;
+  /** Shown in the header itself, between the title and the buttons, only while the section is collapsed (the Players
+   * section puts its avatars here). */
+  collapsedHeader?: ReactNode;
   /** Header right-hand side: the Edit button, or Save and Discard while editing. */
   actions?: ReactNode;
   /** Highlights the section that is being edited. */
@@ -56,6 +59,7 @@ export function SessionFormSection({
   onOpenChange,
   missing = [],
   summary,
+  collapsedHeader,
   actions,
   isEditing = false,
   scrollIntoViewOnOpen = false,
@@ -112,18 +116,21 @@ export function SessionFormSection({
       )}
     >
       <Collapsible open={open} onOpenChange={onOpenChange}>
-        <div className="flex items-center gap-2 bg-surface-1 pr-2">
-          <CollapsibleTrigger className="min-w-0 flex-1 justify-start gap-2 rounded-none px-3 py-2 text-2xs font-semibold text-text-secondary">
+        {/* Header, left to right: the title (the toggle), the collapsed-only content, the section's buttons, the chevron. */}
+        <div className="flex items-center gap-1 bg-surface-1 p-1">
+          <CollapsibleLabelTrigger className="min-w-0 flex-1 gap-2 rounded px-1 py-1 text-2xs font-semibold text-text-secondary">
             <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
               <span>{title}</span>
               {chip}
             </span>
-          </CollapsibleTrigger>
-          {actions !== undefined && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+          </CollapsibleLabelTrigger>
+          {!open && collapsedHeader !== undefined && <div className="flex shrink-0 items-center">{collapsedHeader}</div>}
+          {actions !== undefined && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
+          <CollapsibleChevron />
         </div>
-        {!open && summary !== undefined && <div className="px-3 py-2">{summary}</div>}
+        {!open && summary !== undefined && <div className="p-1">{summary}</div>}
         <CollapsibleContent>
-          <div className="flex flex-col gap-3 px-3 py-3">{children}</div>
+          <div className="flex flex-col gap-3 p-1">{children}</div>
         </CollapsibleContent>
       </Collapsible>
     </div>

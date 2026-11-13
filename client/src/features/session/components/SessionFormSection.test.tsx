@@ -19,6 +19,52 @@ function Harness({ initiallyOpen = false, scroll = true }: { initiallyOpen?: boo
 }
 
 describe('SessionFormSection', () => {
+  it('header, left to right: the title toggle, the collapsed-only content, the buttons, then the chevron', async () => {
+    const user = userEvent.setup();
+    function Header() {
+      const [open, setOpen] = useState(false);
+      return (
+        <SessionFormSection
+          title="Players"
+          open={open}
+          onOpenChange={setOpen}
+          collapsedHeader={<span data-testid="avatars">avatars</span>}
+          actions={<button type="button">Do it</button>}
+        >
+          <p>body</p>
+        </SessionFormSection>
+      );
+    }
+    render(<Header />);
+    const header = screen.getByRole('button', { name: 'Players' }).parentElement as HTMLElement;
+    const order = Array.from(header.children).map(
+      (child) => child.getAttribute('data-testid') ?? child.getAttribute('data-slot') ?? child.textContent,
+    );
+    // label toggle, avatars (collapsed only), the buttons, the chevron last
+    expect(order[0]).toBe('collapsible-trigger');
+    expect(header.querySelector('[data-testid="avatars"]')).not.toBeNull();
+    expect(header.children[header.children.length - 1].getAttribute('data-slot')).toBe('collapsible-chevron');
+    const buttonIndex = Array.from(header.children).findIndex((child) => child.textContent === 'Do it');
+    expect(buttonIndex).toBeGreaterThan(Array.from(header.children).findIndex((child) => child.getAttribute('data-testid') === null && child.contains(header.querySelector('[data-testid="avatars"]'))));
+    expect(buttonIndex).toBeLessThan(header.children.length - 1);
+
+    await user.click(screen.getByRole('button', { name: 'Players' }));
+    // open: the collapsed-only content leaves the header
+    expect(header.querySelector('[data-testid="avatars"]')).toBeNull();
+    expect(screen.getByText('Do it')).toBeInTheDocument();
+  });
+
+  it('the decorative chevron is not a second button for assistive tech or the tab order', () => {
+    render(<Harness />);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('uses the tight padding (p-1) on its header, summary and body', () => {
+    const { container } = render(<Harness initiallyOpen />);
+    expect(container.querySelector('.p-1')).not.toBeNull();
+    expect(container.innerHTML).not.toMatch(/px-3|py-3/);
+  });
+
   it('shows its summary while collapsed and its body once open', async () => {
     const user = userEvent.setup();
     function WithSummary() {

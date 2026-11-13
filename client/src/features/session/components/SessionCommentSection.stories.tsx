@@ -29,6 +29,8 @@ const meta = {
   component: SessionCommentSection,
   args: {
     currentUserId: 'user-marcus',
+    currentUser: { fullName: 'Marcus Reed', avatarUrl: null },
+    onAddComment: () => {},
     comments: [],
     isLoading: false,
     isError: false,

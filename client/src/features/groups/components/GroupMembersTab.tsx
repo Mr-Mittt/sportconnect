@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import type { ApprovalQueueItem } from '../useGroupMembersTabData';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 function initialsFor(fullName: string): string {
   return fullName
@@ -98,10 +99,10 @@ function Section({
         </div>
       )}
       {!isLoading && !isError && totalCount === 0 && (
-        <p className="text-2sm text-text-muted">{t('members.empty')}</p>
+        <EmptyHint>{t('members.empty')}</EmptyHint>
       )}
       {!isLoading && !isError && totalCount > 0 && filteredCount === 0 && (
-        <p className="text-2sm text-text-muted">{t('members.noMatches')}</p>
+        <EmptyHint>{t('members.noMatches')}</EmptyHint>
       )}
       {!isLoading && !isError && filteredCount > 0 && (
         <div className="flex flex-col gap-2">{children}</div>

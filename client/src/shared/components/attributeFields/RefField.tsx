@@ -20,6 +20,7 @@ import { AddDefinitionRecordModal } from './AddDefinitionRecordModal';
 import { normalizeLayout, pickLayoutId } from './layout';
 import { applyRefFieldLayouts } from './refFieldLayouts';
 import { deriveRefChoices, draftToChoice, refValueKey, type RefChoice } from './refChoices';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 export interface RefFieldProps {
   node: ResolvedRefAttribute;
@@ -241,9 +242,9 @@ export function RefField({
             <option value={OTHER}>{t('attributeFields.other')}</option>
           </Select>
           {noProfileValues && (
-            <p className="mt-1 text-2xs text-text-muted">
+            <EmptyHint size="2xs" className="mt-1">
               {t('attributeFields.nothingOnProfile')}
-            </p>
+            </EmptyHint>
           )}
           {modal}
         </div>
@@ -277,9 +278,9 @@ export function RefField({
         )}
         {otherButton}
         {noProfileValues && (
-          <p className="mt-1 text-2xs text-text-muted">
+          <EmptyHint size="2xs" className="mt-1">
             {t('attributeFields.nothingOnProfile')}
-          </p>
+          </EmptyHint>
         )}
         {modal}
       </div>
@@ -295,9 +296,7 @@ export function RefField({
   );
 
   const emptyHint = choices.length === 0 && (
-    <p className="text-2xs text-text-muted">
-      {t('attributeFields.nothingOnProfile')}
-    </p>
+    <EmptyHint size="2xs">{t('attributeFields.nothingOnProfile')}</EmptyHint>
   );
 
   let control: ReactNode;

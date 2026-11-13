@@ -8,6 +8,7 @@ import { cn } from '@/shared/lib/utils';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface JoinGroupModalProps {
   isOpen: boolean;
@@ -206,7 +207,7 @@ export function JoinGroupModal({
             </p>
           )}
           {!isSearching && !isSearchError && groupedResults.length === 0 && (
-            <p className="text-2sm text-text-muted">{t('join.noResults')}</p>
+            <EmptyHint>{t('join.noResults')}</EmptyHint>
           )}
           <div className="flex flex-col gap-4">
             {groupedResults.map(({ sportKey, sportProfile, results }) => (

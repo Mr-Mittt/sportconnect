@@ -206,7 +206,6 @@
     },
     "players": {
       "label": "Players",
-      "summaryLabel": "Players",
       "heading": "Players ({{value}})",
       "error": "Couldn't load participants."
     },
@@ -325,6 +324,7 @@
       "startTime": "Start time is required.",
       "openSlot": "Open slot is required.",
       "endAfterStart": "The end must be after the start.",
+      "startInPast": "The start time can't be in the past.",
       "genderOverOpen": "Male and female slots can't be more than the open slots."
     },
     "invite": {
@@ -421,5 +421,56 @@
       "duration": "Duration"
     },
     "working": "Working…"
+  },
+  "result": {
+    "label": "Results",
+    "heading": "Results ({{count}})",
+    "empty": "No results logged yet.",
+    "loadError": "Couldn't load the results.",
+    "update": "Update",
+    "windowClosed": "Results can't be changed any more: 24 hours have passed since the session ended.",
+    "teamWinner": "Winner",
+    "teamLoser": "Loser",
+    "formerPlayer": "Former player",
+    "dialog": {
+      "title": "Update results",
+      "save": "Save",
+      "saving": "Saving…",
+      "close": "Close",
+      "discard": "Discard changes",
+      "discardTitle": "Discard your changes?",
+      "discardBody": "The changes you haven't saved will be lost.",
+      "keepEditing": "Keep editing",
+      "discardConfirm": "Discard",
+      "limitReached": "This session holds at most {{max}} results. Remove one to add another.",
+      "tooManyChanges": "That is more than {{max}} changes at once. Save these, then continue.",
+      "saveError": "Couldn't save the results. Try again.",
+      "rowNumber": "#{{n}}",
+      "newGame": "New",
+      "rejectedHeading": "Not saved"
+    },
+    "row": {
+      "delete": "Delete result {{n}}",
+      "undo": "Undo changes to result {{n}}",
+      "deletedMark": "Will be deleted"
+    },
+    "picker": {
+      "addPlayer": "Add player",
+      "clear": "Remove player",
+      "slotLabel": "{{team}}, player {{n}}"
+    },
+    "score": {
+      "label": "{{team}}, {{slot}}"
+    },
+    "problem": {
+      "PLAYERS_MAX": "At most {{max}} allowed.",
+      "PLAYER_BOTH_TEAMS": "A player can't be on both sides.",
+      "SCORE_MISSING": "Enter the score.",
+      "SCORE_RULE": "This score isn't valid.",
+      "UNREADABLE": "This result can't be read.",
+      "PLAYERS_MIN_one": "Select the player.",
+      "PLAYERS_MIN_other": "Select at least {{count}} players."
+    },
+    "latestHint": "Showing the last {{count}} of {{total}} results."
   }
 }

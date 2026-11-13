@@ -4,6 +4,8 @@ import {
   durationFromStartAndEnd,
   endFromStartAndDuration,
   isEndNotAfterStart,
+  isStartInPast,
+  START_GRACE_MINUTES,
   useSessionTimeFields,
 } from './sessionFormTime';
 
@@ -98,5 +100,41 @@ describe('useSessionTimeFields', () => {
     act(() => result.current.setEnd('2026-08-01T18:00'));
     expect(result.current.isEndInvalid).toBe(true);
     expect(result.current.duration).toBe('');
+  });
+});
+
+describe('isStartInPast: the grace and the hook flag (CLIENT-GL-38)', () => {
+  const now = new Date('2026-08-01T10:00:00');
+
+  it('is false for the future, for now, and inside the grace', () => {
+    expect(START_GRACE_MINUTES).toBe(5);
+    expect(isStartInPast('2026-08-01T10:30', now)).toBe(false);
+    expect(isStartInPast('2026-08-01T10:00', now)).toBe(false);
+    expect(isStartInPast('2026-08-01T09:55', now)).toBe(false);
+  });
+
+  it('is true once the start is more than the grace before now', () => {
+    expect(isStartInPast('2026-08-01T09:54', now)).toBe(true);
+    expect(isStartInPast('2026-07-31T23:00', now)).toBe(true);
+  });
+
+  it('is false for an empty or unreadable start', () => {
+    expect(isStartInPast('', now)).toBe(false);
+    expect(isStartInPast('nonsense', now)).toBe(false);
+  });
+
+  it('the hook flags a changed past start but not the unchanged past start the form opened with', () => {
+    const { result } = renderHook(() => useSessionTimeFields({ start: '2020-01-01T10:00', duration: '60' }));
+    expect(result.current.isStartInPast).toBe(false);
+    act(() => result.current.setStart('2020-01-02T10:00'));
+    expect(result.current.isStartInPast).toBe(true);
+    act(() => result.current.setStart('2999-01-01T10:00'));
+    expect(result.current.isStartInPast).toBe(false);
+  });
+
+  it('a new form (nothing yet) flags a past start as soon as it is picked', () => {
+    const { result } = renderHook(() => useSessionTimeFields({ start: '', duration: '' }));
+    act(() => result.current.setStart('2020-01-01T10:00'));
+    expect(result.current.isStartInPast).toBe(true);
   });
 });

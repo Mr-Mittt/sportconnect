@@ -2,6 +2,11 @@ import { http, HttpResponse, type HttpHandler } from 'msw';
 import type { ApiResponse } from '../../../src/shared/types/api.ts';
 import type { Comment, CreateCommentPayload } from '../../../src/features/feed/types.ts';
 import type { ParticipantStatus, Session, SessionParticipant } from '../../../src/shared/types/session.ts';
+import type {
+  RecordChangeSetRequest,
+  RecordOperationResult,
+  SessionRecord,
+} from '../../../src/features/session/resultTypes.ts';
 import {
   mockCancelledSession,
   mockDiscoverableSession,
@@ -12,6 +17,7 @@ import {
   mockOwnedGroupSession,
   mockPreparingSession,
   mockRequestedSession,
+  mockResultSchemas,
   mockSecondSessionJoinRequest,
   mockSession,
   mockSessionJoinRequest,
@@ -190,6 +196,11 @@ interface SessionsSession {
   // fake backend, not a fixed responder" reasoning as feed.ts's own commentsState.
   commentsState: Record<number, Comment[]>;
   nextCommentId: number;
+  // CLIENT-GL-38 (SESSION-50): the session result records, keyed by sessionId, plus the client refs
+  // already stored (a replayed add is UNCHANGED) and the id sequence (ids are never reused).
+  recordsState: Record<number, SessionRecord[]>;
+  recordRefsState: Record<number, Record<string, number>>;
+  nextRecordId: number;
 }
 
 // CLIENT-SESSION-1's own stateful fake backend, same "not a fixed responder"
@@ -302,10 +313,203 @@ function defaultSessionsSession(): SessionsSession {
       ],
     },
     nextCommentId: 100,
+    recordsState: {},
+    recordRefsState: {},
+    nextRecordId: 1,
   };
 }
 
 const sessionsSessions = createSessionStore(defaultSessionsSession);
+
+// CLIENT-GL-38: mirrors SESSION-50's SessionRecordServiceImpl closely enough for the dialog's e2e. A bad
+// record is its own REJECTED result (the others are stored, status 200); only a malformed request is a
+// whole-request 400. Not mirrored: the 24-hour window (covered by unit tests) and concurrency.
+const MOCK_MAX_RECORD_BYTES = 4096;
+const MOCK_MAX_RECORD_OPERATIONS = 50;
+
+function maxRecordsFor(sportId: number): number {
+  const configured = mockResultSchemas[sportId]?.maxRecords;
+  return typeof configured === 'number' ? configured : 100;
+}
+
+function rejectedResult(
+  base: Pick<RecordOperationResult, 'clientRef' | 'requestedId'>,
+  errorCode: string,
+  errorParams: Record<string, unknown> | null = null,
+): RecordOperationResult {
+  return { ...base, id: null, status: 'REJECTED', errorCode, errorParams };
+}
+
+function checkRecordPayload(
+  playerIds: unknown,
+  data: unknown,
+  joined: Set<string>,
+): { code: string; params: Record<string, unknown> | null } | null {
+  if (
+    !Array.isArray(playerIds) ||
+    playerIds.length === 0 ||
+    new Set(playerIds).size !== playerIds.length ||
+    typeof data !== 'object' ||
+    data === null ||
+    Array.isArray(data)
+  ) {
+    return { code: 'SESSION_RECORD_INVALID', params: null };
+  }
+  if (new TextEncoder().encode(JSON.stringify(data)).length > MOCK_MAX_RECORD_BYTES) {
+    return { code: 'SESSION_RECORD_TOO_LARGE', params: { maxBytes: MOCK_MAX_RECORD_BYTES } };
+  }
+  if (!playerIds.every((id) => typeof id === 'string' && joined.has(id))) {
+    return { code: 'SESSION_RECORD_PLAYER_NOT_JOINED', params: null };
+  }
+  return null;
+}
+
+/** Applies one change set to the mock store; returns null for a malformed request (the caller answers 400). */
+function applyMockRecordChanges(
+  state: SessionsSession,
+  target: Session,
+  changes: RecordChangeSetRequest,
+): { results: RecordOperationResult[]; records: SessionRecord[] } | null {
+  const add = changes.add ?? [];
+  const update = changes.update ?? [];
+  const remove = changes.delete ?? [];
+  const refs = add.map((op) => op.clientRef);
+  const ids = [...update.map((op) => op.id), ...remove];
+  if (
+    add.length + update.length + remove.length > MOCK_MAX_RECORD_OPERATIONS ||
+    refs.some((ref) => typeof ref !== 'string' || ref === '') ||
+    new Set(refs).size !== refs.length ||
+    ids.some((id) => typeof id !== 'number') ||
+    new Set(ids).size !== ids.length
+  ) {
+    return null;
+  }
+
+  const sessionId = target.id;
+  const stored = state.recordsState[sessionId] ?? [];
+  const storedRefs = state.recordRefsState[sessionId] ?? {};
+  const joined = new Set(
+    (state.participantsState[sessionId] ?? []).filter((p) => p.status === 'JOINED').map((p) => p.userId),
+  );
+  const now = new Date().toISOString();
+  let records = [...stored];
+  const results: RecordOperationResult[] = [];
+  // Operations that need a free slot (adds first, then restores of an update whose record is gone).
+  const pending: Array<{ result: RecordOperationResult; data: SessionRecord['data']; ref: string | null }> = [];
+
+  for (const op of add) {
+    const base = { clientRef: op.clientRef, requestedId: null };
+    if (storedRefs[op.clientRef] !== undefined) {
+      results.push({ ...base, id: storedRefs[op.clientRef], status: 'UNCHANGED', errorCode: null, errorParams: null });
+      continue;
+    }
+    const problem = checkRecordPayload(op.playerIds, op.data, joined);
+    if (problem) {
+      results.push(rejectedResult(base, problem.code, problem.params));
+      continue;
+    }
+    const result: RecordOperationResult = { ...base, id: null, status: 'CREATED', errorCode: null, errorParams: null };
+    results.push(result);
+    pending.push({ result, data: op.data, ref: op.clientRef });
+  }
+
+  const deleteIds = new Set(remove);
+  for (const op of update) {
+    const base = { clientRef: null, requestedId: op.id };
+    if (deleteIds.has(op.id)) {
+      continue;
+    }
+    const problem = checkRecordPayload(op.playerIds, op.data, joined);
+    if (problem) {
+      results.push(rejectedResult(base, problem.code, problem.params));
+      continue;
+    }
+    const existing = records.find((record) => record.id === op.id);
+    if (existing) {
+      records = records.map((record) =>
+        record.id === op.id ? { ...record, data: op.data, updatedBy: mockUser.id, updatedAt: now } : record,
+      );
+      results.push({ ...base, id: op.id, status: 'UPDATED', errorCode: null, errorParams: null });
+    } else {
+      const result: RecordOperationResult = { ...base, id: null, status: 'RESTORED', errorCode: null, errorParams: null };
+      results.push(result);
+      pending.push({ result, data: op.data, ref: null });
+    }
+  }
+
+  for (const id of remove) {
+    const existed = records.some((record) => record.id === id);
+    records = records.filter((record) => record.id !== id);
+    results.push({
+      clientRef: null,
+      requestedId: id,
+      id: null,
+      status: existed ? 'DELETED' : 'UNCHANGED',
+      errorCode: null,
+      errorParams: null,
+    });
+  }
+
+  const maxRecords = maxRecordsFor(target.sportId);
+  const room = Math.max(0, maxRecords - records.length);
+  pending.forEach((entry, index) => {
+    if (index >= room) {
+      entry.result.status = 'REJECTED';
+      entry.result.errorCode = 'SESSION_RECORD_LIMIT_REACHED';
+      entry.result.errorParams = { maxRecords };
+      return;
+    }
+    const id = state.nextRecordId++;
+    entry.result.id = id;
+    records.push({ id, data: entry.data, createdBy: mockUser.id, createdAt: now, updatedBy: null, updatedAt: now });
+    if (entry.ref !== null) storedRefs[entry.ref] = id;
+  });
+
+  state.recordsState[sessionId] = records;
+  state.recordRefsState[sessionId] = storedRefs;
+  return { results, records };
+}
+
+/**
+ * CLIENT-GL-38: with `resultsOngoing` on, the fixture session also has the fixture friend JOINED, so a record
+ * (two teams of at least one player) can be built from two people. Added lazily so every other run keeps
+ * the one-person roster the baselines were taken with.
+ */
+function ensureResultsFriend(state: SessionsSession, request: Request): void {
+  if (!getOverrides(sessionIdFromRequest(request)).resultsOngoing) return;
+  const rows = state.participantsState[mockSession.id] ?? [];
+  if (rows.some((row) => row.userId === mockFriend.id)) return;
+  if (getOverrides(sessionIdFromRequest(request)).resultsRecords && state.recordsState[mockSession.id] === undefined) {
+    const logged = (id: number, first: string, second: string, scores: [number, number]): SessionRecord => ({
+      id,
+      data: { teams: [{ players: [first], scores: [scores[0]] }, { players: [second], scores: [scores[1]] }] },
+      createdBy: mockUser.id,
+      createdAt: '2026-07-07T18:00:00Z',
+      updatedBy: null,
+      updatedAt: '2026-07-07T18:00:00Z',
+    });
+    state.recordsState[mockSession.id] = [
+      logged(state.nextRecordId++, mockUser.id, mockFriend.id, [21, 18]),
+      logged(state.nextRecordId++, mockFriend.id, mockUser.id, [21, 15]),
+    ];
+  }
+  state.participantsState[mockSession.id] = [
+    ...rows,
+    { ...seededJoinedRow(mockSession.id, 90), userId: mockFriend.id, userFullName: mockFriend.fullName, userAvatarUrl: null },
+  ];
+}
+
+/** The gate both record endpoints share: the session exists and the caller is JOINED to it. */
+function recordsGate(state: SessionsSession, sessionId: number): Response | Session {
+  const target = state.sessionsState.find((candidate) => candidate.id === sessionId);
+  if (!target) return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
+  const isJoined = (state.participantsState[sessionId] ?? []).some(
+    (p) => p.userId === mockUser.id && p.status === 'JOINED',
+  );
+  return isJoined
+    ? target
+    : HttpResponse.json(apiError('Not allowed', 'SESSION_RECORD_NOT_ALLOWED'), { status: 403 });
+}
 
 /** Locates a session comment (root or one-level reply) across every session's thread — same
  * shape as feed.ts's own `locateComment`, keyed by domain sessionId instead of postId. */
@@ -741,7 +945,13 @@ export const sessionHandlers: HttpHandler[] = [
     if (!found) {
       return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
-    return HttpResponse.json(apiResponse(withCallerParticipation(session, found), 'Session retrieved successfully'));
+    const detail = withCallerParticipation(session, found);
+    // CLIENT-GL-38: the Result section needs an ONGOING session still inside its 24-hour window.
+    const shown =
+      getOverrides(sessionIdFromRequest(request)).resultsOngoing && detail.id === mockSession.id
+        ? { ...detail, status: 'ONGOING' as const, scheduledEndAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
+        : detail;
+    return HttpResponse.json(apiResponse(shown, 'Session retrieved successfully'));
   }),
 
   http.put('/api/sessions/:sessionId', async ({ request, params }) => {
@@ -983,6 +1193,7 @@ export const sessionHandlers: HttpHandler[] = [
     // SESSION-6: status omitted defaults to JOINED (the public default); any other status (in
     // practice REQUESTED, the approval queue) is real-backend-gated to canManage, but this mock
     // — same as every other handler here — doesn't simulate that 400, only the filter behavior.
+    ensureResultsFriend(sessionsSessions.get(sessionIdFromRequest(request)), request);
     const status = (new URL(request.url).searchParams.get('status') as ParticipantStatus | null) ?? 'JOINED';
     const participants = (
       sessionsSessions.get(sessionIdFromRequest(request)).participantsState[sessionId] ?? []
@@ -1159,6 +1370,38 @@ export const sessionHandlers: HttpHandler[] = [
         : candidate,
     );
     return HttpResponse.json(apiResponse(null, 'Session unliked successfully'));
+  }),
+
+  // CLIENT-GL-38 (SESSION-50): the session's result records and the change-set endpoint.
+  http.get('/api/sessions/:sessionId/records', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const state = sessionsSessions.get(sessionIdFromRequest(request));
+    ensureResultsFriend(state, request);
+    const sessionId = Number(params.sessionId);
+    const gate = recordsGate(state, sessionId);
+    if (gate instanceof Response) return gate;
+    return HttpResponse.json(apiResponse(state.recordsState[sessionId] ?? [], 'Records retrieved successfully'));
+  }),
+
+  http.post('/api/sessions/:sessionId/records/changes', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const state = sessionsSessions.get(sessionIdFromRequest(request));
+    ensureResultsFriend(state, request);
+    const sessionId = Number(params.sessionId);
+    const gate = recordsGate(state, sessionId);
+    if (gate instanceof Response) return gate;
+    // The mock treats the fixture session as ONGOING for records when its detail does (resultsOngoing).
+    const loggable = gate.status === 'ONGOING' || gate.status === 'COMPLETED' || (getOverrides(sessionIdFromRequest(request)).resultsOngoing && gate.id === mockSession.id);
+    if (!loggable) {
+      return HttpResponse.json(apiError('Not loggable', 'SESSION_RECORD_NOT_LOGGABLE'), { status: 409 });
+    }
+    const outcome = applyMockRecordChanges(state, gate, (await request.json()) as RecordChangeSetRequest);
+    if (outcome === null) {
+      return HttpResponse.json(apiError('Malformed change set', 'SESSION_RECORD_INVALID'), { status: 400 });
+    }
+    return HttpResponse.json(apiResponse(outcome, 'Records updated successfully'));
   }),
 ];
 

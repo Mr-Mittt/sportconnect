@@ -1,5 +1,14 @@
-import { IconDotsVertical, IconHeart, IconHeartFilled, IconPencil, IconTrash } from '@tabler/icons-react';
-import { useState } from 'react';
+import {
+  IconDotsVertical,
+  IconHeart,
+  IconHeartFilled,
+  IconPencil,
+  IconSend,
+  IconTrash,
+  IconX,
+} from '@tabler/icons-react';
+import i18next from 'i18next';
+import { useEffect, useRef, useState } from 'react';
 import { MAX_COMMENT_LENGTH, type Comment } from '@/features/feed/types';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
@@ -17,6 +26,8 @@ import { HashtagText } from './HashtagText';
 interface CommentItemProps {
   comment: Comment;
   currentUserId: string | undefined;
+  /** The reply composer's avatar. */
+  currentUser?: { fullName: string; avatarUrl: string | null };
   onToggleLike: (comment: Comment) => void;
   onDelete: (comment: Comment) => void;
   onReply: (parentCommentId: number, content: string) => void;
@@ -69,9 +80,23 @@ function initialsFor(fullName: string): string {
  * disabled rather than wired to a no-op, so it doesn't look like a working save that silently
  * discards the caller's edit.
  */
+/** The full date and time of a comment, for the timestamp's hover (owner, 2026-11-14), in the active language. */
+function fullDateTime(iso: string): string {
+  return new Intl.DateTimeFormat(i18next.language, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(iso));
+}
+
+/** Replies are listed newest first (owner, 2026-11-14): by creation time, the id breaking a tie. */
+function newestFirst(replies: Comment[]): Comment[] {
+  return [...replies].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id);
+}
+
 export function CommentItem({
   comment,
   currentUserId,
+  currentUser,
   onToggleLike,
   onDelete,
   onReply,
@@ -82,6 +107,17 @@ export function CommentItem({
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [showReplyBox, setShowReplyBox] = useState(false);
   const [replyContent, setReplyContent] = useState('');
+  // Once anything was typed (even if it was cleared again) leaving the box no longer closes it.
+  const [replyTouched, setReplyTouched] = useState(false);
+  const replyInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (showReplyBox) replyInput.current?.focus();
+  }, [showReplyBox]);
+  const closeReply = () => {
+    setReplyContent('');
+    setReplyTouched(false);
+    setShowReplyBox(false);
+  };
 
   const isOwnComment = currentUserId !== undefined && comment.userId === currentUserId;
   const canReply = comment.parentCommentId === null;
@@ -104,7 +140,9 @@ export function CommentItem({
         <p className="text-2xs italic text-text-muted">{comment.content}</p>
         {/* The dash lives inside the timestamp rather than as its own element, so a wrap can never
             strand it alone at the end of the first line. */}
-        <span className="text-2xs italic text-text-muted">- {formatRelativeTime(comment.createdAt)}</span>
+        <span className="text-2xs italic text-text-muted" title={fullDateTime(comment.createdAt)}>
+          - {formatRelativeTime(comment.createdAt)}
+        </span>
       </div>
     );
   }
@@ -113,8 +151,7 @@ export function CommentItem({
     const trimmed = replyContent.trim();
     if (trimmed.length === 0) return;
     onReply(comment.id, trimmed);
-    setReplyContent('');
-    setShowReplyBox(false);
+    closeReply();
   };
 
   return (
@@ -130,7 +167,28 @@ export function CommentItem({
           <div className="rounded-lg bg-surface-1 px-2.5 py-1.5">
             <div className="flex items-center gap-1.5">
               <span className="text-2sm font-medium text-text-primary">{comment.userFullName}</span>
-              <span className="text-2xs text-text-muted">{formatRelativeTime(comment.createdAt)}</span>
+              <span className="text-2xs text-text-muted" title={fullDateTime(comment.createdAt)}>
+                {formatRelativeTime(comment.createdAt)}
+              </span>
+              <button
+                type="button"
+                aria-pressed={comment.isLikedByCurrentUser}
+                aria-label={
+                  comment.isLikedByCurrentUser ? t('commentItem.unlike') : t('commentItem.like')
+                }
+                onClick={() => onToggleLike(comment)}
+                className={cn(
+                  'flex cursor-pointer items-center gap-1 rounded p-0.5 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
+                  comment.isLikedByCurrentUser ? 'text-text-danger' : 'text-text-secondary',
+                )}
+              >
+                {comment.isLikedByCurrentUser ? (
+                  <IconHeartFilled className="size-3.5" aria-hidden="true" />
+                ) : (
+                  <IconHeart className="size-3.5" aria-hidden="true" />
+                )}
+                {comment.likeCount}
+              </button>
               {isOwnComment && (
                 <DropdownMenu modal={false}>
                   <DropdownMenuTrigger asChild>
@@ -147,7 +205,10 @@ export function CommentItem({
                       <IconPencil className="size-3.5" aria-hidden="true" />
                       {t('commentItem.edit')}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => onDelete(comment)} className="text-text-danger">
+                    <DropdownMenuItem
+                      onSelect={() => onDelete(comment)}
+                      className="text-text-danger"
+                    >
                       <IconTrash className="size-3.5" aria-hidden="true" />
                       {t('commentItem.delete')}
                     </DropdownMenuItem>
@@ -166,23 +227,6 @@ export function CommentItem({
             )}
           </div>
           <div className="mt-1 flex items-center gap-3 px-1">
-            <button
-              type="button"
-              aria-pressed={comment.isLikedByCurrentUser}
-              aria-label={comment.isLikedByCurrentUser ? t('commentItem.unlike') : t('commentItem.like')}
-              onClick={() => onToggleLike(comment)}
-              className={cn(
-                'flex cursor-pointer items-center gap-1 rounded p-0.5 text-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
-                comment.isLikedByCurrentUser ? 'text-text-danger' : 'text-text-secondary',
-              )}
-            >
-              {comment.isLikedByCurrentUser ? (
-                <IconHeartFilled className="size-3.5" aria-hidden="true" />
-              ) : (
-                <IconHeart className="size-3.5" aria-hidden="true" />
-              )}
-              {comment.likeCount}
-            </button>
             {canReply && (
               <button
                 type="button"
@@ -195,35 +239,72 @@ export function CommentItem({
           </div>
 
           {showReplyBox && (
-            <div className="mt-1.5 flex items-center gap-1.5">
+            <div className="mt-1.5 flex items-center gap-2">
+              <Avatar className="size-7 shrink-0">
+                {currentUser?.avatarUrl != null && (
+                  <AvatarImage src={currentUser.avatarUrl} alt="" />
+                )}
+                <AvatarFallback className="bg-surface-1 text-2xs text-text-primary">
+                  {currentUser !== undefined ? initialsFor(currentUser.fullName) : ''}
+                </AvatarFallback>
+              </Avatar>
               <input
+                ref={replyInput}
                 type="text"
                 value={replyContent}
-                onChange={(event) => setReplyContent(event.target.value.slice(0, MAX_COMMENT_LENGTH))}
+                onChange={(event) => {
+                  setReplyContent(event.target.value.slice(0, MAX_COMMENT_LENGTH));
+                  setReplyTouched(true);
+                }}
+                // Leaving the box without ever typing closes it.
+                onBlur={() => {
+                  if (!replyTouched) closeReply();
+                }}
                 placeholder={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
                 aria-label={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
                 maxLength={MAX_COMMENT_LENGTH}
-                className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-2 px-2.5 py-1 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') submitReply();
+                }}
+                className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
               />
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={submitReply}
-                disabled={replyContent.trim().length === 0 || isSubmittingReply}
-                className={cn('cursor-pointer text-2xs disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
-              >
-                {t('commentItem.post')}
-              </Button>
+              {replyContent.trim().length === 0 ? (
+                // Nothing to send: the button is the red X that closes the box.
+                <button
+                  type="button"
+                  aria-label={t('commentItem.cancelReply')}
+                  title={t('commentItem.cancelReply')}
+                  onClick={closeReply}
+                  className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-text-danger hover:bg-bg-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                >
+                  <IconX className="size-4" aria-hidden="true" />
+                </button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="icon"
+                  aria-label={t('commentItem.post')}
+                  onClick={submitReply}
+                  disabled={isSubmittingReply}
+                  className={cn(
+                    'cursor-pointer rounded-full disabled:cursor-default',
+                    POST_BUTTON_DISABLED_OVERRIDE,
+                  )}
+                >
+                  <IconSend className="size-4" aria-hidden="true" />
+                </Button>
+              )}
             </div>
           )}
 
           {comment.replies.length > 0 && (
             <div className="mt-2 flex flex-col gap-2 pl-3">
-              {comment.replies.map((reply) => (
+              {newestFirst(comment.replies).map((reply) => (
                 <CommentItem
                   key={reply.id}
                   comment={reply}
                   currentUserId={currentUserId}
+                  currentUser={currentUser}
                   onToggleLike={onToggleLike}
                   onDelete={onDelete}
                   onReply={onReply}

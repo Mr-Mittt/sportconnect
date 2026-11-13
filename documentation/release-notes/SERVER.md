@@ -31,7 +31,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 ### Depends on
 - Client: CLIENT-SESSION-34 (form, Schedule button and en/vi copy for the new error codes). Ship the server and the client together.
 - Client: the SESSION-49 part (pre-filled, required title). An older client that lets the title be blank gets a `400 SESSION_TITLE_REQUIRED` it has no copy for.
-- Client: CLIENT-SESSION-38 (the Result section and dialog, en/vi copy for the `SESSION_RECORD_*` codes) and SPORT-18 (admin screen; until it ships, the schema is set with the admin `PUT`). The endpoints work without the client. A client that ignores `results` would show a rejected record as saved, so the client must read each result's `status` after Save.
+- Client: CLIENT-GL-38 (the Result section and dialog, en/vi copy for the `SESSION_RECORD_*` codes) and SPORT-18 (admin screen; until it ships, the schema is set with the admin `PUT`). The endpoints work without the client. A client that ignores `results` would show a rejected record as saved, so the client must read each result's `status` after Save.
 
 ## 0.2.0 — 2026-11-09
 

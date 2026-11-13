@@ -174,6 +174,13 @@
     "NOTIFICATION_NOT_FOUND": "This notification isn't available.",
     "NOTIFICATION_FORBIDDEN": "This notification isn't available.",
     "SESSION_GENDER_SLOTS_EXCEED_OPEN": "Male and female slots can't be more than the open slots.",
-    "SESSION_NOT_READY": "This session still needs a location, a fee and a duration before it can be scheduled."
+    "SESSION_NOT_READY": "This session still needs a location, a fee and a duration before it can be scheduled.",
+    "SESSION_RECORD_INVALID": "This result isn't valid. Check the players and the winner.",
+    "SESSION_RECORD_TOO_LARGE": "This result is too large to save.",
+    "SESSION_RECORD_PLAYER_NOT_JOINED": "A player in this result hasn't joined the session.",
+    "SESSION_RECORD_LIMIT_REACHED": "This session has reached its limit of {{maxRecords}} results.",
+    "SESSION_RECORD_NOT_LOGGABLE": "Results can only be logged while a session is ongoing or completed.",
+    "SESSION_RECORD_WINDOW_CLOSED": "The 24 hours for changing this session's results have passed.",
+    "SESSION_RECORD_NOT_ALLOWED": "You can't view or change this session's results."
   }
 }

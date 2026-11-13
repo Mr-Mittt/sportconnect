@@ -203,6 +203,8 @@ describe('logout from /admin (ADMIN-4)', () => {
       if (url === '/sports/all/1/session-attribute-schema') {
         return apiResponse(badmintonSessionSchema);
       }
+      // SPORT-18: the record-schema editor reads this on the same page mount (null = no schema yet).
+      if (url === '/sports/all/1/result-schema') return apiResponse(null);
       // CLIENT-I18N-1: useSyncUserLocale (RootLayout) fetches this unconditionally too, on
       // every route including /admin — `language: null` so it never touches localeStore here.
       if (url === '/users/me/preferences') {
@@ -345,6 +347,27 @@ describe('logout from /admin (ADMIN-4)', () => {
 
     // Collapse the section — the editor stays mounted (forceMount), so its dirty flag survives.
     await user.click(screen.getByRole('button', { name: 'Session attributes' }));
+
+    postSpy.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Log out' }));
+
+    expect(await screen.findByText('Unsaved changes')).toBeInTheDocument();
+    expect(logoutCalls(postSpy)).toHaveLength(0);
+    expect(useAuthStore.getState().user).not.toBeNull();
+  });
+
+  it('warns on unsaved record-schema edits, even with the section collapsed (SPORT-18)', async () => {
+    const user = userEvent.setup();
+    mockSportReads();
+    const postSpy = vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('offline'));
+
+    renderAt('/admin/sports/1');
+
+    const textarea = await screen.findByLabelText('Record schema document (JSON)');
+    await user.clear(textarea);
+    await user.click(textarea);
+    await user.paste('{"version":1,"maxRecords":10}');
+    await user.click(screen.getByRole('button', { name: 'Record schema' }));
 
     postSpy.mockClear();
     await user.click(screen.getByRole('button', { name: 'Log out' }));

@@ -4,6 +4,7 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { SessionListItem } from '../types';
 import { LoadMoreButton } from './LoadMoreButton';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface DiscoverResultsListProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -61,7 +62,7 @@ export function DiscoverResultsList({
         </p>
       )}
       {!isLoading && !isError && sessions.length === 0 && (
-        <p className="text-2sm text-text-muted">{emptyMessage}</p>
+        <EmptyHint>{emptyMessage}</EmptyHint>
       )}
       {!isLoading && !isError && sessions.length > 0 && (
         <div className={gridClassName}>

@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-12 (CLIENT-SESSION-38..CLIENT-SESSION-48 filed: game logging / session results)
+**Last updated:** 2026-11-13 (CLIENT-GL-38 and SPORT-18 done; CLIENT-GL-49 filed)
 
 ---
 
@@ -77,7 +77,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 9 | [BASELINE-UPDATE-1](MVP/BASELINE-UPDATE-1_VISUAL_BASELINES_FOR_THIS_RELEASE.md) | Standing ticket: the visual baselines each client ticket of this release expects to change (now CLIENT-SESSION-34 and SESSION-49), regenerated through the `client-visual` workflow and `/updatebaseline` before the release; then closed and `BASELINE-UPDATE-2` filed | `TODO` |
 | 10 | [SPORT-17](MVP/SPORT-17_SEEDED_ATTRIBUTE_DEFAULT_READS_AS_A_USER_EDIT.md) | A schema default seeded by `SportAttributesFields` reads as a user edit in the profile editor and the session detail edit section (same defect as the create-session form fixed in CLIENT-SESSION-34; attributes customise each sport app-wide, so audit every host) | `TODO` |
 | 11 | [ACCOUNT-8](MVP/ACCOUNT-8_REQUIRE_FIRST_NAME_IN_ACCOUNT_SETTINGS.md) | First name is required when editing the profile in account settings (from SESSION-49; pairs with auth A38) | `TODO` |
-| 12 | [CLIENT-SESSION-38](MVP/CLIENT-SESSION-38_SESSION_DETAIL_RESULT_SECTION_AND_DIALOG.md) | Session detail: collapsible Result section and nested edit dialog | `TODO` |
 | 13 | [CLIENT-SESSION-39](MVP/CLIENT-SESSION-39_THREAD_COMMAND_HINTS_AND_REPLIES.md) | Session thread: command hints and command results | `TODO` |
 | 14 | [CLIENT-SESSION-40](MVP/CLIENT-SESSION-40_GUESTS_IN_THE_RESULT_DIALOG.md) | Add a guest and pick guests in the result dialog | `TODO` |
 | 15 | [CLIENT-SESSION-41](MVP/CLIENT-SESSION-41_RESULT_STATISTICS_SCREENS.md) | Statistics screens: player totals and head-to-head | `TODO` |
@@ -88,7 +87,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 20 | [CLIENT-SESSION-46](MVP/CLIENT-SESSION-46_OFFLINE_QUEUE_FOR_RESULT_CHANGES.md) | Keep a result change made offline and send it when the connection returns (BA GL-9) | `TODO` |
 | 21 | [CLIENT-SESSION-47](MVP/CLIENT-SESSION-47_DUPLICATE_RESULT_WARNING.md) | Warn when the same players and winner were logged moments ago (BA open question 3) | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
-| 23 | [SPORT-18](MVP/SPORT-18_RESULT_SCHEMA_ADMIN_SCREEN.md) | Admin screen to edit a sport's result schema (extends ADMIN-2; depends on SESSION-50's admin endpoints) | `TODO` |
+| 24 | [CLIENT-GL-49](MVP/CLIENT-GL-49_SESSION_RESULT_SCOREBOARD.md) | Session Result section: the client-computed scoreboard (split out of CLIENT-GL-38) | `TODO` |
 
 #### Removed / Deferred
 
@@ -145,6 +144,8 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 28 | [CLIENT-GL-38](MVP/CLIENT-GL-38_SESSION_DETAIL_RESULT_SECTION_AND_DIALOG.md) | Session detail: collapsible Result section (the games logged, drawn from the sport's record schema) and the record dialog (add, edit, delete with a per-row X / strike-through / undo, an always-present placeholder, red borders while typing and on Save, rejected rows kept at the bottom); the scoreboard moved to CLIENT-GL-49. 19 requirement mutations killed; e2e: new `session-results.spec.ts` and the session-detail specs passed; no baseline change expected | `DONE` (2026-11-13) |
+| 29 | [SPORT-18](MVP/SPORT-18_RESULT_SCHEMA_ADMIN_SCREEN.md) | Admin: "Record schema" section on the sport detail (same generic JSON editor as the profile and session attributes; `GET /sports/all/{id}/result-schema`, `PUT /sports/{id}/result-schema`), with a non-blocking hint when the app cannot read the document. 7 mutations killed; admin e2e passed; built with CLIENT-GL-38 | `DONE` (2026-11-13) |
 | 27 | [CLIENT-SESSION-37](MVP/CLIENT-SESSION-37_SESSION_DETAIL_READ_ONLY_MODE.md) | Session detail read-only mode (not the host, or not `PREPARING`): one collapsed "Session information" section and a collapsed "Players" section (avatars when collapsed) on the same bordered card as the other modes; "Auto-cancelled on <time>" for a system cancel; upper-case session status. 5 requirement mutations killed, scoped Vitest and e2e green; `session-detail-*` baselines pending in `BASELINE-UPDATE-1` | `DONE` (2026-11-12) |
 | 26 | [CLIENT-NOTIF-6](MVP/CLIENT-NOTIF-6_LIVE_SOCKET_RECONNECTS_WITH_A_STALE_TOKEN.md) | Live notification and chat sockets send the token the store holds on every connect attempt and, when a connection is refused, refresh once through one shared `refreshSession()` before reconnecting; a refresh that loses a race can no longer sign the user out | `DONE` (2026-11-12) |
 | 25 | [CLIENT-SESSION-34](MVP/CLIENT-SESSION-34_SESSION_FORM_SECTIONS_SLOTS_MOOD_EDIT_AND_READINESS.md) | Create form in collapsible sections (Overview, When, Where, Who, Cost, Session detail) with linked start/duration/end (one-minute pickers), "Who can join" (Anyone / By gender), game mood slider, fee note, optional title and duration, "Are you ready?" and auto-approve confirmations; detail modal with the same sections, per-section Edit / Save / Discard on a Preparing session, a banner for every viewer and "Mark it scheduled" (auto-opened when the last gap is saved). Description removed from the client (SESSION-48 filed). 19 requirement mutations killed, scoped Vitest 1519+ and 53 e2e green | `DONE` (2026-11-11) |

@@ -5,6 +5,7 @@ import type { SportKey, SportProfile } from '@/shared/types/sport';
 import type { Session } from '@/shared/types/session';
 import { SessionCard } from './SessionCard';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface UpcomingMatchesProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -103,7 +104,7 @@ export function UpcomingMatches({
 
       {visible.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-2">
-          <p className="text-xs text-text-muted">{t('upcomingMatches.empty')}</p>
+          <EmptyHint size="xs">{t('upcomingMatches.empty')}</EmptyHint>
           <div className="flex w-full gap-2">
             <Button variant="primary" size="sm" className="flex-1" onClick={onJoinMatch} disabled={!isSportsReady}>
               {t('upcomingMatches.join')}

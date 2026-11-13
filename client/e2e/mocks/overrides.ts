@@ -39,6 +39,10 @@ export interface SessionOverrides {
   discoverVolume: boolean;
   /** ACCOUNT-7: the next `GET /users/me` answers `isEmailVerified: false` (the default fixture account is verified), consumed once, so the email row's "Get verification now" is reachable. */
   emailUnverified: boolean;
+  /** CLIENT-GL-38: `GET /sessions/{id}` shows the fixture session (id 1, Pickleball, the caller JOINED) as ONGOING with an end time an hour from now, so its Result section and record dialog are reachable. */
+  resultsOngoing: boolean;
+  /** CLIENT-GL-38: with `resultsOngoing`, the fixture session already holds two logged records (the visual specs need a filled Result section and dialog). */
+  resultsRecords: boolean;
 }
 
 function defaultOverrides(): SessionOverrides {
@@ -56,6 +60,8 @@ function defaultOverrides(): SessionOverrides {
     historyVolume: false,
     discoverVolume: false,
     emailUnverified: false,
+    resultsOngoing: false,
+    resultsRecords: false,
   };
 }
 

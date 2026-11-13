@@ -4,6 +4,7 @@ import type { SessionDateGroup as SessionDateGroupData } from '../groupSessionsB
 import { LoadMoreButton } from './LoadMoreButton';
 import { SessionDateGroup } from './SessionDateGroup';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface UpcomingSessionsSectionProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -61,7 +62,7 @@ export function UpcomingSessionsSection({
         </p>
       )}
       {!isLoading && !isError && groups.length === 0 && (
-        <p className="text-2sm text-text-muted">{t('upcoming.empty')}</p>
+        <EmptyHint>{t('upcoming.empty')}</EmptyHint>
       )}
       {groups.length > 0 && (
         <div className="flex flex-col gap-4">

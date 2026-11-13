@@ -229,6 +229,7 @@ e2e/
     direct-chat.spec.ts       # CHAT-10
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9/CLIENT-SESSION-17/CLIENT-SESSION-22/CLIENT-SESSION-23
     session-form-layout.spec.ts # CLIENT-SESSION-34
+    session-results.spec.ts   # CLIENT-GL-38
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
@@ -253,6 +254,7 @@ e2e/
     app-home-feed.spec.ts
     app-groups.spec.ts        # GRP-10
     app-session-detail-modal.spec.ts  # CLIENT-SESSION-12/CLIENT-SESSION-23
+    app-session-results.spec.ts       # CLIENT-GL-38
     app-discover-panel.spec.ts  # CLIENT-SESSION-31
     app-discover-modal.spec.ts  # CLIENT-SESSION-31
     discoverClip.ts           # CLIENT-SESSION-31 — shared helpers (clipAround, settle, pinDiscoverCountsToDate), not a spec
@@ -890,7 +892,7 @@ What this catches that `src/features/admin/AdminLayout.test.tsx` cannot: a route
 test renders the same `routes` export, but only a real navigation exercises a full mount including
 the bootstrap refresh.
 
-### `e2e/flows/admin-sports.spec.ts` (ADMIN-2, ADMIN-4, 6 `test()`s)
+### `e2e/flows/admin-sports.spec.ts` (ADMIN-2, ADMIN-4, SPORT-18, 8 `test()`s)
 
 The sport master-detail admin screen at `/admin/sports` — the first admin section with real
 behavior behind it. Both saves go through the real route tree, which is what distinguishes this from
@@ -902,6 +904,8 @@ from the `/admin` index.
 |---|---|
 | an admin edits a sport field and saves it | Logs in as `mockAdminUser`, enters the section from `/admin`, opens Badminton via "Show detail", edits Category, saves. Asserts the "Saved" status **and** that the new value appears in the master table — proving the mutation's `adminKeys.sportsAll()` invalidation actually refetches, rather than the panel alone updating. |
 | an admin edits and saves the attribute schema | Deep-links to `/admin/sports/1`, confirms the fetched document is in the textarea, replaces it, saves. Covers the second of the two independent Save buttons. |
+| an admin edits and saves the record schema (SPORT-18) | Deep-links to `/admin/sports/1`, confirms the record schema (COMPETITIVE) is in its own textarea with no hint, types a version-2 document (the hint "Results section stays hidden" shows, Save stays allowed), types `maxRecords: 0` and saves (the mock refuses it, the server text shows verbatim), saves a valid document ("Saved"), reloads and reads it back. Covers the third independent Save button and the hint. |
+| a sport with no record schema shows an empty box with a placeholder, and a pasted schema saves (SPORT-18) | Deep-links to `/admin/sports/4` (no record schema in the mock): the textarea is empty with the "No record schema is stored" placeholder and Save is disabled; pastes a document, saves ("Saved"), reloads and reads it back. Guards against a pre-filled example that looks like stored data. |
 | invalid JSON is rejected locally before any request | Types unparseable JSON, clicks Save, asserts the local parse error **and** — via a `page.on('request')` listener — that **no** `PUT` was issued at all. The "fires no request" half is the point: a server round trip for text that cannot parse is the failure this guards. |
 | a deactivated sport is editable like any other (A11) | Deep-links to `/admin/sports/4` (inactive Tennis) and completes a full schema edit → save. This case **inverted mid-ticket**: A9's `GET`/`PUT` asymmetry (verified live — the member read really did 404 for an inactive sport while the matching `PUT` returned 200) was fixed by backend `A11` in the same branch, so the screen no longer has an inactive-sport special case to assert. |
 | unsaved sport-field edits are confirmed before discarding (ADMIN-4) | Dirties Category, clicks "Log out", asserts the confirm dialog appears and the admin is still on `/admin/sports/1` and still signed in. Cancels, asserts the edit survives verbatim, then re-opens and confirms via "Discard & log out" to reach `/login`. Lives in this file rather than `admin-route-guard.spec.ts` because it needs a genuinely dirty form, which only this section has. |
@@ -1187,6 +1191,18 @@ Real-browser layout check (jsdom has no layout) of the sectioned create form and
 | `session form — closing the create form with unsent entries asks "Leave without saving?"` | Open the create form, nothing entered → Escape closes at once → reopen, type a title → Escape opens "Leave without saving?" → **Keep editing** keeps the form and its text → the Close button asks again → **Leave** closes it | CLIENT-SESSION-34. `matches-journey` step 8 now confirms "Leave" after closing with a chosen location. |
 | `session form — create form and Preparing detail fit 320px, header actions are icon-only` (and the same at 375px) | Open the create form and fill it, including the Who section's gender rows → all five sections are visible and neither the dialog nor its scrolling body is wider than the viewport; the hour select is narrower than 80px → create a Preparing session → open its detail → the dialog does not overflow; the first section's **Edit** button is visible with its text span hidden (icon-only, accessible name kept) → click it → **Discard** and **Save** replace it, both icon-only, no overflow → discard, then Edit the Who section → "By gender" is checked and the widest section (slots, gender rows, mood) still fits | CLIENT-SESSION-34 (ticket "Tests": the 320/375px width check). The only spec that proves the header actions collapse to icons below `sm` and that the new Who rows never scroll sideways. |
 
+### `e2e/flows/session-results.spec.ts` (CLIENT-GL-38, 1 `test()` with 5 steps)
+
+The session detail's Result section and the record dialog. `overrides.resultsOngoing` (seed `seedResultsOngoingOnNextLoad`) makes the Pickleball fixture "Sunday pickup run" ONGOING with an end time an hour away and the fixture friend JOINED next to the caller; the mock server stores records like SESSION-50 (a bad record is REJECTED on its own, the others are stored). The mock schema is the badminton one (1 to 2 players a side, one required Point score above zero, winner on the left).
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| 1. the section is there | Open the session detail → "Results (0)" is collapsed, expand it → "No results logged yet." | The section shows for an ONGOING session whose sport has a record schema, collapsed by default. |
+| 2. Update opens the dialog | Click Update → "Update results" dialog with one empty placeholder row and Save disabled; at 900 and 600 px high the dialog sits between the session detail's title bar and its comment composer (bounding boxes); at 320px neither the dialog nor its body scrolls sideways | The always-present placeholder, the nothing-to-save state, the smaller dialog that leaves the session title and composer in view, and the phone fit (jsdom has no layout). |
+| 3. red borders and Save refusal | Pick a winner, type a score for the winner only → the loser's score gets `aria-invalid` while typing; Save shows "Select the player." and sends nothing | Validation while typing and on Save (a score on one team only, a team below the minimum players). |
+| 4. save a record | Pick the loser, type their score, Save → the dialog closes, "Results (1)" and a one-line record (`#1`, both scores, no Won / Lost label) | The change set reaches the mock server and the list shows the fresh records. |
+| 5. delete | Update → the red X strikes the record through and turns into the undo → Save → "Results (0)" and the empty line | The row action slot and the delete diff. |
+
 ### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
 
 The session module's coded errors (SESSION-45) localized from the error code. Each server error is forced with `page.route` on top of the MSW session handlers. "Dialog" is the app-wide session error dialog (`PostActionErrorDialog` fed by `sessionErrorDialogStore`, "Session unavailable", one message and "Got it"). Behavior table: `client/docs/MVP/CLIENT-ERR-7_SESSION_ERROR_ADAPTATION.md`.
@@ -1251,6 +1267,17 @@ resolve caused real `toHaveScreenshot` stability-check flakiness during developm
 Windows noise) → waits for `document.fonts.ready` → full-page screenshot compared against
 `e2e/visual/__screenshots__/groups-{state}-{width}.png`. Same known-Windows-noise caveat as
 `app-home-feed.spec.ts` above.
+
+### `e2e/visual/app-session-results.spec.ts` (CLIENT-GL-38, `visual-regression` project, 6 `test()`s)
+
+Dialog-scoped, same shape as `app-session-detail-modal.spec.ts` below, at 375, 768 and 1280px. The fixture "Sunday pickup run" is made ONGOING by `overrides.resultsOngoing` with two logged records (`overrides.resultsRecords`, seed `seedResultsRecordsOnNextLoad`); the mock record schema is the badminton one.
+
+| Test | Baseline | What it shows |
+|---|---|---|
+| `session results — section @ <w>px` | `session-results-section-<w>.png` | The session detail with the Results section expanded: two record cards, winner (first team) on the left in the success tone, loser in the warning tone, Won / Lost in words, the Point scores. |
+| `session results — dialog @ <w>px` | `session-results-dialog-<w>.png` | The "Update results" dialog on the two saved records (#1, #2, each with the red X) and the empty placeholder row (#3, no action), Save disabled. |
+
+New baselines: generated by the `client-visual` workflow, not on Windows (see `BASELINE-UPDATE-1`).
 
 ### `e2e/visual/app-session-detail-modal.spec.ts` (CLIENT-SESSION-12 / CLIENT-SESSION-17, `visual-regression` project)
 

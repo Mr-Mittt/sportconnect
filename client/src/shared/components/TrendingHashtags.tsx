@@ -1,6 +1,7 @@
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { TrendingHashtag } from '@/shared/types/rail';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface TrendingHashtagsProps {
   hashtags: TrendingHashtag[];
@@ -57,7 +58,7 @@ export function TrendingHashtags({
           </button>
         </div>
       ) : hashtags.length === 0 ? (
-        <div className="py-2 text-xs text-text-muted">{t('trendingHashtags.empty')}</div>
+        <EmptyHint size="xs" className="py-2">{t('trendingHashtags.empty')}</EmptyHint>
       ) : (
         <div className="flex flex-col gap-2">
           {hashtags.map((hashtag) => (

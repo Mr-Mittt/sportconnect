@@ -21,6 +21,9 @@ interface SessionStartTimePickerProps {
   /** CLIENT-SESSION-34: `false` for the optional "Ends at" instance — it stays empty until the user
    * (or the duration) fills it, instead of pushing the "now + 1h" default up on mount. */
   prefillWhenEmpty?: boolean;
+  /** CLIENT-GL-38: the start picker never offers a time earlier than now: when the date is today, the hours before the
+   * current one (and, in the current hour, the minutes before the current one) are disabled. */
+  disallowPast?: boolean;
 }
 
 const PICK_DATE_VALUE = 'pick-a-date';
@@ -63,18 +66,22 @@ export function SessionStartTimePicker({
   now = new Date(),
   field,
   prefillWhenEmpty = true,
+  disallowPast = false,
   i18nOverridePrefix,
 }: SessionStartTimePickerProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   const [showCalendar, setShowCalendar] = useState(false);
+  // The default start is one hour from now on the hour; past 23:00 that lands on tomorrow, not on a past 00:00 today.
+  const defaultStart = new Date(now);
+  defaultStart.setHours(now.getHours() + 1, 0, 0, 0);
   const [datePart, setDatePart] = useState(() =>
-    value !== '' ? value.slice(0, 10) : prefillWhenEmpty ? format(startOfDay(now), 'yyyy-MM-dd') : '',
+    value !== '' ? value.slice(0, 10) : prefillWhenEmpty ? format(startOfDay(defaultStart), 'yyyy-MM-dd') : '',
   );
   const [hourPart, setHourPart] = useState(() =>
     value !== ''
       ? value.slice(11, 13)
       : prefillWhenEmpty
-        ? String((now.getHours() + 1) % 24).padStart(2, '0')
+        ? String(defaultStart.getHours()).padStart(2, '0')
         : '',
   );
   const [minutePart, setMinutePart] = useState(() =>
@@ -106,7 +113,19 @@ export function SessionStartTimePicker({
   const quickDateValues = quickDates.map((date) => format(date, 'yyyy-MM-dd'));
   const isCustomDate = datePart !== '' && !quickDateValues.includes(datePart);
 
-  const commit = (nextDate: string, nextHour: string, nextMinute: string) => {
+  /** Minutes to jump ahead when the user lands on the current hour (so the minute is not a past :00). */
+  const CURRENT_HOUR_MINUTE_LEAD = 15;
+
+  const commit = (nextDate: string, rawHour: string, rawMinute: string) => {
+    // CLIENT-GL-38: landing on today's current hour with a minute that has already passed (or none yet) sets the
+    // minute to now + 15, or :59 when that would roll into the next hour, so the pick is never a past time.
+    const landsOnCurrentHour =
+      disallowPast && nextDate === todayKey && rawHour === String(now.getHours()).padStart(2, '0');
+    const nextHour = rawHour;
+    const nextMinute =
+      landsOnCurrentHour && (rawMinute === '' || Number(rawMinute) < now.getMinutes())
+        ? String(Math.min(now.getMinutes() + CURRENT_HOUR_MINUTE_LEAD, 59)).padStart(2, '0')
+        : rawMinute;
     setDatePart(nextDate);
     setHourPart(nextHour);
     setMinutePart(nextMinute);
@@ -126,6 +145,8 @@ export function SessionStartTimePicker({
     commit(raw, hourPart, minutePart);
   };
 
+  const isToday = disallowPast && datePart === todayKey;
+  const isCurrentHour = isToday && hourPart === String(now.getHours()).padStart(2, '0');
   const hourOptions = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
   const minuteOptions = Array.from({ length: 60 / MINUTE_STEP }, (_, i) =>
     String(i * MINUTE_STEP).padStart(2, '0'),
@@ -169,7 +190,7 @@ export function SessionStartTimePicker({
             {t('time.hour')}
           </option>
           {hourOptions.map((hour) => (
-            <option key={hour} value={hour}>
+            <option key={hour} value={hour} disabled={isToday && Number(hour) < now.getHours()}>
               {hour}
             </option>
           ))}
@@ -185,7 +206,7 @@ export function SessionStartTimePicker({
             {t('time.minuteShort')}
           </option>
           {minuteOptions.map((minute) => (
-            <option key={minute} value={minute}>
+            <option key={minute} value={minute} disabled={isCurrentHour && Number(minute) < now.getMinutes()}>
               {minute}
             </option>
           ))}

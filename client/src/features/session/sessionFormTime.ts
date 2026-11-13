@@ -27,6 +27,15 @@ export function durationFromStartAndEnd(start: string, end: string): number | nu
   return minutes > 0 ? minutes : null;
 }
 
+/** How far before now a start may be and still count as "now" (a form left open for a minute still submits); the server rule (SESSION-62) uses the same 5 minutes. */
+export const START_GRACE_MINUTES = 5;
+
+/** True when `start` (a local `yyyy-MM-ddTHH:mm`) is earlier than now minus the grace; an empty or unreadable start is not in the past. */
+export function isStartInPast(start: string, now: Date = new Date()): boolean {
+  const startDate = parseLocal(start);
+  return startDate !== null && differenceInMinutes(now, startDate) > START_GRACE_MINUTES;
+}
+
 /** True when both are set and the end is not after the start — the end field's error state. */
 export function isEndNotAfterStart(start: string, end: string): boolean {
   const startDate = parseLocal(start);
@@ -45,6 +54,8 @@ export interface SessionTimeFields {
   /** Editing the end derives the duration (cleared when the end is not after the start). */
   setEnd: (next: string) => void;
   isEndInvalid: boolean;
+  /** The start is earlier than now (minus the grace) and was changed from what the form opened with: blocks Create / Save. */
+  isStartInPast: boolean;
 }
 
 /**
@@ -85,5 +96,7 @@ export function useSessionTimeFields(initial: { start: string; duration: string 
     setDuration,
     setEnd,
     isEndInvalid: isEndNotAfterStart(start, end),
+    // An existing session whose stored start is already past is only blocked once its start is edited.
+    isStartInPast: start !== initial.start && isStartInPast(start),
   };
 }

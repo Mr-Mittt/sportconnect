@@ -14,4 +14,7 @@ export const adminKeys = {
    * endpoint, edited in its own textarea. */
   sessionAttributeSchema: (sportId: number) =>
     [...adminKeys.all, 'sessionAttributeSchema', sportId] as const,
+  /** CLIENT-GL-38 / SPORT-18: one sport's raw *result* (record) schema, read via the admin-only
+   * `GET /api/sports/all/{sportId}/result-schema`. */
+  resultSchema: (sportId: number) => [...adminKeys.all, 'resultSchema', sportId] as const,
 };

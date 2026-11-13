@@ -11,6 +11,7 @@ import { useAutoResizeTextarea } from '@/shared/lib/useAutoResizeTextarea';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
 import { Button } from '@/shared/ui/button';
 import { Textarea } from '@/shared/ui/textarea';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 // How long after the last keystroke before a "stopped typing" signal is sent
 // automatically (CHAT-15, user decision) — client-driven, no server timer.
@@ -253,7 +254,7 @@ export function FriendChatPanelView({
                 </button>
               )}
               {(messages?.length ?? 0) === 0 ? (
-                <p className="text-2sm text-text-muted">{t('chat.empty')}</p>
+                <EmptyHint>{t('chat.empty')}</EmptyHint>
               ) : (
                 <div className="flex flex-col gap-1">
                   {(() => {

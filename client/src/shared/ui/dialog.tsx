@@ -61,6 +61,15 @@ interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive
    * no anchor context — that's already centered.
    */
   centered?: boolean;
+  /**
+   * A dialog that opens over another fixed-height dialog (the record dialog over the session detail) and must leave
+   * that one's title bar and footer in view: pass the heights (CSS lengths) to keep clear at the top and at the bottom.
+   * It then takes the same `fixedHeightVh` box as the dialog underneath, minus the two insets, and sits inside it
+   * (anchored like it on an anchored page, centered like it otherwise), so it follows the viewport when resized.
+   * Only meaningful with `fixedHeight`.
+   */
+  insetTop?: string;
+  insetBottom?: string;
 }
 
 function DialogContent({
@@ -70,6 +79,8 @@ function DialogContent({
   fixedHeight = false,
   fixedHeightVh = FIXED_HEIGHT_VH,
   centered = false,
+  insetTop,
+  insetBottom,
   ...props
 }: DialogContentProps) {
   // Page-level anchor (user decision) — Home Feed positions modals below the
@@ -100,14 +111,27 @@ function DialogContent({
   if (anchored) {
     const top = anchorBottom + ANCHOR_GAP_PX;
     const available = `calc(100vh - ${top}px - ${ANCHOR_BOTTOM_MARGIN_PX}px)`;
+    const base = `min(${fixedHeightVh}vh, ${available})`;
     computedStyle = {
       top,
       // Fixed height is still capped by the space actually available below
       // the anchor, so it can never push past the viewport bottom.
-      ...(fixedHeight ? { height: `min(${fixedHeightVh}vh, ${available})` } : { maxHeight: available }),
+      ...(fixedHeight
+        ? {
+            height: insetTop || insetBottom ? `calc(${base} - (${insetTop ?? '0px'} + ${insetBottom ?? '0px'}))` : base,
+            ...(insetTop ? { marginTop: insetTop } : {}),
+          }
+        : { maxHeight: available }),
     };
   } else if (fixedHeight) {
-    computedStyle = { height: `${fixedHeightVh}vh` };
+    computedStyle = {
+      height:
+        insetTop || insetBottom
+          ? `calc(${fixedHeightVh}vh - (${insetTop ?? '0px'} + ${insetBottom ?? '0px'}))`
+          : `${fixedHeightVh}vh`,
+      // Centered: shift by half the difference so the box sits where the dialog underneath has room.
+      ...(insetTop || insetBottom ? { marginTop: `calc((${insetTop ?? '0px'} - ${insetBottom ?? '0px'}) / 2)` } : {}),
+    };
   }
 
   return (
@@ -147,7 +171,8 @@ function DialogTitle({ className, ...props }: React.ComponentProps<typeof Dialog
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-sm font-semibold text-text-primary', className)}
+      // Every dialog title is centered by default (owner rule, 2026-11-13): a title that must not be, passes its own alignment.
+      className={cn('text-center text-sm font-semibold text-text-primary', className)}
       {...props}
     />
   );

@@ -1,11 +1,16 @@
 import type { Comment } from '@/features/feed/types';
 import { CommentItem } from '@/shared/components/CommentItem';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { EmptyHint } from '@/shared/components/EmptyHint';
+import { SessionCommentComposer } from './SessionCommentComposer';
 
 interface SessionCommentSectionProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
   currentUserId: string | undefined;
+  /** The composer at the top of the thread. */
+  currentUser: { fullName: string; avatarUrl: string | null } | undefined;
+  onAddComment: (content: string) => void;
   comments: Comment[];
   isLoading: boolean;
   isError: boolean;
@@ -44,6 +49,8 @@ interface SessionCommentSectionProps {
  */
 export function SessionCommentSection({
   currentUserId,
+  currentUser,
+  onAddComment,
   comments,
   isLoading,
   isError,
@@ -61,7 +68,17 @@ export function SessionCommentSection({
   if (isForbidden) return null;
 
   return (
-    <section aria-label={t('comments.title')} className="border-hairline-t flex flex-col gap-2 border-border pt-3">
+    <section
+      aria-label={t('comments.title')}
+      className="border-hairline-t flex flex-col gap-2 border-border pt-3"
+    >
+      {/* The composer is the first thing of the thread (owner, 2026-11-14), not pinned in the footer. */}
+      <SessionCommentComposer
+        currentUser={currentUser}
+        onAddComment={onAddComment}
+        isPosting={isPosting}
+        i18nOverridePrefix={i18nOverridePrefix}
+      />
       {isLoading && <p className="text-2xs text-text-muted">{t('comments.loading')}</p>}
       {isError && (
         <p role="alert" className="text-2xs text-text-danger">
@@ -69,7 +86,7 @@ export function SessionCommentSection({
         </p>
       )}
       {!isLoading && !isError && comments.length === 0 && (
-        <p className="text-2xs text-text-muted">{t('comments.empty')}</p>
+        <EmptyHint size="2xs">{t('comments.empty')}</EmptyHint>
       )}
       {!isLoading && !isError && comments.length > 0 && (
         <div className="flex flex-col gap-3">
@@ -78,6 +95,7 @@ export function SessionCommentSection({
               key={comment.id}
               comment={comment}
               currentUserId={currentUserId}
+              currentUser={currentUser}
               onToggleLike={onToggleCommentLike}
               onDelete={onDeleteComment}
               onReply={onAddReply}

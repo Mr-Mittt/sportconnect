@@ -4,6 +4,7 @@ import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { MIN_SEARCH_LENGTH, type InviteResultRow } from '@/features/groups/useInviteFriendModalData';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 function initialsFor(fullName: string): string {
   return fullName
@@ -77,7 +78,7 @@ export function InviteFriendModal({
           {!isSearching &&
             !isSearchError &&
             inputValue.trim().length >= MIN_SEARCH_LENGTH &&
-            rows.length === 0 && <p className="text-2sm text-text-muted">{t('inviteFriend.noResults')}</p>}
+            rows.length === 0 && <EmptyHint>{t('inviteFriend.noResults')}</EmptyHint>}
           <div className="flex flex-col gap-2.5">
             {rows.map(({ user, action, isSending, error }) => (
               <div key={user.id} className="flex flex-col gap-1">

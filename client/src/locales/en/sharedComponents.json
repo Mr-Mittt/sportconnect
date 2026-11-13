@@ -39,6 +39,7 @@
     "unlike": "Unlike comment",
     "reply": "Reply",
     "replyPlaceholder": "Reply to {{name}}",
+    "cancelReply": "Cancel reply",
     "post": "Post"
   },
   "createPostForm": {

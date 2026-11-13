@@ -19,6 +19,7 @@ import { useScheduleSession } from './hooks/useScheduleSession';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
+import { useSessionResultData } from './hooks/useSessionResultData';
 import { useUnlikeSession } from './hooks/useUnlikeSession';
 import { useUpdateSession } from './hooks/useUpdateSession';
 import { missingForSession } from './sessionReadiness';
@@ -180,6 +181,10 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
   // settles (or when the sport has no profile schema) → no inheritance, defaults render.
   const refBaseSchema = useSportAttributeSchema(sessionQuery.data?.sportId).data;
 
+  // CLIENT-GL-38: the Result section (the sport's record schema, who may edit, the saved records).
+  const participantRows = participantsQuery.data?.content;
+  const result = useSessionResultData(sessionQuery.data, sessionId, useMemo(() => participantRows ?? [], [participantRows]));
+
   return {
     /**
      * CLIENT-MODAL-1: clears the join/leave/cancel failures before the dialog closes.
@@ -212,6 +217,8 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
     // SPORT-16: profile schema for `#ref`→base `layout` inheritance in the read view.
     refBaseSchema,
     participants: participantsQuery.data?.content ?? [],
+    /** CLIENT-GL-38: the Result section's data slice. */
+    result,
     isParticipantsLoading: participantsQuery.isLoading,
     isParticipantsError: participantsQuery.isError,
     currentUserId: currentUserId ?? '',

@@ -1137,14 +1137,28 @@ describe('SessionDetailModal', () => {
       render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 10 })} />);
       const toggle = screen.getByRole('button', { name: /Players \(1\/10\)/ });
       expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      expect(screen.getByText('Players:')).toBeInTheDocument();
-      // Collapsed: just the avatars, no capacity bar (it shows once opened).
+      // Collapsed: the avatars sit in the section header itself (owner, 2026-11-13), with no "Players:" label under it.
+      expect(screen.queryByText('Players:')).not.toBeInTheDocument();
+      const header = toggle.parentElement as HTMLElement;
+      expect(header).toHaveTextContent('JL');
+      // ... no capacity bar (it shows once opened).
       expect(document.querySelector('[class~="h-1.25"]')).toBeNull();
       expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument();
       fireEvent.click(toggle);
       expect(toggle).toHaveAttribute('aria-expanded', 'true');
       expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
       expect(document.querySelector('[class~="h-1.25"]')).not.toBeNull();
+      // Opened: the avatars leave the header (the roster shows the names).
+      expect(header).not.toHaveTextContent('JL');
+    });
+
+    it('the buttons of a section sit to the left of its chevron, after the collapsed-only header content', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ capacity: 10 })} />);
+      const header = screen.getByRole('button', { name: /Players \(1\/10\)/ }).parentElement as HTMLElement;
+      const children = Array.from(header.children);
+      // label toggle first, the decorative chevron last
+      expect(children[0].getAttribute('aria-expanded')).toBe('false');
+      expect(children[children.length - 1].getAttribute('data-slot')).toBe('collapsible-chevron');
     });
 
     it.each(['SCHEDULED', 'ONGOING', 'COMPLETED', 'CANCELLED'] as const)(

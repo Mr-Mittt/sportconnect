@@ -12,6 +12,7 @@ import type {
   FriendUser,
   UserSearchResult,
 } from '../types';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 function initialsFor(fullName: string): string {
   return fullName
@@ -70,6 +71,8 @@ interface SectionProps {
 }
 
 function FriendSection({ sectionKey, label, isCollapsed, onToggle, count, totalCount, children, t }: SectionProps) {
+  // The empty hint is the same open or collapsed: a collapsed empty section says so under its header.
+  const emptyHint = totalCount === 0 ? t('rail.empty') : count === 0 ? t('rail.noMatches') : null;
   return (
     <section aria-label={label}>
       <Collapsible open={!isCollapsed} onOpenChange={() => onToggle(sectionKey)}>
@@ -78,11 +81,16 @@ function FriendSection({ sectionKey, label, isCollapsed, onToggle, count, totalC
             {label} ({count})
           </span>
         </CollapsibleTrigger>
+        {isCollapsed && emptyHint !== null && (
+          <EmptyHint size="2xs" className="px-1.75 pb-1.5">
+            {emptyHint}
+          </EmptyHint>
+        )}
         <CollapsibleContent className="flex flex-col gap-0.5 pb-1.5">
-          {totalCount === 0 ? (
-            <p className="px-1.75 text-2xs text-text-muted">{t('rail.empty')}</p>
-          ) : count === 0 ? (
-            <p className="px-1.75 text-2xs text-text-muted">{t('rail.noMatches')}</p>
+          {emptyHint !== null ? (
+            <EmptyHint size="2xs" className="px-1.75">
+              {emptyHint}
+            </EmptyHint>
           ) : (
             children
           )}

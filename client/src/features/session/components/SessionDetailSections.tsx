@@ -165,7 +165,7 @@ function WhenSection(props: SectionProps) {
   const time = useSessionTimeFields({ start: initialStart, duration: initialDuration });
   const startChanged = time.start !== initialStart;
   const durationChanged = time.duration !== initialDuration && time.duration !== '';
-  const canSave = (startChanged || durationChanged) && time.start !== '' && !time.isEndInvalid;
+  const canSave = (startChanged || durationChanged) && time.start !== '' && !time.isEndInvalid && !time.isStartInPast;
   const save = () => {
     const payload: UpdateSessionPayload = {};
     if (startChanged) payload.scheduledStart = toOffsetAwareIso(time.start);

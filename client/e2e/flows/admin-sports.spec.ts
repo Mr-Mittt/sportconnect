@@ -52,6 +52,49 @@ test('Admin sports — an admin edits and saves the attribute schema', async ({ 
   await expect(page.getByRole('status')).toHaveText('Saved');
 });
 
+test('Admin sports — an admin edits and saves the record schema (SPORT-18)', async ({ page }) => {
+  await logInAsAdmin(page);
+  await page.goto('/admin/sports/1');
+
+  const textarea = page.getByLabel('Record schema document (JSON)', { exact: true });
+  await expect(textarea).toContainText('COMPETITIVE');
+  await expect(page.getByTestId('result-schema-hint')).toHaveCount(0);
+
+  // a document the app cannot read: a hint, and Save is still allowed
+  await textarea.fill('{"version":2,"maxRecords":30}');
+  await expect(page.getByTestId('result-schema-hint')).toContainText('Results section stays hidden');
+
+  // the server only checks maxRecords: 0 is refused, its message shows verbatim
+  await textarea.fill('{"version":1,"maxRecords":0}');
+  await page.getByRole('button', { name: 'Save record schema' }).click();
+  await expect(page.getByText('maxRecords must be an integer from 1 to 500')).toBeVisible();
+
+  await textarea.fill('{"version":1,"maxRecords":30,"record":{"data":{"type":"COMPETITIVE","playersPerSide":{"min":1,"max":2}}}}');
+  await page.getByRole('button', { name: 'Save record schema' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved');
+
+  // it was stored: a fresh page load reads it back
+  await page.reload();
+  await expect(page.getByLabel('Record schema document (JSON)', { exact: true })).toContainText('"maxRecords": 30');
+});
+
+test('Admin sports — a sport with no record schema shows an empty box with a placeholder, and a pasted schema saves (SPORT-18)', async ({ page }) => {
+  await logInAsAdmin(page);
+  await page.goto('/admin/sports/4'); // Tennis has no record schema in the mock
+
+  const textarea = page.getByLabel('Record schema document (JSON)', { exact: true });
+  await expect(textarea).toHaveValue('');
+  await expect(textarea).toHaveAttribute('placeholder', /No record schema is stored for this sport/);
+  await expect(page.getByRole('button', { name: 'Save record schema' })).toBeDisabled();
+
+  await textarea.fill('{"version":1,"maxRecords":20,"record":{"data":{"type":"COMPETITIVE","playersPerSide":{"min":1,"max":2}}}}');
+  await page.getByRole('button', { name: 'Save record schema' }).click();
+  await expect(page.getByRole('status')).toHaveText('Saved');
+
+  await page.reload();
+  await expect(page.getByLabel('Record schema document (JSON)', { exact: true })).toContainText('COMPETITIVE');
+});
+
 test('Admin sports — invalid JSON is rejected locally before any request', async ({ page }) => {
   await logInAsAdmin(page);
   await page.goto('/admin/sports/1');

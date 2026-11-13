@@ -14,6 +14,7 @@ import { Skeleton } from '@/shared/ui/skeleton';
 import { CommentItem } from './CommentItem';
 import { HashtagText } from './HashtagText';
 import { SportIcon } from './SportIcon';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface CommentSectionProps {
   isOpen: boolean;
@@ -122,7 +123,9 @@ export function CommentSection({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
-        <DialogTitle className="sr-only">{t('commentSection.dialogTitle', { name: displayName })}</DialogTitle>
+        <DialogTitle className="sr-only">
+          {t('commentSection.dialogTitle', { name: displayName })}
+        </DialogTitle>
 
         {/* FEED-12: the post header (below) only ever renders once `post` is
          * resolved. A cold `/posts/:id` load can spend real time (or fail)
@@ -192,7 +195,9 @@ export function CommentSection({
               <button
                 type="button"
                 aria-pressed={post.isLikedByCurrentUser}
-                aria-label={post.isLikedByCurrentUser ? t('commentSection.unlike') : t('commentSection.like')}
+                aria-label={
+                  post.isLikedByCurrentUser ? t('commentSection.unlike') : t('commentSection.like')
+                }
                 onClick={() => onTogglePostLike(post.id)}
                 className={cn(
                   'mt-2 flex cursor-pointer items-center gap-1 rounded p-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
@@ -208,10 +213,44 @@ export function CommentSection({
               </button>
             </div>
           )}
+          {/* The composer is the first thing of the thread (owner, 2026-11-14), not pinned at the bottom. */}
+          <div className="mb-3 flex items-center gap-2">
+            <Avatar className="size-8 shrink-0">
+              {currentUser?.avatarUrl != null && <AvatarImage src={currentUser.avatarUrl} alt="" />}
+              <AvatarFallback className="bg-surface-1 text-2xs text-text-primary">
+                {currentUser !== undefined ? initialsFor(currentUser.fullName) : ''}
+              </AvatarFallback>
+            </Avatar>
+            <input
+              type="text"
+              value={content}
+              onChange={(event) => setContent(event.target.value.slice(0, MAX_COMMENT_LENGTH))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') submitComment();
+              }}
+              placeholder={t('commentSection.commentPlaceholder')}
+              aria-label={t('commentSection.commentAriaLabel')}
+              maxLength={MAX_COMMENT_LENGTH}
+              className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+            />
+            <Button
+              variant="primary"
+              size="icon"
+              aria-label={t('commentSection.postComment')}
+              onClick={submitComment}
+              disabled={content.trim().length === 0 || isPosting}
+              className={cn(
+                'cursor-pointer rounded-full disabled:cursor-default',
+                POST_BUTTON_DISABLED_OVERRIDE,
+              )}
+            >
+              <IconSend className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
           {isLoading && <p className="text-2sm text-text-muted">{t('commentSection.loading')}</p>}
           {isError && <p className="text-2sm text-text-danger">{t('commentSection.loadError')}</p>}
           {!isLoading && !isError && comments.length === 0 && (
-            <p className="text-2sm text-text-muted">{t('commentSection.empty')}</p>
+            <EmptyHint>{t('commentSection.empty')}</EmptyHint>
           )}
           {!isLoading && !isError && comments.length > 0 && (
             <div className="flex flex-col gap-3">
@@ -220,6 +259,7 @@ export function CommentSection({
                   key={comment.id}
                   comment={comment}
                   currentUserId={currentUserId}
+                  currentUser={currentUser}
                   onToggleLike={onToggleCommentLike}
                   onDelete={onDeleteComment}
                   onReply={onAddReply}
@@ -239,37 +279,6 @@ export function CommentSection({
               )}
             </div>
           )}
-        </div>
-
-        <div className="border-hairline-t flex items-center gap-2 border-border px-4 py-3">
-          <Avatar className="size-8 shrink-0">
-            {currentUser?.avatarUrl != null && <AvatarImage src={currentUser.avatarUrl} alt="" />}
-            <AvatarFallback className="bg-surface-1 text-2xs text-text-primary">
-              {currentUser !== undefined ? initialsFor(currentUser.fullName) : ''}
-            </AvatarFallback>
-          </Avatar>
-          <input
-            type="text"
-            value={content}
-            onChange={(event) => setContent(event.target.value.slice(0, MAX_COMMENT_LENGTH))}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') submitComment();
-            }}
-            placeholder={t('commentSection.commentPlaceholder')}
-            aria-label={t('commentSection.commentAriaLabel')}
-            maxLength={MAX_COMMENT_LENGTH}
-            className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-          />
-          <Button
-            variant="primary"
-            size="icon"
-            aria-label={t('commentSection.postComment')}
-            onClick={submitComment}
-            disabled={content.trim().length === 0 || isPosting}
-            className={cn('cursor-pointer rounded-full disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
-          >
-            <IconSend className="size-4" aria-hidden="true" />
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

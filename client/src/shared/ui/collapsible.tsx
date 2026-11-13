@@ -43,8 +43,49 @@ function CollapsibleTrigger({
   );
 }
 
+/**
+ * A header trigger without the built-in chevron, for a header that places its own chevron (and other controls) around the
+ * label: use it with `CollapsibleChevron` so the section's buttons can sit to the left of the chevron.
+ */
+function CollapsibleLabelTrigger({
+  className,
+  ...props
+}: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleTrigger>) {
+  return (
+    <CollapsiblePrimitive.CollapsibleTrigger
+      data-slot="collapsible-trigger"
+      className={cn(
+        'flex cursor-pointer items-center rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/**
+ * The chevron as its own toggle, for a header that puts buttons beside it. It is a second way to toggle the same
+ * section, so it is hidden from the accessibility tree and the tab order: keyboard and screen reader users use the
+ * label trigger (`CollapsibleLabelTrigger`).
+ */
+function CollapsibleChevron({ className }: { className?: string }) {
+  return (
+    <CollapsiblePrimitive.CollapsibleTrigger
+      aria-hidden="true"
+      tabIndex={-1}
+      data-slot="collapsible-chevron"
+      className={cn('group flex shrink-0 cursor-pointer items-center justify-center rounded p-1', className)}
+    >
+      <IconChevronDown
+        className="size-4 text-text-secondary transition-transform group-data-[state=open]:rotate-180"
+        aria-hidden="true"
+      />
+    </CollapsiblePrimitive.CollapsibleTrigger>
+  );
+}
+
 function CollapsibleContent(props: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleContent>) {
   return <CollapsiblePrimitive.CollapsibleContent data-slot="collapsible-content" {...props} />;
 }
 
-export { Collapsible, CollapsibleTrigger, CollapsibleContent };
+export { Collapsible, CollapsibleTrigger, CollapsibleLabelTrigger, CollapsibleChevron, CollapsibleContent };

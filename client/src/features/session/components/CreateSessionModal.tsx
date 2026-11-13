@@ -34,6 +34,7 @@ import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { AutoApproveConfirmDialog, LeaveWithoutSavingDialog, SessionReadinessDialog } from './SessionConfirmDialogs';
 import { SectionSummary, SessionFormSection, type SectionSummaryItem } from './SessionFormSection';
 import { CostFields, OverviewFields, WhenFields, WhereFields, WhoFields } from './SessionSectionFields';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 const INVITE_SEARCH_MIN_LENGTH = 3;
 
@@ -127,7 +128,7 @@ function InviteFriendField({
         (isFriendsLoading ? (
           <p className="text-2xs text-text-muted">{t('common.loading')}</p>
         ) : results.length === 0 ? (
-          <p className="text-2xs text-text-muted">{t('create.invite.noResults')}</p>
+          <EmptyHint size="2xs">{t('create.invite.noResults')}</EmptyHint>
         ) : (
           <div className="flex flex-col gap-1">
             {results.map((friend) => (
@@ -392,6 +393,7 @@ export function CreateSessionModal({
     time.start !== '' &&
     who.open !== '' &&
     !time.isEndInvalid &&
+    !time.isStartInPast &&
     !who.genderOverOpen;
 
   // What is still needed to schedule — drives the amber chips and the readiness popup's list.
