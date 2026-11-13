@@ -468,6 +468,7 @@
       "SCORE_MISSING": "Hãy nhập điểm.",
       "SCORE_RULE": "Điểm này không hợp lệ.",
       "UNREADABLE": "Không đọc được kết quả này.",
+      "PLAYERS_MIN_one": "Hãy chọn người chơi.",
       "PLAYERS_MIN_other": "Hãy chọn ít nhất {{count}} người chơi."
     },
     "latestHint": "Hiển thị {{count}} trong {{total}} kết quả gần nhất."
