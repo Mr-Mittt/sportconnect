@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-11-12 (SESSION-50 done; SESSION-51..SESSION-60 filed)
+**Last updated:** 2026-11-13 (SESSION-50 done; SESSION-51..SESSION-60 filed; SESSION-GL-PERF-61 filed)
 
 ---
 
@@ -36,6 +36,7 @@
 | 15 | [SESSION-58](MVP/SESSION-58_PERFORMANCE_RECORDS_FOR_RUNNING_CYCLING_SWIMMING.md) | A RECORD kind for sports without a head-to-head result (running, cycling, swimming) | `TODO` |
 | 16 | [SESSION-59](MVP/SESSION-59_DRAWS_AND_BEST_OF_THREE_RESULTS.md) | Draws and best-of-three results | `TODO` |
 | 17 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
+| 18 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
 
 ---
 
