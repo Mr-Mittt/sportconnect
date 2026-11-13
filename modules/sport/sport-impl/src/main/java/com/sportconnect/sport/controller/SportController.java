@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -280,6 +281,61 @@ public class SportController {
             @RequestBody(required = false) AttributeSchema schema) {
         AttributeSchema saved = sportService.replaceSessionAttributeSchema(sportId, schema);
         return ResponseEntity.ok(ApiResponse.success("Session attribute schema updated successfully", saved));
+    }
+
+    // Per-sport RESULT schema (SESSION-50) — same layout as the session attribute schema trio above:
+    // member GET at /{sportId}/…, admin GET at /all/{sportId}/…, admin PUT at /{sportId}/….
+    @Operation(summary = "Get a sport's result schema",
+            description = "What one recorded result (a game, later a per-player record) is for this "
+                    + "sport. The client builds, validates and scores session results from it. "
+                    + "Returns null data when the sport has no result logging.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found or not active")
+    })
+    @GetMapping("/{sportId}/result-schema")
+    // /api/sports/** is blanket-permitAll in SecurityConfig, so this @PreAuthorize is what protects it.
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getResultSchema(@PathVariable Long sportId) {
+        return ResponseEntity.ok(ApiResponse.success("Result schema retrieved successfully",
+                sportService.getResultSchema(sportId)));
+    }
+
+    @Operation(summary = "Get a sport's result schema, including for an inactive sport",
+            description = "Admin-only. The admin counterpart of GET /api/sports/{sportId}/result-schema. "
+                    + "Returns null data when the sport has no result logging.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema returned"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not an admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
+    })
+    @GetMapping("/all/{sportId}/result-schema")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getResultSchemaForAdmin(@PathVariable Long sportId) {
+        return ResponseEntity.ok(ApiResponse.success("Result schema retrieved successfully",
+                sportService.getResultSchemaForAdmin(sportId)));
+    }
+
+    @Operation(summary = "Replace a sport's result schema",
+            description = "Admin-only. Replaces the whole document; a null or empty body clears it "
+                    + "(no result logging for the sport). The server reads only maxRecords (1-500); "
+                    + "the rest is the client's and stored as sent. At most 16 KB.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Schema replaced"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "SPORT_RESULT_SCHEMA_INVALID"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not an admin"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Sport not found")
+    })
+    @PutMapping("/{sportId}/result-schema")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> replaceResultSchema(
+            @PathVariable Long sportId,
+            @RequestBody(required = false) Map<String, Object> schema) {
+        return ResponseEntity.ok(ApiResponse.success("Result schema updated successfully",
+                sportService.replaceResultSchema(sportId, schema)));
     }
 
     // User Sport Profile endpoints

@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS sports (
     -- A17 (sport-impl): per-sport SESSION attribute definition tree (V062). Same H2 JSON / Postgres
     -- JSONB substitution as attributes_schema above.
     session_attributes_schema JSON,
+    -- SESSION-50 (sport-impl): per-sport RESULT schema (V089). Same H2 JSON / Postgres JSONB substitution.
+    result_schema JSON,
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
@@ -414,6 +416,19 @@ CREATE TABLE IF NOT EXISTS session_participants (
     updated_at TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES sessions(id),
     CONSTRAINT unique_session_user UNIQUE (session_id, user_id)
+);
+
+-- SESSION-50 (session-impl, V089): result records. JSON for JSONB; no FKs (domain-scoped).
+CREATE TABLE IF NOT EXISTS session_records (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    data JSON NOT NULL,
+    client_request_id UUID NOT NULL,
+    created_by UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_by UUID NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_session_records_request UNIQUE (session_id, client_request_id)
 );
 
 CREATE TABLE IF NOT EXISTS notifications (

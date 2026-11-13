@@ -11,22 +11,27 @@ writes a fresh template and uses the section as the release PR description. Vers
 - A session title is required again (SESSION-49): creating a session without one, or updating it to a blank one, is `400 SESSION_TITLE_REQUIRED`; the title is trimmed. Group auto-generated sessions are titled after the group in the owner's stored language (en `<group>'s session`, vi `Trận đấu của nhóm <group>`, English when none).
 - `GET /api/notifications` no longer fails for the whole page when a referenced session has no title (SESSION-49); a session without a title is just left out of the title lookup.
 - `PREPARING` is a real draft (SESSION-46): a session starts `PREPARING` unless location, fee and duration are all set; every field except sport and group is editable while `PREPARING`; `PUT /api/sessions/{id}` on any other status is now 409 `SESSION_NOT_PREPARING` (before, only location and fee were locked); the automatic `PREPARING` to `SCHEDULED` flip is gone and the host leaves the draft with the new `POST /api/sessions/{id}/schedule` (400 `SESSION_NOT_READY` lists what is missing). New error codes `SESSION_GENDER_SLOTS_EXCEED_OPEN` and `SESSION_NOT_READY`.
+- Game logging, backend (SESSION-50): `GET /api/sessions/{id}/records`, `POST /api/sessions/{id}/records/changes` (one change set: add, update, delete; at most 50 operations and 64 KB). Allowed while the session is `ONGOING` or `COMPLETED` and no later than 24 hours after `scheduledEndAt`; open to group members of a group session and `JOINED` participants of a standalone one. The server stores each record as sent; it checks only access, status and window, that the player ids the request names are `JOINED` (they are not stored), and the sport limits. A bad record does not fail the change set: it comes back in `results` with `status: REJECTED` and its `errorCode` (`_INVALID`, `_TOO_LARGE`, `_PLAYER_NOT_JOINED`, `_LIMIT_REACHED`) and the valid ones are stored; only a malformed request (a missing or repeated ref or id, over 50 operations) is a 400. Concurrent changes never error: the later request wins, an update of a deleted record restores it under a new id. New codes `SESSION_RECORD_NOT_ALLOWED`, `_NOT_LOGGABLE`, `_WINDOW_CLOSED`, `_INVALID`, `_PLAYER_NOT_JOINED`, `_LIMIT_REACHED`, `_TOO_LARGE`.
+- Sport result schema (SESSION-50): `GET /api/sports/{id}/result-schema` (members), `GET /api/sports/all/{id}/result-schema` and `PUT /api/sports/{id}/result-schema` (admin). The schema tells the client what a recorded result is and carries `maxRecords` (default 100, at most 500). Each record is capped at 4 KB. A sport with no schema has no result logging; no schema is seeded, so an admin must `PUT` one for a sport before its sessions can record results. Invalid limits are `400 SPORT_RESULT_SCHEMA_INVALID`.
 
 ### Applied automatically
 - `V088__sessions_title_not_null.sql` (SESSION-49) gives every existing session without a title the title `Session #<id>`, then makes `sessions.title` `NOT NULL`. It runs when the server starts and takes a short lock on `sessions`.
 - `V085` (`male_slots`, `female_slots`, both with a `>= 0` check), `V086` (`game_mood INTEGER NOT NULL DEFAULT 5` with a 1-10 check; existing rows become 5) and `V087` (`fee_note VARCHAR(300)`) run when the server starts. Each only adds a column, so they are quick on the current table size.
+- `V089__session_records.sql` (SESSION-50) adds the nullable `sports.result_schema` column and creates `session_records` (a new table, no existing data touched). It runs when the server starts and is quick.
 
 ### Manual actions on the box
-- none
+- To switch game logging on for a sport, sign in as ADMIN and `PUT /api/sports/{sportId}/result-schema` for it (no schema is seeded). Badminton example and the fields: `modules/session/docs/SESSION_RECORDS_DESIGN.md`, section "Badminton result schema example". Without it the sport's sessions answer `409 SESSION_RECORD_NOT_LOGGABLE`.
 
 ### Rollback
 - `V088` cannot be undone by Liquibase. After a rollback the column stays `NOT NULL`, so the previous server image fails to create a session that has no title (the old group auto-generation does exactly that): roll forward, or restore the pre-deploy dump (SESSION-49).
 - Roll the server image back as usual; the three new columns stay and the previous release ignores them, so no restore is needed.
 - A client older than CLIENT-SESSION-34 cannot complete a draft by filling in location and fee (the flip no longer happens) and gets 409 on edits to a `SCHEDULED` session. A new client against an old server has no Schedule endpoint. Roll the client back together with the server.
+- `V089` only adds a column and one table; the previous server image ignores them, so roll the image back as usual and no restore is needed. Records already written stay in the tables and are not visible to the older server.
 
 ### Depends on
 - Client: CLIENT-SESSION-34 (form, Schedule button and en/vi copy for the new error codes). Ship the server and the client together.
 - Client: the SESSION-49 part (pre-filled, required title). An older client that lets the title be blank gets a `400 SESSION_TITLE_REQUIRED` it has no copy for.
+- Client: CLIENT-SESSION-38 (the Result section and dialog, en/vi copy for the `SESSION_RECORD_*` codes) and SPORT-18 (admin screen; until it ships, the schema is set with the admin `PUT`). The endpoints work without the client. A client that ignores `results` would show a rejected record as saved, so the client must read each result's `status` after Save.
 
 ## 0.2.0 — 2026-11-09
 

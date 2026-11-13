@@ -216,4 +216,41 @@ public interface SportService {
      * @throws com.sportconnect.common.exception.ResourceNotFoundException if no active sport has this id
      */
     ResolvedAttributeSchema getResolvedSessionAttributeSchema(Long sportId, Locale locale);
+
+    /**
+     * SESSION-50: the sport's RESULT schema — what one recorded result is for this sport. An untyped
+     * JSON object: the client builds, validates and scores from it, and the session-records service
+     * reads only {@code maxRecords}. Active-only, like
+     * {@link #getSessionAttributeSchemaRaw}.
+     *
+     * @param sportId the sport to read
+     * @return the stored schema, or {@code null} when the sport has no result logging
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no active sport has this id
+     */
+    Map<String, Object> getResultSchema(Long sportId);
+
+    /**
+     * SESSION-50: the sport's result schema as stored, for an admin caller. Reads the repository, so a
+     * deactivated sport returns its schema rather than 404.
+     *
+     * @param sportId the sport to read
+     * @return the stored schema, or {@code null} when the sport has no result logging
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id
+     */
+    Map<String, Object> getResultSchemaForAdmin(Long sportId);
+
+    /**
+     * SESSION-50: replace a sport's whole result schema. Admin-only; no partial update.
+     *
+     * <p>The server interprets only two fields, so only those are validated: the document must be a
+     * JSON object of at most 16 KB, and when present {@code maxRecords} must be an integer 1 to 500
+     * . Evicts the sport cache on success.
+     *
+     * @param sportId the sport to write
+     * @param schema  the replacement document; {@code null} clears the schema (no result logging)
+     * @return the stored schema, as read back
+     * @throws com.sportconnect.common.exception.BadRequestException  {@code SPORT_RESULT_SCHEMA_INVALID}
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id
+     */
+    Map<String, Object> replaceResultSchema(Long sportId, Map<String, Object> schema);
 }
