@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/common`
-**Last updated:** 2026-10-02 (C12 done — error contract: `errorCode`/`errorParams` on `ApiResponse`)
+**Last updated:** 2026-11-13 (C13 filed: timestamps as instants)
 
 ---
 
@@ -19,7 +19,7 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| _none_ | | | |
+| 1 | [C13](MVP/C13_TIMESTAMPS_AS_INSTANT_WITH_TIMEZONE_ACROSS_THE_API.md) | Store and send every timestamp as an instant (`timestamptz` + `Instant`) instead of a zone-less `LocalDateTime`: posts, comments, notifications and other times show 7 hours old for a viewer in UTC+7 because the API sends no offset (found 2026-11-13, session 13299) | `TODO` |
 
 ---
 
