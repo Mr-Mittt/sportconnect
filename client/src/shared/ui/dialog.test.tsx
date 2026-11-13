@@ -94,7 +94,7 @@ describe('DialogTitle (every dialog title is centered by default, owner rule 202
         </DialogContent>
       </Dialog>,
     );
-    expect(screen.getByText('A plain title')).toHaveClass('text-center');
+    expect(screen.getByText('A plain title').classList.contains('text-center')).toBe(true);
   });
 
   it('DialogHeader centers its title too', () => {
@@ -105,7 +105,7 @@ describe('DialogTitle (every dialog title is centered by default, owner rule 202
         </DialogContent>
       </Dialog>,
     );
-    expect(screen.getByText('Header title')).toHaveClass('text-center');
+    expect(screen.getByText('Header title').classList.contains('text-center')).toBe(true);
   });
 });
 
