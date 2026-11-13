@@ -88,6 +88,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 20 | [CLIENT-SESSION-46](MVP/CLIENT-SESSION-46_OFFLINE_QUEUE_FOR_RESULT_CHANGES.md) | Keep a result change made offline and send it when the connection returns (BA GL-9) | `TODO` |
 | 21 | [CLIENT-SESSION-47](MVP/CLIENT-SESSION-47_DUPLICATE_RESULT_WARNING.md) | Warn when the same players and winner were logged moments ago (BA open question 3) | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
+| 23 | [SPORT-18](MVP/SPORT-18_RESULT_SCHEMA_ADMIN_SCREEN.md) | Admin screen to edit a sport's result schema (extends ADMIN-2; depends on SESSION-50's admin endpoints) | `TODO` |
 
 #### Removed / Deferred
 

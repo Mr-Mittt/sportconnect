@@ -1,6 +1,6 @@
 # Session results (game logging) — design
 
-**Status:** Approved plan, not implemented (2026-11-12). **Tickets:** SESSION-50 (backend), CLIENT-SESSION-38 (client); follow-ups SESSION-51..60, CLIENT-SESSION-39..48, A26 (sport backlog).
+**Status:** Approved plan, not implemented (2026-11-12). **Tickets:** SESSION-50 (backend), CLIENT-SESSION-38 (client); follow-ups SESSION-51..60, CLIENT-SESSION-39..48, SPORT-18 (client backlog).
 **Source:** `/feature` session "game logging", BA document `D:Planningusiness-analystRequirements - Games, Statistics and Leaderboards.md`. Written plan-first: where the plan says "filed as a follow-up", the ticket ids above are the real entries.
 
 ## Context
@@ -13,14 +13,14 @@ Verified: a session can't be scheduled without `scheduledEndAt` (`SessionService
 ## Storage and concurrency design
 Rejected: a JSON blob per session (whole-blob read-modify-write serializes writers and loses concurrent changes, hot row shared with `updateSession`). Rejected: smallest-free-slot ids (race on allocation, retry/combiner, stale edit could hit a reused slot). Rejected: soft delete (a per-session record limit plus restore-as-add makes tombstones unnecessary; hard delete keeps the table bounded by live rows).
 
-`session_records(id bigint generated always as identity PRIMARY KEY, session_id uuid NOT NULL, player_ids uuid[] NOT NULL, data jsonb NOT NULL, client_request_id uuid NOT NULL, created_by uuid NOT NULL, created_at, updated_by, updated_at)`; index `(session_id, id)`; unique `(session_id, client_request_id)`. `player_ids` is the client's `players` list stored beside the opaque `data` so the server can check it without parsing `data`. No GIN index now (only needed for the later per-player ST queries; added in that ticket).
+`session_records(id bigint generated always as identity PRIMARY KEY, session_id bigint NOT NULL, players jsonb NOT NULL, data jsonb NOT NULL, client_request_id uuid NOT NULL, created_by uuid NOT NULL, created_at, updated_by, updated_at)`; index `(session_id, id)`; unique `(session_id, client_request_id)`. `players` (a jsonb list of user ids, not `uuid[]`: no array mapping exists in the codebase and the integration tests run on H2) is the client's `players` list stored beside the opaque `data` so the server can check it without parsing `data`. No GIN index now (only needed for the later per-player ST queries; added in that ticket). Session ids are `Long` in this codebase, hence the `bigint`.
 
 - **Add:** plain `INSERT`; the sequence gives distinct ids, so concurrent adds never conflict, block or retry. `client_request_id` is the client's `clientRef`, so a retried request never duplicates a record.
 - **Update:** lock/read the one row (`SELECT ... FOR UPDATE WHERE id AND session_id` for the audit before-image), then `UPDATE`. **If the row no longer exists (deleted meanwhile), the update is applied as an add with a new id, reported `RESTORED`** (later request wins; ids are never re-inserted, so a client can't plant an id the sequence will later hit).
 - **Delete:** `DELETE ... WHERE id AND session_id RETURNING data, player_ids`; idempotent (already gone ⇒ no-op success). Delete after update ⇒ gone; update after delete ⇒ restored as a new record. Within a single change set, if the same id is both updated and deleted, delete wins (the dialog never sends both).
 - Every write touches one row, so bursts of players never contend. No in-memory queue or combiner.
-- **Limits:** per-session live record count ≤ the sport's `maxRecords` (default 100 if unset, hard ceiling 500), checked in the same transaction on add/restore (a burst of simultaneous adds may overshoot slightly; this is an abuse guard, not a strict invariant). `data` serialized size ≤ the sport's `maxRecordBytes` (default 2048, hard ceiling 8192); `player_ids` non-empty, distinct, ≤ 50.
-- **Abuse protection (size):** the change-set request body is capped at 64 KB, enforced at the HTTP layer before deep parsing, with ≤50 operations; `data` byte size is measured as UTF-8 and rejected with `SESSION_RECORD_TOO_LARGE`; JSON nesting depth is capped (e.g. 10) on the record parser (tight `StreamReadConstraints`) so deeply nested payloads can't be used against the parser. Live data per session is bounded by `maxRecords × maxRecordBytes`. Audit rows are append-only and could grow under add/delete spam within the limits: filed as a follow-up (audit retention / rate limiting), not solved here.
+- **Limits:** per-session live record count ≤ the sport's `maxRecords` (default 100 if unset, hard ceiling 500), checked in the same transaction on add/restore (a burst of simultaneous adds may overshoot slightly; this is an abuse guard, not a strict invariant). `data` serialized size ≤ a fixed 4096 bytes (same as sport profile and session attributes); `player_ids` non-empty, distinct, ≤ 50.
+- **Abuse protection (size):** the change-set request body is capped at 64 KB, enforced at the HTTP layer before deep parsing, with ≤50 operations; `data` byte size is measured as UTF-8 and rejected with `SESSION_RECORD_TOO_LARGE`; JSON nesting depth is capped (e.g. 10) on the record parser (tight `StreamReadConstraints`) so deeply nested payloads can't be used against the parser. Live data per session is bounded by `maxRecords` × 4 KB. Audit rows are append-only and could grow under add/delete spam within the limits: filed as a follow-up (audit retention / rate limiting), not solved here.
 - **Audit:** append-only `session_record_audit(id bigserial, session_id, record_id, action CREATED|UPDATED|DELETED|RESTORED, actor_id, before jsonb, after jsonb, at)` in the same transaction (the before-image of a delete comes from `RETURNING`). Since records are hard-deleted, audit is the history; it is also what group members/participants can read (NF-5).
 - **Display number:** UI shows #1, #2, ... by creation order, computed client-side (cosmetic; shifts after a delete). A stable per-session number for chat commands is decided in that follow-up ticket.
 - **Scoreboard:** computed **on the client** from the record list using the sport schema's points rule. Cross-session stats later are computed server-side from stored rows (ST-5), reading schema fields tolerantly (a malformed record is skipped, not fatal).
@@ -34,8 +34,8 @@ No new Gradle module. `session-impl` already depends on `group-api` and `sport-a
 
 - **session-api:** new `SessionRecordService` interface (separate from the large `SessionService`) + DTOs (`RecordChangeSetRequest`, `RecordChangeSetResponse`, `SessionRecordDto`, audit DTO).
 - **session-impl:** package `com.sportconnect.session.record` — entities `SessionRecord`, `SessionRecordAudit`, repositories, `SessionRecordServiceImpl`, `SessionRecordController`, a `ResourceGate<Session>` implementation (or reuse `SessionGate` if its rules match exactly; decide at implementation after reading it).
-- **Sport domain (additive):** jsonb column `sports.result_schema` (like `session_attributes_schema`), seeded for badminton (and pickleball if that sport row exists; verify at implementation). It is mainly **client-facing**: `kind: MATCH`, players per side min/max (1..2), record mode `WINNER_ONLY`, points win/loss (+1/-1), labels en/vi. The server reads only `maxRecords` and `maxRecordBytes` from it (and treats "has a result schema" as "logging enabled for this sport"). New `SportService.getResultSchema(sportId)` (raw + locale-resolved, mirroring the attribute-schema methods).
-- **Liquibase:** `V089__session_records.sql` (two tables + `sports.result_schema` + seed), registered in `db.changelog-master.xml`; mirror in `server/src/test/resources/schema.sql` (H2 identity syntax; arrays/GIN may need an H2-compatible stand-in, check at implementation).
+- **Sport domain (additive):** jsonb column `sports.result_schema` (like `session_attributes_schema`), **not seeded**; it is set through admin endpoints added in SESSION-50 (`GET /api/sports/all/{sportId}/result-schema`, `PUT /api/sports/{sportId}/result-schema`) and read by the client through a public `GET /api/sports/{sportId}/result-schema`. It is mainly **client-facing**: `kind: MATCH`, players per side min/max (1..2), record mode `WINNER_ONLY`, points win/loss (+1/-1), labels en/vi. The server reads only `maxRecords` from it (and treats "has a result schema" as "logging enabled for this sport"). New `SportService.getResultSchema(sportId)` (active-only, `Optional`). The admin screen is the client ticket SPORT-18.
+- **Liquibase:** `V089__session_records.sql` (two tables + `sports.result_schema`, no seed), registered in `db.changelog-master.xml`; mirrored in `server/src/test/resources/schema.sql` (`BIGSERIAL`, `JSON`; the integration tests run on H2 only, so server SQL stays portable JPA).
 
 **API (`/api/sessions/{sessionId}/records`, `@PreAuthorize("hasRole('USER')")`, `ApiResponse<T>`):**
 - `GET` live records (`id`, `players`, `data`, timestamps, `createdBy`). No scoreboard.
@@ -73,3 +73,49 @@ Session lifecycle/job, participant statuses, group roles, existing endpoints, se
 - IT in `server/src/test/java/com/sportconnect/integration/` (`SessionRecordsIntegrationTest`): group member vs non-member, JOINED vs REQUESTED/INVITED standalone, non-JOINED player rejected, PREPARING/SCHEDULED refused, window at +23h ok / +25h refused, limit reached, oversized payload; **concurrency**: N parallel change sets all succeed with distinct ids and no errors; parallel delete vs update ends deleted-or-restored with no errors; a replayed `clientRef` creates no duplicate; a change set with one invalid item changes nothing (atomic) and names the item; mixed add/update/delete in one request; two sessions written at once don't interfere; real write path and error-code→HTTP mapping.
 - Client: Vitest for the section, dialog, diff logic, schema-driven validation and scoreboard math; scoped Playwright flow with MSW; check vi/en. Scoped tests only.
 - Manual: run server + client, add a 1v2 game in an ONGOING session, delete one, add two, confirm client scoreboard, display numbering and audit.
+
+## Deltas at pickup (2026-11-12)
+
+Ids are `Long`; `players` is jsonb; no seed, admin endpoints in SESSION-50 (scope change at the Phase 1 gate); a request-size filter and `SessionRecordGate` are new code. See `modules/session/docs/MVP/SESSION-50_SESSION_RECORDS_LOG_EDIT_DELETE_GAMES.md`.
+
+## Badminton result schema example
+
+Set with `PUT /api/sports/{sportId}/result-schema` (ADMIN). The server reads only `maxRecords`; every other field is the client contract that CLIENT-SESSION-38 finalizes, so treat the rest as the starting shape:
+
+```json
+{
+  "kind": "MATCH",
+  "playersPerSide": { "min": 1, "max": 2 },
+  "recordMode": "WINNER_ONLY",
+  "points": { "win": 1, "loss": -1 },
+  "labels": { "en": "Game", "vi": "Trận" },
+  "maxRecords": 100,
+}
+```
+
+A record sent by the client for this schema looks like `{"clientRef": "<uuid>", "players": ["<userId>", ...], "data": {"sideOne": ["<userId>"], "sideTwo": ["<userId>", "<userId>"], "winningSide": 1}}`; the server stores `data` as it is.
+
+---
+
+## Decision change (2026-11-13, owner): no audit table, no stored player ids
+
+The owner asked to keep the database small. Two things from the first implementation were removed before merge:
+
+- **`session_record_audit`, `GET /audit`, `RecordAuditDto` and the audit writes are gone.** A deleted or replaced record leaves no trace; deleting is final. The response statuses (`CREATED`, `UPDATED`, `RESTORED`, `DELETED`, `UNCHANGED`) are unchanged: they come from the change-set logic, not from the audit. SESSION-57 (audit retention and rate limiting) was dropped with it.
+- **`session_records.players` is gone.** The request now carries `playerIds` beside `data` (add and update). The server checks that every id is `JOINED` and does not store it; the client reads players, sides, winner and scores from `data` and validates `data` against the sport's result schema when it loads. A wrong `data` can be stored, but the board skips it because the client's validation fails. The response record no longer has a `players` field.
+- Table now: `id, session_id, data, client_request_id, created_by, created_at, updated_by, updated_at`. `V089` was edited in place (never merged or applied outside a scratch database).
+- Verified: the Spock spec and `SessionRecordsIntegrationTest` / `SportResultSchemaIntegrationTest` pass after the change (not a full `:server:test` rerun yet).
+- Where the text above (summary, design, tests list) still names the audit table, `GET /audit`, `RecordAuditDto` or a stored `players` column, this note overrides it.
+
+## Decision change (2026-11-13, owner): fixed 4 KB per record, count limit counted with stored records
+
+- **Per-record size:** a record's serialized `data` is capped at a fixed **4096 bytes**, the same check as sport profile attributes and session attributes. `maxRecordBytes` is gone from the result schema (the server no longer reads it, and the admin `PUT` no longer validates it); over the cap is `400 SESSION_RECORD_TOO_LARGE` with `maxBytes: 4096`. Where older text says "sport's `maxRecordBytes` (default 2048, ceiling 8192)", this overrides it. The 64 KB request cap stays as the guard on the whole change set.
+- **Record count:** the sport's `maxRecords` (default 100, ceiling 500) is compared with the records **already stored in the session** plus the adds, minus the deletes in the same change set. With 100 configured for badminton, the 101st record is refused with `400 SESSION_RECORD_LIMIT_REACHED` and `errorParams.maxRecords`, and the whole change set is rolled back (nothing stored). (A burst of simultaneous adds may overshoot slightly; the check is not serialised across requests.)
+- New tests: `SessionRecordsIntegrationTest` (a record over 4 KB; the 3rd record with `maxRecords` 2 counting the two stored ones) and Spock cases for the fixed cap.
+
+## Decision change (2026-11-13, owner): a bad record no longer fails the change set
+
+- Each record is checked on its own. An invalid record (`playerIds` or `data` malformed), one over 4 KB, one naming a player who has not `JOINED`, or an add past `maxRecords` becomes a result with `status: REJECTED`, `errorCode` and `errorParams`; the response is still `200`, every valid operation is applied, and `records` is the list after the valid ones. Where older text says these reject the whole change set (or answer 400 / roll back), this overrides it.
+- Still refused whole (400 `SESSION_RECORD_INVALID`): a malformed request (an add without its own `clientRef`, an update or delete without an id or with a repeated one, over 50 operations), and the access, status and window checks (403 / 404 / 409), the 64 KB body (413).
+- `maxRecords`: only as many new records as still fit (counting the stored ones, minus deletes in the same change set) are stored, in request order, adds before restores; the rest are `REJECTED` with `SESSION_RECORD_LIMIT_REACHED`. A rejected update stores nothing and leaves the existing record as it was. A rejected restore does not recreate the record.
+- Client: read `results` after every Save; keep rejected rows in the dialog and show the code's en/vi copy beside each (CLIENT-SESSION-38).

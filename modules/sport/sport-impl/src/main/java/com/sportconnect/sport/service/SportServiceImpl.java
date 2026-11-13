@@ -1,6 +1,8 @@
 package com.sportconnect.sport.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.attributes.AttributeSchema;
 import com.sportconnect.common.attributes.json.AttributeJson;
 import com.sportconnect.common.attributes.pair.DerivedSchemaExpander;
@@ -35,6 +37,10 @@ public class SportServiceImpl implements SportService {
     private static final TypeReference<Map<String, Object>> STORED_SCHEMA =
             new TypeReference<Map<String, Object>>() {
             };
+
+    /** SESSION-50: ceiling on a stored result schema document. */
+    private static final int MAX_RESULT_SCHEMA_BYTES = 16 * 1024;
+    private static final ObjectMapper RESULT_SCHEMA_MAPPER = new ObjectMapper();
 
     private final SportRepository sportRepository;
     private final SportLookupCache sportLookupCache;
@@ -403,6 +409,79 @@ public class SportServiceImpl implements SportService {
             return null;
         }
         return DerivedSchemaResolver.resolve(parseStoredSchema(sport.getAttributesSchema()), sessionSchema, locale);
+    }
+
+    /** {@inheritDoc} Active-only, via the sport cache. */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> getResultSchema(Long sportId) {
+        return requireActiveSport(sportId).getResultSchema();
+    }
+
+    /** {@inheritDoc} Repository read, so an inactive sport returns its schema. */
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> getResultSchemaForAdmin(Long sportId) {
+        Sport sport = sportRepository.findById(sportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
+        return sport.getResultSchema();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Validates only what the server reads (see {@link #validateResultSchema}) and stores the rest
+     * untouched. Resolves via {@code findById} so an inactive sport stays editable; evicts the sport
+     * cache on success.
+     */
+    @Override
+    @Transactional
+    public Map<String, Object> replaceResultSchema(Long sportId, Map<String, Object> schema) {
+        Sport sport = sportRepository.findById(sportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
+
+        validateResultSchema(schema);
+
+        sport.setResultSchema(schema);
+        Sport saved = sportRepository.save(sport);
+        sportLookupCache.evictAll();
+
+        log.info("Replaced result schema for sport {}", sportId);
+        return saved.getResultSchema();
+    }
+
+    /**
+     * Rejects a result schema the server could not use: not serialisable, over 16 KB, or a
+     * {@code maxRecords} that is not an integer in range. Everything else in
+     * the document is the client's and is deliberately not interpreted here.
+     */
+    private static void validateResultSchema(Map<String, Object> schema) {
+        if (schema == null) {
+            return;
+        }
+        try {
+            if (RESULT_SCHEMA_MAPPER.writeValueAsBytes(schema).length > MAX_RESULT_SCHEMA_BYTES) {
+                throw invalidResultSchema("The result schema is larger than " + MAX_RESULT_SCHEMA_BYTES + " bytes");
+            }
+        } catch (JsonProcessingException e) {
+            throw invalidResultSchema("The result schema is not valid JSON");
+        }
+        requireIntInRange(schema, "maxRecords", 1, 500);
+    }
+
+    private static void requireIntInRange(Map<String, Object> schema, String field, int min, int max) {
+        Object value = schema.get(field);
+        if (value == null) {
+            return;
+        }
+        if (!(value instanceof Integer || value instanceof Long)
+                || ((Number) value).longValue() < min || ((Number) value).longValue() > max) {
+            throw invalidResultSchema(field + " must be an integer from " + min + " to " + max);
+        }
+    }
+
+    private static BadRequestException invalidResultSchema(String message) {
+        return new BadRequestException("SPORT_RESULT_SCHEMA_INVALID", message, null);
     }
 
     /** A25: 404 {@code SPORT_NOT_FOUND} for a missing or inactive sport on the user-reachable paths. */

@@ -86,6 +86,20 @@ public class Sport {
     @Column(name = "session_attributes_schema", columnDefinition = "jsonb")
     private Map<String, Object> sessionAttributesSchema;
 
+    /**
+     * SESSION-50: the per-sport RESULT schema — what one recorded result (a game, later a per-player
+     * record) is for this sport. Mainly client-facing (the client builds, validates and scores from
+     * it); the server reads only {@code maxRecords}. {@code null} means
+     * this sport has no result logging. Admin-managed through
+     * {@code PUT /api/sports/{sportId}/result-schema}, not seeded.
+     *
+     * <p>Untyped {@code Map} for the same reason as {@link #attributesSchema}: {@code Sport} is
+     * cache-loaded on the hot path. {@code null} is meaningful, so no {@code @Builder.Default}.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "result_schema", columnDefinition = "jsonb")
+    private Map<String, Object> resultSchema;
+
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;

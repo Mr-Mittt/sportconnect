@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +24,11 @@ public interface SessionParticipantRepository extends JpaRepository<SessionParti
     Page<SessionParticipant> findBySessionIdAndStatus(Long sessionId, ParticipantStatus status, Pageable pageable);
 
     List<SessionParticipant> findBySessionIdAndStatusIn(Long sessionId, List<ParticipantStatus> statuses);
+
+    /** SESSION-50: which of the given users hold {@code status} in the session — one query for every
+     * player named in a result change set, instead of one lookup per player. */
+    List<SessionParticipant> findBySessionIdAndStatusAndUserIdIn(
+            Long sessionId, ParticipantStatus status, Collection<UUID> userIds);
 
     long countBySessionIdAndStatus(Long sessionId, ParticipantStatus status);
 
