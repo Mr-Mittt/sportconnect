@@ -2,7 +2,7 @@
 
 **Status:** Draft for the BA, 2026-11-12
 **Compares:** `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards.md` (dated Nov 7, decisions of Nov 9, 2026) against the implementation decisions in `modules/session/docs/SESSION_RECORDS_DESIGN.md`
-**Tickets:** SESSION-50 (server), CLIENT-GL-38 (client); follow-ups SESSION-51 to 60, CLIENT-SESSION-39 to 48, SPORT-18
+**Tickets:** SESSION-50 (server), CLIENT-GL-38 (client); follow-ups SESSION-GL-51 (was 51) to 60, CLIENT-GL-39 (was CLIENT-SESSION-39) to CLIENT-SESSION-48, SPORT-18
 **Scope of this comparison:** the game logging part (GL-1 to GL-9, the roles table, the sport template section, the standalone/group table, the non-functional rows and the three open questions). Statistics, boards, seasons, adjustments and guests are deferred, so only the places where today's decisions constrain them are listed.
 
 How to read it: **Server** and **Client** say where the decision is enforced. "Update BA" is a suggested change to the BA text; "Confirm" needs a BA answer.
@@ -39,7 +39,7 @@ How to read it: **Server** and **Client** say where the decision is enforced. "U
 3. **One Save for the whole dialog.** The Result dialog is a draft: adds, edits and deletes are sent together as one change set (at most 50 operations, 64 KB). If one item is invalid, nothing is saved and the error names the item.
 4. **Limits (abuse protection).** Per sport: maximum records per session (default 100, ceiling 500) and maximum bytes per record (default 2 KB, ceiling 8 KB); a 64 KB request cap; a nesting-depth cap. The BA needs a business number for the real maximum games in one session. **Confirm** 100.
 5. **A result section on the session screen.** A collapsible "Result / Kết quả" section under the players, collapsed by default, shown only for `ONGOING` and `COMPLETED` sessions whose sport has a result schema, with an "Update" button that opens the dialog.
-6. **Chat commands as a second entry path (new, SESSION-51).** `:add`, `:del`, `:upd` typed in the session's post chat. The grammar, how players are named, a stable per-session number and the reply are open and settled when that ticket is picked up.
+6. **Chat commands as a second entry path (new, SESSION-GL-51).** `:add`, `:del`, `:upd` typed in the session's post chat. The grammar, how players are named, a stable per-session number and the reply are open and settled when that ticket is picked up.
 7. **Who may be named.** Only `JOINED` participants of that session can appear in a record; the server enforces it because standalone games later count in each named player's career statistics, so a participant must not be able to log games against arbitrary users.
 8. **Malformed records.** The server stores the payload as it is, so statistics skip a malformed record. The BA acceptance criteria "statistics match hand-checked results" should say records are well-formed by construction of the app, and what the product does with a malformed one (skipped silently, or flagged).
 9. **No notification.** Adding, changing or deleting a record notifies nobody in this slice (candidate NOTIF-11).

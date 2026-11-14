@@ -1,6 +1,6 @@
-# SESSION-51 · Chat commands `:add`, `:del`, `:upd` in the session post thread
+# SESSION-GL-51 · Chat commands `:add`, `:del`, `:upd` in the session post thread
 
-**Status:** `TODO`
+**Status:** `POSTPONED` (2026-11-14)
 **Type:** Feature · **Depends on:** SESSION-50 ·
 **Filed:** 2026-11-12, Filed 2026-11-12 by the `/feature` session "game logging" (BA document `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards.md`; design: `modules/session/docs/SESSION_RECORDS_DESIGN.md`).
 
@@ -11,3 +11,7 @@ To settle at pickup: the command grammar; how players are named (mentions or use
 **Out of scope:** The dialog (SESSION-50 / CLIENT-GL-38).
 
 **Tests:** To be planned at pickup; an integration test through the real comment endpoint is required (cross-bean wiring).
+
+## Postponed (2026-11-14)
+
+Picked up on 2026-11-14 and postponed the same day. The owner's idea: the **client** parses the command, validates it and calls the existing records change-set API, so the server needs no parser. That makes this ticket mostly redundant; what could remain is a per-session stable game number (for `:del 3`) and, maybe, a way to post a confirmation reply. The discussion continues when CLIENT-GL-39 (formerly CLIENT-SESSION-39) is picked up; its "Discussion to continue" section holds the open points. Resume or close this ticket from there.
