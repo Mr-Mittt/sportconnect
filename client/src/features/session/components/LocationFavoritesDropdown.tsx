@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface LocationFavoritesDropdownProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -56,7 +57,7 @@ export function LocationFavoritesDropdown({
         {isFavoritesLoading ? (
           <p className="px-2 py-2 text-2xs text-text-muted">{t('common.loading')}</p>
         ) : favorites.length === 0 ? (
-          <p className="px-2 py-2 text-2xs text-text-muted">{t('locationFavorites.empty')}</p>
+          <EmptyHint size="2xs" className="px-2 py-2">{t('locationFavorites.empty')}</EmptyHint>
         ) : (
           favorites.map((location) => (
             <DropdownMenuItem key={location.id} onSelect={() => onSelectFavorite(location)}>

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/app/authStore';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
@@ -129,6 +129,9 @@ async function replaceTitle(user: ReturnType<typeof userEvent.setup>, value: str
 
 describe('CreateSessionModal', () => {
   beforeEach(() => {
+    // CLIENT-GL-38: the start picker offers no time before now, and these tests pick fixed hours (18 to 23) on
+    // Today: pin the clock (Date only, timers stay real) at 06:00 so every one of them stays selectable all day.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-08-03T06:00:00') });
     useAuthStore.getState().setSession(
       {
         id: 'user-1',
@@ -143,6 +146,10 @@ describe('CreateSessionModal', () => {
       'access-token',
     );
   });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
 
   it('has no mode toggle — the form is always the standalone sport picker', () => {
     render(<CreateSessionModal {...baseProps} />);
@@ -965,6 +972,22 @@ describe('CreateSessionModal', () => {
       expect(screen.getByLabelText(/^Duration \(min\)/)).toHaveValue(90);
       expect(screen.getByLabelText('Ends at: hour')).toHaveValue('21');
       expect(screen.getByLabelText('Ends at: minute')).toHaveValue('30');
+    });
+
+    it('a start that has gone past while the form stayed open shows an error and blocks Create (CLIENT-GL-38)', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(<CreateSessionModal {...baseProps} activeSport="basketball" onSubmit={onSubmit} />);
+      await pickAnyStartTime(user); // Today 19:00, the clock is at 06:00
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      expect(screen.queryByText("The start time can't be in the past.")).not.toBeInTheDocument();
+      // the user leaves the form open until 20:00, then edits another field
+      vi.setSystemTime(new Date('2026-08-03T20:00:00'));
+      await user.type(screen.getByLabelText(/^Open slot/), '0');
+      expect(screen.getByText("The start time can't be in the past.")).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Create session' }));
+      expect(screen.queryByText('Are you ready?')).not.toBeInTheDocument();
+      expect(onSubmit).not.toHaveBeenCalled();
     });
 
     it('an end that is not after the start shows an error, clears the duration and blocks Create', async () => {

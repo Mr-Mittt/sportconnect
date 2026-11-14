@@ -27,6 +27,8 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
 const noop = () => {};
 const baseProps = {
   currentUserId: 'user-marcus',
+  currentUser: { fullName: 'Marcus Lee', avatarUrl: null },
+  onAddComment: noop,
   comments: [] as Comment[],
   isLoading: false,
   isError: false,
@@ -44,6 +46,15 @@ describe('SessionCommentSection', () => {
   it('renders nothing when isForbidden', () => {
     const { container } = render(<SessionCommentSection {...baseProps} isForbidden />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('starts the thread with the composer, above the first comment (owner, 2026-11-14)', () => {
+    render(<SessionCommentSection {...baseProps} comments={[makeComment()]} />);
+    const input = screen.getByRole('textbox', { name: 'Add a comment' });
+    expect(
+      input.compareDocumentPosition(screen.getByText('What time are we meeting?')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('shows the empty state for a thread with zero comments', () => {
@@ -70,7 +81,12 @@ describe('SessionCommentSection', () => {
           makeComment({
             content: 'Bring your own #paddle',
             replies: [
-              makeComment({ id: 2, userFullName: 'Priya Shah', content: 'Agreed!', parentCommentId: 1 }),
+              makeComment({
+                id: 2,
+                userFullName: 'Priya Shah',
+                content: 'Agreed!',
+                parentCommentId: 1,
+              }),
             ],
           }),
         ]}
@@ -123,7 +139,10 @@ describe('SessionCommentSection', () => {
     const comment = makeComment();
     render(<SessionCommentSection {...baseProps} comments={[comment]} onAddReply={onAddReply} />);
     await user.click(screen.getByRole('button', { name: 'Reply' }));
-    await user.type(screen.getByRole('textbox', { name: `Reply to ${comment.userFullName}` }), 'Sounds good');
+    await user.type(
+      screen.getByRole('textbox', { name: `Reply to ${comment.userFullName}` }),
+      'Sounds good',
+    );
     // CLIENT-SESSION-10: the main composer moved out of this component (now `SessionCommentComposer`,
     // rendered by SessionDetailModal) — the reply box's own "Post" is the only one here now.
     await user.click(screen.getByRole('button', { name: 'Post' }));

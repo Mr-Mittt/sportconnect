@@ -174,6 +174,13 @@
     "NOTIFICATION_NOT_FOUND": "Thông báo này không khả dụng.",
     "NOTIFICATION_FORBIDDEN": "Thông báo này không khả dụng.",
     "SESSION_GENDER_SLOTS_EXCEED_OPEN": "Số chỗ cho nam và nữ không được vượt quá số chỗ trống.",
-    "SESSION_NOT_READY": "Buổi chơi này còn cần địa điểm, phí và thời lượng trước khi có thể lên lịch."
+    "SESSION_NOT_READY": "Buổi chơi này còn cần địa điểm, phí và thời lượng trước khi có thể lên lịch.",
+    "SESSION_RECORD_INVALID": "Kết quả này không hợp lệ. Hãy kiểm tra người chơi và bên thắng.",
+    "SESSION_RECORD_TOO_LARGE": "Kết quả này quá lớn để lưu.",
+    "SESSION_RECORD_PLAYER_NOT_JOINED": "Có người chơi trong kết quả này chưa tham gia buổi chơi.",
+    "SESSION_RECORD_LIMIT_REACHED": "Buổi chơi này đã đạt giới hạn {{maxRecords}} kết quả.",
+    "SESSION_RECORD_NOT_LOGGABLE": "Chỉ có thể ghi kết quả khi buổi chơi đang diễn ra hoặc đã hoàn thành.",
+    "SESSION_RECORD_WINDOW_CLOSED": "Đã quá 24 giờ để thay đổi kết quả của buổi chơi này.",
+    "SESSION_RECORD_NOT_ALLOWED": "Bạn không thể xem hoặc thay đổi kết quả của buổi chơi này."
   }
 }

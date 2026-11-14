@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { LocationMapPreview } from './LocationMapPreview';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 export interface LocationPickerProps {
   isOpen: boolean;
@@ -145,7 +146,7 @@ export function LocationPicker({
               {isSearching && <p className="text-2sm text-text-muted">{t('locationPicker.searching')}</p>}
               {isSearchError && <p className="text-2sm text-text-danger">{t('locationPicker.searchError')}</p>}
               {!isSearching && !isSearchError && results.length === 0 && (
-                <p className="text-2sm text-text-muted">{t('locationPicker.noResults')}</p>
+                <EmptyHint>{t('locationPicker.noResults')}</EmptyHint>
               )}
               <div className="flex flex-col gap-2.5">
                 {results.map((location) => {

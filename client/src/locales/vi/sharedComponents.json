@@ -39,6 +39,7 @@
     "unlike": "Bỏ thích bình luận",
     "reply": "Trả lời",
     "replyPlaceholder": "Trả lời {{name}}",
+    "cancelReply": "Hủy trả lời",
     "post": "Đăng"
   },
   "createPostForm": {

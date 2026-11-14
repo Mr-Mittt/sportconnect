@@ -50,7 +50,12 @@ const post: Post = {
   broadcastEndTime: null,
 };
 
-const football: SportProfile = { key: 'football', label: 'Football', iconUrl: '/images/sports/football.png', colorRamp: 'teal' };
+const football: SportProfile = {
+  key: 'football',
+  label: 'Football',
+  iconUrl: '/images/sports/football.png',
+  colorRamp: 'teal',
+};
 
 const currentUser = { fullName: 'Jordan Lee', avatarUrl: null };
 const noop = () => {};
@@ -117,13 +122,28 @@ describe('CommentSection', () => {
         comments={[
           makeComment({
             replies: [
-              makeComment({ id: 2, userFullName: 'Priya Shah', content: 'Agreed!', parentCommentId: 1 }),
+              makeComment({
+                id: 2,
+                userFullName: 'Priya Shah',
+                content: 'Agreed!',
+                parentCommentId: 1,
+              }),
             ],
           }),
         ]}
       />,
     );
     expect(screen.getByText('Agreed!')).toBeInTheDocument();
+  });
+
+  it('has the composer above the comments, inside the scrolling body (not pinned below it)', () => {
+    render(
+      <CommentSection {...baseProps} comments={[makeComment({ content: 'First comment text' })]} />,
+    );
+    const input = screen.getByRole('textbox', { name: 'Add a comment' });
+    const comment = screen.getByText('First comment text');
+    expect(input.compareDocumentPosition(comment) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(input.closest('.overflow-y-auto')).not.toBeNull();
   });
 
   it('shows the empty state for a thread with zero comments', () => {
@@ -146,13 +166,18 @@ describe('CommentSection', () => {
     const user = userEvent.setup();
     const onFetchMore = vi.fn();
     render(
-      <CommentSection {...baseProps} comments={[makeComment()]} hasMore onFetchMore={onFetchMore} />,
+      <CommentSection
+        {...baseProps}
+        comments={[makeComment()]}
+        hasMore
+        onFetchMore={onFetchMore}
+      />,
     );
     await user.click(screen.getByRole('button', { name: 'View more comments' }));
     expect(onFetchMore).toHaveBeenCalledTimes(1);
   });
 
-  it('submits a new comment via the bottom composer and clears it', async () => {
+  it('puts the composer at the top of the thread, before the first comment, and submits through it', async () => {
     const user = userEvent.setup();
     const onAddComment = vi.fn();
     render(<CommentSection {...baseProps} onAddComment={onAddComment} />);

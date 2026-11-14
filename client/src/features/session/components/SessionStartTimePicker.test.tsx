@@ -34,9 +34,84 @@ describe('SessionStartTimePicker', () => {
     expect(onChange).toHaveBeenCalledWith('2026-08-03T11:00');
   });
 
-  it('the hour default wraps past 23 back to 00 rather than rolling into the next day', () => {
-    render(<SessionStartTimePicker value="" onChange={vi.fn()} now={new Date('2026-08-03T23:30:00')} />);
+  it('the default past 23:00 is tomorrow at 00:00, never a 00:00 that has already passed today', () => {
+    const onChange = vi.fn();
+    render(<SessionStartTimePicker value="" onChange={onChange} now={new Date('2026-08-03T23:30:00')} />);
+    expect(screen.getByLabelText('Date')).toHaveValue('2026-08-04');
     expect(screen.getByLabelText('Hour')).toHaveValue('00');
+    expect(onChange).toHaveBeenCalledWith('2026-08-04T00:00');
+  });
+
+  describe('disallowPast (the start picker)', () => {
+    const optionState = (select: HTMLElement) =>
+      Array.from(select.querySelectorAll('option')).filter((option) => option.value !== '').map((option) => [option.value, option.disabled] as const);
+
+    it('disables the hours before the current one when the date is today', () => {
+      render(<SessionStartTimePicker value="2026-08-03T14:30" onChange={vi.fn()} now={now} disallowPast />);
+      const hours = optionState(screen.getByLabelText('Hour'));
+      expect(hours.filter(([, disabled]) => disabled).map(([hour]) => hour)).toEqual(['00', '01', '02', '03', '04', '05', '06', '07', '08', '09']);
+      expect(hours.find(([hour]) => hour === '10')?.[1]).toBe(false);
+    });
+
+    it('in the current hour also disables the minutes before the current one', () => {
+      render(<SessionStartTimePicker value="2026-08-03T10:30" onChange={vi.fn()} now={new Date('2026-08-03T10:15:40')} disallowPast />);
+      const minutes = optionState(screen.getByLabelText('Minute'));
+      expect(minutes.filter(([, disabled]) => disabled).map(([minute]) => minute)).toEqual(Array.from({ length: 15 }, (_, i) => String(i).padStart(2, '0')));
+    });
+
+    function Controlled({ start, at, disallowPast = true }: { start: string; at: Date; disallowPast?: boolean }) {
+      const [value, setValue] = useState(start);
+      return <SessionStartTimePicker value={value} onChange={setValue} now={at} disallowPast={disallowPast} />;
+    }
+
+    it('landing on the current hour with a past :00 sets the minute to now + 15', async () => {
+      const user = userEvent.setup();
+      render(<Controlled start="2026-08-03T14:00" at={new Date('2026-08-03T10:10:40')} />);
+      await user.selectOptions(screen.getByLabelText('Hour'), '10');
+      expect(screen.getByLabelText('Minute')).toHaveValue('25');
+    });
+
+    it('uses :59 when now + 15 would roll into the next hour', async () => {
+      const user = userEvent.setup();
+      render(<Controlled start="2026-08-03T14:00" at={new Date('2026-08-03T10:50:00')} />);
+      await user.selectOptions(screen.getByLabelText('Hour'), '10');
+      expect(screen.getByLabelText('Minute')).toHaveValue('59');
+    });
+
+    it('keeps a minute that is not in the past, and leaves other hours and days alone', async () => {
+      const user = userEvent.setup();
+      render(<Controlled start="2026-08-03T14:40" at={new Date('2026-08-03T10:10:00')} />);
+      await user.selectOptions(screen.getByLabelText('Hour'), '10');
+      expect(screen.getByLabelText('Minute')).toHaveValue('40');
+      await user.selectOptions(screen.getByLabelText('Hour'), '12');
+      expect(screen.getByLabelText('Minute')).toHaveValue('40');
+    });
+
+    it('does not touch the minute for a later day or without disallowPast', async () => {
+      const user = userEvent.setup();
+      const { unmount } = render(<Controlled start="2026-08-04T14:00" at={new Date('2026-08-03T10:10:00')} />);
+      await user.selectOptions(screen.getByLabelText('Hour'), '10');
+      expect(screen.getByLabelText('Minute')).toHaveValue('00');
+      unmount();
+      render(<Controlled start="2026-08-03T14:00" at={new Date('2026-08-03T10:10:00')} disallowPast={false} />);
+      await user.selectOptions(screen.getByLabelText('Hour'), '10');
+      expect(screen.getByLabelText('Minute')).toHaveValue('00');
+    });
+
+    it('switching the date to today while the hour is the current one also moves a past minute', async () => {
+      const user = userEvent.setup();
+      render(<Controlled start="2026-08-04T10:00" at={new Date('2026-08-03T10:10:00')} />);
+      await user.selectOptions(screen.getByLabelText('Date'), 'Today');
+      expect(screen.getByLabelText('Minute')).toHaveValue('25');
+    });
+
+    it('disables nothing on a later day, nor without the prop', () => {
+      const { unmount } = render(<SessionStartTimePicker value="2026-08-04T01:00" onChange={vi.fn()} now={now} disallowPast />);
+      expect(optionState(screen.getByLabelText('Hour')).some(([, disabled]) => disabled)).toBe(false);
+      unmount();
+      render(<SessionStartTimePicker value="2026-08-03T14:30" onChange={vi.fn()} now={now} />);
+      expect(optionState(screen.getByLabelText('Hour')).some(([, disabled]) => disabled)).toBe(false);
+    });
   });
 
   it('does not override an already-set value with the default', () => {

@@ -21,15 +21,14 @@ import { getApiError } from '@/shared/lib/apiError';
 import { getSportLabelForId } from '@/shared/lib/sportProfileFromId';
 import { getRampBadgeClasses, getRampFillClass } from '@/shared/lib/rampStyles';
 import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
-import { getParticipationAction, type ParticipationActionKind } from '@/shared/lib/sessionParticipation';
+import {
+  getParticipationAction,
+  type ParticipationActionKind,
+} from '@/shared/lib/sessionParticipation';
 import { getSessionStatusLabel, SESSION_STATUS_CLASSES } from '@/shared/lib/sessionStatus';
 import { formatSessionHeaderDateTime, formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
-import type {
-  ResolvedSportAttributeSchema,
-  SportKey,
-  SportProfile,
-} from '@/shared/types/sport';
+import type { ResolvedSportAttributeSchema, SportKey, SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
@@ -37,11 +36,13 @@ import { Input } from '@/shared/ui/input';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant, UpdateSessionPayload } from '../types';
-import { SessionCommentComposer } from './SessionCommentComposer';
 import { SessionCommentSection } from './SessionCommentSection';
 import { SessionReadinessDialog } from './SessionConfirmDialogs';
 import { SessionDetailSections, type CompletionFavorites } from './SessionDetailSections';
 import { SessionFormSection } from './SessionFormSection';
+import { SessionResultDialog } from './SessionResultDialog';
+import { SessionResultSection } from './SessionResultSection';
+import type { SessionResultData } from '../hooks/useSessionResultData';
 import { missingForSession } from '../sessionReadiness';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 
@@ -60,6 +61,10 @@ interface SessionDetailModalProps {
   participants: SessionParticipant[];
   isParticipantsLoading: boolean;
   isParticipantsError: boolean;
+
+  /** CLIENT-GL-38: the Result section's data (the sport's record schema, who may edit, the saved records);
+   * absent = no Result section (stories and tests that do not exercise it). */
+  result?: SessionResultData;
 
   currentUserId: string;
   /** Creator (standalone) or owner/admin (group-linked) — resolved by the caller, same
@@ -178,7 +183,13 @@ function rosterQualifier(
 }
 
 /** CLIENT-SESSION-37: the capacity bar under the Players header (nothing for an uncapped session). */
-function PlayersMeter({ session, rampColor }: { session: Session; rampColor: Parameters<typeof getRampFillClass>[0] }) {
+function PlayersMeter({
+  session,
+  rampColor,
+}: {
+  session: Session;
+  rampColor: Parameters<typeof getRampFillClass>[0];
+}) {
   if (session.capacity === UNCAPPED_CAPACITY) return null;
   return (
     <div className="h-1.25 overflow-hidden rounded-full bg-surface-1">
@@ -218,9 +229,17 @@ function PlayersAvatarStack({ participants }: { participants: SessionParticipant
   return (
     <div className="flex flex-wrap items-center gap-1.5" aria-hidden="true">
       {participants.map((participant) => (
-        <Avatar key={participant.id} className="border-hairline size-7 shrink-0 border-border" title={participant.userFullName}>
-          {participant.userAvatarUrl !== null && <AvatarImage src={participant.userAvatarUrl} alt="" />}
-          <AvatarFallback className="text-2xs">{initialsFor(participant.userFullName)}</AvatarFallback>
+        <Avatar
+          key={participant.id}
+          className="border-hairline size-7 shrink-0 border-border"
+          title={participant.userFullName}
+        >
+          {participant.userAvatarUrl !== null && (
+            <AvatarImage src={participant.userAvatarUrl} alt="" />
+          )}
+          <AvatarFallback className="text-2xs">
+            {initialsFor(participant.userFullName)}
+          </AvatarFallback>
         </Avatar>
       ))}
     </div>
@@ -253,11 +272,19 @@ function PlayersRoster({
             className="border-hairline flex items-center gap-1.5 rounded-full border-border bg-surface-2 py-1 pr-2.5 pl-1"
           >
             <Avatar className="size-5.5 shrink-0">
-              {participant.userAvatarUrl !== null && <AvatarImage src={participant.userAvatarUrl} alt="" />}
-              <AvatarFallback className="text-2xs">{initialsFor(participant.userFullName)}</AvatarFallback>
+              {participant.userAvatarUrl !== null && (
+                <AvatarImage src={participant.userAvatarUrl} alt="" />
+              )}
+              <AvatarFallback className="text-2xs">
+                {initialsFor(participant.userFullName)}
+              </AvatarFallback>
             </Avatar>
-            <span className="text-2xs whitespace-nowrap text-text-primary">{participant.userFullName}</span>
-            {qualifier !== null && <span className="text-2xs whitespace-nowrap text-text-muted">{qualifier}</span>}
+            <span className="text-2xs whitespace-nowrap text-text-primary">
+              {participant.userFullName}
+            </span>
+            {qualifier !== null && (
+              <span className="text-2xs whitespace-nowrap text-text-muted">{qualifier}</span>
+            )}
           </div>
         );
       })}
@@ -265,7 +292,7 @@ function PlayersRoster({
   );
 }
 
-const PARTICIPATION_ACTION_ICON:Record<ParticipationActionKind, Icon> = {
+const PARTICIPATION_ACTION_ICON: Record<ParticipationActionKind, Icon> = {
   JOIN: IconUserPlus,
   ACCEPT: IconCheck,
   CANCEL: IconX,
@@ -291,7 +318,10 @@ function ActionButtonContent({
   if (isPending) {
     return (
       <>
-        <IconLoader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+        <IconLoader2
+          className="size-4 animate-spin motion-reduce:animate-none"
+          aria-hidden="true"
+        />
         {pendingLabel}
       </>
     );
@@ -375,6 +405,7 @@ export function SessionDetailModal({
   participants,
   isParticipantsLoading,
   isParticipantsError,
+  result,
   currentUserId,
   canManage,
   sportsByKey,
@@ -436,6 +467,8 @@ export function SessionDetailModal({
   /** Read-only mode only: its Players section starts collapsed. */
   const [isPlayersOpen, setIsPlayersOpen] = useState(false);
   const [isApprovalCollapsed, setIsApprovalCollapsed] = useState(false);
+  /** CLIENT-GL-38: the record dialog, a sibling Dialog of this one (a nested popup misbehaves here). */
+  const [isResultDialogOpen, setIsResultDialogOpen] = useState(false);
 
   // SESSION-9/CLIENT-SESSION-9: derived from `session.callerParticipation`, not a lookup into
   // `participants` (which only ever holds JOINED rows for a non-manager — see the Players
@@ -445,24 +478,33 @@ export function SessionDetailModal({
   // on it either (backend only rejects CANCELLED), so this gate must include it too.
   const canJoinOrLeave =
     session !== undefined &&
-    (session.status === 'SCHEDULED' || session.status === 'ONGOING' || session.status === 'PREPARING');
+    (session.status === 'SCHEDULED' ||
+      session.status === 'ONGOING' ||
+      session.status === 'PREPARING');
 
-  const title = session === undefined
+  const title =
+    session === undefined
       ? t('detail.defaultTitle')
-      : (session.title ?? t('card.defaultTitle', { sport: getSportLabelForId(session.sportId, session.sportName) }));
+      : (session.title ??
+        t('card.defaultTitle', { sport: getSportLabelForId(session.sportId, session.sportName) }));
   const sportKey = session !== undefined ? sportKeyForId(session.sportId) : undefined;
   const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
 
-  const isAcceptOrJoin = participationAction?.kind === 'JOIN' || participationAction?.kind === 'ACCEPT';
+  const isAcceptOrJoin =
+    participationAction?.kind === 'JOIN' || participationAction?.kind === 'ACCEPT';
   // A JOINED creator (the normal case: creating a session also joins it) doesn't get the plain
   // participant Leave action — walking away from a session that still lists them as its creator
   // via the same "Leave" a regular participant uses isn't the intended flow (user decision).
   const isLeaveHiddenForCreator =
-    participationAction?.kind === 'LEAVE' && session !== undefined && session.createdBy === currentUserId;
+    participationAction?.kind === 'LEAVE' &&
+    session !== undefined &&
+    session.createdBy === currentUserId;
 
-  const loadCategory = isError && loadError !== undefined ? getApiError(loadError).category : undefined;
+  const loadCategory =
+    isError && loadError !== undefined ? getApiError(loadError).category : undefined;
   // CLIENT-SESSION-34: what a PREPARING session still needs before it can be scheduled.
-  const missing = session !== undefined && session.status === 'PREPARING' ? missingForSession(session) : [];
+  const missing =
+    session !== undefined && session.status === 'PREPARING' ? missingForSession(session) : [];
   // CLIENT-SESSION-37: everyone who cannot edit the session (a viewer, or the host once it is no longer
   // PREPARING) gets the read-only mode: Session information and Players, both collapsed.
   const readOnly = session !== undefined && !(canManage && session.status === 'PREPARING');
@@ -476,160 +518,235 @@ export function SessionDetailModal({
               : `${session.participantCount}/${session.capacity}`,
         });
   // CLIENT-SESSION-37: the system cancelled it (SESSION-24): no canceller, a cancel time.
-  const isAutoCancelled = session !== undefined && session.cancelledBy === null && session.cancelledAt !== null;
+  const isAutoCancelled =
+    session !== undefined && session.cancelledBy === null && session.cancelledAt !== null;
 
   return (
     <>
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          setRejectingUserId(null);
-          setRejectReason('');
-          onClose();
-        }
-      }}
-    >
-      <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
-        <div className="border-hairline-b flex flex-col gap-[9px] border-border px-4 py-3">
-          <div className="grid w-full grid-cols-[1fr_minmax(0,auto)_1fr] items-start gap-2">
-            <span aria-hidden="true" />
-            <div className="flex min-w-0 items-center justify-center gap-1.5">
-              {sport !== undefined && (
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectingUserId(null);
+            setRejectReason('');
+            onClose();
+          }
+        }}
+      >
+        <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
+          <div className="border-hairline-b flex flex-col gap-[9px] border-border px-4 py-3">
+            <div className="grid w-full grid-cols-[1fr_minmax(0,auto)_1fr] items-start gap-2">
+              <span aria-hidden="true" />
+              <div className="flex min-w-0 items-center justify-center gap-1.5">
+                {sport !== undefined && (
+                  <span
+                    role="img"
+                    aria-label={sport.label}
+                    className={cn(
+                      'flex size-5 shrink-0 items-center justify-center rounded-full',
+                      getRampBadgeClasses(sport.colorRamp),
+                    )}
+                  >
+                    <SportIcon iconUrl={sport.iconUrl} className="size-3" />
+                  </span>
+                )}
+                <DialogTitle className="min-w-0 truncate text-sm font-semibold text-text-primary">
+                  {title}
+                </DialogTitle>
+              </div>
+              <DialogClose aria-label={t('common.close')} className="justify-self-end" />
+            </div>
+            {session !== undefined && (
+              <div className="flex items-center gap-1.5 text-2sm">
                 <span
-                  role="img"
-                  aria-label={sport.label}
                   className={cn(
-                    'flex size-5 shrink-0 items-center justify-center rounded-full',
-                    getRampBadgeClasses(sport.colorRamp),
+                    'size-1.5 shrink-0 rounded-full bg-current',
+                    SESSION_STATUS_CLASSES[session.status],
                   )}
+                  aria-hidden="true"
+                />
+                <span
+                  className={cn('font-medium uppercase', SESSION_STATUS_CLASSES[session.status])}
                 >
-                  <SportIcon iconUrl={sport.iconUrl} className="size-3" />
+                  {getSessionStatusLabel(session.status)}
                 </span>
-              )}
-              <DialogTitle className="min-w-0 truncate text-sm font-semibold text-text-primary">
-                {title}
-              </DialogTitle>
-            </div>
-            <DialogClose aria-label={t('common.close')} className="justify-self-end" />
+                <span className="text-text-muted">
+                  {' '}
+                  · {formatSessionHeaderDateTime(session.scheduledStart, session.scheduledEndAt)}
+                </span>
+              </div>
+            )}
           </div>
-          {session !== undefined && (
-            <div className="flex items-center gap-1.5 text-2sm">
-              <span
-                className={cn('size-1.5 shrink-0 rounded-full bg-current', SESSION_STATUS_CLASSES[session.status])}
-                aria-hidden="true"
+
+          <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-1 py-1">
+            {isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
+            {isError && loadCategory === 'NOT_FOUND' && (
+              <ResourceUnavailable
+                variant="unavailable"
+                onAction={onClose}
+                actionLabel={t('common.close')}
               />
-              <span className={cn('font-medium uppercase', SESSION_STATUS_CLASSES[session.status])}>
-                {getSessionStatusLabel(session.status)}
-              </span>
-              <span className="text-text-muted"> · {formatSessionHeaderDateTime(session.scheduledStart, session.scheduledEndAt)}</span>
-            </div>
-          )}
-        </div>
+            )}
+            {isError && loadCategory === 'FORBIDDEN' && (
+              <ResourceUnavailable
+                variant="forbidden"
+                onAction={onClose}
+                actionLabel={t('common.close')}
+              />
+            )}
+            {isError && loadCategory !== 'NOT_FOUND' && loadCategory !== 'FORBIDDEN' && (
+              <p role="alert" className="text-2sm text-text-danger">
+                {t('detail.error')}
+              </p>
+            )}
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3.5">
-          {isLoading && <p className="text-2sm text-text-muted">{t('common.loading')}</p>}
-          {isError && loadCategory === 'NOT_FOUND' && (
-            <ResourceUnavailable variant="unavailable" onAction={onClose} actionLabel={t('common.close')} />
-          )}
-          {isError && loadCategory === 'FORBIDDEN' && (
-            <ResourceUnavailable variant="forbidden" onAction={onClose} actionLabel={t('common.close')} />
-          )}
-          {isError && loadCategory !== 'NOT_FOUND' && loadCategory !== 'FORBIDDEN' && (
-            <p role="alert" className="text-2sm text-text-danger">{t('detail.error')}</p>
-          )}
-
-          {session !== undefined && (
-            <>
-              {session.status === 'CANCELLED' && (
-                <div className="border-hairline rounded-lg border-border bg-surface-1 p-2.5 text-2sm text-text-secondary">
-                  <div>
-                    {isAutoCancelled && session.cancelledAt !== null
-                      ? t('detail.autoCancelledOn', { time: formatStartTime(session.cancelledAt) })
-                      : session.cancelledAt !== null
-                        ? t('detail.cancelledByOn', {
-                            name: session.cancelledByFullName ?? t('detail.unknownUser'),
+            {session !== undefined && (
+              <>
+                {session.status === 'CANCELLED' && (
+                  <div className="border-hairline rounded-lg border-border bg-surface-1 p-2.5 text-2sm text-text-secondary">
+                    <div>
+                      {isAutoCancelled && session.cancelledAt !== null
+                        ? t('detail.autoCancelledOn', {
                             time: formatStartTime(session.cancelledAt),
                           })
-                        : t('detail.cancelledBy', {
-                            name: session.cancelledByFullName ?? t('detail.unknownUser'),
-                          })}
-                  </div>
-                  {/* An auto-cancel's stored reason is the server's English sentence: show client copy instead. */}
-                  {isAutoCancelled ? (
-                    <div className="mt-1 text-2xs text-text-muted">
-                      {t('detail.reason', { reason: t('detail.autoCancelledReason') })}
+                        : session.cancelledAt !== null
+                          ? t('detail.cancelledByOn', {
+                              name: session.cancelledByFullName ?? t('detail.unknownUser'),
+                              time: formatStartTime(session.cancelledAt),
+                            })
+                          : t('detail.cancelledBy', {
+                              name: session.cancelledByFullName ?? t('detail.unknownUser'),
+                            })}
                     </div>
-                  ) : (
-                    session.cancelReason !== null &&
-                    session.cancelReason !== '' && (
-                      <div className="mt-1 text-2xs text-text-muted">{t('detail.reason', { reason: session.cancelReason })}</div>
-                    )
-                  )}
-                </div>
-              )}
-
-              {/* CLIENT-SESSION-34: a viewer of a PREPARING session sees the warning. The host already knows
-                  it is theirs to prepare, so (CLIENT-SESSION-37) they get only what is still missing. */}
-              {session.status === 'PREPARING' && (!canManage || missing.length > 0) && (
-                <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-2xs leading-relaxed text-amber-800">
-                  {!canManage && (
-                    <p>
-                      <strong>{t('detail.preparingBanner.lead')}</strong> {t('detail.preparingBanner.body')}
-                    </p>
-                  )}
-                  {canManage && (
-                    <p>
-                      <strong>{t('detail.stillMissing')}</strong>{' '}
-                      {missing.map((field) => t(`form.missingItem.${field}`)).join(', ')}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <SessionDetailSections
-                i18nOverridePrefix={i18nOverridePrefix}
-                session={session}
-                canEdit={canManage && session.status === 'PREPARING'}
-                onUpdateSession={onUpdateSession}
-                isSaving={isUpdatingSession}
-                saveError={isUpdateSessionError ? (updateSessionErrorText ?? t('detail.saveError')) : null}
-                selectedLocation={selectedCompletionLocation}
-                onOpenLocationPicker={onOpenCompletionLocationPicker}
-                locationPicker={completionLocationPicker}
-                favorites={completionFavorites}
-                onClearLocation={onClearCompletionLocation}
-                sessionAttributeSchema={sessionAttributeSchema}
-                refBaseSchema={refBaseSchema}
-                refChoiceSource={refChoiceSource}
-              />
-
-              {/* CLIENT-SESSION-37: read-only mode — Players is a collapsed section like Session information. */}
-              {readOnly ? (
-                <section aria-label={t('detail.players.label')}>
-                  <SessionFormSection
-                    i18nOverridePrefix={i18nOverridePrefix}
-                    title={playersHeading}
-                    open={isPlayersOpen}
-                    onOpenChange={setIsPlayersOpen}
-                    scrollIntoViewOnOpen
-                    summary={
-                      <div className="flex flex-col gap-1.5">
-                        <PlayersStatus
-                          isLoading={isParticipantsLoading}
-                          isError={isParticipantsError}
-                          loadingText={t('common.loading')}
-                          errorText={t('detail.players.error')}
-                        />
-                        {!isParticipantsLoading && !isParticipantsError && (
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="text-2xs text-text-muted">{t('detail.players.summaryLabel')}:</span>
-                            <PlayersAvatarStack participants={participants} />
-                          </div>
-                        )}
+                    {/* An auto-cancel's stored reason is the server's English sentence: show client copy instead. */}
+                    {isAutoCancelled ? (
+                      <div className="mt-1 text-2xs text-text-muted">
+                        {t('detail.reason', { reason: t('detail.autoCancelledReason') })}
                       </div>
-                    }
-                  >
+                    ) : (
+                      session.cancelReason !== null &&
+                      session.cancelReason !== '' && (
+                        <div className="mt-1 text-2xs text-text-muted">
+                          {t('detail.reason', { reason: session.cancelReason })}
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+
+                {/* CLIENT-SESSION-34: a viewer of a PREPARING session sees the warning. The host already knows
+                  it is theirs to prepare, so (CLIENT-SESSION-37) they get only what is still missing. */}
+                {session.status === 'PREPARING' && (!canManage || missing.length > 0) && (
+                  <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-2xs leading-relaxed text-amber-800">
+                    {!canManage && (
+                      <p>
+                        <strong>{t('detail.preparingBanner.lead')}</strong>{' '}
+                        {t('detail.preparingBanner.body')}
+                      </p>
+                    )}
+                    {canManage && (
+                      <p>
+                        <strong>{t('detail.stillMissing')}</strong>{' '}
+                        {missing.map((field) => t(`form.missingItem.${field}`)).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <SessionDetailSections
+                  i18nOverridePrefix={i18nOverridePrefix}
+                  session={session}
+                  canEdit={canManage && session.status === 'PREPARING'}
+                  onUpdateSession={onUpdateSession}
+                  isSaving={isUpdatingSession}
+                  saveError={
+                    isUpdateSessionError ? (updateSessionErrorText ?? t('detail.saveError')) : null
+                  }
+                  selectedLocation={selectedCompletionLocation}
+                  onOpenLocationPicker={onOpenCompletionLocationPicker}
+                  locationPicker={completionLocationPicker}
+                  favorites={completionFavorites}
+                  onClearLocation={onClearCompletionLocation}
+                  sessionAttributeSchema={sessionAttributeSchema}
+                  refBaseSchema={refBaseSchema}
+                  refChoiceSource={refChoiceSource}
+                />
+
+                {/* CLIENT-SESSION-37: read-only mode — Players is a collapsed section like Session information. */}
+                {readOnly ? (
+                  <section aria-label={t('detail.players.label')}>
+                    <SessionFormSection
+                      i18nOverridePrefix={i18nOverridePrefix}
+                      title={playersHeading}
+                      open={isPlayersOpen}
+                      onOpenChange={setIsPlayersOpen}
+                      scrollIntoViewOnOpen
+                      // Collapsed: the avatars sit in the header itself, no "Players:" label under it (owner, 2026-11-13).
+                      collapsedHeader={
+                        !isParticipantsLoading && !isParticipantsError ? (
+                          <PlayersAvatarStack participants={participants} />
+                        ) : undefined
+                      }
+                      summary={
+                        isParticipantsLoading || isParticipantsError ? (
+                          <PlayersStatus
+                            isLoading={isParticipantsLoading}
+                            isError={isParticipantsError}
+                            loadingText={t('common.loading')}
+                            errorText={t('detail.players.error')}
+                          />
+                        ) : undefined
+                      }
+                    >
+                      <PlayersMeter session={session} rampColor={sport?.colorRamp} />
+                      <PlayersStatus
+                        isLoading={isParticipantsLoading}
+                        isError={isParticipantsError}
+                        loadingText={t('common.loading')}
+                        errorText={t('detail.players.error')}
+                      />
+                      {!isParticipantsLoading && !isParticipantsError && (
+                        <PlayersRoster
+                          participants={participants}
+                          session={session}
+                          currentUserId={currentUserId}
+                          t={t}
+                        />
+                      )}
+                    </SessionFormSection>
+                  </section>
+                ) : (
+                  <section aria-label={t('detail.players.label')} className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsPlayersCollapsed((collapsed) => !collapsed)}
+                      aria-expanded={!isPlayersCollapsed}
+                      className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                    >
+                      <IconUsers className="size-4 shrink-0" aria-hidden="true" />
+                      {t('detail.players.heading', {
+                        value:
+                          session.capacity === UNCAPPED_CAPACITY
+                            ? session.participantCount
+                            : `${session.participantCount}/${session.capacity}`,
+                      })}
+                      {/* Collapsed: the avatars sit in the header, left of the chevron. */}
+                      {isPlayersCollapsed && !isParticipantsLoading && !isParticipantsError && (
+                        <span className="ml-auto">
+                          <PlayersAvatarStack participants={participants} />
+                        </span>
+                      )}
+                      <IconChevronDown
+                        className={cn(
+                          'size-4 shrink-0 text-text-muted transition-transform',
+                          !(isPlayersCollapsed && !isParticipantsLoading && !isParticipantsError) &&
+                            'ml-auto',
+                          !isPlayersCollapsed && 'rotate-180',
+                        )}
+                        aria-hidden="true"
+                      />
+                    </button>
+
                     <PlayersMeter session={session} rampColor={sport?.colorRamp} />
                     <PlayersStatus
                       isLoading={isParticipantsLoading}
@@ -637,281 +754,289 @@ export function SessionDetailModal({
                       loadingText={t('common.loading')}
                       errorText={t('detail.players.error')}
                     />
-                    {!isParticipantsLoading && !isParticipantsError && (
-                      <PlayersRoster participants={participants} session={session} currentUserId={currentUserId} t={t} />
+                    {!isParticipantsLoading && !isParticipantsError && !isPlayersCollapsed && (
+                      <PlayersRoster
+                        participants={participants}
+                        session={session}
+                        currentUserId={currentUserId}
+                        t={t}
+                      />
                     )}
-                  </SessionFormSection>
-                </section>
-              ) : (
-              <section aria-label={t('detail.players.label')} className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsPlayersCollapsed((collapsed) => !collapsed)}
-                  aria-expanded={!isPlayersCollapsed}
-                  className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                >
-                  <IconUsers className="size-4 shrink-0" aria-hidden="true" />
-                  {t('detail.players.heading', {
-                    value:
-                      session.capacity === UNCAPPED_CAPACITY
-                        ? session.participantCount
-                        : `${session.participantCount}/${session.capacity}`,
-                  })}
-                  <IconChevronDown
-                    className={cn(
-                      'ml-auto size-4 shrink-0 text-text-muted transition-transform',
-                      !isPlayersCollapsed && 'rotate-180',
-                    )}
-                    aria-hidden="true"
+                  </section>
+                )}
+
+                {/* CLIENT-GL-38: the Result section: ONGOING/COMPLETED sessions whose sport has a record schema. */}
+                {result !== undefined && result.access.visible && result.schema !== null && (
+                  <SessionResultSection
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    schema={result.schema}
+                    records={result.records}
+                    isLoading={result.isLoading}
+                    isError={result.isError}
+                    names={result.names}
+                    locale={result.locale}
+                    canEdit={result.access.canEdit}
+                    windowClosed={result.access.windowClosed}
+                    onUpdate={() => setIsResultDialogOpen(true)}
                   />
-                </button>
-
-                <PlayersMeter session={session} rampColor={sport?.colorRamp} />
-                <PlayersStatus
-                  isLoading={isParticipantsLoading}
-                  isError={isParticipantsError}
-                  loadingText={t('common.loading')}
-                  errorText={t('detail.players.error')}
-                />
-                {!isParticipantsLoading && !isParticipantsError && isPlayersCollapsed && (
-                  <PlayersAvatarStack participants={participants} />
                 )}
-                {!isParticipantsLoading && !isParticipantsError && !isPlayersCollapsed && (
-                  <PlayersRoster participants={participants} session={session} currentUserId={currentUserId} t={t} />
-                )}
-              </section>
-              )}
 
-              {/* canJoinOrLeave also gates approve/reject, not just non-empty — the backend
+                {/* canJoinOrLeave also gates approve/reject, not just non-empty — the backend
                   rejects both once the session is CANCELLED (same reason cancelSession itself
                   is blocked on COMPLETED/CANCELLED), so this stays hidden rather than showing
                   buttons that would only ever 400. */}
-              {canJoinOrLeave && requestedParticipants.length > 0 && (
-                <section aria-label={t('detail.approval.label')} className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsApprovalCollapsed((collapsed) => !collapsed)}
-                    aria-expanded={!isApprovalCollapsed}
-                    className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                  >
-                    <IconClock className="size-4 shrink-0" aria-hidden="true" />
-                    {t('detail.approval.heading', { n: requestedParticipants.length })}
-                    <IconChevronDown
-                      className={cn(
-                        'ml-auto size-4 shrink-0 text-text-muted transition-transform',
-                        !isApprovalCollapsed && 'rotate-180',
-                      )}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {isRequestedParticipantsLoading && (
-                    <p className="text-2xs text-text-muted">{t('common.loading')}</p>
-                  )}
-                  {isRequestedParticipantsError && (
-                    <p role="alert" className="text-2xs text-text-danger">
-                      {t('detail.approval.error')}
-                    </p>
-                  )}
-                  {!isApprovalCollapsed && !isRequestedParticipantsLoading && !isRequestedParticipantsError && (
-                    <div className="border-amber-800/30 bg-amber-50 divide-amber-800/20 flex flex-col gap-2.5 divide-y rounded-xl border-hairline p-2.5">
-                      {requestedParticipants.map((participant) => (
-                        <div key={participant.id} className="flex flex-col gap-1.5 pt-2.5 first:pt-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-2">
-                              <Avatar className="size-6 shrink-0">
-                                {participant.userAvatarUrl !== null && (
-                                  <AvatarImage src={participant.userAvatarUrl} alt="" />
-                                )}
-                                <AvatarFallback className="text-2xs">
-                                  {initialsFor(participant.userFullName)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="truncate text-2sm text-text-primary">
-                                {participant.userFullName}
-                              </span>
-                            </div>
-                            <div className="flex shrink-0 gap-1.5">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled={isRejectingParticipant}
-                                onClick={() => {
-                                  setRejectingUserId(participant.userId);
-                                  setRejectReason('');
-                                }}
-                              >
-                                {t('detail.approval.reject')}
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="primary"
-                                size="sm"
-                                disabled={isApprovingParticipant}
-                                onClick={() => onApproveParticipant(participant.userId)}
-                              >
-                                {t('detail.approval.approve')}
-                              </Button>
-                            </div>
-                          </div>
-                          {rejectingUserId === participant.userId && (
-                            <div className="border-hairline flex flex-col gap-2 rounded-lg border-border bg-surface-2 p-2.5">
-                              <Input
-                                value={rejectReason}
-                                onChange={(event) => setRejectReason(event.target.value)}
-                                placeholder={t('detail.approval.reasonPlaceholder')}
-                                aria-label={t('detail.approval.reasonLabel', { name: participant.userFullName })}
-                              />
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  variant="primary"
-                                  size="sm"
-                                  disabled={isRejectingParticipant}
-                                  onClick={() => {
-                                    onRejectParticipant(participant.userId, rejectReason.trim());
-                                    setRejectingUserId(null);
-                                  }}
-                                >
-                                  {isRejectingParticipant ? t('detail.approval.rejecting') : t('detail.approval.confirmReject')}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={isRejectingParticipant}
-                                  onClick={() => setRejectingUserId(null)}
-                                >
-                                  {t('detail.approval.neverMind')}
-                                </Button>
+                {canJoinOrLeave && requestedParticipants.length > 0 && (
+                  <section aria-label={t('detail.approval.label')} className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsApprovalCollapsed((collapsed) => !collapsed)}
+                      aria-expanded={!isApprovalCollapsed}
+                      className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                    >
+                      <IconClock className="size-4 shrink-0" aria-hidden="true" />
+                      {t('detail.approval.heading', { n: requestedParticipants.length })}
+                      <IconChevronDown
+                        className={cn(
+                          'ml-auto size-4 shrink-0 text-text-muted transition-transform',
+                          !isApprovalCollapsed && 'rotate-180',
+                        )}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    {isRequestedParticipantsLoading && (
+                      <p className="text-2xs text-text-muted">{t('common.loading')}</p>
+                    )}
+                    {isRequestedParticipantsError && (
+                      <p role="alert" className="text-2xs text-text-danger">
+                        {t('detail.approval.error')}
+                      </p>
+                    )}
+                    {!isApprovalCollapsed &&
+                      !isRequestedParticipantsLoading &&
+                      !isRequestedParticipantsError && (
+                        <div className="border-amber-800/30 bg-amber-50 divide-amber-800/20 flex flex-col gap-2.5 divide-y rounded-xl border-hairline p-2.5">
+                          {requestedParticipants.map((participant) => (
+                            <div
+                              key={participant.id}
+                              className="flex flex-col gap-1.5 pt-2.5 first:pt-0"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Avatar className="size-6 shrink-0">
+                                    {participant.userAvatarUrl !== null && (
+                                      <AvatarImage src={participant.userAvatarUrl} alt="" />
+                                    )}
+                                    <AvatarFallback className="text-2xs">
+                                      {initialsFor(participant.userFullName)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="truncate text-2sm text-text-primary">
+                                    {participant.userFullName}
+                                  </span>
+                                </div>
+                                <div className="flex shrink-0 gap-1.5">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isRejectingParticipant}
+                                    onClick={() => {
+                                      setRejectingUserId(participant.userId);
+                                      setRejectReason('');
+                                    }}
+                                  >
+                                    {t('detail.approval.reject')}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={isApprovingParticipant}
+                                    onClick={() => onApproveParticipant(participant.userId)}
+                                  >
+                                    {t('detail.approval.approve')}
+                                  </Button>
+                                </div>
                               </div>
+                              {rejectingUserId === participant.userId && (
+                                <div className="border-hairline flex flex-col gap-2 rounded-lg border-border bg-surface-2 p-2.5">
+                                  <Input
+                                    value={rejectReason}
+                                    onChange={(event) => setRejectReason(event.target.value)}
+                                    placeholder={t('detail.approval.reasonPlaceholder')}
+                                    aria-label={t('detail.approval.reasonLabel', {
+                                      name: participant.userFullName,
+                                    })}
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="primary"
+                                      size="sm"
+                                      disabled={isRejectingParticipant}
+                                      onClick={() => {
+                                        onRejectParticipant(
+                                          participant.userId,
+                                          rejectReason.trim(),
+                                        );
+                                        setRejectingUserId(null);
+                                      }}
+                                    >
+                                      {isRejectingParticipant
+                                        ? t('detail.approval.rejecting')
+                                        : t('detail.approval.confirmReject')}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={isRejectingParticipant}
+                                      onClick={() => setRejectingUserId(null)}
+                                    >
+                                      {t('detail.approval.neverMind')}
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                  </section>
+                )}
+
+                <div className="flex items-center gap-2 self-end">
+                  <span className="text-2xs text-text-muted">
+                    {t('detail.approvalCreatedBy', {
+                      approval: session.autoApprove
+                        ? i18next.t('enums:sessionApproval.auto')
+                        : i18next.t('enums:sessionApproval.hostApproval'),
+                      name: session.createdByFullName,
+                    })}
+                  </span>
+                  {!isCommentsForbidden && (
+                    <button
+                      type="button"
+                      aria-pressed={session.isLikedByCurrentUser}
+                      aria-label={
+                        session.isLikedByCurrentUser ? t('detail.unlike') : t('detail.like')
+                      }
+                      onClick={onToggleLike}
+                      disabled={isTogglingLike}
+                      className={cn(
+                        'flex w-fit cursor-pointer items-center gap-1 rounded p-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default',
+                        session.isLikedByCurrentUser ? 'text-text-danger' : 'text-text-secondary',
+                      )}
+                    >
+                      {session.isLikedByCurrentUser ? (
+                        <IconHeartFilled className="size-4" aria-hidden="true" />
+                      ) : (
+                        <IconHeart className="size-4" aria-hidden="true" />
+                      )}
+                      {session.likeCount}
+                    </button>
                   )}
-                </section>
-              )}
+                </div>
 
-              <div className="flex items-center gap-2 self-end">
-                <span className="text-2xs text-text-muted">
-                  {t('detail.approvalCreatedBy', {
-                    approval: session.autoApprove
-                      ? i18next.t('enums:sessionApproval.auto')
-                      : i18next.t('enums:sessionApproval.hostApproval'),
-                    name: session.createdByFullName,
-                  })}
-                </span>
-                {!isCommentsForbidden && (
-                  <button
-                    type="button"
-                    aria-pressed={session.isLikedByCurrentUser}
-                    aria-label={session.isLikedByCurrentUser ? t('detail.unlike') : t('detail.like')}
-                    onClick={onToggleLike}
-                    disabled={isTogglingLike}
-                    className={cn(
-                      'flex w-fit cursor-pointer items-center gap-1 rounded p-0.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent disabled:cursor-default',
-                      session.isLikedByCurrentUser ? 'text-text-danger' : 'text-text-secondary',
-                    )}
-                  >
-                    {session.isLikedByCurrentUser ? (
-                      <IconHeartFilled className="size-4" aria-hidden="true" />
-                    ) : (
-                      <IconHeart className="size-4" aria-hidden="true" />
-                    )}
-                    {session.likeCount}
-                  </button>
-                )}
-              </div>
-
-              <SessionCommentSection
-                currentUserId={currentUserId}
-                comments={comments}
-                isLoading={isCommentsLoading}
-                isError={isCommentsError}
-                isForbidden={isCommentsForbidden}
-                hasMore={hasMoreComments}
-                isFetchingMore={isFetchingMoreComments}
-                onFetchMore={onFetchMoreComments}
-                onAddReply={onAddCommentReply}
-                isPosting={isPostingComment}
-                onDeleteComment={onDeleteComment}
-                onToggleCommentLike={onToggleCommentLike}
-              />
-            </>
-          )}
-        </div>
-
-        {session !== undefined && (
-          <div className="border-hairline-t flex flex-col gap-2.5 border-border px-4 py-3">
-            {/* CLIENT-SESSION-34: the host's way out of PREPARING (SESSION-46 has no automatic flip). */}
-            {canManage && session.status === 'PREPARING' && (
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-2xs text-text-muted">{t('detail.markScheduledHint')}</span>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={missing.length > 0}
-                  onClick={() => onScheduleConfirmOpenChange(true)}
-                >
-                  {t('detail.markScheduled')}
-                </Button>
-              </div>
-            )}
-            {!isCommentsForbidden && (
-              <SessionCommentComposer
-                currentUser={currentUser}
-                onAddComment={onAddComment}
-                isPosting={isPostingComment}
-              />
-            )}
-
-            {isJoinError && (
-              <p role="alert" className="text-2sm text-text-danger">
-                {t('detail.actionError')}
-              </p>
-            )}
-            {isLeaveError && (
-              <p role="alert" className="text-2sm text-text-danger">
-                {t('detail.actionError')}
-              </p>
-            )}
-
-            {participationAction !== null && !isLeaveHiddenForCreator && (
-              <div className="flex justify-center gap-2">
-                {participationAction.kind === 'CANCEL' && (
-                  // CLIENT-SESSION-30: REQUESTED → the one action is Cancel; say why it's still pending.
-                  <p className="self-center text-2xs text-text-muted">{t('detail.waitingForHost')}</p>
-                )}
-                {participationAction.kind === 'ACCEPT' && (
-                  <Button variant="outline" disabled={isJoining || isLeaving} onClick={onLeave}>
-                    <ActionButtonContent
-                      Icon={IconX}
-                      isPending={isLeaving}
-                      pendingLabel={t('detail.pending.DECLINE')}
-                      idleLabel={t('detail.decline')}
-                    />
-                  </Button>
-                )}
-                <Button
-                  variant={isAcceptOrJoin ? 'primary' : 'outline'}
-                  disabled={isJoining || isLeaving}
-                  onClick={isAcceptOrJoin ? onJoin : onLeave}
-                >
-                  <ActionButtonContent
-                    Icon={PARTICIPATION_ACTION_ICON[participationAction.kind]}
-                    isPending={isAcceptOrJoin ? isJoining : isLeaving}
-                    pendingLabel={t(`detail.pending.${participationAction.kind}`)}
-                    idleLabel={participationAction.label}
-                  />
-                </Button>
-              </div>
+                <SessionCommentSection
+                  currentUserId={currentUserId}
+                  currentUser={currentUser}
+                  onAddComment={onAddComment}
+                  comments={comments}
+                  isLoading={isCommentsLoading}
+                  isError={isCommentsError}
+                  isForbidden={isCommentsForbidden}
+                  hasMore={hasMoreComments}
+                  isFetchingMore={isFetchingMoreComments}
+                  onFetchMore={onFetchMoreComments}
+                  onAddReply={onAddCommentReply}
+                  isPosting={isPostingComment}
+                  onDeleteComment={onDeleteComment}
+                  onToggleCommentLike={onToggleCommentLike}
+                />
+              </>
             )}
           </div>
+
+          {session !== undefined && (
+            <div className="border-hairline-t flex flex-col gap-2.5 border-border px-4 py-3">
+              {/* CLIENT-SESSION-34: the host's way out of PREPARING (SESSION-46 has no automatic flip). */}
+              {canManage && session.status === 'PREPARING' && (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-2xs text-text-muted">{t('detail.markScheduledHint')}</span>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={missing.length > 0}
+                    onClick={() => onScheduleConfirmOpenChange(true)}
+                  >
+                    {t('detail.markScheduled')}
+                  </Button>
+                </div>
+              )}
+              {isJoinError && (
+                <p role="alert" className="text-2sm text-text-danger">
+                  {t('detail.actionError')}
+                </p>
+              )}
+              {isLeaveError && (
+                <p role="alert" className="text-2sm text-text-danger">
+                  {t('detail.actionError')}
+                </p>
+              )}
+
+              {participationAction !== null && !isLeaveHiddenForCreator && (
+                <div className="flex justify-center gap-2">
+                  {participationAction.kind === 'CANCEL' && (
+                    // CLIENT-SESSION-30: REQUESTED → the one action is Cancel; say why it's still pending.
+                    <p className="self-center text-2xs text-text-muted">
+                      {t('detail.waitingForHost')}
+                    </p>
+                  )}
+                  {participationAction.kind === 'ACCEPT' && (
+                    <Button variant="outline" disabled={isJoining || isLeaving} onClick={onLeave}>
+                      <ActionButtonContent
+                        Icon={IconX}
+                        isPending={isLeaving}
+                        pendingLabel={t('detail.pending.DECLINE')}
+                        idleLabel={t('detail.decline')}
+                      />
+                    </Button>
+                  )}
+                  <Button
+                    variant={isAcceptOrJoin ? 'primary' : 'outline'}
+                    disabled={isJoining || isLeaving}
+                    onClick={isAcceptOrJoin ? onJoin : onLeave}
+                  >
+                    <ActionButtonContent
+                      Icon={PARTICIPATION_ACTION_ICON[participationAction.kind]}
+                      isPending={isAcceptOrJoin ? isJoining : isLeaving}
+                      pendingLabel={t(`detail.pending.${participationAction.kind}`)}
+                      idleLabel={participationAction.label}
+                    />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      {session !== undefined &&
+        result !== undefined &&
+        result.access.visible &&
+        result.schema !== null && (
+          <SessionResultDialog
+            i18nOverridePrefix={i18nOverridePrefix}
+            isOpen={isResultDialogOpen}
+            onClose={() => setIsResultDialogOpen(false)}
+            sessionId={session.id}
+            schema={result.schema}
+            records={result.records ?? []}
+            playerIds={result.playerIds}
+            names={result.names}
+            locale={result.locale}
+          />
         )}
-      </DialogContent>
-    </Dialog>
       {session !== undefined && (
         <SessionReadinessDialog
           i18nOverridePrefix={i18nOverridePrefix}

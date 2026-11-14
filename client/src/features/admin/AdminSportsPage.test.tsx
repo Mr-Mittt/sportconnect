@@ -9,6 +9,7 @@ import type {
   SportAttributeSchema,
   SportResponse,
 } from '@/shared/types/sport';
+import badmintonRecordSchema from '@/features/session/recordSchema/badminton-record-schema-v1.json';
 import { AdminSportsPage } from './AdminSportsPage';
 
 function apiResponse<T>(data: T) {
@@ -80,6 +81,7 @@ function renderPage(initialPath = '/admin/sports') {
 function mockGet(
   schema: SportAttributeSchema | null = badmintonSchema,
   sessionSchema: SessionAttributeSchema | null = badmintonSessionSchema,
+  resultSchema: Record<string, unknown> | null = badmintonRecordSchema,
 ) {
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     if (url === '/sports/all') return apiResponse([badminton, tennis]);
@@ -91,6 +93,9 @@ function mockGet(
     // ADMIN-5 / A17 — the same admin-twin shape for the session schema.
     if (url === '/sports/all/1/session-attribute-schema') return apiResponse(sessionSchema);
     if (url === '/sports/all/4/session-attribute-schema') return apiResponse(sessionSchema);
+    // SPORT-18 / SESSION-50 — the admin twin for the result (record) schema.
+    if (url === '/sports/all/1/result-schema') return apiResponse(resultSchema);
+    if (url === '/sports/all/4/result-schema') return apiResponse(resultSchema);
     throw new Error(`unexpected GET ${url}`);
   });
 }
@@ -410,5 +415,111 @@ describe('AdminSportsPage', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Couldn.t format . invalid JSON/)).toBeInTheDocument();
     expect(within(dialog).getByText('{ not json')).toBeInTheDocument();
+  });
+
+  // ─── SPORT-18: record (result) schema editor ─────────────────────────────────
+
+  it('loads the raw record schema into its own textarea via the admin path', async () => {
+    const getSpy = mockGet();
+    renderPage('/admin/sports/1');
+
+    const textarea = await screen.findByLabelText('Record schema document (JSON)');
+    expect(JSON.parse((textarea as HTMLTextAreaElement).value)).toEqual(badmintonRecordSchema);
+    expect(getSpy).toHaveBeenCalledWith('/sports/all/1/result-schema');
+    // A schema the app can read has no hint.
+    expect(screen.queryByTestId('result-schema-hint')).not.toBeInTheDocument();
+  });
+
+  it('shows an empty textarea with a placeholder, not an example, for a sport without a record schema', async () => {
+    mockGet(badmintonSchema, badmintonSessionSchema, null);
+    renderPage('/admin/sports/1');
+
+    const textarea = (await screen.findByLabelText('Record schema document (JSON)')) as HTMLTextAreaElement;
+    expect(textarea.value).toBe('');
+    expect(textarea.placeholder).toContain('No record schema is stored for this sport');
+    // nothing typed: nothing to save
+    expect(screen.getByRole('button', { name: 'Save record schema' })).toBeDisabled();
+  });
+
+  it('can save a document pasted into the empty record schema textarea', async () => {
+    mockGet(badmintonSchema, badmintonSessionSchema, null);
+    const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
+    const user = userEvent.setup();
+    renderPage('/admin/sports/1');
+
+    const textarea = await screen.findByLabelText('Record schema document (JSON)');
+    await user.click(textarea);
+    await user.paste('{"version":1,"maxRecords":20}');
+    await user.click(screen.getByRole('button', { name: 'Save record schema' }));
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledWith('/sports/1/result-schema', { version: 1, maxRecords: 20 }));
+  });
+
+  it('saves the record schema to its own endpoint', async () => {
+    mockGet();
+    const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
+    const user = userEvent.setup();
+    renderPage('/admin/sports/1');
+
+    const textarea = await screen.findByLabelText('Record schema document (JSON)');
+    await user.clear(textarea);
+    await user.click(textarea);
+    await user.paste('{"version":1,"maxRecords":30}');
+    await user.click(screen.getByRole('button', { name: 'Save record schema' }));
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalledWith('/sports/1/result-schema', { version: 1, maxRecords: 30 }));
+  });
+
+  it('renders the server message verbatim when the record schema is rejected', async () => {
+    mockGet();
+    vi.spyOn(apiClient, 'put').mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        data: { success: false, message: 'maxRecords must be an integer from 1 to 500', errorCode: 'SPORT_RESULT_SCHEMA_INVALID' },
+        status: 400,
+      },
+    });
+    const user = userEvent.setup();
+    renderPage('/admin/sports/1');
+
+    const textarea = await screen.findByLabelText('Record schema document (JSON)');
+    await user.clear(textarea);
+    await user.click(textarea);
+    await user.paste('{"version":1,"maxRecords":0}');
+    await user.click(screen.getByRole('button', { name: 'Save record schema' }));
+
+    expect(await screen.findByText('maxRecords must be an integer from 1 to 500')).toBeInTheDocument();
+  });
+
+  it('warns, without blocking Save, when the app cannot read the document', async () => {
+    mockGet();
+    const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValue(apiResponse(null));
+    const user = userEvent.setup();
+    renderPage('/admin/sports/1');
+
+    const textarea = await screen.findByLabelText('Record schema document (JSON)');
+    await user.clear(textarea);
+    await user.click(textarea);
+    await user.paste('{"version":2,"maxRecords":30}');
+
+    expect(screen.getByTestId('result-schema-hint')).toHaveTextContent('Results section stays hidden');
+    await user.click(screen.getByRole('button', { name: 'Save record schema' }));
+    await waitFor(() => expect(putSpy).toHaveBeenCalledWith('/sports/1/result-schema', { version: 2, maxRecords: 30 }));
+  });
+
+  it('blocks a record schema save on invalid JSON and fires no request', async () => {
+    mockGet();
+    const putSpy = vi.spyOn(apiClient, 'put');
+    const user = userEvent.setup();
+    renderPage('/admin/sports/1');
+
+    const textarea = await screen.findByLabelText('Record schema document (JSON)');
+    await user.clear(textarea);
+    await user.click(textarea);
+    await user.paste('{ not json');
+    await user.click(screen.getByRole('button', { name: 'Save record schema' }));
+
+    expect(await screen.findByText(/Invalid JSON/)).toBeInTheDocument();
+    expect(putSpy).not.toHaveBeenCalled();
   });
 });

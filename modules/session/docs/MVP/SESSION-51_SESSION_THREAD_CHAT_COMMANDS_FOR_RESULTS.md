@@ -8,6 +8,6 @@ A second way to change results: commands typed in the session's post chat (the `
 
 To settle at pickup: the command grammar; how players are named (mentions or usernames); where the command is parsed (server in `createSessionComment`, or the client before it posts); a stable per-session number for `:del 3` / `:upd 3` (a per-session counter, since record ids are global identity values and the display number shifts after a delete); what the reply or the stored comment looks like; and whether the command comment doubles as a readable audit trail.
 
-**Out of scope:** The dialog (SESSION-50 / CLIENT-SESSION-38).
+**Out of scope:** The dialog (SESSION-50 / CLIENT-GL-38).
 
 **Tests:** To be planned at pickup; an integration test through the real comment endpoint is required (cross-bean wiring).

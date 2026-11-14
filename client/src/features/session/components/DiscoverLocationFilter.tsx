@@ -4,6 +4,7 @@ import { Input } from '@/shared/ui/input';
 import type { Location } from '@/shared/types/location';
 import { DiscoverFilterTrigger } from './DiscoverFilterTrigger';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface DiscoverLocationFilterProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -126,9 +127,9 @@ export function DiscoverLocationFilter({
           {isLoadingRows ? (
             <p className="px-2 py-1.5 text-2xs text-text-muted">{t('common.loading')}</p>
           ) : rows.length === 0 ? (
-            <p className="px-2 py-1.5 text-2xs text-text-muted">
+            <EmptyHint size="2xs" className="px-2 py-1.5">
               {trimmedSearch === '' ? t('discover.location.noFavorites') : t('discover.location.noResults')}
-            </p>
+            </EmptyHint>
           ) : (
             <fieldset className="flex min-w-0 max-h-48 flex-col gap-0.5 overflow-y-auto">
               <legend className="sr-only">{t('discover.location.legend')}</legend>

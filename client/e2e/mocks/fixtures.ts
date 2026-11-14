@@ -1138,6 +1138,23 @@ export async function seedHistoryVolumeOnNextLoad(sessionId: string): Promise<vo
 }
 
 /**
+ * CLIENT-GL-38 — makes `GET /sessions/1` (the Pickleball fixture the caller is JOINED to) ONGOING with an end
+ * time an hour from now, so the detail's Result section and the record dialog can be exercised.
+ */
+export async function seedResultsOngoingOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/resultsOngoing');
+}
+
+/**
+ * CLIENT-GL-38 — on top of `seedResultsOngoingOnNextLoad`, the session already holds two logged records
+ * (the caller beat the fixture friend 21-18, the friend beat the caller 21-15).
+ */
+export async function seedResultsRecordsOnNextLoad(sessionId: string): Promise<void> {
+  await seedResultsOngoingOnNextLoad(sessionId);
+  await postAdmin(sessionId, 'override/resultsRecords');
+}
+
+/**
  * CLIENT-SESSION-31 — makes `GET /sessions/discover` (and `/discover/counts`) also include 25
  * synthetic discoverable Badminton sessions and page `/discover` for real, so a Discover section
  * shows its "Load more" (client page size 10). Used by the Discover visual-regression spec.
@@ -1243,4 +1260,29 @@ export const mockPreparingSession: Session = {
   participantCount: 0,
   feeType: null,
   feeAmountVnd: null,
+};
+
+/**
+ * CLIENT-GL-38: a sport's result schema (SESSION-50), as GET /api/sports/{id}/result-schema returns it:
+ * the stored document, not localized. Same content as the badminton example in
+ * src/features/session/recordSchema/badminton-record-schema-v1.json (contract:
+ * documentation/md/RECORD_SCHEMA_CONTRACT.md).
+ */
+export const mockResultSchema: Record<string, unknown> = {
+  version: 1,
+  maxRecords: 50,
+  record: {
+    data: {
+      type: 'COMPETITIVE',
+      playersPerSide: { min: 1, max: 2 },
+      score: { slot: [{ required: true, title: { vi: 'Điểm', en: 'Point' }, rule: '>0' }] },
+    },
+    UI: { id: 'horizontal', config: { winnerAlign: 'LEFT' } },
+  },
+};
+
+/** Badminton (1) and Pickleball (3) log results; every other sport has no result schema (data: null). */
+export const mockResultSchemas: Record<number, Record<string, unknown>> = {
+  1: mockResultSchema,
+  3: mockResultSchema,
 };

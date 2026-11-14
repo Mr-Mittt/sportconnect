@@ -5,6 +5,7 @@ import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { PostCard } from './PostCard';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface FeedProps {
   posts: Post[];
@@ -151,9 +152,7 @@ export function Feed({
 
   if (visiblePosts.length === 0) {
     return (
-      <div className="py-6 text-center text-2sm text-text-muted">
-        {emptyMessage ?? t('feed.emptyMessageDefault')}
-      </div>
+      <EmptyHint className="py-6">{emptyMessage ?? t('feed.emptyMessageDefault')}</EmptyHint>
     );
   }
 

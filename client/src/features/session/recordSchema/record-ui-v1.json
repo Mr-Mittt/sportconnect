@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "tones": ["success", "warning", "danger", "accent"],
+  "COMPETITIVE": {
+    "defaultStyle": "horizontal",
+    "styles": {
+      "horizontal": {
+        "config": {
+          "winnerAlign": { "enum": ["LEFT", "RIGHT"], "default": "LEFT" },
+          "winnerTone": { "enum": "tones", "default": "success" },
+          "loserTone": { "enum": "tones", "default": "warning" }
+        }
+      },
+      "vertical": {
+        "config": {
+          "winnerAlign": { "enum": ["TOP", "BOTTOM"], "default": "TOP" },
+          "winnerTone": { "enum": "tones", "default": "success" },
+          "loserTone": { "enum": "tones", "default": "warning" }
+        }
+      }
+    }
+  }
+}

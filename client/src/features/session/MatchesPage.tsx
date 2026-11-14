@@ -326,6 +326,7 @@ export function MatchesPage() {
         participants={data.participants}
         isParticipantsLoading={data.isParticipantsLoading}
         isParticipantsError={data.isParticipantsError}
+        result={data.result}
         currentUserId={data.currentUserId ?? ''}
         canManage={data.canManage}
         selectedCompletionLocation={data.selectedCompletionLocation}

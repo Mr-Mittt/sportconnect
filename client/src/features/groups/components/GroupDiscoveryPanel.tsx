@@ -10,6 +10,7 @@ import { Input } from '@/shared/ui/input';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { GroupInvitationsSection } from './GroupInvitationsSection';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface GroupDiscoveryPanelProps {
   /** Already sport-filtered by the caller (same `data.groups` GroupSpaceSwitcher
@@ -179,7 +180,7 @@ export function GroupDiscoveryPanel({
       {!isLoading && !isError && groups.length === 0 && (
         <div className="flex flex-col items-center gap-1.5 py-8 text-center">
           <IconUsersGroup className="size-6 text-text-muted" aria-hidden="true" />
-          <p className="text-2sm text-text-muted">{t('discovery.empty')}</p>
+          <EmptyHint>{t('discovery.empty')}</EmptyHint>
         </div>
       )}
 

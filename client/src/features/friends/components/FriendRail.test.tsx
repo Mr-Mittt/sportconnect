@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { FriendRail } from './FriendRail';
@@ -134,5 +134,24 @@ describe('FriendRail', () => {
     render(<FriendRail {...props} />);
     await user.click(screen.getByRole('button', { name: 'Add friend' }));
     expect(props.onToggleAddMode).toHaveBeenCalledTimes(1);
+  });
+
+  it('a collapsed section that is empty still shows its empty hint, centered; a collapsed one with rows shows none', () => {
+    render(
+      <FriendRail
+        {...baseProps()}
+        totalFriendsCount={0}
+        offlineFriends={[]}
+        collapsedSections={{ ...collapsedSections, online: true, friendRequests: true }}
+      />,
+    );
+    expect(within(screen.getByRole('region', { name: 'Online' })).getByText('Nothing here yet.')).toHaveClass('text-center');
+    // Friend Requests is collapsed too but has two rows: no hint
+    expect(within(screen.getByRole('region', { name: 'Friend Requests' })).queryByText('Nothing here yet.')).toBeNull();
+  });
+
+  it('an open empty section shows the hint once', () => {
+    render(<FriendRail {...baseProps()} totalFriendsCount={0} offlineFriends={[]} />);
+    expect(within(screen.getByRole('region', { name: 'Online' })).getAllByText('Nothing here yet.')).toHaveLength(1);
   });
 });

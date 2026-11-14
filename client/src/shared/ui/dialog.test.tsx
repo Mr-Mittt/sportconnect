@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModalAnchorProvider } from '@/shared/lib/modalAnchor';
-import { Dialog, DialogContent, DialogHeader } from './dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './dialog';
 
 /**
  * Regression coverage for the "modal renders off-screen" bug (CLIENT-SESSION-10 follow-up, found
@@ -82,5 +82,82 @@ describe('DialogContent anchored positioning', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog.style.top).toBe('');
     expect(dialog.className).toContain('top-1/2');
+  });
+});
+
+describe('DialogTitle (every dialog title is centered by default, owner rule 2026-11-13)', () => {
+  it('is centered without any class from the caller', () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogTitle>A plain title</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByText('A plain title').classList.contains('text-center')).toBe(true);
+  });
+
+  it('DialogHeader centers its title too', () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent>
+          <DialogHeader title="Header title" />
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByText('Header title').classList.contains('text-center')).toBe(true);
+  });
+});
+
+describe('DialogContent insets (a dialog that leaves the dialog underneath its title bar and footer in view)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('innerHeight', 800);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function renderInset(anchorBottom: number | null) {
+    return render(
+      <ModalAnchorProvider value={anchorBottom}>
+        <Dialog open onOpenChange={() => {}}>
+          <DialogContent fixedHeight fixedHeightVh={72} insetTop="4rem" insetBottom="3rem">
+            <DialogTitle>Inset</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </ModalAnchorProvider>,
+    );
+  }
+
+  it('centered: the same 72vh box minus both insets, shifted by half their difference', () => {
+    renderInset(null);
+    const dialog = screen.getByRole('dialog');
+    // jsdom re-serializes calc(), so check the pieces (the real box is measured in the e2e)
+    expect(dialog.style.height).toContain('72vh');
+    expect(dialog.style.height).toContain('4rem');
+    expect(dialog.style.height).toContain('3rem');
+    // (4rem - 3rem) / 2, which jsdom folds into 0.5rem
+    expect(dialog.style.marginTop).toBe('calc(0.5rem)');
+  });
+
+  it('anchored: starts the top inset below the dialog underneath and is capped by the space left, like it', () => {
+    renderInset(120);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.style.top).toBe('132px');
+    expect(dialog.style.marginTop).toBe('4rem');
+    expect(dialog.style.height).toContain('72vh');
+    expect(dialog.style.height).toContain('4rem');
+    expect(dialog.style.height).toContain('3rem');
+  });
+
+  it('without insets the height is unchanged', () => {
+    render(
+      <Dialog open onOpenChange={() => {}}>
+        <DialogContent fixedHeight fixedHeightVh={72}>
+          <DialogTitle>Plain</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+    expect(screen.getByRole('dialog').style.height).toBe('72vh');
   });
 });

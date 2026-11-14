@@ -1,6 +1,6 @@
 # Session results (game logging) — design
 
-**Status:** Approved plan, not implemented (2026-11-12). **Tickets:** SESSION-50 (backend), CLIENT-SESSION-38 (client); follow-ups SESSION-51..60, CLIENT-SESSION-39..48, SPORT-18 (client backlog).
+**Status:** Approved plan, not implemented (2026-11-12). **Tickets:** SESSION-50 (backend), CLIENT-GL-38 (client); follow-ups SESSION-51..60, CLIENT-SESSION-39..48, SPORT-18 (client backlog).
 **Source:** `/feature` session "game logging", BA document `D:Planningusiness-analystRequirements - Games, Statistics and Leaderboards.md`. Written plan-first: where the plan says "filed as a follow-up", the ticket ids above are the real entries.
 
 ## Context
@@ -80,7 +80,7 @@ Ids are `Long`; `players` is jsonb; no seed, admin endpoints in SESSION-50 (scop
 
 ## Badminton result schema example
 
-Set with `PUT /api/sports/{sportId}/result-schema` (ADMIN). The server reads only `maxRecords`; every other field is the client contract that CLIENT-SESSION-38 finalizes, so treat the rest as the starting shape:
+Set with `PUT /api/sports/{sportId}/result-schema` (ADMIN). The server reads only `maxRecords`; every other field is the client contract that CLIENT-GL-38 finalizes, so treat the rest as the starting shape:
 
 ```json
 {
@@ -118,4 +118,10 @@ The owner asked to keep the database small. Two things from the first implementa
 - Each record is checked on its own. An invalid record (`playerIds` or `data` malformed), one over 4 KB, one naming a player who has not `JOINED`, or an add past `maxRecords` becomes a result with `status: REJECTED`, `errorCode` and `errorParams`; the response is still `200`, every valid operation is applied, and `records` is the list after the valid ones. Where older text says these reject the whole change set (or answer 400 / roll back), this overrides it.
 - Still refused whole (400 `SESSION_RECORD_INVALID`): a malformed request (an add without its own `clientRef`, an update or delete without an id or with a repeated one, over 50 operations), and the access, status and window checks (403 / 404 / 409), the 64 KB body (413).
 - `maxRecords`: only as many new records as still fit (counting the stored ones, minus deletes in the same change set) are stored, in request order, adds before restores; the rest are `REJECTED` with `SESSION_RECORD_LIMIT_REACHED`. A rejected update stores nothing and leaves the existing record as it was. A rejected restore does not recreate the record.
-- Client: read `results` after every Save; keep rejected rows in the dialog and show the code's en/vi copy beside each (CLIENT-SESSION-38).
+- Client: read `results` after every Save; keep rejected rows in the dialog and show the code's en/vi copy beside each (CLIENT-GL-38).
+
+---
+
+## Decision change (2026-11-13, owner, CLIENT-GL-38): the record schema contract
+
+The result schema is `{ version, maxRecords, record: { data: { type: COMPETITIVE, playersPerSide, score.slot[] }, UI } }` and a record's `data` is `{ teams: [{players, scores}, {players, scores}] }` with the first team as the winner. This replaces the `kind` / `recordMode` / `points` / `winningSide` sketch and the badminton example above. The server is unchanged (it reads only top-level `maxRecords`). Contract: `documentation/md/RECORD_SCHEMA_CONTRACT.md`.

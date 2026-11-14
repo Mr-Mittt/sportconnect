@@ -15,7 +15,7 @@ import type {
   SessionAttributeSchema,
   UserSportProfileResponse,
 } from '../../../src/shared/types/sport.ts';
-import { mockSportProfiles, mockUser } from '../fixtures.ts';
+import { mockResultSchemas, mockSportProfiles, mockUser } from '../fixtures.ts';
 import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
@@ -327,6 +327,8 @@ interface SportSession {
   attributeSchemaState: Record<number, SportAttributeSchema | null>;
   /** ADMIN-5: raw admin session schema per sport, stateful so a PUT shows on the next GET. */
   sessionAttributeSchemaState: Record<number, SessionAttributeSchema | null>;
+  /** SPORT-18: the result (record) schema per sport, stateful so an admin PUT shows on the next GET (member read too). */
+  resultSchemaState: Record<number, Record<string, unknown> | null>;
 }
 
 // Stateful, same reasoning as groups.ts's userGroupsState — a profile
@@ -341,6 +343,7 @@ function defaultSportSession(): SportSession {
     adminSportCatalogState: defaultAdminSportCatalog(),
     attributeSchemaState: defaultAttributeSchemas(),
     sessionAttributeSchemaState: defaultSessionAttributeSchemasRaw(),
+    resultSchemaState: { ...mockResultSchemas },
   };
 }
 
@@ -434,6 +437,56 @@ export const sportHandlers: HttpHandler[] = [
   // nodes. Active-only + 404 for an unknown/inactive sport, same as its profile-schema sibling
   // above. Served pre-resolved from the fixture (the raw `#ref` -> resolved translation is the
   // real backend's job, not modelled here).
+  // CLIENT-GL-38 (SESSION-50): the member-facing result schema, raw as stored; null = no result logging.
+  http.get('/api/sports/:sportId/result-schema', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const sportId = Number(params.sportId);
+    const sport = session.adminSportCatalogState.find((entry) => entry.id === sportId);
+    if (!sport || !sport.isActive) {
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
+    }
+    return HttpResponse.json(
+      apiResponse(session.resultSchemaState[sportId] ?? null, 'Result schema retrieved successfully'),
+    );
+  }),
+
+  // SPORT-18: the admin read (inactive sports too) and the admin replace of the result schema. The real
+  // server validates only maxRecords (an integer 1 to 500) and the 16 KB cap, then stores the rest as sent.
+  http.get('/api/sports/all/:sportId/result-schema', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const sportId = Number(params.sportId);
+    if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
+    }
+    return HttpResponse.json(
+      apiResponse(session.resultSchemaState[sportId] ?? null, 'Result schema retrieved successfully'),
+    );
+  }),
+
+  http.put('/api/sports/:sportId/result-schema', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const session = sportSessions.get(sessionIdFromRequest(request));
+    const sportId = Number(params.sportId);
+    if (!session.adminSportCatalogState.some((entry) => entry.id === sportId)) {
+      return HttpResponse.json(apiError('Sport not found'), { status: 404 });
+    }
+    const body = (await request.json()) as Record<string, unknown> | null;
+    const maxRecords = body?.maxRecords;
+    if (body && (!Number.isInteger(maxRecords) || (maxRecords as number) < 1 || (maxRecords as number) > 500)) {
+      return HttpResponse.json(
+        apiError('maxRecords must be an integer from 1 to 500', 'SPORT_RESULT_SCHEMA_INVALID'),
+        { status: 400 },
+      );
+    }
+    session.resultSchemaState[sportId] = body && Object.keys(body).length > 0 ? body : null;
+    return HttpResponse.json(apiResponse(session.resultSchemaState[sportId], 'Result schema updated successfully'));
+  }),
+
   http.get('/api/sports/:sportId/session-attribute-schema', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;

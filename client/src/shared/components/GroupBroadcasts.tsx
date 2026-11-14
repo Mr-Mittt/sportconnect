@@ -4,6 +4,7 @@ import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Skeleton } from '@/shared/ui/skeleton';
 import type { GroupBroadcast } from '@/shared/types/rail';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface GroupBroadcastsProps {
   broadcasts: GroupBroadcast[];
@@ -66,7 +67,7 @@ export function GroupBroadcasts({
           </button>
         </div>
       ) : broadcasts.length === 0 ? (
-        <div className="py-2 text-xs text-text-muted">{t('groupBroadcasts.empty')}</div>
+        <EmptyHint size="xs" className="py-2">{t('groupBroadcasts.empty')}</EmptyHint>
       ) : (
         <div className="flex flex-col gap-2.5">
           {broadcasts.map((broadcast) => (

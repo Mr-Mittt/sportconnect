@@ -1,16 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { parseRecordSchema } from '@/features/session/recordSchema';
 import { AttributeSchemaEditor } from './components/AttributeSchemaEditor';
 import { CollapsibleSection } from './components/CollapsibleSection';
 import { SportCatalogTable } from './components/SportCatalogTable';
 import { SportFieldsForm } from './components/SportFieldsForm';
 import { useAdminOutletContext } from './useAdminOutletContext';
 import { useAdminSportCatalog } from './useAdminSportCatalog';
+import { useReplaceResultSchema } from './useReplaceResultSchema';
 import { useReplaceSessionAttributeSchema } from './useReplaceSessionAttributeSchema';
 import { useReplaceSportAttributeSchema } from './useReplaceSportAttributeSchema';
+import { useResultSchemaAdmin, type ResultSchemaDocument } from './useResultSchemaAdmin';
 import { useSessionAttributeSchemaAdmin } from './useSessionAttributeSchemaAdmin';
 import { useSportAttributeSchema } from './useSportAttributeSchema';
 import { useUpdateSport } from './useUpdateSport';
+
+/** Shown in the empty textarea of a sport that has no record schema: nothing is stored, so there is no example to mistake for data. */
+const RESULT_SCHEMA_PLACEHOLDER =
+  'No record schema is stored for this sport, so its session detail shows no Results section. Paste the schema document (JSON) here and save. Format: documentation/md/RECORD_SCHEMA_CONTRACT.md';
+
+/** Says when the app cannot read the document, so the Results section would stay hidden for this sport. */
+function recordSchemaHint(document: unknown): string | null {
+  return parseRecordSchema(document) === null
+    ? 'The app cannot read this as a record schema (version 1, record type COMPETITIVE, playersPerSide, score slots), so the Results section stays hidden for this sport until it is fixed. You can still save.'
+    : null;
+}
 
 /**
  * ADMIN-2: sport master-detail admin screen.
@@ -43,11 +57,14 @@ export function AdminSportsPage() {
   const updateSport = useUpdateSport(selectedSportId);
   const replaceSchema = useReplaceSportAttributeSchema(selectedSportId);
   const replaceSessionSchema = useReplaceSessionAttributeSchema(selectedSportId);
+  const resultSchemaQuery = useResultSchemaAdmin(selectedSportId);
+  const replaceResultSchema = useReplaceResultSchema(selectedSportId);
 
   const selectSport = (id: number) => {
     updateSport.reset();
     replaceSchema.reset();
     replaceSessionSchema.reset();
+    replaceResultSchema.reset();
     navigate(`/admin/sports/${id}`);
   };
 
@@ -58,6 +75,7 @@ export function AdminSportsPage() {
   const [areFieldsDirty, setAreFieldsDirty] = useState(false);
   const [isSchemaDirty, setIsSchemaDirty] = useState(false);
   const [isSessionSchemaDirty, setIsSessionSchemaDirty] = useState(false);
+  const [isResultSchemaDirty, setIsResultSchemaDirty] = useState(false);
 
   // Stable identities — these are effect dependencies inside the children.
   const reportFieldsDirty = useCallback((dirty: boolean) => setAreFieldsDirty(dirty), []);
@@ -66,13 +84,14 @@ export function AdminSportsPage() {
     (dirty: boolean) => setIsSessionSchemaDirty(dirty),
     [],
   );
+  const reportResultSchemaDirty = useCallback((dirty: boolean) => setIsResultSchemaDirty(dirty), []);
 
   useEffect(() => {
-    setHasUnsavedChanges(areFieldsDirty || isSchemaDirty || isSessionSchemaDirty);
+    setHasUnsavedChanges(areFieldsDirty || isSchemaDirty || isSessionSchemaDirty || isResultSchemaDirty);
     // Leaving this section clears the flag: AdminLayout outlives this page, so a
     // lingering `true` would keep warning on logout from a section with no forms.
     return () => setHasUnsavedChanges(false);
-  }, [areFieldsDirty, isSchemaDirty, isSessionSchemaDirty, setHasUnsavedChanges]);
+  }, [areFieldsDirty, isSchemaDirty, isSessionSchemaDirty, isResultSchemaDirty, setHasUnsavedChanges]);
 
   return (
     <section>
@@ -154,6 +173,31 @@ export function AdminSportsPage() {
                   fieldLabel="Session schema document (JSON)"
                   saveLabel="Save session attributes"
                   viewerTitle="Session attributes"
+                />
+              </CollapsibleSection>
+
+              {/* SPORT-18: what one logged result is for this sport (documentation/md/RECORD_SCHEMA_CONTRACT.md). */}
+              <CollapsibleSection title="Record schema">
+                <AttributeSchemaEditor<ResultSchemaDocument>
+                  key={`result-schema-${selectedSport.id}`}
+                  schema={resultSchemaQuery.data}
+                  onSave={replaceResultSchema.replaceSchema}
+                  isLoading={resultSchemaQuery.isLoading}
+                  isSaving={replaceResultSchema.isPending}
+                  errorMessage={
+                    resultSchemaQuery.isError
+                      ? 'Could not load this sport’s record schema.'
+                      : replaceResultSchema.errorMessage
+                  }
+                  isSaved={replaceResultSchema.isSuccess}
+                  onDirtyChange={reportResultSchemaDirty}
+                  documentHint={recordSchemaHint}
+                  blankWhenEmpty
+                  placeholder={RESULT_SCHEMA_PLACEHOLDER}
+                  fieldId="result-schema"
+                  fieldLabel="Record schema document (JSON)"
+                  saveLabel="Save record schema"
+                  viewerTitle="Record schema"
                 />
               </CollapsibleSection>
             </div>

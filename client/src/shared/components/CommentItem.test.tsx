@@ -139,6 +139,185 @@ describe('CommentItem', () => {
     expect(onReply).toHaveBeenCalledWith(5, 'Nice one!');
   });
 
+  describe('the reply composer', () => {
+    const box = () => screen.queryByRole('textbox', { name: 'Reply to Marcus Lee' });
+
+    it('opens focused and shows the current user avatar', async () => {
+      const user = userEvent.setup();
+      render(
+        <CommentItem
+          comment={makeComment({ id: 5 })}
+          currentUserId="someone-else"
+          currentUser={{ fullName: 'Priya Shah', avatarUrl: null }}
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+          onHashtagClick={noop}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Reply' }));
+      expect(box()).toHaveFocus();
+      expect(screen.getByText('PS')).toBeInTheDocument();
+    });
+
+    it('closes when focus leaves it before anything was typed', async () => {
+      const user = userEvent.setup();
+      render(
+        <CommentItem
+          comment={makeComment({ id: 5 })}
+          currentUserId="someone-else"
+          currentUser={{ fullName: 'Priya Shah', avatarUrl: null }}
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+          onHashtagClick={noop}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Reply' }));
+      await user.click(document.body);
+      expect(box()).toBeNull();
+    });
+
+    it('stays open after leaving it once something was typed, even when it was cleared again', async () => {
+      const user = userEvent.setup();
+      render(
+        <CommentItem
+          comment={makeComment({ id: 5 })}
+          currentUserId="someone-else"
+          currentUser={{ fullName: 'Priya Shah', avatarUrl: null }}
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+          onHashtagClick={noop}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Reply' }));
+      await user.type(box() as HTMLElement, 'a');
+      await user.clear(box() as HTMLElement);
+      await user.click(document.body);
+      expect(box()).not.toBeNull();
+    });
+
+    it('has a red X that closes it while empty, and the send button once there is text', async () => {
+      const user = userEvent.setup();
+      render(
+        <CommentItem
+          comment={makeComment({ id: 5 })}
+          currentUserId="someone-else"
+          currentUser={{ fullName: 'Priya Shah', avatarUrl: null }}
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+          onHashtagClick={noop}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Reply' }));
+      expect(screen.queryByRole('button', { name: 'Post' })).toBeNull();
+      const cancel = screen.getByRole('button', { name: 'Cancel reply' });
+      expect(cancel).toHaveClass('text-text-danger');
+      await user.type(box() as HTMLElement, 'x');
+      expect(screen.queryByRole('button', { name: 'Cancel reply' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Post' })).toHaveClass('rounded-full');
+      await user.clear(box() as HTMLElement);
+      await user.click(screen.getByRole('button', { name: 'Cancel reply' }));
+      expect(box()).toBeNull();
+    });
+
+    it('sends on Enter', async () => {
+      const user = userEvent.setup();
+      const onReply = vi.fn();
+      render(
+        <CommentItem
+          comment={makeComment({ id: 5 })}
+          currentUserId="someone-else"
+          currentUser={{ fullName: 'Priya Shah', avatarUrl: null }}
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={onReply}
+          isSubmittingReply={false}
+          onHashtagClick={noop}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Reply' }));
+      await user.type(box() as HTMLElement, 'On enter{Enter}');
+      expect(onReply).toHaveBeenCalledWith(5, 'On enter');
+      expect(box()).toBeNull();
+    });
+  });
+
+  it('shows the full date and time of the comment on hover of its timestamp', () => {
+    render(
+      <CommentItem
+        comment={makeComment({ createdAt: '2026-03-05T14:30:00Z' })}
+        currentUserId="someone-else"
+        onToggleLike={noop}
+        onDelete={noop}
+        onReply={noop}
+        isSubmittingReply={false}
+        onHashtagClick={noop}
+      />,
+    );
+    const title =
+      screen.getByText(/ago|now|on/i, { selector: 'span[title]' }).getAttribute('title') ?? '';
+    expect(title).toMatch(/2026/);
+    expect(title).toMatch(/Mar/);
+  });
+
+  it('shows the like count right after the timestamp', () => {
+    render(
+      <CommentItem
+        comment={makeComment({ id: 5 })}
+        currentUserId="someone-else"
+        currentUser={{ fullName: 'Priya Shah', avatarUrl: null }}
+        onToggleLike={noop}
+        onDelete={noop}
+        onReply={noop}
+        isSubmittingReply={false}
+        onHashtagClick={noop}
+      />,
+    );
+    const like = screen.getByRole('button', { name: 'Like comment' });
+    const time = screen.getByText(/ago|now/i);
+    expect(time.compareDocumentPosition(like) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(time.parentElement).toContainElement(like);
+    expect(screen.getByRole('button', { name: 'Reply' }).parentElement).not.toContainElement(like);
+  });
+
+  it('lists the replies newest first', () => {
+    const at = (minutesAgo: number) => new Date(Date.now() - minutesAgo * 60 * 1000).toISOString();
+    render(
+      <CommentItem
+        comment={makeComment({
+          id: 1,
+          replies: [
+            makeComment({ id: 2, parentCommentId: 1, content: 'oldest reply', createdAt: at(30) }),
+            makeComment({ id: 4, parentCommentId: 1, content: 'newest reply', createdAt: at(5) }),
+            makeComment({ id: 3, parentCommentId: 1, content: 'middle reply', createdAt: at(15) }),
+          ],
+        })}
+        currentUserId="someone-else"
+        onToggleLike={noop}
+        onDelete={noop}
+        onReply={noop}
+        isSubmittingReply={false}
+        onHashtagClick={noop}
+      />,
+    );
+    const order = ['newest reply', 'middle reply', 'oldest reply'].map((text) =>
+      screen.getByText(text),
+    );
+    expect(
+      order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      order[1].compareDocumentPosition(order[2]) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('does not show Reply for a comment that is itself a reply', () => {
     render(
       <CommentItem

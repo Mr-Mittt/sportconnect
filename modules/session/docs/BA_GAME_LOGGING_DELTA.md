@@ -2,7 +2,7 @@
 
 **Status:** Draft for the BA, 2026-11-12
 **Compares:** `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards.md` (dated Nov 7, decisions of Nov 9, 2026) against the implementation decisions in `modules/session/docs/SESSION_RECORDS_DESIGN.md`
-**Tickets:** SESSION-50 (server), CLIENT-SESSION-38 (client); follow-ups SESSION-51 to 60, CLIENT-SESSION-39 to 48, SPORT-18
+**Tickets:** SESSION-50 (server), CLIENT-GL-38 (client); follow-ups SESSION-51 to 60, CLIENT-SESSION-39 to 48, SPORT-18
 **Scope of this comparison:** the game logging part (GL-1 to GL-9, the roles table, the sport template section, the standalone/group table, the non-functional rows and the three open questions). Statistics, boards, seasons, adjustments and guests are deferred, so only the places where today's decisions constrain them are listed.
 
 How to read it: **Server** and **Client** say where the decision is enforced. "Update BA" is a suggested change to the BA text; "Confirm" needs a BA answer.
@@ -99,3 +99,8 @@ Open items this ticket adds to section 5: none new. Still waiting on the BA: que
 ### SESSION-50 change, 2026-11-13: one bad game does not stop the others
 
 - Saving several games at once: a game that is not valid (too big, names someone who is not in the session, past the sport's game limit) is not saved and is reported back to the app with the reason; every valid game is saved. Add to the BA document as the rule for a group save.
+
+### CLIENT-GL-38 change, 2026-11-13: the game record is described by the sport's record schema
+
+- **GL-4 / GL-5:** a game is two teams (the first is the winner by position), each with 1 to the sport's maximum players (badminton: 1 to 2) and, when the sport defines score slots, a score per slot; scores are optional but must be complete (both teams, all required slots). The same player cannot be on both teams. The earlier "tap the winning side" is gone: the winner is the first team. Contract: `documentation/md/RECORD_SCHEMA_CONTRACT.md`.
+- **Scoreboard:** not part of logging. It moves to CLIENT-GL-49, so the session's Result section lists the games first.

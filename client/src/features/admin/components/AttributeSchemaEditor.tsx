@@ -38,11 +38,24 @@ export interface AttributeSchemaEditorProps<T extends object> {
   saveLabel?: string;
   /** ADMIN-5: title shown in the read-only viewer dialog (suffixed " — read-only"). */
   viewerTitle?: string;
+  /**
+   * SPORT-18: an optional, non-blocking note about the document as typed (it only runs while the text is
+   * valid JSON). Used by the result schema to say when the app cannot read the document; it never stops a Save.
+   */
+  documentHint?: (document: unknown) => string | null;
+  /**
+   * SPORT-18: with no stored document, show an empty textarea instead of `emptyDocument`, so nothing that looks like
+   * real data is on screen. Pair it with `placeholder`. Save stays disabled until something is typed.
+   */
+  blankWhenEmpty?: boolean;
+  /** SPORT-18: the textarea's placeholder (visible while it is empty). */
+  placeholder?: string;
 }
 
 const DEFAULT_EMPTY_DOCUMENT = { defaultLocale: 'en', groups: [] };
 
-function toText(schema: object | null, emptyDocument: object): string {
+function toText(schema: object | null, emptyDocument: object, blankWhenEmpty = false): string {
+  if (schema === null && blankWhenEmpty) return '';
   return JSON.stringify(schema ?? emptyDocument, null, 2);
 }
 
@@ -113,8 +126,11 @@ export function AttributeSchemaEditor<T extends object>({
   fieldLabel = 'Schema document (JSON)',
   saveLabel = 'Save attributes',
   viewerTitle = 'Attributes',
+  documentHint,
+  blankWhenEmpty = false,
+  placeholder,
 }: AttributeSchemaEditorProps<T>) {
-  const [text, setText] = useState<string>(() => toText(schema, emptyDocument));
+  const [text, setText] = useState<string>(() => toText(schema, emptyDocument, blankWhenEmpty));
   const [parseError, setParseError] = useState<string | null>(null);
   const [isViewerOpen, setIsViewerOpen] = useState(false);
 
@@ -125,11 +141,11 @@ export function AttributeSchemaEditor<T extends object>({
   const [seededFrom, setSeededFrom] = useState(schema);
   if (seededFrom !== schema) {
     setSeededFrom(schema);
-    setText(toText(schema, emptyDocument));
+    setText(toText(schema, emptyDocument, blankWhenEmpty));
     setParseError(null);
   }
 
-  const isDirty = text !== toText(schema, emptyDocument);
+  const isDirty = text !== toText(schema, emptyDocument, blankWhenEmpty);
 
   // ADMIN-4: report upward on change, and report clean on unmount — a `true` left
   // behind by an unmounted editor would keep warning on every later logout attempt.
@@ -144,6 +160,14 @@ export function AttributeSchemaEditor<T extends object>({
   }
 
   const parseErrorId = `${fieldId}-parse-error`;
+  let hint: string | null = null;
+  if (documentHint !== undefined) {
+    try {
+      hint = documentHint(JSON.parse(text) as unknown);
+    } catch {
+      hint = null; // not JSON yet: the parse error shows on Save
+    }
+  }
 
   const handleSubmit = () => {
     let parsed: T;
@@ -166,12 +190,19 @@ export function AttributeSchemaEditor<T extends object>({
           value={text}
           spellCheck={false}
           rows={16}
+          placeholder={placeholder}
           onChange={(event) => setText(event.target.value)}
           className="font-mono text-xs"
           aria-describedby={parseError ? parseErrorId : undefined}
           aria-invalid={parseError ? true : undefined}
         />
       </div>
+
+      {hint !== null ? (
+        <p className="mt-2 text-2sm text-text-secondary" data-testid={`${fieldId}-hint`}>
+          {hint}
+        </p>
+      ) : null}
 
       {parseError ? (
         <p id={parseErrorId} role="alert" className="mt-2 text-2sm text-text-danger">
@@ -199,7 +230,7 @@ export function AttributeSchemaEditor<T extends object>({
           variant="outline"
           disabled={!isDirty || isSaving}
           onClick={() => {
-            setText(toText(schema, emptyDocument));
+            setText(toText(schema, emptyDocument, blankWhenEmpty));
             setParseError(null);
           }}
         >

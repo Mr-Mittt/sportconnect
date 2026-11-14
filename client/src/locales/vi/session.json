@@ -206,7 +206,6 @@
     },
     "players": {
       "label": "Người chơi",
-      "summaryLabel": "Người chơi",
       "heading": "Người chơi ({{value}})",
       "error": "Không thể tải danh sách người tham gia."
     },
@@ -324,6 +323,7 @@
       "title": "Vui lòng đặt tên cho buổi chơi.",
       "startTime": "Vui lòng chọn thời gian bắt đầu.",
       "openSlot": "Vui lòng nhập số chỗ trống.",
+      "startInPast": "Thời gian bắt đầu không được ở trong quá khứ.",
       "endAfterStart": "Giờ kết thúc phải sau giờ bắt đầu.",
       "genderOverOpen": "Số chỗ cho nam và nữ không được vượt quá số chỗ trống."
     },
@@ -421,5 +421,56 @@
       "duration": "Thời lượng"
     },
     "working": "Đang xử lý…"
+  },
+  "result": {
+    "label": "Kết quả",
+    "heading": "Kết quả ({{count}})",
+    "empty": "Chưa có kết quả nào.",
+    "loadError": "Không tải được kết quả.",
+    "update": "Cập nhật",
+    "windowClosed": "Không thể thay đổi kết quả nữa: đã quá 24 giờ kể từ khi buổi chơi kết thúc.",
+    "teamWinner": "Bên thắng",
+    "teamLoser": "Bên thua",
+    "formerPlayer": "Người chơi cũ",
+    "dialog": {
+      "title": "Cập nhật kết quả",
+      "save": "Lưu",
+      "saving": "Đang lưu…",
+      "close": "Đóng",
+      "discard": "Bỏ thay đổi",
+      "discardTitle": "Bỏ các thay đổi của bạn?",
+      "discardBody": "Những thay đổi chưa lưu sẽ bị mất.",
+      "keepEditing": "Tiếp tục chỉnh sửa",
+      "discardConfirm": "Bỏ",
+      "limitReached": "Buổi chơi này chỉ chứa tối đa {{max}} kết quả. Hãy xóa một kết quả để thêm kết quả khác.",
+      "tooManyChanges": "Có hơn {{max}} thay đổi cùng lúc. Hãy lưu các thay đổi này rồi tiếp tục.",
+      "saveError": "Không lưu được kết quả. Hãy thử lại.",
+      "rowNumber": "#{{n}}",
+      "newGame": "Mới",
+      "rejectedHeading": "Chưa lưu"
+    },
+    "row": {
+      "delete": "Xóa kết quả {{n}}",
+      "undo": "Hoàn tác thay đổi của kết quả {{n}}",
+      "deletedMark": "Sẽ bị xóa"
+    },
+    "picker": {
+      "addPlayer": "Thêm người chơi",
+      "clear": "Bỏ người chơi",
+      "slotLabel": "{{team}}, người chơi {{n}}"
+    },
+    "score": {
+      "label": "{{team}}, {{slot}}"
+    },
+    "problem": {
+      "PLAYERS_MAX": "Tối đa {{max}}.",
+      "PLAYER_BOTH_TEAMS": "Một người chơi không thể ở cả hai bên.",
+      "SCORE_MISSING": "Hãy nhập điểm.",
+      "SCORE_RULE": "Điểm này không hợp lệ.",
+      "UNREADABLE": "Không đọc được kết quả này.",
+      "PLAYERS_MIN_one": "Hãy chọn người chơi.",
+      "PLAYERS_MIN_other": "Hãy chọn ít nhất {{count}} người chơi."
+    },
+    "latestHint": "Hiển thị {{count}} trong {{total}} kết quả gần nhất."
   }
 }

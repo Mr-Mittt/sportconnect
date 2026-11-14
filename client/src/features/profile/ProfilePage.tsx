@@ -508,6 +508,7 @@ export function ProfilePage() {
           participants={discoverModalData.participants}
           isParticipantsLoading={discoverModalData.isParticipantsLoading}
           isParticipantsError={discoverModalData.isParticipantsError}
+          result={discoverModalData.result}
           currentUserId={discoverModalData.currentUserId}
           canManage={discoverModalData.canManage}
           selectedCompletionLocation={discoverModalData.selectedCompletionLocation}

@@ -100,9 +100,12 @@ export function WhenFields({
             {t('create.startsAt.label')}
             {startRequired && <RequiredMark />}
           </span>
-          <SessionStartTimePicker key={startPickerKey} value={time.start} onChange={time.setStart} />
+          <SessionStartTimePicker key={startPickerKey} value={time.start} onChange={time.setStart} disallowPast />
           {showStartError && time.start === '' && (
             <p className="mt-1 text-2xs text-text-danger">{t('create.validation.startTime')}</p>
+          )}
+          {time.isStartInPast && (
+            <p className="mt-1 text-2xs text-text-danger" role="alert">{t('create.validation.startInPast')}</p>
           )}
         </div>
         <div className="sm:col-span-2">

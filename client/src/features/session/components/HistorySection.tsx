@@ -4,6 +4,7 @@ import { formatSessionDayLabel } from '../groupSessionsByDate';
 import type { SessionHistoryDate } from '../types';
 import { LoadMoreButton } from './LoadMoreButton';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+import { EmptyHint } from '@/shared/components/EmptyHint';
 
 interface HistorySectionProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -61,7 +62,7 @@ export function HistorySection({
         </p>
       )}
       {!isLoading && !isError && dates.length === 0 && (
-        <p className="text-2sm text-text-muted">{t('history.empty')}</p>
+        <EmptyHint>{t('history.empty')}</EmptyHint>
       )}
       {dates.length > 0 && (
         <div className="flex flex-col gap-3">
