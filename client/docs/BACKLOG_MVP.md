@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-13 (CLIENT-GL-38 and SPORT-18 done; CLIENT-GL-49 filed)
+**Last updated:** 2026-11-13 (CLIENT-GL-38 and SPORT-18 done; CLIENT-GL-49 filed; HF-22 filed)
 
 ---
 
@@ -88,6 +88,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 21 | [CLIENT-SESSION-47](MVP/CLIENT-SESSION-47_DUPLICATE_RESULT_WARNING.md) | Warn when the same players and winner were logged moments ago (BA open question 3) | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
 | 24 | [CLIENT-GL-49](MVP/CLIENT-GL-49_SESSION_RESULT_SCOREBOARD.md) | Session Result section: the client-computed scoreboard (split out of CLIENT-GL-38) | `TODO` |
+| 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request` | `TODO` |
 
 #### Removed / Deferred
 
