@@ -172,4 +172,11 @@ SESSION-46 makes `PREPARING` a fully editable draft that the host leaves with an
 **Status:** `CANDIDATE`
 **Source:** `/feature` game logging scoping (SESSION-50) — surfaced, not resolved on the spot.
 
-SESSION-50 lets any joined participant (or any group member in a group session) add, change and delete result records in an ONGOING or COMPLETED session. Should the other players in a record be told when a record naming them is added, changed or deleted ("a game with you was logged")? Open: whether it is noise during a busy session (a digest or only after the session ends), whether a deletion or edit made by someone else should notify the players it names, and who counts as the actor. SESSION-50 sends nothing.
+SESSION-50 lets any joined participant (or any group member in a group session) add, change and delete result records in an ONGOING or COMPLETED session. Should the other players in a record be told when a record naming them is added, changed or deleted ("a game with you was logged")? Open: whether it is noise during a busy session (a digest or only after the session ends), whether a deletion or edit made by someone else should notify the players it names, and who counts as the actor. SESSION-50 sends nothing. Filed as SESSION-GL-63 on 2026-11-15 (system comment plus notification), because CLIENT-GL-39 commands leave no comment in the thread; the open points above are settled there at pickup.
+
+### NOTIF-12 · Someone is tagged in a session comment
+**Date added:** 2026-11-15
+**Status:** `CANDIDATE`
+**Source:** CLIENT-GL-50 / SESSION-GL-64 scoping (`/ticket` session) — surfaced, not resolved on the spot; the owner will handle it later.
+
+CLIENT-GL-50 lets a user tag people in a session comment (the text carries `@[Full Name](userId)`). Should a tagged person be notified ("X mentioned you in <session>")? Open: whether the server reads the markup at write time (`createSessionComment`) or the client sends the tagged ids; whether a tagged person who is not a participant yet (requested, invited, a group member) is notified and what tapping it opens; whether a reply tag and a comment tag are the same notice; throttling (many tags in one comment); and how it relates to NOTIF-1 (a new comment already notifies the session's participants, so a tagged participant would get two). CLIENT-GL-50 and SESSION-GL-64 send nothing.

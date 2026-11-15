@@ -125,3 +125,7 @@ The owner asked to keep the database small. Two things from the first implementa
 ## Decision change (2026-11-13, owner, CLIENT-GL-38): the record schema contract
 
 The result schema is `{ version, maxRecords, record: { data: { type: COMPETITIVE, playersPerSide, score.slot[] }, UI } }` and a record's `data` is `{ teams: [{players, scores}, {players, scores}] }` with the first team as the winner. This replaces the `kind` / `recordMode` / `points` / `winningSide` sketch and the badminton example above. The server is unchanged (it reads only top-level `maxRecords`). Contract: `documentation/md/RECORD_SCHEMA_CONTRACT.md`.
+
+## Decision change (2026-11-15, owner, CLIENT-GL-39): the chat commands are parsed by the client
+
+The `:add` / `:upd` / `:del` commands of the session thread are parsed and validated **by the client** (the sport's record schema and the dialog's own checks) and sent as a one-item change set to `POST /api/sessions/{id}/records/changes`. A command is not stored as a comment, so there is no `createSessionComment` parser, no second write path and no stable per-session game number: the commands take the real record id (the Result section's copy button). SESSION-GL-51 (a server parser) stays postponed. What the thread lacks is a shared trace of who changed a result: SESSION-GL-63 adds a system comment and a notification when a record changes (NOTIF-11).

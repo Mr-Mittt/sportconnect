@@ -2,7 +2,9 @@ import type { Comment } from '@/features/feed/types';
 import { CommentItem } from '@/shared/components/CommentItem';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { EmptyHint } from '@/shared/components/EmptyHint';
-import { SessionCommentComposer } from './SessionCommentComposer';
+import { SystemNoticeLine } from '@/shared/components/SystemNoticeLine';
+import type { RecordCommandNotice } from '../hooks/useRecordCommands';
+import { SessionCommentComposer, type ComposerCommands } from './SessionCommentComposer';
 
 interface SessionCommentSectionProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -26,6 +28,10 @@ interface SessionCommentSectionProps {
   isPosting: boolean;
   onDeleteComment: (comment: Comment) => void;
   onToggleCommentLike: (comment: Comment) => void;
+  /** CLIENT-GL-39: record commands for the composer (only for someone who can log results). */
+  commands?: ComposerCommands;
+  /** CLIENT-GL-39: caller-only lines (a command's error) in the system-comment look; never stored. */
+  notices?: RecordCommandNotice[];
 }
 
 /**
@@ -62,6 +68,8 @@ export function SessionCommentSection({
   isPosting,
   onDeleteComment,
   onToggleCommentLike,
+  commands,
+  notices = [],
   i18nOverridePrefix,
 }: SessionCommentSectionProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -77,8 +85,16 @@ export function SessionCommentSection({
         currentUser={currentUser}
         onAddComment={onAddComment}
         isPosting={isPosting}
+        commands={commands}
         i18nOverridePrefix={i18nOverridePrefix}
       />
+      {notices.length > 0 && (
+        <div className="flex flex-col" data-testid="command-notices">
+          {notices.map((notice) => (
+            <SystemNoticeLine key={notice.id} text={notice.text} role="status" />
+          ))}
+        </div>
+      )}
       {isLoading && <p className="text-2xs text-text-muted">{t('comments.loading')}</p>}
       {isError && (
         <p role="alert" className="text-2xs text-text-danger">

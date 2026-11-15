@@ -349,6 +349,7 @@ export function AppShell() {
         isParticipantsLoading={sessionDetailData.isParticipantsLoading}
         isParticipantsError={sessionDetailData.isParticipantsError}
         result={sessionDetailData.result}
+        recordCommands={sessionDetailData.recordCommands}
         currentUserId={sessionDetailData.currentUserId}
         canManage={sessionDetailData.canManage}
         selectedCompletionLocation={sessionDetailData.selectedCompletionLocation}

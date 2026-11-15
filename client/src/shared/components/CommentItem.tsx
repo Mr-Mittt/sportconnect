@@ -1,3 +1,4 @@
+import { SystemNoticeLine } from '@/shared/components/SystemNoticeLine';
 import {
   IconDotsVertical,
   IconHeart,
@@ -134,16 +135,16 @@ export function CommentItem({
   // offer the caller something the API refuses.
   if (comment.commentType === 'SESSION_SYSTEM') {
     return (
-      // `flex-wrap` so the timestamp drops to a second centered line rather than overflowing the
-      // dialog at 375px — a long participant name can push this past the available width.
-      <div className="flex flex-wrap items-center justify-center gap-x-1 py-0.5 text-center">
-        <p className="text-2xs italic text-text-muted">{comment.content}</p>
-        {/* The dash lives inside the timestamp rather than as its own element, so a wrap can never
-            strand it alone at the end of the first line. */}
-        <span className="text-2xs italic text-text-muted" title={fullDateTime(comment.createdAt)}>
-          - {formatRelativeTime(comment.createdAt)}
-        </span>
-      </div>
+      <SystemNoticeLine
+        text={comment.content}
+        trailing={
+          // The dash lives inside the timestamp rather than as its own element, so a wrap can never
+          // strand it alone at the end of the first line.
+          <span className="text-2xs italic text-text-muted" title={fullDateTime(comment.createdAt)}>
+            - {formatRelativeTime(comment.createdAt)}
+          </span>
+        }
+      />
     );
   }
 

@@ -27,17 +27,19 @@
 | 6 | [SESSION-44](MVP/SESSION-44_REJECT_JOIN_AND_APPROVAL_ON_COMPLETED_SESSION.md) | `joinSession` (and approve/reject) reject only `CANCELLED`, not `COMPLETED` — a join or join request on a finished session succeeds (and notifies the creator); found during client CLIENT-SESSION-30 by code review, not yet reproduced live | `TODO` |
 | 7 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
 | 8 | [SESSION-48](MVP/SESSION-48_REMOVE_DESCRIPTION_FROM_THE_SESSION_API.md) | Remove description from the session API (deferred from CLIENT-SESSION-34; depends on it) | `TODO` |
-| 9 | [SESSION-GL-51](MVP/SESSION-GL-51_SESSION_THREAD_CHAT_COMMANDS_FOR_RESULTS.md) | Chat commands `:add`, `:del`, `:upd` in the session post thread | `POSTPONED` (2026-11-14, see CLIENT-GL-39) |
-| 10 | [SESSION-52](MVP/SESSION-52_GUESTS_IN_SESSION_RESULTS.md) | Guests in session results (BA GU-1 to GU-4) | `TODO` |
-| 11 | [SESSION-53](MVP/SESSION-53_RESULT_STATISTICS.md) | Result statistics: per player, head-to-head, pair stats, scope (BA ST-1 to ST-7) | `TODO` |
-| 12 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Group leaderboards and the admin-set ranking order (BA LB-1 to LB-9) | `TODO` |
-| 13 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `TODO` |
-| 14 | [SESSION-56](MVP/SESSION-56_POINT_ADJUSTMENTS.md) | Admin point adjustments with a reason and history (BA AD-1 to AD-4) | `TODO` |
-| 15 | [SESSION-58](MVP/SESSION-58_PERFORMANCE_RECORDS_FOR_RUNNING_CYCLING_SWIMMING.md) | A RECORD kind for sports without a head-to-head result (running, cycling, swimming) | `TODO` |
-| 16 | [SESSION-59](MVP/SESSION-59_DRAWS_AND_BEST_OF_THREE_RESULTS.md) | Draws and best-of-three results | `TODO` |
-| 17 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
-| 18 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
-| 19 | [SESSION-62](MVP/SESSION-62_REJECT_A_SESSION_START_IN_THE_PAST.md) | Reject a session start in the past (coded 400 `SESSION_START_IN_PAST`, 5-minute grace) on create and on a start change; the client already restricts it in CLIENT-GL-38 | `TODO` |
+| 9 | [SESSION-GL-64](MVP/SESSION-GL-64_THREAD_PEOPLE_SEARCH_FOR_TAGGING.md) | Search the people who can see a session's thread (`GET /api/sessions/{id}/thread-people`), for tagging in comments (CLIENT-GL-50) | `TODO` |
+| 10 | [SESSION-GL-51](MVP/SESSION-GL-51_SESSION_THREAD_CHAT_COMMANDS_FOR_RESULTS.md) | Chat commands `:add`, `:del`, `:upd` in the session post thread | `POSTPONED` (2026-11-14, see CLIENT-GL-39) |
+| 11 | [SESSION-52](MVP/SESSION-52_GUESTS_IN_SESSION_RESULTS.md) | Guests in session results (BA GU-1 to GU-4) | `TODO` |
+| 12 | [SESSION-53](MVP/SESSION-53_RESULT_STATISTICS.md) | Result statistics: per player, head-to-head, pair stats, scope (BA ST-1 to ST-7) | `TODO` |
+| 13 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Group leaderboards and the admin-set ranking order (BA LB-1 to LB-9) | `TODO` |
+| 14 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `TODO` |
+| 15 | [SESSION-56](MVP/SESSION-56_POINT_ADJUSTMENTS.md) | Admin point adjustments with a reason and history (BA AD-1 to AD-4) | `TODO` |
+| 16 | [SESSION-58](MVP/SESSION-58_PERFORMANCE_RECORDS_FOR_RUNNING_CYCLING_SWIMMING.md) | A RECORD kind for sports without a head-to-head result (running, cycling, swimming) | `TODO` |
+| 17 | [SESSION-59](MVP/SESSION-59_DRAWS_AND_BEST_OF_THREE_RESULTS.md) | Draws and best-of-three results | `TODO` |
+| 18 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
+| 19 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
+| 20 | [SESSION-62](MVP/SESSION-62_REJECT_A_SESSION_START_IN_THE_PAST.md) | Reject a session start in the past (coded 400 `SESSION_START_IN_PAST`, 5-minute grace) on create and on a start change; the client already restricts it in CLIENT-GL-38 | `TODO` |
+| 21 | [SESSION-GL-63](MVP/SESSION-GL-63_SYSTEM_COMMENT_AND_NOTIFICATION_WHEN_A_RECORD_CHANGES.md) | System comment and notification when a session record is added, changed or deleted, so every participant knows (NOTIF-11; follow-up of CLIENT-GL-39) | `TODO` |
 
 ---
 

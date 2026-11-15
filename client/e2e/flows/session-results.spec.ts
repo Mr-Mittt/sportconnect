@@ -1,4 +1,4 @@
-import { seedAuthenticatedSession, seedResultsOngoingOnNextLoad } from '../mocks/fixtures.ts';
+import { seedAuthenticatedSession, seedResultsOngoingOnNextLoad, seedResultsRecordsOnNextLoad } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -83,8 +83,8 @@ test('Session results — log a record, see it in the Result section, then delet
     await expect(detail.getByRole('button', { name: /Results \(1\)/ })).toBeVisible();
     const card = detail.getByTestId('record-card');
     await expect(card).toBeVisible();
-    // one line: # | team 1 | score 1 - score 2 | team 2, no Won / Lost labels
-    await expect(card).toContainText('#1');
+    // one line: team 1 | score 1 - score 2 | team 2 and the copy-id button, no record number, no Won / Lost labels
+    await expect(card).not.toContainText('#1');
     await expect(card).toContainText('21');
     await expect(card).toContainText('18');
     await expect(card.getByText('Won')).toHaveCount(0);
@@ -104,5 +104,72 @@ test('Session results — log a record, see it in the Result section, then delet
     await expect(dialog).not.toBeVisible();
     await expect(detail.getByRole('button', { name: /Results \(0\)/ })).toBeVisible();
     await expect(detail.getByText('No results logged yet.')).toBeVisible();
+  });
+});
+
+/*
+ * CLIENT-GL-39: record commands in the session thread. `resultsRecords` seeds two logged games between the caller
+ * (Jordan Lee) and the fixture friend (Priya Shah), both JOINED. A command is never posted as a comment; an invalid
+ * one shows a system-style line to the caller only, and it is gone when the modal is closed and opened again.
+ */
+test('Session results — record commands in the thread: hints, invalid, add, copy id then delete (CLIENT-GL-39)', async ({
+  page,
+  context,
+  mockSessionId,
+}) => {
+  test.setTimeout(90000);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await seedResultsRecordsOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page, '/matches');
+  await page.getByRole('button', { name: 'Pickleball' }).click();
+  await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
+  const detail = page.getByRole('dialog', { name: 'Sunday pickup run' });
+  const composer = detail.getByRole('textbox', { name: 'Add a comment' });
+  await expect(detail.getByRole('button', { name: /Results \(2\)/ })).toBeVisible();
+
+  await test.step('1. ":" lists the three command templates, ":a" narrows to :add, plain text shows none', async () => {
+    await composer.fill(':');
+    await expect(detail.getByRole('list', { name: 'Record commands' }).locator('li')).toHaveCount(3);
+    await composer.fill(':a');
+    await expect(detail.getByRole('list', { name: 'Record commands' }).locator('li')).toHaveCount(1);
+    await composer.fill('hello');
+    await expect(detail.getByRole('list', { name: 'Record commands' })).toHaveCount(0);
+  });
+
+  await test.step('2. an invalid command shows a caller-only line, keeps its text and posts no comment', async () => {
+    await composer.fill(':add @Nobody 21 vs 15 @Priya Shah');
+    await composer.press('Enter');
+    await expect(detail.getByTestId('command-notices')).toContainText("isn't a player in this session");
+    await expect(composer).toHaveValue(':add @Nobody 21 vs 15 @Priya Shah');
+    await expect(detail.getByText(':add @Nobody')).toHaveCount(0);
+  });
+
+  await test.step('3. a valid :add adds a game, clears the box and posts no comment', async () => {
+    await composer.fill(':add @Jordan Lee 21 vs 15 @Priya Shah');
+    await composer.press('Enter');
+    await expect(composer).toHaveValue('');
+    await expect(detail.getByRole('button', { name: /Results \(3\)/ })).toBeVisible();
+    await expect(detail.getByText('21 vs 15')).toHaveCount(0);
+  });
+
+  await test.step('4. the copy button puts the real record id on the clipboard and :del removes that game', async () => {
+    await detail.getByRole('button', { name: /Results \(3\)/ }).click();
+    await detail.getByRole('button', { name: 'Copy result id' }).first().click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toMatch(/^\d+$/);
+    await composer.fill(`:del ${copied}`);
+    await composer.press('Enter');
+    await expect(detail.getByRole('button', { name: /Results \(2\)/ })).toBeVisible();
+  });
+
+  await test.step('5. the caller-only line is gone after closing and reopening the modal', async () => {
+    await composer.fill(':del 99999');
+    await composer.press('Enter');
+    await expect(detail.getByTestId('command-notices')).toContainText('There is no game with id 99999.');
+    await page.keyboard.press('Escape');
+    await expect(detail).not.toBeVisible();
+    await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Sunday pickup run' }).getByRole('textbox', { name: 'Add a comment' })).toBeVisible();
+    await expect(page.getByTestId('command-notices')).toHaveCount(0);
   });
 });

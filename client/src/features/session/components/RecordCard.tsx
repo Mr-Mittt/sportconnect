@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { cn } from '@/shared/lib/utils';
 import { slotTitle, type RecordSchema } from '../recordSchema';
 import { readTeams, type TeamIndex } from '../recordData';
@@ -10,8 +11,10 @@ import {
 } from '../resultDisplay';
 import type { RecordData } from '../resultTypes';
 
-const ROW_GRID =
-  'grid grid-cols-[1.75rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 px-1.5';
+const ROW_GRID = 'grid items-center gap-1.5 px-1.5';
+const COLUMNS = 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]';
+/** The same columns plus a narrow trailing one for a row's action button. */
+const COLUMNS_WITH_ACTION = 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_1.5rem]';
 
 /**
  * The Winner / Loser labels above the list, in the schema's tones, aligned like the teams below them: the left label
@@ -20,9 +23,12 @@ const ROW_GRID =
 export function RecordListHeader({
   schema,
   text,
+  withAction = false,
 }: {
   schema: RecordSchema;
   text: { teamWinner: string; teamLoser: string };
+  /** The rows below carry a trailing action button: keep the columns lined up. */
+  withAction?: boolean;
 }) {
   const order = teamDisplayOrder(schema);
   const label = (index: TeamIndex, align: 'text-right' | 'text-left') => (
@@ -39,14 +45,18 @@ export function RecordListHeader({
   );
   return (
     <div
-      className={cn(ROW_GRID, 'border-hairline border-transparent')}
+      className={cn(
+        ROW_GRID,
+        withAction ? COLUMNS_WITH_ACTION : COLUMNS,
+        'border-hairline border-transparent',
+      )}
       data-testid="record-list-header"
       aria-hidden="true"
     >
-      <span />
       {label(order[0], 'text-right')}
       <span className="invisible">–</span>
       {label(order[1], 'text-left')}
+      {withAction && <span />}
     </div>
   );
 }
@@ -54,17 +64,17 @@ export function RecordListHeader({
 interface RecordCardProps {
   schema: RecordSchema;
   data: RecordData;
-  /** The record's number in the list (#n). */
-  number: number;
   names: PlayerNames;
   locale: 'en' | 'vi';
   /** Copy for the "Former player" fallback. */
   text: { formerPlayer: string };
+  /** A trailing button for this row (CLIENT-GL-39: copy the record id); the list header gets `withAction` too. */
+  action?: ReactNode;
 }
 
 /**
  * CLIENT-GL-38: one saved record on the Result section's list: one line,
- * "#n  [team 1  score 1]  -  [score 2  team 2]". The left group (team 1 and its score) is right-aligned and the right
+ * "[team 1  score 1]  -  [score 2  team 2]" (no record number since CLIENT-GL-39: the copy button gives the id). The left group (team 1 and its score) is right-aligned and the right
  * group (its score and team 2) left-aligned, so the two scores meet around the dash in the middle. The first team (the
  * winner) is on the schema's winnerAlign side, in the winner tone; the other in the loser tone; no Won / Lost label.
  *
@@ -73,7 +83,7 @@ interface RecordCardProps {
  * together, nothing is shortened in advance. A score is the first slot's value, "-" when missing, and "(...)" after it
  * when the sport has several score slots; hovering shows every slot as a bullet ("- label: score").
  */
-export function RecordCard({ schema, data, number, names, locale, text }: RecordCardProps) {
+export function RecordCard({ schema, data, names, locale, text, action }: RecordCardProps) {
   const read = readTeams(data, schema);
   if (read === null) return null;
   const order = teamDisplayOrder(schema);
@@ -119,10 +129,12 @@ export function RecordCard({ schema, data, number, names, locale, text }: Record
 
   return (
     <li
-      className="grid grid-cols-[1.75rem_minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5 rounded-lg border-hairline border-border bg-surface-2 px-1.5 py-1.5 text-2xs"
+      className={cn(
+        'grid items-center gap-1.5 rounded-lg border-hairline border-border bg-surface-2 px-1.5 py-1.5 text-2xs',
+        action === undefined ? COLUMNS : COLUMNS_WITH_ACTION,
+      )}
       data-testid="record-card"
     >
-      <span className="text-center font-semibold text-text-muted">#{number}</span>
       <span className="flex min-w-0 items-baseline justify-end gap-1.5" data-side="left">
         {team(order[0])}
         {score(order[0])}
@@ -134,6 +146,7 @@ export function RecordCard({ schema, data, number, names, locale, text }: Record
         {score(order[1])}
         {team(order[1])}
       </span>
+      {action}
     </li>
   );
 }

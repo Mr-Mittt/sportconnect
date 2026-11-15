@@ -112,3 +112,14 @@ export const SystemCommentsOnly: Story = {
     ],
   },
 };
+
+/** CLIENT-GL-39: a record command's error: a system-comment line only the caller sees. */
+export const WithCommandNotices: Story = {
+  args: {
+    comments: [makeComment()],
+    notices: [
+      { id: 2, text: 'There is no game with id 99.' },
+      { id: 1, text: 'Side 1: “Zed” isn’t a player in this session. Pick one from the @ list.' },
+    ],
+  },
+};

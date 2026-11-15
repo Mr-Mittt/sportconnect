@@ -229,7 +229,7 @@ e2e/
     direct-chat.spec.ts       # CHAT-10
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9/CLIENT-SESSION-17/CLIENT-SESSION-22/CLIENT-SESSION-23
     session-form-layout.spec.ts # CLIENT-SESSION-34
-    session-results.spec.ts   # CLIENT-GL-38
+    session-results.spec.ts   # CLIENT-GL-38, CLIENT-GL-39
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
@@ -1191,7 +1191,7 @@ Real-browser layout check (jsdom has no layout) of the sectioned create form and
 | `session form — closing the create form with unsent entries asks "Leave without saving?"` | Open the create form, nothing entered → Escape closes at once → reopen, type a title → Escape opens "Leave without saving?" → **Keep editing** keeps the form and its text → the Close button asks again → **Leave** closes it | CLIENT-SESSION-34. `matches-journey` step 8 now confirms "Leave" after closing with a chosen location. |
 | `session form — create form and Preparing detail fit 320px, header actions are icon-only` (and the same at 375px) | Open the create form and fill it, including the Who section's gender rows → all five sections are visible and neither the dialog nor its scrolling body is wider than the viewport; the hour select is narrower than 80px → create a Preparing session → open its detail → the dialog does not overflow; the first section's **Edit** button is visible with its text span hidden (icon-only, accessible name kept) → click it → **Discard** and **Save** replace it, both icon-only, no overflow → discard, then Edit the Who section → "By gender" is checked and the widest section (slots, gender rows, mood) still fits | CLIENT-SESSION-34 (ticket "Tests": the 320/375px width check). The only spec that proves the header actions collapse to icons below `sm` and that the new Who rows never scroll sideways. |
 
-### `e2e/flows/session-results.spec.ts` (CLIENT-GL-38, 1 `test()` with 5 steps)
+### `e2e/flows/session-results.spec.ts` (CLIENT-GL-38 and CLIENT-GL-39, 2 `test()`s: 5 steps and 5 steps)
 
 The session detail's Result section and the record dialog. `overrides.resultsOngoing` (seed `seedResultsOngoingOnNextLoad`) makes the Pickleball fixture "Sunday pickup run" ONGOING with an end time an hour away and the fixture friend JOINED next to the caller; the mock server stores records like SESSION-50 (a bad record is REJECTED on its own, the others are stored). The mock schema is the badminton one (1 to 2 players a side, one required Point score above zero, winner on the left).
 
@@ -1200,8 +1200,20 @@ The session detail's Result section and the record dialog. `overrides.resultsOng
 | 1. the section is there | Open the session detail → "Results (0)" is collapsed, expand it → "No results logged yet." | The section shows for an ONGOING session whose sport has a record schema, collapsed by default. |
 | 2. Update opens the dialog | Click Update → "Update results" dialog with one empty placeholder row and Save disabled; at 900 and 600 px high the dialog sits between the session detail's title bar and its comment composer (bounding boxes); at 320px neither the dialog nor its body scrolls sideways | The always-present placeholder, the nothing-to-save state, the smaller dialog that leaves the session title and composer in view, and the phone fit (jsdom has no layout). |
 | 3. red borders and Save refusal | Pick a winner, type a score for the winner only → the loser's score gets `aria-invalid` while typing; Save shows "Select the player." and sends nothing | Validation while typing and on Save (a score on one team only, a team below the minimum players). |
-| 4. save a record | Pick the loser, type their score, Save → the dialog closes, "Results (1)" and a one-line record (`#1`, both scores, no Won / Lost label) | The change set reaches the mock server and the list shows the fresh records. |
+| 4. save a record | Pick the loser, type their score, Save → the dialog closes, "Results (1)" and a one-line record (both scores and a copy-id button, no record number, no Won / Lost label) | The change set reaches the mock server and the list shows the fresh records. |
 | 5. delete | Update → the red X strikes the record through and turns into the undo → Save → "Results (0)" and the empty line | The row action slot and the delete diff. |
+
+Second test (CLIENT-GL-39, record commands in the thread; `resultsRecords` seeds two games between Jordan Lee and Priya Shah, both JOINED; the clipboard permission is granted):
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| 1. hints | `:` lists the three command templates, `:a` only `:add`, plain text none | The hint list follows the first word and only shows for a command candidate. |
+| 2. invalid command | `:add @Nobody 21 vs 15 @Priya Shah` → a caller-only line "Side 1: “Nobody” isn't a player in this session…", the text stays in the box, nothing is posted | A refused command keeps its text and posts no comment. |
+| 3. valid `:add` | `:add @Jordan Lee 21 vs 15 @Priya Shah` → the box clears, "Results (3)", no comment with that text | The same change set as the dialog reaches the mock server; a command is never a comment. |
+| 4. copy id, `:del` | The copy button puts the real record id on the clipboard (digits), `:del <id>` → "Results (2)" | The id the button gives is the one `:del` takes. |
+| 5. notices reset | `:del 99999` → "There is no game with id 99999."; close the modal, open it again → no notice | The caller-only line lives only while the modal is open. |
+
+The "my results" switch has no e2e step (every seeded game has both players); Vitest covers it.
 
 ### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
 

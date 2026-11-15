@@ -42,6 +42,7 @@ import { SessionDetailSections, type CompletionFavorites } from './SessionDetail
 import { SessionFormSection } from './SessionFormSection';
 import { SessionResultDialog } from './SessionResultDialog';
 import { SessionResultSection } from './SessionResultSection';
+import type { RecordCommandsData } from '../hooks/useRecordCommands';
 import type { SessionResultData } from '../hooks/useSessionResultData';
 import { missingForSession } from '../sessionReadiness';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
@@ -65,6 +66,9 @@ interface SessionDetailModalProps {
   /** CLIENT-GL-38: the Result section's data (the sport's record schema, who may edit, the saved records);
    * absent = no Result section (stories and tests that do not exercise it). */
   result?: SessionResultData;
+
+  /** CLIENT-GL-39: the record commands of the comment box; absent = every text is a normal comment. */
+  recordCommands?: RecordCommandsData;
 
   currentUserId: string;
   /** Creator (standalone) or owner/admin (group-linked) — resolved by the caller, same
@@ -406,6 +410,7 @@ export function SessionDetailModal({
   isParticipantsLoading,
   isParticipantsError,
   result,
+  recordCommands,
   currentUserId,
   canManage,
   sportsByKey,
@@ -777,6 +782,7 @@ export function SessionDetailModal({
                     locale={result.locale}
                     canEdit={result.access.canEdit}
                     windowClosed={result.access.windowClosed}
+                    currentUserId={currentUserId}
                     onUpdate={() => setIsResultDialogOpen(true)}
                   />
                 )}
@@ -953,6 +959,8 @@ export function SessionDetailModal({
                   isPosting={isPostingComment}
                   onDeleteComment={onDeleteComment}
                   onToggleCommentLike={onToggleCommentLike}
+                  commands={recordCommands}
+                  notices={recordCommands?.notices}
                 />
               </>
             )}
