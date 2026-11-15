@@ -155,7 +155,7 @@ test('Session results — record commands in the thread: hints, invalid, add, co
   await test.step('4. the copy button puts the real record id on the clipboard and :del removes that game', async () => {
     await detail.getByRole('button', { name: /Results \(3\)/ }).click();
     await detail.getByRole('button', { name: 'Copy result id' }).first().click();
-    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    const copied = await page.evaluate<string>('navigator.clipboard.readText()');
     expect(copied).toMatch(/^\d+$/);
     await composer.fill(`:del ${copied}`);
     await composer.press('Enter');
