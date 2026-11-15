@@ -19,6 +19,7 @@ import { useScheduleSession } from './hooks/useScheduleSession';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
+import { useRecordCommands } from './hooks/useRecordCommands';
 import { useSessionResultData } from './hooks/useSessionResultData';
 import { useUnlikeSession } from './hooks/useUnlikeSession';
 import { useUpdateSession } from './hooks/useUpdateSession';
@@ -185,6 +186,9 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
   const participantRows = participantsQuery.data?.content;
   const result = useSessionResultData(sessionQuery.data, sessionId, useMemo(() => participantRows ?? [], [participantRows]));
 
+  // CLIENT-GL-39: record commands typed in the comment box (only for someone who can log results).
+  const recordCommands = useRecordCommands(sessionId, result);
+
   return {
     /**
      * CLIENT-MODAL-1: clears the join/leave/cancel failures before the dialog closes.
@@ -219,6 +223,8 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
     participants: participantsQuery.data?.content ?? [],
     /** CLIENT-GL-38: the Result section's data slice. */
     result,
+    /** CLIENT-GL-39: the record commands of the comment box; `undefined` = every text is a normal comment. */
+    recordCommands,
     isParticipantsLoading: participantsQuery.isLoading,
     isParticipantsError: participantsQuery.isError,
     currentUserId: currentUserId ?? '',

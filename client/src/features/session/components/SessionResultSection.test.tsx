@@ -84,12 +84,13 @@ describe('SessionResultSection', () => {
     expect(screen.getAllByTestId('record-card')).toHaveLength(1);
   });
 
-  describe('a record is one line: # | [team 1 score 1] - [score 2 team 2]', () => {
-    it('has the number, the left group (team 1, score 1) right-aligned, the dash, and the right group (score 2, team 2) left-aligned', async () => {
+  describe('a record is one line: [team 1 score 1] - [score 2 team 2]', () => {
+    it('has no record number, the left group (team 1, score 1) right-aligned, the dash, and the right group (score 2, team 2) left-aligned', async () => {
       renderSection();
       await open();
-      const [number, left, dash, right] = Array.from(card().children) as HTMLElement[];
-      expect(number).toHaveTextContent('#1');
+      const [left, dash, right, action] = Array.from(card().children) as HTMLElement[];
+      expect(card()).not.toHaveTextContent('#');
+      expect(action).toContainElement(screen.getByRole('button', { name: 'Copy result id' }));
       expect(left).toHaveTextContent('Alice Nguyen21');
       expect(left.className).toContain('justify-end');
       expect(dash).toHaveTextContent('–');
@@ -151,7 +152,7 @@ describe('SessionResultSection', () => {
     it('shows - for a missing score', async () => {
       renderSection({ records: [game(1, ['a'], ['b'], [null, null])] });
       await open();
-      const [, left, , right] = Array.from(card().children) as HTMLElement[];
+      const [left, , right] = Array.from(card().children) as HTMLElement[];
       expect(left).toHaveTextContent('Alice Nguyen-');
       expect(right).toHaveTextContent('-Bob Tran');
     });
@@ -176,7 +177,7 @@ describe('SessionResultSection', () => {
         ],
       });
       await open();
-      const [, left, , right] = Array.from(card().children) as HTMLElement[];
+      const [left, , right] = Array.from(card().children) as HTMLElement[];
       expect(left).toHaveTextContent('Alice Nguyen2(...)');
       expect(right).toHaveTextContent('2(...)Bob Tran');
       expect(left.querySelector('[title^="•"]')).toHaveAttribute(
@@ -199,7 +200,7 @@ describe('SessionResultSection', () => {
   it('draws the winner first even when the record was stored with the higher score on the second team', async () => {
     renderSection({ records: [game(1, ['a'], ['b'], [15, 21])] });
     await open();
-    const [, left, , right] = Array.from(card().children) as HTMLElement[];
+    const [left, , right] = Array.from(card().children) as HTMLElement[];
     expect(left).toHaveTextContent('Bob Tran21');
     expect(right).toHaveTextContent('15Alice Nguyen');
   });
@@ -209,7 +210,7 @@ describe('SessionResultSection', () => {
 
     it('shows them in the schema tones, the left one right-aligned over the left team and the right one left-aligned', () => {
       renderSection();
-      const [, left, , right] = Array.from(labels().children) as HTMLElement[];
+      const [left, , right] = Array.from(labels().children) as HTMLElement[];
       expect(left).toHaveTextContent('Winner');
       expect(left).toHaveClass('text-right', 'text-text-success', 'underline');
       expect(right).toHaveTextContent('Loser');
@@ -218,15 +219,15 @@ describe('SessionResultSection', () => {
 
     it('uses the same grid as a record line, so they sit over the teams', () => {
       renderSection();
-      expect(labels().className).toContain('grid-cols-[1.75rem_minmax(0,1fr)_auto_minmax(0,1fr)]');
+      expect(labels().className).toContain('grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_1.5rem]');
       expect(screen.getByTestId('record-card').className).toContain(
-        'grid-cols-[1.75rem_minmax(0,1fr)_auto_minmax(0,1fr)]',
+        'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_1.5rem]',
       );
     });
 
     it('swaps with the teams when the schema says winnerAlign RIGHT', () => {
       renderSection({ schema: { ...schema, ui: { ...schema.ui, winnerAlign: 'RIGHT' } } });
-      const [, left, , right] = Array.from(labels().children) as HTMLElement[];
+      const [left, , right] = Array.from(labels().children) as HTMLElement[];
       expect(left).toHaveTextContent('Loser');
       expect(right).toHaveTextContent('Winner');
     });
@@ -239,13 +240,13 @@ describe('SessionResultSection', () => {
 
   describe('collapsed: the 3 latest records; open: all of them', () => {
     const five = [1, 2, 3, 4, 5].map((id) => game(id, ['a'], ['b'], [20 + id, 10]));
-    const numbers = () =>
+    const shownScores = () =>
       screen.getAllByTestId('record-card').map((c) => c.children[0].textContent);
 
-    it('collapsed lists only the last 3, keeping their numbers, and says it is a short list', () => {
+    it('collapsed lists only the last 3 and says it is a short list', () => {
       renderSection({ records: five });
       expect(screen.getByRole('button', { name: /Results \(5\)/ })).toBeInTheDocument();
-      expect(numbers()).toEqual(['#3', '#4', '#5']);
+      expect(shownScores()).toEqual(['Alice Nguyen23', 'Alice Nguyen24', 'Alice Nguyen25']);
       expect(screen.getByText('Showing the last 3 of 5 results.')).toHaveClass(
         'text-center',
         'italic',
@@ -255,14 +256,77 @@ describe('SessionResultSection', () => {
     it('open lists every record, in order, and no short-list line', async () => {
       renderSection({ records: five });
       await open();
-      expect(numbers()).toEqual(['#1', '#2', '#3', '#4', '#5']);
+      expect(shownScores()).toEqual([
+        'Alice Nguyen21',
+        'Alice Nguyen22',
+        'Alice Nguyen23',
+        'Alice Nguyen24',
+        'Alice Nguyen25',
+      ]);
       expect(screen.queryByText(/Showing the last/)).toBeNull();
     });
 
     it('with 3 or fewer records collapsed shows them all and no short-list line', () => {
       renderSection({ records: five.slice(0, 3) });
-      expect(numbers()).toEqual(['#1', '#2', '#3']);
+      expect(shownScores()).toEqual(['Alice Nguyen21', 'Alice Nguyen22', 'Alice Nguyen23']);
       expect(screen.queryByText(/Showing the last/)).toBeNull();
+    });
+  });
+
+  describe('CLIENT-GL-39: copy the record id', () => {
+    it('copies the real record id (not the position) when the caller can edit', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      // userEvent.setup() installs its own clipboard stub: replace it after setup
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      renderSection({ records: [game(41, ['a'], ['b']), game(57, ['c'], ['d'])] });
+      await user.click(screen.getByRole('button', { name: /Results/ }));
+      const buttons = screen.getAllByRole('button', { name: 'Copy result id' });
+      expect(buttons).toHaveLength(2);
+      await user.click(buttons[1]);
+      expect(writeText).toHaveBeenCalledWith('57');
+    });
+
+    it('shows no copy button to a caller who cannot edit', async () => {
+      renderSection({ canEdit: false });
+      await open();
+      expect(screen.queryByRole('button', { name: 'Copy result id' })).toBeNull();
+    });
+  });
+
+  describe('CLIENT-GL-39: the "my results" switch', () => {
+    const mine = game(1, ['a'], ['b']);
+    const others = game(2, ['c'], ['d']);
+
+    it('is off by default, has no visible label, and shows every game', async () => {
+      renderSection({ records: [mine, others], currentUserId: 'a' });
+      await open();
+      const toggle = screen.getByRole('switch', { name: 'My results' });
+      expect(toggle).toHaveAttribute('aria-checked', 'false');
+      expect(toggle).toHaveTextContent('');
+      expect(screen.getAllByTestId('record-card')).toHaveLength(2);
+    });
+
+    it('narrows the list to the games the caller plays in, and keeps the heading count', async () => {
+      renderSection({ records: [mine, others], currentUserId: 'b' });
+      await open();
+      await userEvent.setup().click(screen.getByRole('switch', { name: 'My results' }));
+      expect(screen.getAllByTestId('record-card')).toHaveLength(1);
+      expect(screen.getByTestId('record-card')).toHaveTextContent('Alice Nguyen21');
+      expect(screen.getByRole('button', { name: /Results \(2\)/ })).toBeInTheDocument();
+    });
+
+    it('says so when none of the games include the caller', async () => {
+      renderSection({ records: [others], currentUserId: 'a' });
+      await open();
+      await userEvent.setup().click(screen.getByRole('switch', { name: 'My results' }));
+      expect(screen.queryByTestId('record-card')).toBeNull();
+      expect(screen.getAllByText('None of the results include you.').length).toBeGreaterThan(0);
+    });
+
+    it('shows to a caller who cannot edit too', () => {
+      renderSection({ canEdit: false, currentUserId: 'a' });
+      expect(screen.getByRole('switch', { name: 'My results' })).toBeInTheDocument();
     });
   });
 

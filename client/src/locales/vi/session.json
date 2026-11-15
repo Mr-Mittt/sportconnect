@@ -74,7 +74,30 @@
     "viewMore": "Xem thêm bình luận",
     "placeholder": "Thêm bình luận…",
     "addLabel": "Thêm bình luận",
-    "post": "Đăng bình luận"
+    "post": "Đăng bình luận",
+    "command": {
+      "hintsLabel": "Lệnh ghi kết quả",
+      "mentionLabel": "Người chơi",
+      "labels": {
+        "player": "người chơi",
+        "score": "điểm",
+        "id": "id"
+      },
+      "teamPrefix": "Bên {{n}}: {{text}}",
+      "error": {
+        "ID_MISSING": "Thêm id của ván sau lệnh. Nút sao chép trong Kết quả sẽ cho bạn id.",
+        "ID_INVALID": "“{{text}}” không phải là id của ván. Hãy dùng số mà nút sao chép cung cấp.",
+        "ID_NOT_FOUND": "Không có ván nào có id {{text}}.",
+        "VS_MISSING": "Ngăn cách hai bên bằng “vs”.",
+        "VS_MULTIPLE": "Chỉ dùng “vs” một lần.",
+        "PLAYER_UNKNOWN": "“{{text}}” không phải là người chơi trong buổi này. Hãy chọn từ danh sách @.",
+        "PLAYER_AMBIGUOUS": "Có nhiều người chơi tên “{{text}}”. Hãy chọn một người từ danh sách @.",
+        "PLAYER_REPEATED": "{{text}} được nhập hai lần trong cùng một bên.",
+        "TEXT_UNEXPECTED": "Không hiểu “{{text}}”. Điểm đặt sau người chơi ở bên trái và trước người chơi ở bên phải.",
+        "SCORE_FORMAT": "“{{text}}” có nhiều điểm hơn số điểm môn này ghi nhận.",
+        "EXTRA_TEXT": "Không thể có thêm gì sau id (“{{text}}”)."
+      }
+    }
   },
   "upcoming": {
     "title": "Buổi chơi sắp tới",
@@ -471,6 +494,9 @@
       "PLAYERS_MIN_one": "Hãy chọn người chơi.",
       "PLAYERS_MIN_other": "Hãy chọn ít nhất {{count}} người chơi."
     },
-    "latestHint": "Hiển thị {{count}} trong {{total}} kết quả gần nhất."
+    "latestHint": "Hiển thị {{count}} trong {{total}} kết quả gần nhất.",
+    "copyId": "Sao chép id kết quả",
+    "myRecords": "Kết quả của tôi",
+    "myRecordsEmpty": "Không có kết quả nào có bạn."
   }
 }

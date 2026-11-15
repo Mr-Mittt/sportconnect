@@ -1,11 +1,14 @@
 import { IconPencil } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Button } from '@/shared/ui/button';
+import { Switch } from '@/shared/ui/switch';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import type { RecordSchema } from '../recordSchema';
 import type { PlayerNames } from '../resultDisplay';
 import type { SessionRecord } from '../resultTypes';
+import { readTeams } from '../recordData';
 import { showableRecords } from '../showableRecords';
+import { CopyRecordIdButton } from './CopyRecordIdButton';
 import { RecordCard, RecordListHeader } from './RecordCard';
 import { SessionFormSection } from './SessionFormSection';
 import { EmptyHint } from '@/shared/components/EmptyHint';
@@ -27,6 +30,8 @@ interface SessionResultSectionProps {
   canEdit: boolean;
   /** The 24 hours after `scheduledEndAt` have passed: a line explains why nothing can change. */
   windowClosed: boolean;
+  /** The caller, for the "my results" switch. */
+  currentUserId?: string;
   onUpdate: () => void;
 }
 
@@ -47,30 +52,47 @@ export function SessionResultSection({
   locale,
   canEdit,
   windowClosed,
+  currentUserId,
   onUpdate,
 }: SessionResultSectionProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   const [open, setOpen] = useState(false);
-  const shown = records === undefined ? [] : showableRecords(schema, records);
+  const [mineOnly, setMineOnly] = useState(false);
+  const saved = records === undefined ? [] : showableRecords(schema, records);
+  // CLIENT-GL-39: the "my results" switch narrows the list (and the 3-latest preview) to the games the caller plays in;
+  // the heading count stays the number of all games.
+  const shown =
+    mineOnly && currentUserId !== undefined
+      ? saved.filter((record) =>
+          readTeams(record.data, schema)?.teams.some((team) =>
+            team.players.includes(currentUserId),
+          ),
+        )
+      : saved;
   // Collapsed: the 3 latest records and a line saying it is a short list. Open: every record.
   const latest = shown.slice(-LATEST_RECORDS);
-  const firstNumber = shown.length - latest.length + 1;
-  const renderCards = (list: typeof shown, startNumber: number) => (
+  const emptyText = mineOnly && saved.length > 0 ? t('result.myRecordsEmpty') : t('result.empty');
+  const renderCards = (list: typeof shown) => (
     <div className="flex flex-col gap-1">
       <RecordListHeader
         schema={schema}
+        withAction={canEdit}
         text={{ teamWinner: t('result.teamWinner'), teamLoser: t('result.teamLoser') }}
       />
       <ol className="flex flex-col gap-1.5">
-        {list.map((record, index) => (
+        {list.map((record) => (
           <RecordCard
             key={record.id}
             schema={schema}
             data={record.data}
-            number={startNumber + index}
             names={names}
             locale={locale}
             text={{ formerPlayer: t('result.formerPlayer') }}
+            action={
+              canEdit ? (
+                <CopyRecordIdButton recordId={record.id} label={t('result.copyId')} />
+              ) : undefined
+            }
           />
         ))}
       </ol>
@@ -81,7 +103,7 @@ export function SessionResultSection({
     <section aria-label={t('result.label')}>
       <SessionFormSection
         i18nOverridePrefix={i18nOverridePrefix}
-        title={t('result.heading', { count: shown.length })}
+        title={t('result.heading', { count: saved.length })}
         open={open}
         onOpenChange={setOpen}
         scrollIntoViewOnOpen
@@ -89,10 +111,10 @@ export function SessionResultSection({
         // saying it is a short list; opening it shows them all.
         summary={
           isLoading || isError ? undefined : shown.length === 0 ? (
-            <EmptyHint size="2xs">{t('result.empty')}</EmptyHint>
+            <EmptyHint size="2xs">{emptyText}</EmptyHint>
           ) : (
             <div className="flex flex-col gap-1">
-              {renderCards(latest, firstNumber)}
+              {renderCards(latest)}
               {shown.length > latest.length && (
                 <EmptyHint size="2xs" className="italic">
                   {t('result.latestHint', { count: latest.length, total: shown.length })}
@@ -102,29 +124,38 @@ export function SessionResultSection({
           )
         }
         actions={
-          canEdit ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1 rounded-full px-2 sm:px-3"
-              aria-label={t('result.update')}
-              title={t('result.update')}
-              onClick={onUpdate}
-            >
-              <IconPencil className="size-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">{t('result.update')}</span>
-            </Button>
-          ) : undefined
+          <>
+            <span title={t('result.myRecords')} className="mr-1 flex items-center">
+              <Switch
+                checked={mineOnly}
+                onCheckedChange={setMineOnly}
+                aria-label={t('result.myRecords')}
+              />
+            </span>
+            {canEdit && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1 rounded-full px-2 sm:px-3"
+                aria-label={t('result.update')}
+                title={t('result.update')}
+                onClick={onUpdate}
+              >
+                <IconPencil className="size-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">{t('result.update')}</span>
+              </Button>
+            )}
+          </>
         }
       >
         {windowClosed && <p className="text-2xs text-text-secondary">{t('result.windowClosed')}</p>}
         {isLoading && <p className="text-2xs text-text-muted">{t('common.loading')}</p>}
         {isError && <p className="text-2xs text-text-danger">{t('result.loadError')}</p>}
         {!isLoading && !isError && shown.length === 0 && (
-          <EmptyHint size="2xs">{t('result.empty')}</EmptyHint>
+          <EmptyHint size="2xs">{emptyText}</EmptyHint>
         )}
-        {shown.length > 0 && renderCards(shown, 1)}
+        {shown.length > 0 && renderCards(shown)}
       </SessionFormSection>
     </section>
   );

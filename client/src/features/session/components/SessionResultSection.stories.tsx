@@ -109,3 +109,8 @@ export const TwoScoreSlots: Story = {
   },
   play: WithRecords.play,
 };
+
+/** CLIENT-GL-39: the "my results" switch narrows the list to the games the caller plays in (here: Carol). */
+export const WithMyResultsSwitch: Story = {
+  args: { currentUserId: 'c' },
+};

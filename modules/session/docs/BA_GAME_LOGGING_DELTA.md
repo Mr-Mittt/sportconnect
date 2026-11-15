@@ -104,3 +104,10 @@ Open items this ticket adds to section 5: none new. Still waiting on the BA: que
 
 - **GL-4 / GL-5:** a game is two teams (the first is the winner by position), each with 1 to the sport's maximum players (badminton: 1 to 2) and, when the sport defines score slots, a score per slot; scores are optional but must be complete (both teams, all required slots). The same player cannot be on both teams. The earlier "tap the winning side" is gone: the winner is the first team. Contract: `documentation/md/RECORD_SCHEMA_CONTRACT.md`.
 - **Scoreboard:** not part of logging. It moves to CLIENT-GL-49, so the session's Result section lists the games first.
+
+### CLIENT-GL-39 change, 2026-11-15: games can be logged from the session chat box
+
+- A second way to log, change and delete a game (GL-1 to GL-3): a message in the session's chat box that starts with `:add`, `:upd` or `:del` is a command, not a chat message. For example `:add @Bao @An 21 vs 15 @Binh @Chi` (the first side is the winner, scores are optional and follow the sport's rules), `:upd 12 @Bao 21 vs 15 @An` and `:del 12`. Players are chosen from a list that opens when you type `@`; the id comes from a small copy button on each game in the Results section.
+- The app checks the command with the same rules as the Update dialog and sends the same request; the server has no separate rules for it. A mistake shows a short note that only the person who typed it sees, and it disappears when the session is closed. Nothing is written into the chat, and the other players are not told yet (SESSION-GL-63 adds a chat line and a notification, NOTIF-11).
+- Only a joined participant inside the 24 hours can use commands; for anyone else the same text is an ordinary message.
+- The Results section no longer shows game numbers (#1, #2); a switch next to Update shows only the games you played in.
