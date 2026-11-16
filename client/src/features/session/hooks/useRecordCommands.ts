@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/app/authStore';
 import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
+import type { Segment } from '@/shared/lib/mentionMarkup';
 import {
   commandNameOf,
+  commandText,
   mentionPlayers,
   parseCommand,
-  type CommandIssue,
   type MentionPlayer,
 } from '../recordCommand';
 import { buildCommandHints, type CommandHint } from '../recordCommandHints';
@@ -20,11 +22,14 @@ export const MAX_NOTICES = 3;
 export interface RecordCommandNotice {
   id: number;
   text: string;
+  /** The generic "your update is invalid" line (a streak of refusals shows as one line with a count). */
+  invalid?: boolean;
 }
 
-/** A player the `@` list offers: the command token plus the avatar the list draws. */
+/** A player the `@` list offers: the name the list shows plus the avatar it draws; the caller is marked (the list adds `(you)`). */
 export interface MentionOption extends MentionPlayer {
   avatarUrl: string | null;
+  isCurrentUser: boolean;
 }
 
 export interface RecordCommandsData {
@@ -35,19 +40,10 @@ export interface RecordCommandsData {
    * either refused locally (`accepted: false`, a notice says why, the text should stay in the box) or sent
    * (`accepted: true`, the box clears; a failure shows up as a notice later).
    */
-  run: (text: string) => { handled: boolean; accepted: boolean };
+  run: (draft: Segment[]) => { handled: boolean; accepted: boolean };
   isRunning: boolean;
   notices: RecordCommandNotice[];
 }
-
-const RECORD_PROBLEM_CODES = new Set([
-  'UNREADABLE',
-  'PLAYERS_MIN',
-  'PLAYERS_MAX',
-  'PLAYER_BOTH_TEAMS',
-  'SCORE_MISSING',
-  'SCORE_RULE',
-]);
 
 /**
  * CLIENT-GL-39: record commands typed in the session thread (`:add`, `:upd`, `:del`). Available only to someone who
@@ -63,13 +59,17 @@ export function useRecordCommands(
   const { t } = useTranslation('session');
   const { t: tErrors } = useTranslation('errors');
   const mutation = useApplyRecordChanges();
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const [notices, setNotices] = useState<RecordCommandNotice[]>([]);
+  // How many commands in a row were refused as invalid (a command that goes through starts the count again).
+  const [invalidStreak, setInvalidStreak] = useState(0);
   const [noticesFor, setNoticesFor] = useState(sessionId);
   const counter = useRef(0);
   // The notices belong to one opening of one session: a different session, or the modal closing, drops them.
   if (noticesFor !== sessionId) {
     setNoticesFor(sessionId);
     setNotices([]);
+    setInvalidStreak(0);
   }
 
   const { schema, access, names, playerIds, records } = result;
@@ -85,10 +85,15 @@ export function useRecordCommands(
       ),
     [playerIds, names],
   );
-  const mentions = useMemo<MentionOption[]>(
-    () => players.map((player) => ({ ...player, avatarUrl: names.get(player.id)?.avatarUrl ?? null })),
-    [players, names],
-  );
+  // The caller, when a player, is always first.
+  const mentions = useMemo<MentionOption[]>(() => {
+    const options = players.map((player) => ({
+      ...player,
+      avatarUrl: names.get(player.id)?.avatarUrl ?? null,
+      isCurrentUser: player.id === currentUserId,
+    }));
+    return [...options.filter((option) => option.isCurrentUser), ...options.filter((option) => !option.isCurrentUser)];
+  }, [players, names, currentUserId]);
   const hints = useMemo(
     () =>
       schema === null
@@ -107,27 +112,35 @@ export function useRecordCommands(
     setNotices((previous) => [{ id, text }, ...previous].slice(0, MAX_NOTICES));
   }, []);
 
-  const issueText = useCallback(
-    (issue: CommandIssue): string => {
-      const min = schema?.playersPerSide.min ?? 1;
-      const base = RECORD_PROBLEM_CODES.has(issue.code)
-        ? t(`result.problem.${issue.code}`, { min, max: schema?.playersPerSide.max ?? min, count: min })
-        : t(`comments.command.error.${issue.code}`, { text: issue.text ?? '' });
-      return issue.team === undefined ? base : t('comments.command.teamPrefix', { n: issue.team, text: base });
+  // The newest line of a streak of refusals is replaced, not stacked: the count after it says how many in a row.
+  const pushInvalid = useCallback(
+    (count: number) => {
+      counter.current += 1;
+      const id = counter.current;
+      const text = count < 2 ? t('comments.command.invalid') : t('comments.command.invalidRepeated', { count });
+      setNotices((previous) => {
+        const rest = previous.filter((notice) => !notice.invalid);
+        return [{ id, text, invalid: true }, ...rest].slice(0, MAX_NOTICES);
+      });
     },
-    [schema, t],
+    [t],
   );
 
   const run = useCallback(
-    (text: string) => {
+    (draft: Segment[]) => {
+      // The players are read from the chips' ids (CLIENT-GL-50); a name typed without being picked is no player.
+      const text = commandText(draft);
       if (!available || schema === null || commandNameOf(text) === null) {
         return { handled: false, accepted: false };
       }
       const parsed = parseCommand(text, { schema, players, records: records ?? [] });
       if (!parsed.ok) {
-        push([...new Set(parsed.issues.map(issueText))].join(' '));
+        // Whatever is wrong, one line: the hint under the box already shows the shape of a command.
+        pushInvalid(invalidStreak + 1);
+        setInvalidStreak(invalidStreak + 1);
         return { handled: true, accepted: false };
       }
+      setInvalidStreak(0);
       const { operation } = parsed;
       const changes: RecordChangeSetRequest = {
         add:
@@ -159,7 +172,7 @@ export function useRecordCommands(
       );
       return { handled: true, accepted: true };
     },
-    [available, schema, players, records, push, issueText, mutation, sessionId, tErrors, t],
+    [available, schema, players, records, push, pushInvalid, invalidStreak, mutation, sessionId, tErrors, t],
   );
 
   if (!available) return undefined;

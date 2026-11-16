@@ -7,6 +7,7 @@ import { useHomeFeedStore } from '@/app/homeFeedStore';
 import { usePost } from '@/features/feed/hooks/usePost';
 import { usePostErrorGuard } from '@/features/feed/postErrors';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
+import { usePostMentionSource } from '@/features/feed/hooks/usePostMentionSource';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
@@ -75,6 +76,10 @@ const noop = () => {};
  * `usePost`, not a feed-cache lookup — decoupling the dialog from feed
  * pagination and making it work from a cold load with no prior fetch at all.
  */
+/** `/` and `/posts/:postId` are the same page: opening or closing a post moves between them without leaving it. */
+const isHomeFeedPath = (path: string) => path === '/' || /^\/posts\/[^/]+$/.test(path);
+const isInsideHomeFeed = (fromPath: string, toPath: string) => isHomeFeedPath(fromPath) && isHomeFeedPath(toPath);
+
 export function HomeFeedPage() {
   const { t } = useTranslation('homeFeed');
   const activeSport = useHomeFeedStore((state) => state.activeSport);
@@ -198,6 +203,9 @@ export function HomeFeedPage() {
   // that has this post, and falls through to a real fetch otherwise (a post
   // outside every loaded cache, or a cold `/posts/:id` load).
   const activeCommentsPost = activeCommentsPostQuery.data ?? null;
+  // CLIENT-GL-50 part 2: who an `@` can tag. The post box makes a user post (friends), the comments follow the open post.
+  const composerMentionSource = usePostMentionSource(null);
+  const commentMentionSource = usePostMentionSource(activeCommentsPost?.groupId ?? null, activeCommentsPostId !== null);
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
@@ -270,6 +278,9 @@ export function HomeFeedPage() {
           onPhotoClick={noop}
           onLocationClick={noop}
           onTagSportClick={noop}
+          mentionSource={composerMentionSource}
+          // Opening a post (`/posts/:id`) and closing it (`/`) keeps this page, and the draft, in place.
+          isSamePage={isInsideHomeFeed}
         />
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
           <div className="min-w-0">
@@ -337,6 +348,7 @@ export function HomeFeedPage() {
             fullName: `${user.firstName} ${user.lastName}`,
             avatarUrl: user.avatarUrl,
           }}
+          mentionSource={commentMentionSource}
           post={activeCommentsPost}
           sport={activeCommentsPostSport}
           isPostLoading={activeCommentsPostQuery.isLoading}
@@ -517,6 +529,7 @@ export function HomeFeedPage() {
           isParticipantsError={discoverModalData.isParticipantsError}
           result={discoverModalData.result}
           recordCommands={discoverModalData.recordCommands}
+          mentionSource={discoverModalData.mentionSource}
           currentUserId={discoverModalData.currentUserId}
           canManage={discoverModalData.canManage}
           selectedCompletionLocation={discoverModalData.selectedCompletionLocation}

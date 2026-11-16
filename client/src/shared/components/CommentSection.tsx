@@ -1,7 +1,8 @@
 import { IconHeart, IconHeartFilled, IconSend } from '@tabler/icons-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Comment, Post } from '@/features/feed/types';
 import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
+import { isEmptyDraft, serialize, trimSegments } from '@/shared/lib/mentionMarkup';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
@@ -9,10 +10,14 @@ import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
+import { useCloseWithDraftGuard, useDraftRegistry } from '@/shared/hooks/useCloseWithDraftGuard';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { focusFirstUnsent } from '@/shared/lib/focusFirstUnsent';
+import { UnsavedPostConfirmDialog } from './UnsavedPostConfirmDialog';
 import { Skeleton } from '@/shared/ui/skeleton';
 import { CommentItem } from './CommentItem';
-import { HashtagText } from './HashtagText';
+import { MentionInput, type MentionDraft, type MentionInputHandle, type MentionSource } from './MentionInput';
+import { PostText } from './PostText';
 import { SportIcon } from './SportIcon';
 import { EmptyHint } from '@/shared/components/EmptyHint';
 
@@ -56,6 +61,9 @@ interface CommentSectionProps {
    * affordance at all, unlike PostCard in the feed). Same
    * `onToggleLike(postId)` convention as PostCard/Feed. */
   onTogglePostLike: (postId: number) => void;
+  /** CLIENT-GL-50 part 2: who an `@` in a comment or a reply can tag, the same people as the post itself (a user post:
+   * the caller's friends, a group post: the group's members). Absent = nobody can be tagged. */
+  mentionSource?: MentionSource;
   /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
    * copy (`sharedComponents.commentSection.*`) for a specific caller. No current caller passes
    * this. */
@@ -106,23 +114,58 @@ export function CommentSection({
   onToggleCommentLike,
   onHashtagClick,
   onTogglePostLike,
+  mentionSource,
   i18nOverridePrefix,
 }: CommentSectionProps) {
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
-  const [content, setContent] = useState('');
+  const [draft, setDraft] = useState<MentionDraft>({ segments: [], stored: '', plain: '' });
+  const [query, setQuery] = useState<string | null>(null);
+  const inputHandle = useRef<MentionInputHandle>(null);
+
+  // A person already tagged in this comment is not offered again.
+  const options = useMemo(() => {
+    if (query === null) return [];
+    const tagged = new Set(draft.segments.flatMap((segment) => (segment.kind === 'mention' ? [segment.userId] : [])));
+    return (mentionSource?.options ?? []).filter((person) => !tagged.has(person.id));
+  }, [query, draft.segments, mentionSource?.options]);
+
+  const isDraftEmpty = isEmptyDraft(draft.segments);
+
+  // Closing over an unsent comment or reply asks first (owner, 2026-11-16).
+  const drafts = useDraftRegistry();
+  const reportDraft = drafts.report;
+  useEffect(() => {
+    reportDraft('comment', !isDraftEmpty);
+  }, [reportDraft, isDraftEmpty]);
+  const closeGuard = useCloseWithDraftGuard(drafts.hasDraft, () => {
+    // The box is gone with the closed dialog, so what it held is too.
+    setDraft({ segments: [], stored: '', plain: '' });
+    setQuery(null);
+    onClose();
+  });
 
   const submitComment = () => {
-    const trimmed = content.trim();
-    if (trimmed.length === 0) return;
-    onAddComment(trimmed);
-    setContent('');
+    if (isDraftEmpty) return;
+    onAddComment(serialize(trimSegments(draft.segments)));
+    inputHandle.current?.clear();
   };
 
   const displayName = post?.userFullName ?? t('commentSection.unknownUser');
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
+    <>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && closeGuard.requestClose()}>
+      <DialogContent
+        fixedHeight
+        fixedHeightVh={72}
+        className="max-w-[35rem]"
+        data-unsent-scope="comment-modal"
+        // The caret goes to the comment box, not to the first button (owner, 2026-11-16).
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          inputHandle.current?.focus();
+        }}
+      >
         <DialogTitle className="sr-only">
           {t('commentSection.dialogTitle', { name: displayName })}
         </DialogTitle>
@@ -187,7 +230,7 @@ export function CommentSection({
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {post !== null && (
             <div className="border-hairline-b mb-3 border-border pb-3">
-              <HashtagText
+              <PostText
                 text={post.content}
                 onHashtagClick={onHashtagClick}
                 className="text-sm text-text-primary"
@@ -221,24 +264,26 @@ export function CommentSection({
                 {currentUser !== undefined ? initialsFor(currentUser.fullName) : ''}
               </AvatarFallback>
             </Avatar>
-            <input
-              type="text"
-              value={content}
-              onChange={(event) => setContent(event.target.value.slice(0, MAX_COMMENT_LENGTH))}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') submitComment();
-              }}
+            <MentionInput
+              ref={inputHandle}
+              ariaLabel={t('commentSection.commentAriaLabel')}
               placeholder={t('commentSection.commentPlaceholder')}
-              aria-label={t('commentSection.commentAriaLabel')}
               maxLength={MAX_COMMENT_LENGTH}
-              className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+              options={options}
+              pickerLabel={t('commentSection.mentionLabel')}
+              onQueryChange={(next) => {
+                setQuery(next);
+                mentionSource?.onQueryChange(next);
+              }}
+              onChange={setDraft}
+              onSubmit={submitComment}
             />
             <Button
               variant="primary"
               size="icon"
               aria-label={t('commentSection.postComment')}
               onClick={submitComment}
-              disabled={content.trim().length === 0 || isPosting}
+              disabled={isDraftEmpty || isPosting}
               className={cn(
                 'cursor-pointer rounded-full disabled:cursor-default',
                 POST_BUTTON_DISABLED_OVERRIDE,
@@ -256,6 +301,7 @@ export function CommentSection({
             <div className="flex flex-col gap-3">
               {comments.map((comment) => (
                 <CommentItem
+                  onDraftChange={drafts.report}
                   key={comment.id}
                   comment={comment}
                   currentUserId={currentUserId}
@@ -265,6 +311,7 @@ export function CommentSection({
                   onReply={onAddReply}
                   isSubmittingReply={isPosting}
                   onHashtagClick={onHashtagClick}
+                  mentionSource={mentionSource}
                 />
               ))}
               {hasMore && (
@@ -282,5 +329,13 @@ export function CommentSection({
         </div>
       </DialogContent>
     </Dialog>
+    <UnsavedPostConfirmDialog
+      isOpen={closeGuard.isAsking}
+      onStay={closeGuard.stay}
+      onLeave={closeGuard.leave}
+      onStayFocus={() => focusFirstUnsent('[data-unsent-scope="comment-modal"]')}
+      i18nOverridePrefix="sharedDialogs:unsavedComment"
+    />
+    </>
   );
 }

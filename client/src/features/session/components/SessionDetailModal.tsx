@@ -12,7 +12,7 @@ import {
   type Icon,
 } from '@tabler/icons-react';
 import i18next from 'i18next';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Comment } from '@/features/feed/types';
 import { SportIcon } from '@/shared/components/SportIcon';
@@ -31,11 +31,15 @@ import { cn } from '@/shared/lib/utils';
 import type { ResolvedSportAttributeSchema, SportKey, SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
+import { focusFirstUnsent } from '@/shared/lib/focusFirstUnsent';
+import { UnsavedPostConfirmDialog } from '@/shared/components/UnsavedPostConfirmDialog';
+import { useCloseWithDraftGuard, useDraftRegistry } from '@/shared/hooks/useCloseWithDraftGuard';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant, UpdateSessionPayload } from '../types';
+import type { MentionSource } from '@/shared/components/MentionInput';
 import { SessionCommentSection } from './SessionCommentSection';
 import { SessionReadinessDialog } from './SessionConfirmDialogs';
 import { SessionDetailSections, type CompletionFavorites } from './SessionDetailSections';
@@ -160,6 +164,8 @@ interface SessionDetailModalProps {
   isPostingComment: boolean;
   onDeleteComment: (comment: Comment) => void;
   onToggleCommentLike: (comment: Comment) => void;
+  /** CLIENT-GL-50: the people an `@` in a comment or reply offers. */
+  mentionSource?: MentionSource;
 }
 
 function initialsFor(fullName: string): string {
@@ -460,6 +466,7 @@ export function SessionDetailModal({
   isPostingComment,
   onDeleteComment,
   onToggleCommentLike,
+  mentionSource,
   i18nOverridePrefix,
 }: SessionDetailModalProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -526,19 +533,175 @@ export function SessionDetailModal({
   const isAutoCancelled =
     session !== undefined && session.cancelledBy === null && session.cancelledAt !== null;
 
+  // CLIENT-GL-50 part 3: the host's "Waiting for approval" block lives inside the Players section (under its header
+  // when collapsed, above the capacity meter when open); still its own collapsible block, open by default.
+  // `canJoinOrLeave` also gates approve/reject, not just non-empty: the backend rejects both once the session is
+  // CANCELLED (same reason cancelSession itself is blocked on COMPLETED/CANCELLED), so it stays hidden rather than
+  // showing buttons that would only ever 400.
+  const composerFocus = useRef<{ focus: () => void }>(null);
+  // Closing over an unsent comment or reply asks first (owner, 2026-11-16).
+  const drafts = useDraftRegistry();
+  const closeGuard = useCloseWithDraftGuard(drafts.hasDraft, () => {
+    setRejectingUserId(null);
+    setRejectReason('');
+    onClose();
+  });
+  const approvalQueue =
+    canJoinOrLeave && requestedParticipants.length > 0 ? (
+      <section aria-label={t('detail.approval.label')} className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsApprovalCollapsed((collapsed) => !collapsed)}
+                      aria-expanded={!isApprovalCollapsed}
+                      className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                    >
+                      <IconClock className="size-4 shrink-0" aria-hidden="true" />
+                      {t('detail.approval.heading', { n: requestedParticipants.length })}
+                      <IconChevronDown
+                        className={cn(
+                          'ml-auto size-4 shrink-0 text-text-muted transition-transform',
+                          !isApprovalCollapsed && 'rotate-180',
+                        )}
+                        aria-hidden="true"
+                      />
+                    </button>
+                    {isRequestedParticipantsLoading && (
+                      <p className="text-2xs text-text-muted">{t('common.loading')}</p>
+                    )}
+                    {isRequestedParticipantsError && (
+                      <p role="alert" className="text-2xs text-text-danger">
+                        {t('detail.approval.error')}
+                      </p>
+                    )}
+                    {!isApprovalCollapsed &&
+                      !isRequestedParticipantsLoading &&
+                      !isRequestedParticipantsError && (
+                        <div className="border-amber-800/30 bg-amber-50 divide-amber-800/20 flex flex-col gap-2.5 divide-y rounded-xl border-hairline p-2.5">
+                          {requestedParticipants.map((participant) => (
+                            <div
+                              key={participant.id}
+                              className="flex flex-col gap-1.5 pt-2.5 first:pt-0"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <Avatar className="size-6 shrink-0">
+                                    {participant.userAvatarUrl !== null && (
+                                      <AvatarImage src={participant.userAvatarUrl} alt="" />
+                                    )}
+                                    <AvatarFallback className="text-2xs">
+                                      {initialsFor(participant.userFullName)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="truncate text-2sm text-text-primary">
+                                    {participant.userFullName}
+                                  </span>
+                                </div>
+                                <div className="flex shrink-0 gap-1.5">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isRejectingParticipant}
+                                    onClick={() => {
+                                      setRejectingUserId(participant.userId);
+                                      setRejectReason('');
+                                    }}
+                                  >
+                                    {t('detail.approval.reject')}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={isApprovingParticipant}
+                                    onClick={() => onApproveParticipant(participant.userId)}
+                                  >
+                                    {t('detail.approval.approve')}
+                                  </Button>
+                                </div>
+                              </div>
+                              {rejectingUserId === participant.userId && (
+                                <div className="border-hairline flex flex-col gap-2 rounded-lg border-border bg-surface-2 p-2.5">
+                                  <Input
+                                    value={rejectReason}
+                                    onChange={(event) => setRejectReason(event.target.value)}
+                                    placeholder={t('detail.approval.reasonPlaceholder')}
+                                    aria-label={t('detail.approval.reasonLabel', {
+                                      name: participant.userFullName,
+                                    })}
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="primary"
+                                      size="sm"
+                                      disabled={isRejectingParticipant}
+                                      onClick={() => {
+                                        onRejectParticipant(
+                                          participant.userId,
+                                          rejectReason.trim(),
+                                        );
+                                        setRejectingUserId(null);
+                                      }}
+                                    >
+                                      {isRejectingParticipant
+                                        ? t('detail.approval.rejecting')
+                                        : t('detail.approval.confirmReject')}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={isRejectingParticipant}
+                                      onClick={() => setRejectingUserId(null)}
+                                    >
+                                      {t('detail.approval.neverMind')}
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                  </section>
+    ) : null;
+
+  // CLIENT-GL-50 part 3: in the tag list of a thread the session's host says so; the chip and the text keep the name.
+  const hostId = session?.createdBy;
+  const hostLabel = t('detail.qualifier.host');
+  const tagSource = useMemo<MentionSource | undefined>(
+    () =>
+      mentionSource === undefined || hostId === undefined
+        ? mentionSource
+        : {
+            ...mentionSource,
+            options: mentionSource.options.map((option) =>
+              option.id === hostId ? { ...option, label: `${option.name} ${hostLabel}` } : option,
+            ),
+          },
+    [mentionSource, hostId, hostLabel],
+  );
+
   return (
     <>
       <Dialog
         open={isOpen}
         onOpenChange={(open) => {
-          if (!open) {
-            setRejectingUserId(null);
-            setRejectReason('');
-            onClose();
-          }
+          if (!open) closeGuard.requestClose();
         }}
       >
-        <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
+        <DialogContent
+          fixedHeight
+          fixedHeightVh={72}
+          className="max-w-[35rem]"
+          data-unsent-scope="session-modal"
+          // The caret goes to the comment box, not to the first button (owner, 2026-11-16).
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            composerFocus.current?.focus();
+          }}
+        >
           <div className="border-hairline-b flex flex-col gap-[9px] border-border px-4 py-3">
             <div className="grid w-full grid-cols-[1fr_minmax(0,auto)_1fr] items-start gap-2">
               <span aria-hidden="true" />
@@ -686,6 +849,7 @@ export function SessionDetailModal({
                       open={isPlayersOpen}
                       onOpenChange={setIsPlayersOpen}
                       scrollIntoViewOnOpen
+                      pinned={approvalQueue ?? undefined}
                       // Collapsed: the avatars sit in the header itself, no "Players:" label under it (owner, 2026-11-13).
                       collapsedHeader={
                         !isParticipantsLoading && !isParticipantsError ? (
@@ -752,6 +916,7 @@ export function SessionDetailModal({
                       />
                     </button>
 
+                    {approvalQueue}
                     <PlayersMeter session={session} rampColor={sport?.colorRamp} />
                     <PlayersStatus
                       isLoading={isParticipantsLoading}
@@ -785,130 +950,6 @@ export function SessionDetailModal({
                     currentUserId={currentUserId}
                     onUpdate={() => setIsResultDialogOpen(true)}
                   />
-                )}
-
-                {/* canJoinOrLeave also gates approve/reject, not just non-empty — the backend
-                  rejects both once the session is CANCELLED (same reason cancelSession itself
-                  is blocked on COMPLETED/CANCELLED), so this stays hidden rather than showing
-                  buttons that would only ever 400. */}
-                {canJoinOrLeave && requestedParticipants.length > 0 && (
-                  <section aria-label={t('detail.approval.label')} className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsApprovalCollapsed((collapsed) => !collapsed)}
-                      aria-expanded={!isApprovalCollapsed}
-                      className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                    >
-                      <IconClock className="size-4 shrink-0" aria-hidden="true" />
-                      {t('detail.approval.heading', { n: requestedParticipants.length })}
-                      <IconChevronDown
-                        className={cn(
-                          'ml-auto size-4 shrink-0 text-text-muted transition-transform',
-                          !isApprovalCollapsed && 'rotate-180',
-                        )}
-                        aria-hidden="true"
-                      />
-                    </button>
-                    {isRequestedParticipantsLoading && (
-                      <p className="text-2xs text-text-muted">{t('common.loading')}</p>
-                    )}
-                    {isRequestedParticipantsError && (
-                      <p role="alert" className="text-2xs text-text-danger">
-                        {t('detail.approval.error')}
-                      </p>
-                    )}
-                    {!isApprovalCollapsed &&
-                      !isRequestedParticipantsLoading &&
-                      !isRequestedParticipantsError && (
-                        <div className="border-amber-800/30 bg-amber-50 divide-amber-800/20 flex flex-col gap-2.5 divide-y rounded-xl border-hairline p-2.5">
-                          {requestedParticipants.map((participant) => (
-                            <div
-                              key={participant.id}
-                              className="flex flex-col gap-1.5 pt-2.5 first:pt-0"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <Avatar className="size-6 shrink-0">
-                                    {participant.userAvatarUrl !== null && (
-                                      <AvatarImage src={participant.userAvatarUrl} alt="" />
-                                    )}
-                                    <AvatarFallback className="text-2xs">
-                                      {initialsFor(participant.userFullName)}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="truncate text-2sm text-text-primary">
-                                    {participant.userFullName}
-                                  </span>
-                                </div>
-                                <div className="flex shrink-0 gap-1.5">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={isRejectingParticipant}
-                                    onClick={() => {
-                                      setRejectingUserId(participant.userId);
-                                      setRejectReason('');
-                                    }}
-                                  >
-                                    {t('detail.approval.reject')}
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="primary"
-                                    size="sm"
-                                    disabled={isApprovingParticipant}
-                                    onClick={() => onApproveParticipant(participant.userId)}
-                                  >
-                                    {t('detail.approval.approve')}
-                                  </Button>
-                                </div>
-                              </div>
-                              {rejectingUserId === participant.userId && (
-                                <div className="border-hairline flex flex-col gap-2 rounded-lg border-border bg-surface-2 p-2.5">
-                                  <Input
-                                    value={rejectReason}
-                                    onChange={(event) => setRejectReason(event.target.value)}
-                                    placeholder={t('detail.approval.reasonPlaceholder')}
-                                    aria-label={t('detail.approval.reasonLabel', {
-                                      name: participant.userFullName,
-                                    })}
-                                  />
-                                  <div className="flex gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="primary"
-                                      size="sm"
-                                      disabled={isRejectingParticipant}
-                                      onClick={() => {
-                                        onRejectParticipant(
-                                          participant.userId,
-                                          rejectReason.trim(),
-                                        );
-                                        setRejectingUserId(null);
-                                      }}
-                                    >
-                                      {isRejectingParticipant
-                                        ? t('detail.approval.rejecting')
-                                        : t('detail.approval.confirmReject')}
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      disabled={isRejectingParticipant}
-                                      onClick={() => setRejectingUserId(null)}
-                                    >
-                                      {t('detail.approval.neverMind')}
-                                    </Button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                  </section>
                 )}
 
                 <div className="flex items-center gap-2 self-end">
@@ -959,6 +1000,9 @@ export function SessionDetailModal({
                   isPosting={isPostingComment}
                   onDeleteComment={onDeleteComment}
                   onToggleCommentLike={onToggleCommentLike}
+                  mentionSource={tagSource}
+                  composerFocusRef={composerFocus}
+                  onDraftChange={drafts.report}
                   commands={recordCommands}
                   notices={recordCommands?.notices}
                 />
@@ -1029,6 +1073,13 @@ export function SessionDetailModal({
           )}
         </DialogContent>
       </Dialog>
+      <UnsavedPostConfirmDialog
+        isOpen={closeGuard.isAsking}
+        onStay={closeGuard.stay}
+        onLeave={closeGuard.leave}
+        onStayFocus={() => focusFirstUnsent('[data-unsent-scope="session-modal"]')}
+        i18nOverridePrefix="sharedDialogs:unsavedComment"
+      />
       {session !== undefined &&
         result !== undefined &&
         result.access.visible &&

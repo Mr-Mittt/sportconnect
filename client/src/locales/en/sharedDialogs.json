@@ -30,6 +30,14 @@
     "keepEditing": "Keep editing",
     "leave": "Leave"
   },
+  "unsavedComment": {
+    "unsavedPost": {
+      "title": "Leave without posting?",
+      "body": "You have an unsent comment. Leaving now will lose what you typed.",
+      "keepEditing": "Keep editing",
+      "leave": "Leave"
+    }
+  },
   "addSportIntro": {
     "title": "Add this sport to your profile?",
     "body": "This {{sportName}} group — accepting this invitation will add this sport to your profile.",

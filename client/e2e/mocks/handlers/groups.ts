@@ -30,6 +30,7 @@ import {
   mockSentInvitation,
   mockUser,
 } from '../fixtures.ts';
+import { matchesName } from '../../../src/shared/lib/nameMatch.ts';
 import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
@@ -391,6 +392,24 @@ export const groupHandlers: HttpHandler[] = [
     const groupId = Number(params.groupId);
     const members = groupsSessions.get(sessionIdFromRequest(request)).groupMembersState[groupId] ?? [];
     return HttpResponse.json(apiResponse(mockPageResponse(members), 'Members retrieved successfully'));
+  }),
+
+  // B23 (CLIENT-GL-50 part 2): the name search over a group's members, for tagging in a group post and its comments. The
+  // server's rule (`matchesName`: word-start, accents ignored, every word), `size` default 5, cut to 20, id + name + avatar only.
+  http.get('/api/groups/:groupId/members/search', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const members = groupsSessions.get(sessionIdFromRequest(request)).groupMembersState[groupId];
+    if (members === undefined) return HttpResponse.json(apiError('Group not found'), { status: 404 });
+    const url = new URL(request.url);
+    const query = url.searchParams.get('q') ?? '';
+    const size = Math.max(1, Math.min(Number(url.searchParams.get('size') ?? 5) || 5, 20));
+    const found = members
+      .filter((member) => matchesName(member.userFullName, query))
+      .slice(0, size)
+      .map((member) => ({ userId: member.userId, fullName: member.userFullName, avatarUrl: member.userAvatarUrl }));
+    return HttpResponse.json(apiResponse(found, 'Members retrieved successfully'));
   }),
 
   http.get('/api/groups/:groupId/join-requests', ({ request, params }) => {

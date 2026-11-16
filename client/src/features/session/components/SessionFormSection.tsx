@@ -26,6 +26,9 @@ interface SessionFormSectionProps {
   /** Shown in the header itself, between the title and the buttons, only while the section is collapsed (the Players
    * section puts its avatars here). */
   collapsedHeader?: ReactNode;
+  /** Always shown right under the header, whether the section is collapsed or open (the Players section pins its
+   * "Waiting for approval" block here, above the capacity meter in the body). */
+  pinned?: ReactNode;
   /** Header right-hand side: the Edit button, or Save and Discard while editing. */
   actions?: ReactNode;
   /** Highlights the section that is being edited. */
@@ -60,6 +63,7 @@ export function SessionFormSection({
   missing = [],
   summary,
   collapsedHeader,
+  pinned,
   actions,
   isEditing = false,
   scrollIntoViewOnOpen = false,
@@ -128,6 +132,7 @@ export function SessionFormSection({
           {actions !== undefined && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
           <CollapsibleChevron />
         </div>
+        {pinned !== undefined && <div className="p-1">{pinned}</div>}
         {!open && summary !== undefined && <div className="p-1">{summary}</div>}
         <CollapsibleContent>
           <div className="flex flex-col gap-3 p-1">{children}</div>

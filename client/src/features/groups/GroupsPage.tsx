@@ -12,6 +12,7 @@ import { usePost } from '@/features/feed/hooks/usePost';
 import { usePostErrorGuard } from '@/features/feed/postErrors';
 import { useUpdateGroup } from '@/features/feed/hooks/useUpdateGroup';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
+import { usePostMentionSource } from '@/features/feed/hooks/usePostMentionSource';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
@@ -490,6 +491,9 @@ export function GroupsPage() {
   // FEED-12: comes from usePost, not a feed-cache lookup — see
   // HomeFeedPage's own equivalent comment for the full reasoning.
   const activeCommentsPost = activeCommentsPostQuery.data ?? null;
+  // CLIENT-GL-50 part 2: who an `@` can tag. The post box makes a post in the selected group (its members), the comments follow the open post.
+  const composerMentionSource = usePostMentionSource(selectedGroupId, selectedGroupId !== null);
+  const commentMentionSource = usePostMentionSource(activeCommentsPost?.groupId ?? null, activeCommentsPostId !== null);
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
@@ -706,6 +710,7 @@ export function GroupsPage() {
                         onLocationClick={noop}
                         onTagSportClick={noop}
                         canBroadcast={canBroadcast}
+                        mentionSource={composerMentionSource}
                       />
                       <Feed
                         posts={data.posts}
@@ -837,6 +842,7 @@ export function GroupsPage() {
             fullName: `${user.firstName} ${user.lastName}`,
             avatarUrl: user.avatarUrl,
           }}
+          mentionSource={commentMentionSource}
           post={activeCommentsPost}
           sport={activeCommentsPostSport}
           isPostLoading={activeCommentsPostQuery.isLoading}
@@ -1156,6 +1162,7 @@ export function GroupsPage() {
           isParticipantsError={discoverModalData.isParticipantsError}
           result={discoverModalData.result}
           recordCommands={discoverModalData.recordCommands}
+          mentionSource={discoverModalData.mentionSource}
           currentUserId={discoverModalData.currentUserId}
           canManage={discoverModalData.canManage}
           selectedCompletionLocation={discoverModalData.selectedCompletionLocation}

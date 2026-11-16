@@ -83,21 +83,10 @@
         "score": "score",
         "id": "id"
       },
-      "teamPrefix": "Side {{n}}: {{text}}",
-      "error": {
-        "ID_MISSING": "Add the game's id after the command. The copy button in Results gives it.",
-        "ID_INVALID": "“{{text}}” isn't a game id. Use the number the copy button gives.",
-        "ID_NOT_FOUND": "There is no game with id {{text}}.",
-        "VS_MISSING": "Separate the two sides with “vs”.",
-        "VS_MULTIPLE": "Use “vs” only once.",
-        "PLAYER_UNKNOWN": "“{{text}}” isn't a player in this session. Pick one from the @ list.",
-        "PLAYER_AMBIGUOUS": "Several players are named “{{text}}”. Pick one from the @ list.",
-        "PLAYER_REPEATED": "{{text}} is named twice on the same side.",
-        "TEXT_UNEXPECTED": "Unexpected “{{text}}”. Scores go after the players on the left side and before them on the right side.",
-        "SCORE_FORMAT": "“{{text}}” has more scores than this sport records.",
-        "EXTRA_TEXT": "Nothing can follow the id (“{{text}}”)."
-      }
-    }
+      "invalid": "Your update is invalid. Follow the hint, [...] is optional.",
+      "invalidRepeated": "Your update is invalid. Follow the hint, [...] is optional. ({{count}})"
+    },
+    "tagLabel": "People you can tag"
   },
   "upcoming": {
     "title": "Upcoming sessions",
@@ -355,7 +344,6 @@
       "remove": "Remove {{name}}",
       "placeholder": "Search friends by name…",
       "searchLabel": "Search friends to invite",
-      "minChars": "Type at least {{min}} characters to search.",
       "noResults": "No friends found."
     },
     "autoApprove": {
@@ -448,6 +436,7 @@
   "result": {
     "label": "Results",
     "heading": "Results ({{count}})",
+    "headingMine": "Results ({{mine}}/{{count}})",
     "empty": "No results logged yet.",
     "loadError": "Couldn't load the results.",
     "update": "Update",
@@ -468,6 +457,7 @@
       "limitReached": "This session holds at most {{max}} results. Remove one to add another.",
       "tooManyChanges": "That is more than {{max}} changes at once. Save these, then continue.",
       "saveError": "Couldn't save the results. Try again.",
+      "saved": "Results saved",
       "rowNumber": "#{{n}}",
       "newGame": "New",
       "rejectedHeading": "Not saved"

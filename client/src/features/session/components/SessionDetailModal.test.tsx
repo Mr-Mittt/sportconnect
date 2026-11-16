@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError, type AxiosResponse } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
@@ -208,6 +208,17 @@ const baseProps = {
 };
 
 describe('SessionDetailModal', () => {
+  it('puts the caret in the comment box when it opens, not on the first button (owner, 2026-11-16)', async () => {
+    render(<SessionDetailModal {...baseProps} />);
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Add a comment' })).toHaveFocus());
+  });
+
+  it('opens with the usual focus when the discussion is hidden from the caller (no comment box)', async () => {
+    render(<SessionDetailModal {...baseProps} isCommentsForbidden />);
+    expect(screen.queryByRole('textbox', { name: 'Add a comment' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
   it('shows a loading message while the session is loading', () => {
     render(<SessionDetailModal {...baseProps} session={undefined} isLoading participants={[]} />);
     expect(screen.getByText('Loading…')).toBeInTheDocument();
@@ -584,6 +595,107 @@ describe('SessionDetailModal', () => {
     await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'Nice one!');
     await user.click(screen.getByRole('button', { name: 'Post comment' }));
     expect(onAddComment).toHaveBeenCalledWith('Nice one!');
+  });
+
+  describe('closing over an unsent comment or reply (owner, 2026-11-16)', () => {
+    const comment: Comment = {
+      id: 1,
+      postId: 1,
+      commentType: 'USER',
+      userId: 'user-1',
+      userFullName: 'Priya Shah',
+      userAvatarUrl: null,
+      content: 'What time are we meeting?',
+      parentCommentId: null,
+      likeCount: 0,
+      replyCount: 0,
+      isLikedByCurrentUser: false,
+      replies: [],
+      createdAt: '2026-07-03T10:00:00',
+      updatedAt: '2026-07-03T10:00:00',
+    };
+
+    it('closes at once when nothing is typed', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<SessionDetailModal {...baseProps} onClose={onClose} />);
+      await user.keyboard('{Escape}');
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText('Leave without posting?')).not.toBeInTheDocument();
+    });
+
+    it('asks first when a comment is typed; Keep editing stays, Leave closes', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<SessionDetailModal {...baseProps} onClose={onClose} />);
+      await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'half');
+
+      await user.keyboard('{Escape}');
+      expect(await screen.findByText('Leave without posting?')).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByRole('textbox', { name: 'Add a comment' })).toHaveTextContent('half');
+
+      await user.keyboard('{Escape}');
+      await user.click(await screen.findByRole('button', { name: 'Leave' }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks first when a reply is typed', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<SessionDetailModal {...baseProps} comments={[comment]} onClose={onClose} />);
+      await user.click(screen.getByRole('button', { name: 'Reply' }));
+      await user.type(screen.getByRole('textbox', { name: /reply/i }), 'half');
+
+      await user.keyboard('{Escape}');
+      expect(await screen.findByText('Leave without posting?')).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('a draft left behind by Leave does not make the next opening ask', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      const { rerender } = render(<SessionDetailModal {...baseProps} onClose={onClose} />);
+      await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'half');
+      await user.keyboard('{Escape}');
+      await user.click(await screen.findByRole('button', { name: 'Leave' }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+
+      rerender(<SessionDetailModal {...baseProps} onClose={onClose} isOpen={false} />);
+      rerender(<SessionDetailModal {...baseProps} onClose={onClose} />);
+      await user.keyboard('{Escape}');
+      expect(onClose).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText('Leave without posting?')).not.toBeInTheDocument();
+    });
+
+    it('"Keep editing" puts the caret on the unsent text: the first of them when there are several', async () => {
+      const user = userEvent.setup();
+      render(<SessionDetailModal {...baseProps} comments={[comment]} />);
+      await user.click(screen.getByRole('button', { name: 'Reply' }));
+      await user.type(screen.getByRole('textbox', { name: /reply/i }), 'reply half');
+
+      await user.keyboard('{Escape}');
+      await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+      await waitFor(() => expect(screen.getByRole('textbox', { name: /reply/i })).toHaveFocus());
+
+      await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'comment half');
+      await user.keyboard('{Escape}');
+      await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+      await waitFor(() => expect(screen.getByRole('textbox', { name: 'Add a comment' })).toHaveFocus());
+    });
+
+    it('does not ask after the comment was sent', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<SessionDetailModal {...baseProps} onClose={onClose} />);
+      await user.type(screen.getByRole('textbox', { name: 'Add a comment' }), 'Nice one!');
+      await user.click(screen.getByRole('button', { name: 'Post comment' }));
+      await user.keyboard('{Escape}');
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('hides the Discussion section entirely when isCommentsForbidden', () => {

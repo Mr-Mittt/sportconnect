@@ -11,18 +11,23 @@ type Guard = ReturnType<typeof useUnsavedChangesGuard>;
  * uses, re-parameterized on `hasUnsavedChanges` directly since this hook
  * takes no data of its own.
  */
-function renderGuard(hasUnsavedChanges: boolean) {
+function renderGuard(
+  hasUnsavedChanges: boolean,
+  isSamePage?: (fromPath: string, toPath: string) => boolean,
+  start = '/a',
+) {
   const box: { current: Guard | null } = { current: null };
   function Harness() {
-    box.current = useUnsavedChangesGuard(hasUnsavedChanges);
+    box.current = useUnsavedChangesGuard(hasUnsavedChanges, isSamePage);
     return null;
   }
   const router = createMemoryRouter(
     [
       { path: '/a', element: <Harness /> },
+      { path: '/a/:id', element: <Harness /> },
       { path: '/b', element: <div>Elsewhere</div> },
     ],
-    { initialEntries: ['/a'] },
+    { initialEntries: [start] },
   );
   render(<RouterProvider router={router} />);
   return { box, router };
@@ -81,6 +86,31 @@ describe('useUnsavedChangesGuard', () => {
 
     act(() => box.current?.proceed());
     await waitFor(() => expect(router.state.location.pathname).toBe('/b'));
+  });
+
+  describe('isSamePage (a route change the page makes while it stays mounted)', () => {
+    const sameArea = (from: string, to: string) => from.startsWith('/a') && to.startsWith('/a');
+
+    it('lets a move inside the page through while dirty, in both directions', async () => {
+      const { box, router } = renderGuard(true, sameArea);
+
+      await act(async () => router.navigate('/a/5'));
+      expect(box.current?.isLeaveDialogOpen).toBe(false);
+      expect(router.state.location.pathname).toBe('/a/5');
+
+      await act(async () => router.navigate('/a', { replace: true }));
+      expect(box.current?.isLeaveDialogOpen).toBe(false);
+      expect(router.state.location.pathname).toBe('/a');
+    });
+
+    it('still blocks a move to another page while dirty', async () => {
+      const { box, router } = renderGuard(true, sameArea, '/a/5');
+
+      await act(async () => router.navigate('/b'));
+
+      await waitFor(() => expect(box.current?.isLeaveDialogOpen).toBe(true));
+      expect(router.state.location.pathname).toBe('/a/5');
+    });
   });
 
   it('does not block in-app navigation when there are no unsaved changes', async () => {

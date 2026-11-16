@@ -29,7 +29,8 @@
     "commentAriaLabel": "Viết bình luận",
     "postComment": "Đăng bình luận",
     "like": "Thích",
-    "unlike": "Bỏ thích"
+    "unlike": "Bỏ thích",
+    "mentionLabel": "Người có thể gắn thẻ"
   },
   "commentItem": {
     "commentOptions": "Tùy chọn bình luận",
@@ -40,7 +41,8 @@
     "reply": "Trả lời",
     "replyPlaceholder": "Trả lời {{name}}",
     "cancelReply": "Hủy trả lời",
-    "post": "Đăng"
+    "post": "Đăng",
+    "mentionLabel": "Người có thể gắn thẻ"
   },
   "createPostForm": {
     "placeholderWithName": "Bạn đang nghĩ gì vậy, {{firstName}}?",
@@ -51,7 +53,8 @@
     "tagSport": "Gắn thẻ môn thể thao",
     "broadcast": "Thông báo",
     "post": "Đăng",
-    "error": "Không thể đăng bài. Vui lòng thử lại."
+    "error": "Không thể đăng bài. Vui lòng thử lại.",
+    "mentionLabel": "Người có thể gắn thẻ"
   },
   "groupBroadcasts": {
     "ariaLabel": "Thông báo từ nhóm",
@@ -148,5 +151,9 @@
     "moveDown": "Chuyển {{label}} xuống",
     "selectedPosition": "{{label}} (đã chọn, vị trí {{index}})",
     "nothingOnProfile": "Hồ sơ của bạn chưa có gì để chọn — hãy dùng “Khác…”."
+  },
+  "mention": {
+    "chipLabel": "Nhắc đến: {{name}}",
+    "lengthCounter": "{{count}} / {{max}}"
   }
 }

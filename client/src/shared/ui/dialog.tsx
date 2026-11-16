@@ -72,6 +72,15 @@ interface DialogContentProps extends React.ComponentProps<typeof DialogPrimitive
   insetBottom?: string;
 }
 
+/**
+ * CLIENT-GL-50: Esc with a tag list (`MentionInput`'s `@` list) open closes the list, not the dialog. Radix reads Escape in the
+ * capture phase before any handler of the box can stop it, so the dialog asks here: the focused box says it has a list open
+ * through `aria-controls` (set only while the list shows).
+ */
+function isTagListOpen(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.getAttribute('aria-autocomplete') === 'list' && target.hasAttribute('aria-controls');
+}
+
 function DialogContent({
   className,
   children,
@@ -81,6 +90,7 @@ function DialogContent({
   centered = false,
   insetTop,
   insetBottom,
+  onEscapeKeyDown,
   ...props
 }: DialogContentProps) {
   // Page-level anchor (user decision) — Home Feed positions modals below the
@@ -152,6 +162,10 @@ function DialogContent({
           className,
         )}
         {...props}
+        onEscapeKeyDown={(event) => {
+          if (isTagListOpen(event.target)) event.preventDefault();
+          onEscapeKeyDown?.(event);
+        }}
       >
         <FloatingPortalContainerContext.Provider value={contentEl}>
           {children}

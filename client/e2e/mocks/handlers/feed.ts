@@ -325,6 +325,8 @@ export const feedHandlers: HttpHandler[] = [
       content: body.content,
       postType,
       groupId: body.groupId ?? null,
+      // The sport the composer tagged (the page's active pill), else the fixture's: a new post stays visible under its own pill.
+      sportId: body.sportId ?? mockPost.sportId,
       visibility: body.visibility ?? 'public',
       hashtags: [],
       likeCount: 0,

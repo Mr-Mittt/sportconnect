@@ -134,6 +134,28 @@ describe('useGroupBroadcasts', () => {
     ]);
   });
 
+  it('shows a tagged person as @Name in the rail, never the stored markup (CLIENT-GL-50 part 2)', async () => {
+    useAuthStore.setState({ user: testUser, accessToken: 'token', isBootstrapping: false });
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      if (url === '/posts/broadcast') {
+        return apiResponse(
+          pageResponse([
+            makeBroadcastPost({ id: 1, groupId: 5, content: 'Court 3 at 7, bring @[Priya Shah](u-priya) along' }),
+          ]),
+        );
+      }
+      if (url === '/groups/user/user-1') {
+        return apiResponse(pageResponse([makeGroup({ id: 5, groupName: 'Riverside Ballers', sportId: 6 })]));
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useGroupBroadcasts(), { wrapper });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.data[0].text).toBe('Court 3 at 7, bring @Priya Shah along');
+  });
+
   it("drops a broadcast whose groupId matches none of the caller's groups, without crashing", async () => {
     useAuthStore.setState({ user: testUser, accessToken: 'token', isBootstrapping: false });
     vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {

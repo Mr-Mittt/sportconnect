@@ -152,7 +152,7 @@ describe('PostsTab', () => {
 
   it('renders the composer and defaults to the first sport profile\'s posts (no "all" pill on this page)', async () => {
     render(<PostsTab />, { wrapper });
-    expect(screen.getByPlaceholderText(/what's on your mind/i)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Create a post' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
     expect(screen.getByText('Football post')).toBeInTheDocument();
     expect(screen.queryByText('Basketball post')).not.toBeInTheDocument();
@@ -192,7 +192,7 @@ describe('PostsTab', () => {
     render(<PostsTab />, { wrapper });
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(1));
 
-    await user.type(screen.getByPlaceholderText(/what's on your mind/i), 'New post');
+    await user.type(screen.getByRole('textbox', { name: 'Create a post' }), 'New post');
     await user.click(screen.getByRole('button', { name: /^post$/i }));
 
     await waitFor(() =>
@@ -220,7 +220,7 @@ describe('PostsTab', () => {
     render(<PostsTab />, { wrapper });
     await waitFor(() => expect(screen.queryAllByRole('article')).toHaveLength(0));
 
-    await user.type(screen.getByPlaceholderText(/what's on your mind/i), 'New post');
+    await user.type(screen.getByRole('textbox', { name: 'Create a post' }), 'New post');
     await user.click(screen.getByRole('button', { name: /^post$/i }));
 
     await waitFor(() =>

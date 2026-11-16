@@ -78,6 +78,11 @@ test('Session results — log a record, see it in the Result section, then delet
     // the dialog stays open after a save (owner, 2026-11-14); Close leaves it
     await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
     await expect(dialog).toBeVisible();
+    // the footer says so, green and centered (owner, 2026-11-16)
+    const saved = dialog.getByRole('status');
+    await expect(saved).toHaveText('Results saved');
+    await expect(saved).toHaveCSS('text-align', 'center');
+    await expect(saved).toHaveCSS('color', 'rgb(21, 128, 61)'); // text-text-success
     await dialog.getByRole('button', { name: 'Close' }).click();
     await expect(dialog).not.toBeVisible();
     await expect(detail.getByRole('button', { name: /Results \(1\)/ })).toBeVisible();
@@ -136,18 +141,50 @@ test('Session results — record commands in the thread: hints, invalid, add, co
     await expect(detail.getByRole('list', { name: 'Record commands' })).toHaveCount(0);
   });
 
+  await test.step('1b. the hints are keyboard stops before Send in the tab order, and what is typed is bold', async () => {
+    const hints = detail.getByRole('list', { name: 'Record commands' }).getByRole('button');
+    await composer.fill(':');
+    await composer.press('ArrowDown');
+    await expect(hints.nth(0)).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(hints.nth(1)).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(hints.nth(0)).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(composer).toBeFocused();
+    // Tab from the box: the three hints, then Send
+    await page.keyboard.press('Tab');
+    await expect(hints.nth(0)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(hints.nth(2)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(detail.getByRole('button', { name: 'Post comment' })).toBeFocused();
+    // bold: the typed part of the template
+    await composer.fill(':add ');
+    const boldWords = detail.getByRole('list', { name: 'Record commands' }).locator('.font-semibold');
+    await expect(boldWords).toHaveText([':add']);
+    await composer.fill('');
+  });
+
   await test.step('2. an invalid command shows a caller-only line, keeps its text and posts no comment', async () => {
-    await composer.fill(':add @Nobody 21 vs 15 @Priya Shah');
+    // A name typed without being picked is not a player (CLIENT-GL-50: a player is a chip that carries the id).
+    await composer.fill(':add @Nobody 21 vs 15');
     await composer.press('Enter');
-    await expect(detail.getByTestId('command-notices')).toContainText("isn't a player in this session");
-    await expect(composer).toHaveValue(':add @Nobody 21 vs 15 @Priya Shah');
-    await expect(detail.getByText(':add @Nobody')).toHaveCount(0);
+    await expect(detail.getByTestId('command-notices')).toContainText('Your update is invalid. Follow the hint, [...] is optional.');
+    await expect(composer).toHaveText(':add @Nobody 21 vs 15');
+    await expect(detail.getByRole('region', { name: 'Discussion' }).locator('p', { hasText: ':add @Nobody' })).toHaveCount(0);
   });
 
   await test.step('3. a valid :add adds a game, clears the box and posts no comment', async () => {
-    await composer.fill(':add @Jordan Lee 21 vs 15 @Priya Shah');
+    await composer.fill('');
+    await composer.pressSequentially(':add @Jord');
     await composer.press('Enter');
-    await expect(composer).toHaveValue('');
+    await composer.pressSequentially('21 vs 15 @Priy');
+    await composer.press('Enter');
+    await expect(composer.getByRole('img')).toHaveCount(2);
+    await composer.press('Enter');
+    await expect(composer).toHaveText('');
     await expect(detail.getByRole('button', { name: /Results \(3\)/ })).toBeVisible();
     await expect(detail.getByText('21 vs 15')).toHaveCount(0);
   });
@@ -165,8 +202,10 @@ test('Session results — record commands in the thread: hints, invalid, add, co
   await test.step('5. the caller-only line is gone after closing and reopening the modal', async () => {
     await composer.fill(':del 99999');
     await composer.press('Enter');
-    await expect(detail.getByTestId('command-notices')).toContainText('There is no game with id 99999.');
+    await expect(detail.getByTestId('command-notices')).toContainText('Your update is invalid. Follow the hint, [...] is optional.');
+    // the rejected text is still in the box, so closing asks first (owner, 2026-11-16)
     await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Leave', exact: true }).click();
     await expect(detail).not.toBeVisible();
     await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     await expect(page.getByRole('dialog', { name: 'Sunday pickup run' }).getByRole('textbox', { name: 'Add a comment' })).toBeVisible();

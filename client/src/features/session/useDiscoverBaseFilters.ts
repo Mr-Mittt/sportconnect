@@ -14,7 +14,7 @@ import type { SessionSearchMode } from './types';
  * `discoverParams.ts`'s `DiscoverFilters.status` doc comment for why `ONGOING` isn't offered. */
 export const DISCOVERABLE_STATUSES: SessionStatus[] = ['PREPARING', 'SCHEDULED'];
 
-const LOCATION_SEARCH_MIN_LENGTH = 3; // same convention as CreateSessionModal's InviteFriendField.
+const LOCATION_SEARCH_MIN_LENGTH = 3; // a server search, so it waits for three characters (the friend filter, which runs on a list already loaded, has no minimum: CLIENT-GL-50).
 const TITLE_DEBOUNCE_MS = 400;
 const LOCATION_SEARCH_DEBOUNCE_MS = 400;
 

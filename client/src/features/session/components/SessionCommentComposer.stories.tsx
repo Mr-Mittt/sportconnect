@@ -27,14 +27,14 @@ export const NoCurrentUser: Story = {
 
 const commands = {
   hints: [
-    { command: 'add' as const, template: ':add @player1 [@player2] [score] vs [score] @player1 [@player2]' },
-    { command: 'upd' as const, template: ':upd <id> @player1 [@player2] [score] vs [score] @player1 [@player2]' },
-    { command: 'del' as const, template: ':del <id>' },
+    { command: 'add' as const, template: ':add @player1 [@player2] [score] vs [score] @player1 [@player2]', parts: [] },
+    { command: 'upd' as const, template: ':upd <id> @player1 [@player2] [score] vs [score] @player1 [@player2]', parts: [] },
+    { command: 'del' as const, template: ':del <id>', parts: [] },
   ],
   mentions: [
-    { id: 'a', token: 'Alice Nguyen', name: 'Alice Nguyen', avatarUrl: null },
-    { id: 'b', token: 'Bob Tran', name: 'Bob Tran', avatarUrl: null },
-    { id: 'c', token: 'Carol Le', name: 'Carol Le', avatarUrl: null },
+    { id: 'a', token: 'Alice Nguyen', name: 'Alice Nguyen', avatarUrl: null, isCurrentUser: false },
+    { id: 'b', token: 'Bob Tran', name: 'Bob Tran', avatarUrl: null, isCurrentUser: false },
+    { id: 'c', token: 'Carol Le', name: 'Carol Le', avatarUrl: null, isCurrentUser: false },
   ],
   run: () => ({ handled: true, accepted: true }),
   isRunning: false,
@@ -43,4 +43,18 @@ const commands = {
 /** CLIENT-GL-39: someone who can log results: type `:` for the command templates, `@` for the players. */
 export const WithRecordCommands: Story = {
   args: { commands },
+};
+
+/** CLIENT-GL-50: tagging in a normal comment: type `@` and pick someone from the thread's people; the pick is a chip. */
+export const WithTagging: Story = {
+  args: {
+    mentionSource: {
+      options: [
+        { id: '1', name: 'Alice Nguyen', label: 'Alice Nguyen', avatarUrl: null },
+        { id: '2', name: 'Đặng Tuấn Anh', label: 'Đặng Tuấn Anh', avatarUrl: null },
+        { id: '3', name: 'Carol Le', label: 'Carol Le', avatarUrl: null },
+      ],
+      onQueryChange: () => {},
+    },
+  },
 };

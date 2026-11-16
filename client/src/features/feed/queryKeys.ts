@@ -20,6 +20,9 @@ export const feedKeys = {
   groupSettings: (groupId: number) => [...feedKeys.all, 'group-settings', groupId] as const,
   groupInfo: (groupId: number) => [...feedKeys.all, 'group-info', groupId] as const,
   groupMembers: (groupId: number) => [...feedKeys.all, 'group-members', groupId] as const,
+  /** CLIENT-GL-50 part 2: `GET /groups/{id}/members/search?q=` (B23); a `null` query is the idle search. */
+  groupMemberSearch: (groupId: number, query: string | null) =>
+    [...feedKeys.all, 'group-member-search', groupId, query] as const,
   groupJoinRequests: (groupId: number) => [...feedKeys.all, 'group-join-requests', groupId] as const,
   sentInvitations: (groupId: number) => [...feedKeys.all, 'sent-invitations', groupId] as const,
   // GRP-7: the owner/admin's pending_owner approval queue for a group.

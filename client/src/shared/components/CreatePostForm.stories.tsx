@@ -47,3 +47,16 @@ export const CanBroadcast: Story = {
 export const ErrorState: Story = {
   args: { isError: true },
 };
+
+/** CLIENT-GL-50 part 2: `@` offers the people of the source (friends for a user post, group members for a group post); Enter adds a line. */
+export const WithTagging: Story = {
+  args: {
+    mentionSource: {
+      options: [
+        { id: 'u-priya', name: 'Priya Shah', label: 'Priya Shah', avatarUrl: null },
+        { id: 'u-sam', name: 'Sam Ito', label: 'Sam Ito', avatarUrl: null },
+      ],
+      onQueryChange: () => {},
+    },
+  },
+};

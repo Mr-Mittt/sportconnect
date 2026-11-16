@@ -328,6 +328,7 @@ export function MatchesPage() {
         isParticipantsError={data.isParticipantsError}
         result={data.result}
         recordCommands={data.recordCommands}
+        mentionSource={data.mentionSource}
         currentUserId={data.currentUserId ?? ''}
         canManage={data.canManage}
         selectedCompletionLocation={data.selectedCompletionLocation}

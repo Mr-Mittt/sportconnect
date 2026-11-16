@@ -1,10 +1,14 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useAuthStore } from '@/app/authStore';
+import type { MentionSource } from '@/shared/components/MentionInput';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { getApiError } from '@/shared/lib/apiError';
 import type { Comment } from '@/features/feed/types';
 import { useCreateSessionComment } from './hooks/useCreateSessionComment';
 import { useDeleteSessionComment } from './hooks/useDeleteSessionComment';
 import { useLikeSessionComment } from './hooks/useLikeSessionComment';
 import { useSessionComments } from './hooks/useSessionComments';
+import { THREAD_PEOPLE_SIZE, useThreadPeople } from './hooks/useThreadPeople';
 import { useUnlikeSessionComment } from './hooks/useUnlikeSessionComment';
 
 /**
@@ -22,6 +26,47 @@ export function useSessionCommentsData(sessionId: number | undefined, isOpen: bo
   const deleteMutation = useDeleteSessionComment();
   const likeMutation = useLikeSessionComment();
   const unlikeMutation = useUnlikeSessionComment();
+
+  // CLIENT-GL-50: the people an `@` in a comment or reply offers (SESSION-GL-64). One query shared by both boxes: only one
+  // has the caret at a time, and it reports the word after its `@` (`null` = none, the call stays off).
+  // `peopleSearch` counts the `@` words that have ended: a list is never carried from one `@` word into the next.
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const [typing, setTyping] = useState<{ query: string | null; search: number }>({ query: null, search: 0 });
+  const { query: peopleQuery, search: peopleSearch } = typing;
+  const setPeopleQuery = useCallback(
+    (next: string | null) =>
+      setTyping((current) =>
+        current.query === next
+          ? current
+          : { query: next, search: next === null ? current.search + 1 : current.search },
+      ),
+    [],
+  );
+  const debouncedPeopleQuery = useDebouncedValue(peopleQuery, 150, peopleQuery === null);
+  const peopleQueryResult = useThreadPeople(
+    isOpen ? sessionId : undefined,
+    peopleQuery === null ? null : debouncedPeopleQuery,
+    peopleSearch,
+  );
+  const mentionSource = useMemo<MentionSource>(
+    () => ({
+      options:
+        peopleQuery === null
+          ? []
+          : (peopleQueryResult.data ?? [])
+              // Nobody tags themselves in a normal comment; a record command has its own list (the players).
+              .filter((person) => person.userId !== currentUserId)
+              .slice(0, THREAD_PEOPLE_SIZE)
+              .map((person) => ({
+                id: person.userId,
+                name: person.fullName,
+                label: person.fullName,
+                avatarUrl: person.avatarUrl,
+              })),
+      onQueryChange: setPeopleQuery,
+    }),
+    [peopleQuery, peopleQueryResult.data, currentUserId, setPeopleQuery],
+  );
 
   const comments = useMemo(
     () => commentsQuery.data?.pages.flatMap((page) => page.content) ?? [],
@@ -75,5 +120,6 @@ export function useSessionCommentsData(sessionId: number | undefined, isOpen: bo
     isPostingComment: createMutation.isPending,
     onDeleteComment: deleteComment,
     onToggleCommentLike: toggleCommentLike,
+    mentionSource,
   };
 }

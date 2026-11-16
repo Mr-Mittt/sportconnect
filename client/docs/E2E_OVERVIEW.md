@@ -230,6 +230,8 @@ e2e/
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9/CLIENT-SESSION-17/CLIENT-SESSION-22/CLIENT-SESSION-23
     session-form-layout.spec.ts # CLIENT-SESSION-34
     session-results.spec.ts   # CLIENT-GL-38, CLIENT-GL-39
+    session-thread-tags.spec.ts # CLIENT-GL-50
+    post-tags.spec.ts           # CLIENT-GL-50 part 2
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
@@ -1191,7 +1193,7 @@ Real-browser layout check (jsdom has no layout) of the sectioned create form and
 | `session form — closing the create form with unsent entries asks "Leave without saving?"` | Open the create form, nothing entered → Escape closes at once → reopen, type a title → Escape opens "Leave without saving?" → **Keep editing** keeps the form and its text → the Close button asks again → **Leave** closes it | CLIENT-SESSION-34. `matches-journey` step 8 now confirms "Leave" after closing with a chosen location. |
 | `session form — create form and Preparing detail fit 320px, header actions are icon-only` (and the same at 375px) | Open the create form and fill it, including the Who section's gender rows → all five sections are visible and neither the dialog nor its scrolling body is wider than the viewport; the hour select is narrower than 80px → create a Preparing session → open its detail → the dialog does not overflow; the first section's **Edit** button is visible with its text span hidden (icon-only, accessible name kept) → click it → **Discard** and **Save** replace it, both icon-only, no overflow → discard, then Edit the Who section → "By gender" is checked and the widest section (slots, gender rows, mood) still fits | CLIENT-SESSION-34 (ticket "Tests": the 320/375px width check). The only spec that proves the header actions collapse to icons below `sm` and that the new Who rows never scroll sideways. |
 
-### `e2e/flows/session-results.spec.ts` (CLIENT-GL-38 and CLIENT-GL-39, 2 `test()`s: 5 steps and 5 steps)
+### `e2e/flows/session-results.spec.ts` (CLIENT-GL-38, CLIENT-GL-39 and CLIENT-GL-50, 2 `test()`s: 5 steps and 6 steps)
 
 The session detail's Result section and the record dialog. `overrides.resultsOngoing` (seed `seedResultsOngoingOnNextLoad`) makes the Pickleball fixture "Sunday pickup run" ONGOING with an end time an hour away and the fixture friend JOINED next to the caller; the mock server stores records like SESSION-50 (a bad record is REJECTED on its own, the others are stored). The mock schema is the badminton one (1 to 2 players a side, one required Point score above zero, winner on the left).
 
@@ -1200,7 +1202,7 @@ The session detail's Result section and the record dialog. `overrides.resultsOng
 | 1. the section is there | Open the session detail → "Results (0)" is collapsed, expand it → "No results logged yet." | The section shows for an ONGOING session whose sport has a record schema, collapsed by default. |
 | 2. Update opens the dialog | Click Update → "Update results" dialog with one empty placeholder row and Save disabled; at 900 and 600 px high the dialog sits between the session detail's title bar and its comment composer (bounding boxes); at 320px neither the dialog nor its body scrolls sideways | The always-present placeholder, the nothing-to-save state, the smaller dialog that leaves the session title and composer in view, and the phone fit (jsdom has no layout). |
 | 3. red borders and Save refusal | Pick a winner, type a score for the winner only → the loser's score gets `aria-invalid` while typing; Save shows "Select the player." and sends nothing | Validation while typing and on Save (a score on one team only, a team below the minimum players). |
-| 4. save a record | Pick the loser, type their score, Save → the dialog closes, "Results (1)" and a one-line record (both scores and a copy-id button, no record number, no Won / Lost label) | The change set reaches the mock server and the list shows the fresh records. |
+| 4. save a record | Pick the loser, type their score, Save → the dialog stays open and its footer shows "Results saved" (centered, green `rgb(21, 128, 61)`), Close → "Results (1)" and a one-line record (both scores and a copy-id button, no record number, no Won / Lost label) | The change set reaches the mock server and the list shows the fresh records. |
 | 5. delete | Update → the red X strikes the record through and turns into the undo → Save → "Results (0)" and the empty line | The row action slot and the delete diff. |
 
 Second test (CLIENT-GL-39, record commands in the thread; `resultsRecords` seeds two games between Jordan Lee and Priya Shah, both JOINED; the clipboard permission is granted):
@@ -1208,12 +1210,54 @@ Second test (CLIENT-GL-39, record commands in the thread; `resultsRecords` seeds
 | Step | What it does | Why it exists |
 |---|---|---|
 | 1. hints | `:` lists the three command templates, `:a` only `:add`, plain text none | The hint list follows the first word and only shows for a command candidate. |
-| 2. invalid command | `:add @Nobody 21 vs 15 @Priya Shah` → a caller-only line "Side 1: “Nobody” isn't a player in this session…", the text stays in the box, nothing is posted | A refused command keeps its text and posts no comment. |
-| 3. valid `:add` | `:add @Jordan Lee 21 vs 15 @Priya Shah` → the box clears, "Results (3)", no comment with that text | The same change set as the dialog reaches the mock server; a command is never a comment. |
+| 1b. keyboard and bold | `:` → Down focuses the first hint, Down the second, Up, Up back to the box; Tab from the box → the three hints, then Send; `:add ` → only `:add` is bold (part 4) | The hints are keyboard stops before Send in the tab order, and the typed part of a template is bold. |
+| 2. invalid command | `:add @Nobody 21 vs 15` (a name typed, not picked) → one caller-only line "Your update is invalid. Follow the hint, [...] is optional.", the text stays in the box, nothing is posted | A refused command keeps its text and posts no comment; a player is a picked chip (CLIENT-GL-50), a typed name is not one. |
+| 3. valid `:add` | Type `:add @Jord` + Enter (picks the chip), `21 vs 15 @Priy` + Enter, Enter → two chips, the box clears, "Results (3)", no comment with that text | The same change set as the dialog reaches the mock server; a command is never a comment. |
 | 4. copy id, `:del` | The copy button puts the real record id on the clipboard (digits), `:del <id>` → "Results (2)" | The id the button gives is the one `:del` takes. |
-| 5. notices reset | `:del 99999` → "There is no game with id 99999."; close the modal, open it again → no notice | The caller-only line lives only while the modal is open. |
+| 5. notices reset | `:del 99999` → the same generic line; close the modal, open it again → no notice | The caller-only line lives only while the modal is open. |
 
-The "my results" switch has no e2e step (every seeded game has both players); Vitest covers it.
+The "my results" switch, the `Results (mine/all)` title and the whole-row highlight of an edited result have no e2e step (every seeded game has both players, and the highlight is a class); Vitest covers them.
+
+### `e2e/flows/session-thread-tags.spec.ts` (CLIENT-GL-50, 2 `test()`s: 6 steps and 5 steps)
+
+The chip composer of the session thread. `resultsOngoing` (first test) and `resultsRecords` (second) make the Pickleball fixture "Sunday pickup run" ONGOING with Jordan Lee (the caller) and Priya Shah JOINED; the mock `GET /sessions/{id}/thread-people` follows SESSION-GL-64's name rule over the participants. Caret and Backspace over a chip can only be proven in a browser, so they live here and not in Vitest. The clipboard permission is granted.
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| 1. the list | `@shah` lists "Priya Shah" (a later word), `@iya` lists nobody (the middle of a word) | The picker follows the app name rule (word-start, accent-insensitive). |
+| 2. pick | `hi @pri` → wait for the list → Enter → one chip "Mention: Priya Shah", the box reads `hi @Priya Shah` | A pick is a chip that shows the name only. |
+| 2b. copy | Ctrl+A, Ctrl+C in the box → the clipboard holds `hi @Priya Shah` | Copying a chip gives the plain `@Full Name`, never the id. |
+| 3. Backspace | Backspace removes the blank, the next one removes the whole chip | A chip goes whole. |
+| 4. post | Tag again, type, Enter → the thread shows the chip and `hi @Priya Shah see you at 7`, no `](` anywhere; double-click the chip and copy → no id on the clipboard | The stored `@[Name](id)` is drawn as a chip; the id is never on screen or in a copy. |
+| 5. reply | Reply → `thanks @jor` → no list (the caller is never offered themselves), `thanks @pri` → Priya Shah listed → Enter, Enter → the reply shows the chip (2 chips in the thread) | The reply box is a chip composer with the same list, a reply row draws its tags, and nobody tags themselves in a normal comment. |
+
+Second test (a pasted record command; `resultsRecords` seeds two games):
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| 1. paste | Paste `:add @Jordan Lee 21 vs 15 @Priya Shah ` (a `paste` event with text/plain) → "Jordan Lee" is a chip, the last `@Priya Shah` keeps no trailing blank and the "Players" list is open for it | A pasted command resolves its names to chips; the last `@` word is left to the picker. |
+| 2. send | Enter picks Priya, Enter sends → "Results (3)", no comment | A command built from chips logs a game. |
+| 2b. you | `:add @` → the first row of the "Players" list reads "Jordan Lee (you)"; Esc and clear | The caller is marked and first in the record-command player list (part 3). |
+| 3. unknown name | Paste `:add @Nobody 21 vs 15 @Priya Shah 3 ` → Enter → the one generic line "Your update is invalid. Follow the hint, [...] is optional." (no "(2)" yet) | A name nobody has stays plain text and the command is refused, with one generic message. |
+| 4. count | Enter again → the same line with "(2)", again → "(3)", still one line | A streak of refusals shows as one line with a count (part 3). |
+
+### `e2e/flows/post-tags.spec.ts` (CLIENT-GL-50 parts 2, 3 and 5, 4 `test()`s: 4 steps, 3 steps, 1 and 3 steps)
+
+Tagging in normal posts. The first test runs on Home Feed (a user post: the fixture friend Priya Shah is the only friend), the second on `/groups` in "Weekend Tennis Ladder" (a group post: the mock `GET /groups/{id}/members/search` follows B23 over the group's members, Sam Ito and Alex Chen besides the caller). Real caret and line-break behaviour is only provable in a browser, so it is proven here.
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| Home 1. list and Enter | `derby with @shah` → "Priya Shah" listed → Enter picks (one chip, no line break) → type `#derby`, Enter, `Court 3 at 7pm` → the box reads the two lines and no post exists yet | The post box offers friends; Enter picks while the list is open and adds a line otherwise; the caret lands after the break (a browser puts it before a trailing break otherwise). |
+| Home 2. Post | The Post button sends → the first article has the text, the chip, a clickable `#derby`, no `@[` markup, and `#derby\nCourt 3 at 7pm` as its text; the box is empty | The stored markup is drawn as a chip, the hashtag still works, line breaks show (`pre-line`). |
+| Home 3. comment | View comments → `see you @pri` → list → Enter picks → Enter sends → the dialog shows two chips (post and comment) | A comment under a user post tags the same friends. |
+| Home 4. reply and Esc | Reply → `@shah` → list → Esc closes the list and keeps the dialog → space, `@pri` → list again | Esc leaves the dialog alone while a list is open, and the next `@` searches again. |
+| Group 1. members only | `@ito` lists "Sam Ito"; `@priya` (a friend, not a member) lists nobody; `bring @alex` → Alex Chen → Enter → chip | A group post tags the group's members, not the caller's friends. |
+| Group 2. post | The Post button sends → the group feed's first article shows the Alex Chen chip, no `@[` | The tag is drawn in a group post (the mock now keeps the `sportId` the page tags the post with, so it stays under its pill). |
+| Group 3. comment | View comments → `@sam` → Sam Ito listed → Enter, Enter → the chip shows in the dialog | A comment under a group post tags the members too. |
+| Caret (own test) | `a long line of words before the tag @shah` → the list is far from the left edge of the box and inside the box's own height | The `@` list opens at the caret, not under the box (part 3). |
+| Draft 1. open a post | A half-written post in the box, View comments → no "Leave without posting?", the comment box has the caret (part 5, own test) | Opening a post moves `/` to `/posts/:id` on the same page; the draft is not lost, so nothing is asked. |
+| Draft 2. Keep editing | Type a comment, Esc → "Leave without posting?" → Keep editing → the comment box has the caret and its text | The question is about the unsent comment; staying returns to it. |
+| Draft 3. Leave | Esc, Leave → the post closes, nothing more is asked, the half-written post is still in the box | Leaving the modal keeps the page's own draft. |
 
 ### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
 

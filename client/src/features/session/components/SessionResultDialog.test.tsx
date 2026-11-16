@@ -226,31 +226,47 @@ describe('SessionResultDialog', () => {
   });
 
   describe('edited and deleted rows', () => {
-    it('gives an edited score or player the focus-colored border, and leaves untouched fields and new rows alone', async () => {
+    const editedFields = (row: HTMLElement) => [
+      within(row).getByLabelText('Winner, player 1'),
+      within(row).getByLabelText('Loser, player 1'),
+      within(row).getByLabelText('Winner, Point'),
+      within(row).getByLabelText('Loser, Point'),
+    ];
+
+    it('an untouched saved row has no highlight at all', () => {
+      renderDialog();
+      for (const field of editedFields(rows()[0])) expect(field).not.toHaveAttribute('data-edited');
+    });
+
+    it('a changed score highlights every field of its row (players and scores), and no other row', async () => {
       const user = userEvent.setup();
       renderDialog();
       const first = rows()[0];
       const winnerScore = within(first).getByLabelText('Winner, Point');
-      expect(winnerScore).not.toHaveAttribute('data-edited');
       await user.clear(winnerScore);
       await user.type(winnerScore, '25');
-      expect(winnerScore).toHaveAttribute('data-edited', 'true');
-      expect(winnerScore.className).toContain('border-border-accent');
-      expect(within(first).getByLabelText('Loser, Point')).not.toHaveAttribute('data-edited');
+      for (const field of editedFields(first)) {
+        expect(field).toHaveAttribute('data-edited', 'true');
+        expect(field.className).toContain('border-border-accent');
+      }
+      for (const field of editedFields(rows()[1])) expect(field).not.toHaveAttribute('data-edited');
+    });
+
+    it('a changed player highlights the whole row too, and putting the value back clears it', async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      const first = rows()[0];
       await pick(user, within(first).getByLabelText('Loser, player 1'), 'Dan Pham');
-      expect(within(first).getByLabelText('Loser, player 1')).toHaveAttribute(
-        'data-edited',
-        'true',
-      );
-      expect(within(first).getByLabelText('Loser, player 1').className).toContain(
-        'border-border-accent',
-      );
-      expect(within(first).getByLabelText('Winner, player 1')).not.toHaveAttribute('data-edited');
-      // a new row has nothing saved to differ from
+      for (const field of editedFields(first)) expect(field).toHaveAttribute('data-edited', 'true');
+      await user.click(screen.getByRole('button', { name: 'Undo changes to result 1' }));
+      for (const field of editedFields(rows()[0])) expect(field).not.toHaveAttribute('data-edited');
+    });
+
+    it('a new row has nothing saved to differ from, so it is never highlighted', async () => {
+      const user = userEvent.setup();
+      renderDialog();
       await pick(user, within(rows()[2]).getByLabelText('Winner, player 1'), 'Carol Le');
-      expect(within(rows()[2]).getByLabelText('Winner, player 1')).not.toHaveAttribute(
-        'data-edited',
-      );
+      for (const field of editedFields(rows()[2])) expect(field).not.toHaveAttribute('data-edited');
     });
 
     it('a deleted row keeps showing its record in the same fields, all gray and struck through, and not editable', async () => {
@@ -597,6 +613,83 @@ describe('SessionResultDialog', () => {
     expect(within(row).getByLabelText('Loser, Point')).toHaveValue(15);
     expect(row.dataset.rowStatus).toBe('unchanged');
     expect(save()).toBeDisabled();
+  });
+
+  describe('the saved message in the footer', () => {
+    async function saveANewRow(user: ReturnType<typeof userEvent.setup>) {
+      post.mockImplementation(async (_url: string, body: unknown) => {
+        const changes = body as RecordChangeSetRequest;
+        return okResponse(
+          [
+            {
+              clientRef: changes.add[0].clientRef,
+              requestedId: null,
+              id: 12,
+              status: 'CREATED',
+              errorCode: null,
+              errorParams: null,
+            },
+          ],
+          [...saved, record(12, 'c', 'd', [null, null])],
+        );
+      });
+      const placeholder = rows()[2];
+      await pick(user, within(placeholder).getByLabelText('Winner, player 1'), 'Carol Le');
+      await pick(user, within(placeholder).getByLabelText('Loser, player 1'), 'Dan Pham');
+      await user.click(save());
+    }
+
+    it('shows nothing before a save', () => {
+      renderDialog();
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+
+    it('shows a green, centered "Results saved" once a save went through', async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      await saveANewRow(user);
+      const message = await screen.findByRole('status');
+      expect(message).toHaveTextContent('Results saved');
+      expect(message).toHaveClass('text-text-success', 'text-center');
+    });
+
+    it('takes the message away with the next edit', async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      await saveANewRow(user);
+      await screen.findByRole('status');
+      const winnerScore = within(rows()[0]).getByLabelText('Winner, Point');
+      await user.clear(winnerScore);
+      await user.type(winnerScore, '30');
+      expect(screen.queryByRole('status')).toBeNull();
+    });
+
+    it('does not show it next to a rejected row, nor after a failed request', async () => {
+      const user = userEvent.setup();
+      renderDialog();
+      post.mockImplementation(async (_url: string, body: unknown) => {
+        const changes = body as RecordChangeSetRequest;
+        return okResponse(
+          [
+            {
+              clientRef: changes.add[0].clientRef,
+              requestedId: null,
+              id: null,
+              status: 'REJECTED',
+              errorCode: 'SESSION_RECORD_PLAYER_NOT_JOINED',
+              errorParams: null,
+            },
+          ],
+          saved,
+        );
+      });
+      const placeholder = rows()[2];
+      await pick(user, within(placeholder).getByLabelText('Winner, player 1'), 'Carol Le');
+      await pick(user, within(placeholder).getByLabelText('Loser, player 1'), 'Dan Pham');
+      await user.click(save());
+      await waitFor(() => expect(screen.getByTestId('row-rejection')).toBeInTheDocument());
+      expect(screen.queryByRole('status')).toBeNull();
+    });
   });
 
   it('keeps a REJECTED row at the bottom with its message and stays open', async () => {

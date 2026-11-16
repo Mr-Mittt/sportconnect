@@ -25,12 +25,21 @@ import { useBlocker } from 'react-router-dom';
  * caught — the caller wraps its own handler in `guard()`, same as
  * `useSettingsUnsavedGuard`'s callers already do.
  */
-export function useUnsavedChangesGuard(hasUnsavedChanges: boolean) {
+export function useUnsavedChangesGuard(
+  hasUnsavedChanges: boolean,
+  /**
+   * A route change the page itself makes while it stays mounted (Home Feed opens a post at `/posts/:id` and closes it
+   * back to `/`): the form is not left, so nothing is asked. Absent = every change of pathname counts as leaving.
+   */
+  isSamePage?: (fromPath: string, toPath: string) => boolean,
+) {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
-      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname,
+      hasUnsavedChanges &&
+      currentLocation.pathname !== nextLocation.pathname &&
+      !isSamePage?.(currentLocation.pathname, nextLocation.pathname),
   );
 
   useEffect(() => {

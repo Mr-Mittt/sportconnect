@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Comment, Post } from '@/features/feed/types';
@@ -84,6 +84,11 @@ const baseProps = {
 };
 
 describe('CommentSection', () => {
+  it('puts the caret in the comment box when it opens, not on the first button (owner, 2026-11-16)', async () => {
+    render(<CommentSection {...baseProps} />);
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /comment/i })).toHaveFocus());
+  });
+
   it('renders the post header (author, relative time, sport badge) and repeats the post content in the body', () => {
     render(<CommentSection {...baseProps} />);
     expect(screen.getByText('Marcus Lee')).toBeInTheDocument();
@@ -185,7 +190,7 @@ describe('CommentSection', () => {
     await user.type(input, 'Nice one!');
     await user.click(screen.getByRole('button', { name: 'Post comment' }));
     expect(onAddComment).toHaveBeenCalledWith('Nice one!');
-    expect(input).toHaveValue('');
+    expect(input).toHaveTextContent('');
   });
 
   it('send button stays disabled (muted) while the composer is empty, solid once there is text', async () => {

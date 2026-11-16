@@ -83,21 +83,10 @@
         "score": "điểm",
         "id": "id"
       },
-      "teamPrefix": "Bên {{n}}: {{text}}",
-      "error": {
-        "ID_MISSING": "Thêm id của ván sau lệnh. Nút sao chép trong Kết quả sẽ cho bạn id.",
-        "ID_INVALID": "“{{text}}” không phải là id của ván. Hãy dùng số mà nút sao chép cung cấp.",
-        "ID_NOT_FOUND": "Không có ván nào có id {{text}}.",
-        "VS_MISSING": "Ngăn cách hai bên bằng “vs”.",
-        "VS_MULTIPLE": "Chỉ dùng “vs” một lần.",
-        "PLAYER_UNKNOWN": "“{{text}}” không phải là người chơi trong buổi này. Hãy chọn từ danh sách @.",
-        "PLAYER_AMBIGUOUS": "Có nhiều người chơi tên “{{text}}”. Hãy chọn một người từ danh sách @.",
-        "PLAYER_REPEATED": "{{text}} được nhập hai lần trong cùng một bên.",
-        "TEXT_UNEXPECTED": "Không hiểu “{{text}}”. Điểm đặt sau người chơi ở bên trái và trước người chơi ở bên phải.",
-        "SCORE_FORMAT": "“{{text}}” có nhiều điểm hơn số điểm môn này ghi nhận.",
-        "EXTRA_TEXT": "Không thể có thêm gì sau id (“{{text}}”)."
-      }
-    }
+      "invalid": "Lệnh cập nhật không hợp lệ. Hãy làm theo gợi ý, phần trong [...] là tùy chọn.",
+      "invalidRepeated": "Lệnh cập nhật không hợp lệ. Hãy làm theo gợi ý, phần trong [...] là tùy chọn. ({{count}})"
+    },
+    "tagLabel": "Người có thể gắn thẻ"
   },
   "upcoming": {
     "title": "Buổi chơi sắp tới",
@@ -355,7 +344,6 @@
       "remove": "Xóa {{name}}",
       "placeholder": "Tìm bạn bè theo tên…",
       "searchLabel": "Tìm bạn bè để mời",
-      "minChars": "Nhập ít nhất {{min}} ký tự để tìm kiếm.",
       "noResults": "Không tìm thấy bạn bè nào."
     },
     "autoApprove": {
@@ -448,6 +436,7 @@
   "result": {
     "label": "Kết quả",
     "heading": "Kết quả ({{count}})",
+    "headingMine": "Kết quả ({{mine}}/{{count}})",
     "empty": "Chưa có kết quả nào.",
     "loadError": "Không tải được kết quả.",
     "update": "Cập nhật",
@@ -468,6 +457,7 @@
       "limitReached": "Buổi chơi này chỉ chứa tối đa {{max}} kết quả. Hãy xóa một kết quả để thêm kết quả khác.",
       "tooManyChanges": "Có hơn {{max}} thay đổi cùng lúc. Hãy lưu các thay đổi này rồi tiếp tục.",
       "saveError": "Không lưu được kết quả. Hãy thử lại.",
+      "saved": "Đã lưu kết quả",
       "rowNumber": "#{{n}}",
       "newGame": "Mới",
       "rejectedHeading": "Chưa lưu"

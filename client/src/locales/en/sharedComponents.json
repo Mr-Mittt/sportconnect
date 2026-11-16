@@ -29,7 +29,8 @@
     "commentAriaLabel": "Add a comment",
     "postComment": "Post comment",
     "like": "Like",
-    "unlike": "Unlike"
+    "unlike": "Unlike",
+    "mentionLabel": "People you can tag"
   },
   "commentItem": {
     "commentOptions": "Comment options",
@@ -40,7 +41,8 @@
     "reply": "Reply",
     "replyPlaceholder": "Reply to {{name}}",
     "cancelReply": "Cancel reply",
-    "post": "Post"
+    "post": "Post",
+    "mentionLabel": "People you can tag"
   },
   "createPostForm": {
     "placeholderWithName": "What's on your mind, {{firstName}}?",
@@ -51,7 +53,8 @@
     "tagSport": "Tag sport",
     "broadcast": "Broadcast",
     "post": "Post",
-    "error": "Couldn't create post. Try again."
+    "error": "Couldn't create post. Try again.",
+    "mentionLabel": "People you can tag"
   },
   "groupBroadcasts": {
     "ariaLabel": "Group broadcasts",
@@ -148,5 +151,9 @@
     "moveDown": "Move {{label}} down",
     "selectedPosition": "{{label}} (selected, position {{index}})",
     "nothingOnProfile": "Nothing on your profile to pick from — use “Other…”."
+  },
+  "mention": {
+    "chipLabel": "Mention: {{name}}",
+    "lengthCounter": "{{count}} / {{max}}"
   }
 }

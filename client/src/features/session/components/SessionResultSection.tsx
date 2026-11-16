@@ -60,7 +60,7 @@ export function SessionResultSection({
   const [mineOnly, setMineOnly] = useState(false);
   const saved = records === undefined ? [] : showableRecords(schema, records);
   // CLIENT-GL-39: the "my results" switch narrows the list (and the 3-latest preview) to the games the caller plays in;
-  // the heading count stays the number of all games.
+  // the heading reads `Results (mine/all)` while it is on, and the number of all games otherwise.
   const shown =
     mineOnly && currentUserId !== undefined
       ? saved.filter((record) =>
@@ -103,7 +103,11 @@ export function SessionResultSection({
     <section aria-label={t('result.label')}>
       <SessionFormSection
         i18nOverridePrefix={i18nOverridePrefix}
-        title={t('result.heading', { count: saved.length })}
+        title={
+          mineOnly && currentUserId !== undefined
+            ? t('result.headingMine', { mine: shown.length, count: saved.length })
+            : t('result.heading', { count: saved.length })
+        }
         open={open}
         onOpenChange={setOpen}
         scrollIntoViewOnOpen

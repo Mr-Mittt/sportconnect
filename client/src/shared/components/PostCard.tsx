@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
-import { HashtagText } from './HashtagText';
+import { PostText } from './PostText';
 import { SportIcon } from './SportIcon';
 
 interface PostCardProps {
@@ -71,7 +71,8 @@ function initialsFor(fullName: string): string {
  * back to "Unknown User", same convention CommentServiceImpl already uses
  * server-side for a comparable gap.
  *
- * Hashtags render inline within `post.content` itself (`HashtagText`) rather
+ * Hashtags render inline within `post.content` itself (`PostText`, which also draws the tagged people as chips and
+ * keeps the text's line breaks, CLIENT-GL-50 part 2) rather
  * than as a separate row of chips repeating the same tags below the text —
  * `post.hashtags` (the backend's structured extraction) isn't read here at
  * all; `HashtagText` re-derives clickable spans directly from the content
@@ -165,7 +166,7 @@ export function PostCard({
         )}
       </div>
 
-      <HashtagText
+      <PostText
         text={post.content}
         onHashtagClick={onHashtagClick}
         className="mb-2 text-sm leading-normal text-text-primary"

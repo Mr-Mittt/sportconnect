@@ -134,3 +134,11 @@ export interface SessionHistoryDatesResponse {
   dates: SessionHistoryDate[];
   hasMore: boolean;
 }
+
+/** CLIENT-GL-50 — one person of `GET /sessions/{id}/thread-people` (SESSION-GL-64): someone who can see the session's
+ * discussion thread. Typed 1:1 against `ThreadPersonResponse`; nothing else is ever sent (no email, no status). */
+export interface ThreadPerson {
+  userId: string;
+  fullName: string;
+  avatarUrl: string | null;
+}

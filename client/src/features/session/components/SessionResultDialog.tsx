@@ -343,6 +343,13 @@ function ResultDialogBody({
             {wholeRequestError}
           </p>
         )}
+        {/* Saved (owner, 2026-11-16): green, centered; the next edit, or closing the dialog, takes it away. A rejected row keeps the
+            draft dirty, so it never shows next to one. */}
+        {mutation.isSuccess && !draft.isDirty && wholeRequestError === null && (
+          <p role="status" className="text-center text-2xs font-medium text-text-success">
+            {t('result.dialog.saved')}
+          </p>
+        )}
         {confirmDiscard ? (
           <div
             className="flex flex-col gap-2 rounded-md bg-surface-1 p-2"

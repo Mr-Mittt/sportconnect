@@ -3,6 +3,7 @@ import { useAuthStore } from '@/app/authStore';
 import { useActiveBroadcasts } from '@/features/feed/hooks/useActiveBroadcasts';
 import { useUserGroups } from '@/features/feed/hooks/useUserGroups';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
+import { parseMarkup, plainText } from '@/shared/lib/mentionMarkup';
 import { getSportProfileConfig } from '@/shared/lib/sportProfileConfig';
 import type { GroupBroadcast } from '@/shared/types/rail';
 
@@ -63,7 +64,8 @@ export function useGroupBroadcasts(): {
         groupName: group.groupName,
         groupInitials: initialsFor(group.groupName),
         colorRamp,
-        text: post.content,
+        // A tagged person is stored as markup (`@[Name](id)`); the rail shows what a reader sees, `@Name`.
+        text: plainText(parseMarkup(post.content)),
         createdAt: post.createdAt,
       });
       return broadcasts;

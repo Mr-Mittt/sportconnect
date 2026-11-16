@@ -48,6 +48,9 @@ export const sessionKeys = {
   /** CLIENT-SESSION-8: the session's comment thread (SESSION-10's SESSION_POST-anchored
    * comments, reached only through the session-scoped /sessions/{id}/comments endpoints). */
   comments: (sessionId: number) => [...sessionKeys.all, 'comments', sessionId] as const,
+  /** CLIENT-GL-50: `GET /sessions/{id}/thread-people?q=` (SESSION-GL-64), the people the `@` list offers in a comment. */
+  threadPeople: (sessionId: number, query: string | null) =>
+    [...sessionKeys.all, 'threadPeople', sessionId, query] as const,
   /** CLIENT-GL-38: the session's result records (SESSION-50), `GET /sessions/{id}/records`. */
   records: (sessionId: number) => [...sessionKeys.all, 'records', sessionId] as const,
 };
