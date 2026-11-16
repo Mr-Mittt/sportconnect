@@ -203,7 +203,9 @@ test('Session results — record commands in the thread: hints, invalid, add, co
     await composer.fill(':del 99999');
     await composer.press('Enter');
     await expect(detail.getByTestId('command-notices')).toContainText('Your update is invalid. Follow the hint, [...] is optional.');
+    // the rejected text is still in the box, so closing asks first (owner, 2026-11-16)
     await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Leave', exact: true }).click();
     await expect(detail).not.toBeVisible();
     await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();
     await expect(page.getByRole('dialog', { name: 'Sunday pickup run' }).getByRole('textbox', { name: 'Add a comment' })).toBeVisible();
