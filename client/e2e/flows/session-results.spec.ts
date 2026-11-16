@@ -78,6 +78,11 @@ test('Session results — log a record, see it in the Result section, then delet
     // the dialog stays open after a save (owner, 2026-11-14); Close leaves it
     await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
     await expect(dialog).toBeVisible();
+    // the footer says so, green and centered (owner, 2026-11-16)
+    const saved = dialog.getByRole('status');
+    await expect(saved).toHaveText('Results saved');
+    await expect(saved).toHaveCSS('text-align', 'center');
+    await expect(saved).toHaveCSS('color', 'rgb(21, 128, 61)'); // text-text-success
     await dialog.getByRole('button', { name: 'Close' }).click();
     await expect(dialog).not.toBeVisible();
     await expect(detail.getByRole('button', { name: /Results \(1\)/ })).toBeVisible();
@@ -134,6 +139,32 @@ test('Session results — record commands in the thread: hints, invalid, add, co
     await expect(detail.getByRole('list', { name: 'Record commands' }).locator('li')).toHaveCount(1);
     await composer.fill('hello');
     await expect(detail.getByRole('list', { name: 'Record commands' })).toHaveCount(0);
+  });
+
+  await test.step('1b. the hints are keyboard stops before Send in the tab order, and what is typed is bold', async () => {
+    const hints = detail.getByRole('list', { name: 'Record commands' }).getByRole('button');
+    await composer.fill(':');
+    await composer.press('ArrowDown');
+    await expect(hints.nth(0)).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(hints.nth(1)).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(hints.nth(0)).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(composer).toBeFocused();
+    // Tab from the box: the three hints, then Send
+    await page.keyboard.press('Tab');
+    await expect(hints.nth(0)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(hints.nth(2)).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(detail.getByRole('button', { name: 'Post comment' })).toBeFocused();
+    // bold: the typed part of the template
+    await composer.fill(':add ');
+    const boldWords = detail.getByRole('list', { name: 'Record commands' }).locator('.font-semibold');
+    await expect(boldWords).toHaveText([':add']);
+    await composer.fill('');
   });
 
   await test.step('2. an invalid command shows a caller-only line, keeps its text and posts no comment', async () => {

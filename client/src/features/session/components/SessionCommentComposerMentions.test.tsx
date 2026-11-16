@@ -34,7 +34,7 @@ function setup(options: { source?: MentionSource | null; commands?: boolean } = 
     options.source === null ? undefined : (options.source ?? { options: people, onQueryChange: vi.fn() });
   const commands: ComposerCommands | undefined = options.commands
     ? {
-        hints: [{ command: 'add', template: ':add @player1 vs @player1' }],
+        hints: [{ command: 'add', template: ':add @player1 vs @player1', parts: [] }],
         mentions,
         run: vi.fn(() => ({ handled: true, accepted: true })),
         isRunning: false,

@@ -27,9 +27,9 @@ export const NoCurrentUser: Story = {
 
 const commands = {
   hints: [
-    { command: 'add' as const, template: ':add @player1 [@player2] [score] vs [score] @player1 [@player2]' },
-    { command: 'upd' as const, template: ':upd <id> @player1 [@player2] [score] vs [score] @player1 [@player2]' },
-    { command: 'del' as const, template: ':del <id>' },
+    { command: 'add' as const, template: ':add @player1 [@player2] [score] vs [score] @player1 [@player2]', parts: [] },
+    { command: 'upd' as const, template: ':upd <id> @player1 [@player2] [score] vs [score] @player1 [@player2]', parts: [] },
+    { command: 'del' as const, template: ':del <id>', parts: [] },
   ],
   mentions: [
     { id: 'a', token: 'Alice Nguyen', name: 'Alice Nguyen', avatarUrl: null, isCurrentUser: false },

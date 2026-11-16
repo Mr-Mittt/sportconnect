@@ -307,13 +307,25 @@ describe('SessionResultSection', () => {
       expect(screen.getAllByTestId('record-card')).toHaveLength(2);
     });
 
-    it('narrows the list to the games the caller plays in, and keeps the heading count', async () => {
+    it('narrows the list to the games the caller plays in, and the title reads Results (mine/all)', async () => {
       renderSection({ records: [mine, others], currentUserId: 'b' });
       await open();
-      await userEvent.setup().click(screen.getByRole('switch', { name: 'My results' }));
+      const user = userEvent.setup();
+      expect(screen.getByRole('button', { name: /Results \(2\)/ })).toBeInTheDocument();
+      await user.click(screen.getByRole('switch', { name: 'My results' }));
       expect(screen.getAllByTestId('record-card')).toHaveLength(1);
       expect(screen.getByTestId('record-card')).toHaveTextContent('Alice Nguyen21');
+      expect(screen.getByRole('button', { name: /Results \(1\/2\)/ })).toBeInTheDocument();
+      // off again: the number of all games, as before
+      await user.click(screen.getByRole('switch', { name: 'My results' }));
       expect(screen.getByRole('button', { name: /Results \(2\)/ })).toBeInTheDocument();
+    });
+
+    it('reads Results (0/1) when none of the games include the caller', async () => {
+      renderSection({ records: [others], currentUserId: 'a' });
+      await open();
+      await userEvent.setup().click(screen.getByRole('switch', { name: 'My results' }));
+      expect(screen.getByRole('button', { name: /Results \(0\/1\)/ })).toBeInTheDocument();
     });
 
     it('says so when none of the games include the caller', async () => {

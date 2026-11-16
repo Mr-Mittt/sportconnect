@@ -436,6 +436,7 @@
   "result": {
     "label": "Results",
     "heading": "Results ({{count}})",
+    "headingMine": "Results ({{mine}}/{{count}})",
     "empty": "No results logged yet.",
     "loadError": "Couldn't load the results.",
     "update": "Update",
@@ -456,6 +457,7 @@
       "limitReached": "This session holds at most {{max}} results. Remove one to add another.",
       "tooManyChanges": "That is more than {{max}} changes at once. Save these, then continue.",
       "saveError": "Couldn't save the results. Try again.",
+      "saved": "Results saved",
       "rowNumber": "#{{n}}",
       "newGame": "New",
       "rejectedHeading": "Not saved"

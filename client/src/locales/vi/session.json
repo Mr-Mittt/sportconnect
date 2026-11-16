@@ -436,6 +436,7 @@
   "result": {
     "label": "Kết quả",
     "heading": "Kết quả ({{count}})",
+    "headingMine": "Kết quả ({{mine}}/{{count}})",
     "empty": "Chưa có kết quả nào.",
     "loadError": "Không tải được kết quả.",
     "update": "Cập nhật",
@@ -456,6 +457,7 @@
       "limitReached": "Buổi chơi này chỉ chứa tối đa {{max}} kết quả. Hãy xóa một kết quả để thêm kết quả khác.",
       "tooManyChanges": "Có hơn {{max}} thay đổi cùng lúc. Hãy lưu các thay đổi này rồi tiếp tục.",
       "saveError": "Không lưu được kết quả. Hãy thử lại.",
+      "saved": "Đã lưu kết quả",
       "rowNumber": "#{{n}}",
       "newGame": "Mới",
       "rejectedHeading": "Chưa lưu"

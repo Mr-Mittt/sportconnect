@@ -2,14 +2,17 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { MentionOption } from '../hooks/useRecordCommands';
+import { buildCommandHints } from '../recordCommandHints';
+import badminton from '../recordSchema/badminton-record-schema-v1.json';
+import { parseRecordSchema, type RecordSchema } from '../recordSchema';
 import { SessionCommentComposer, type ComposerCommands } from './SessionCommentComposer';
 
 // CLIENT-GL-39: record commands in the comment box.
 
 const hints = [
-  { command: 'add' as const, template: ':add @player1 [@player2] [score] vs [score] @player1 [@player2]' },
-  { command: 'upd' as const, template: ':upd <id> @player1 [@player2] [score] vs [score] @player1 [@player2]' },
-  { command: 'del' as const, template: ':del <id>' },
+  { command: 'add' as const, template: ':add @player1 [@player2] [score] vs [score] @player1 [@player2]', parts: [] },
+  { command: 'upd' as const, template: ':upd <id> @player1 [@player2] [score] vs [score] @player1 [@player2]', parts: [] },
+  { command: 'del' as const, template: ':del <id>', parts: [] },
 ];
 
 const mentions: MentionOption[] = [
@@ -18,13 +21,20 @@ const mentions: MentionOption[] = [
   { id: 'u-anh', token: 'Anh Tuấn', name: 'Anh Tuấn', avatarUrl: null, isCurrentUser: false },
 ];
 
+const realHints = buildCommandHints(parseRecordSchema(badminton) as RecordSchema, {
+  player: 'player',
+  score: 'score',
+  id: 'id',
+});
+
 function setup(
   run: ComposerCommands['run'] = () => ({ handled: true, accepted: true }),
   players: MentionOption[] = mentions,
+  commandHints: ComposerCommands['hints'] = hints,
 ) {
   const user = userEvent.setup();
   const onAddComment = vi.fn();
-  const commands: ComposerCommands = { hints, mentions: players, run: vi.fn(run), isRunning: false };
+  const commands: ComposerCommands = { hints: commandHints, mentions: players, run: vi.fn(run), isRunning: false };
   render(
     <SessionCommentComposer
       currentUser={{ fullName: 'Jordan Lee', avatarUrl: null }}
@@ -159,5 +169,91 @@ describe('SessionCommentComposer record commands', () => {
       .getAllByRole('option')
       .map((option) => option.querySelector('span.truncate')?.textContent);
     expect(names).toEqual(['Nam', 'Nam']);
+  });
+
+  describe('the hints as a list to move through and to read', () => {
+    const hintButtons = () => within(screen.getByRole('list', { name: 'Record commands' })).getAllByRole('button');
+    const sendButton = () => screen.getByRole('button', { name: 'Post comment' });
+
+    it('Down from the box focuses the first hint, Up and Down move between hints, Up from the first returns to the box', async () => {
+      const { user, input } = setup(undefined, mentions, realHints);
+      await user.type(input, ':');
+      expect(hintButtons()).toHaveLength(3);
+      await user.keyboard('{ArrowDown}');
+      expect(hintButtons()[0]).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(hintButtons()[1]).toHaveFocus();
+      await user.keyboard('{ArrowDown}{ArrowDown}');
+      expect(hintButtons()[2]).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(hintButtons()[1]).toHaveFocus();
+      await user.keyboard('{ArrowUp}{ArrowUp}');
+      expect(input).toHaveFocus();
+    });
+
+    it('Esc in a hint goes back to the box, and Enter starts the focused command', async () => {
+      const { user, input } = setup(undefined, mentions, realHints);
+      await user.type(input, ':');
+      await user.keyboard('{ArrowDown}{ArrowDown}{Escape}');
+      expect(input).toHaveFocus();
+      await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+      expect(input).toHaveTextContent(':upd');
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+
+    it('Tab goes through the hints first and then to the Send button', async () => {
+      const { user, input } = setup(undefined, mentions, realHints);
+      await user.type(input, ':');
+      await user.tab();
+      expect(hintButtons()[0]).toHaveFocus();
+      await user.tab();
+      expect(hintButtons()[1]).toHaveFocus();
+      await user.tab();
+      expect(hintButtons()[2]).toHaveFocus();
+      await user.tab();
+      expect(sendButton()).toHaveFocus();
+    });
+
+    it('Tab goes straight to Send when there are no hints', async () => {
+      const { user, input } = setup(undefined, mentions, realHints);
+      await user.type(input, 'hello');
+      await user.tab();
+      expect(sendButton()).toHaveFocus();
+    });
+
+    it('Down does nothing special without hints, and does not take over the arrows of an open @ list', async () => {
+      const { user, input } = setup(undefined, mentions, realHints);
+      await user.type(input, 'hello');
+      await user.keyboard('{ArrowDown}');
+      expect(input).toHaveFocus();
+      await user.clear(input);
+      await user.type(input, ':add @');
+      await user.keyboard('{ArrowDown}');
+      expect(input).toHaveFocus();
+      expect(screen.getByRole('listbox', { name: 'Players' })).toBeInTheDocument();
+    });
+
+    it('bolds the words of a hint that the typed text covers, and nothing else', async () => {
+      const { user, input } = setup(undefined, mentions, realHints);
+      const boldWords = () =>
+        Array.from(screen.getByRole('list', { name: 'Record commands' }).querySelectorAll('.font-semibold')).map(
+          (element) => element.textContent,
+        );
+      await user.type(input, ':a');
+      expect(boldWords()).toEqual([':a']);
+      await user.type(input, 'dd ');
+      expect(boldWords()).toEqual([':add']);
+      await user.type(input, '@Ba');
+      await user.keyboard('{Enter}');
+      expect(boldWords()).toEqual([':add', '@player1']);
+      await user.type(input, '21 vs');
+      expect(boldWords()).toEqual([':add', '@player1', '[score]', 'vs']);
+    });
+
+    it('a hint still reads as the whole template for a reader', async () => {
+      const { user, input } = setup(undefined, mentions, realHints);
+      await user.type(input, ':add ');
+      expect(hintButtons()[0]).toHaveTextContent(':add @player1 [@player2] [score] vs [score] @player1 [@player2]');
+    });
   });
 });

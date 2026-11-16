@@ -70,6 +70,17 @@ export function RecordEditorCells({
   if (read === null) return null;
   const teams = read.teams;
   const initialTeams = initialData === null ? null : readTeams(initialData, schema);
+  // A saved record that differs from what was saved in any field is a row being edited: all its fields take the accent
+  // border (owner, 2026-11-16), not only the ones whose value changed.
+  const rowEdited =
+    !deleted &&
+    initialTeams !== null &&
+    teams.some(
+      (team, index) =>
+        team.players.length !== initialTeams.teams[index].players.length ||
+        team.players.some((player, slot) => player !== initialTeams.teams[index].players[slot]) ||
+        schema.slots.some((_, slot) => (team.scores[slot] ?? null) !== (initialTeams.teams[index].scores[slot] ?? null)),
+    );
   const order = teamDisplayOrder(schema);
   const { max } = schema.playersPerSide;
   const taken = new Set(teams.flatMap((team) => team.players));
@@ -117,9 +128,7 @@ export function RecordEditorCells({
               name: names.get(id)?.name ?? text.formerPlayer,
               avatarUrl: names.get(id)?.avatarUrl ?? null,
             });
-            const edited =
-              initialTeams !== null &&
-              (initialTeams.teams[team].players[index] ?? undefined) !== userId;
+            const edited = rowEdited;
             return (
               <PlayerSelect
                 key={index}
@@ -159,11 +168,7 @@ export function RecordEditorCells({
         {schema.slots.map((slot, index) => {
           const title = slotTitle(slot, index, locale);
           const invalid = !deleted && hasProblem(scoreField(team, index));
-          const edited =
-            !deleted &&
-            initialTeams !== null &&
-            (initialTeams.teams[team].scores[index] ?? null) !==
-              (teams[team].scores[index] ?? null);
+          const edited = rowEdited;
           return (
             <DigitsOnlyInput
               key={index}
