@@ -57,6 +57,27 @@ describe('SessionCommentSection', () => {
     ).toBeTruthy();
   });
 
+  it('draws a stored tag as a chip and offers the people to the reply box (CLIENT-GL-50)', async () => {
+    const user = userEvent.setup();
+    const id = '123e4567-e89b-12d3-a456-426614174000';
+    const mentionSource = {
+      options: [{ id, name: 'Priya Shah', label: 'Priya Shah', avatarUrl: null }],
+      onQueryChange: noop,
+    };
+    render(
+      <SessionCommentSection
+        {...baseProps}
+        currentUserId="someone-else"
+        mentionSource={mentionSource}
+        comments={[makeComment({ content: `See you @[Priya Shah](${id})` })]}
+      />,
+    );
+    expect(screen.getByRole('img', { name: 'Mention: Priya Shah' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reply' }));
+    await user.type(screen.getByRole('textbox', { name: 'Reply to Marcus Lee' }), '@Pr');
+    expect(screen.getByRole('listbox', { name: 'People you can tag' })).toBeInTheDocument();
+  });
+
   it('shows the empty state for a thread with zero comments', () => {
     render(<SessionCommentSection {...baseProps} />);
     expect(screen.getByText('No comments yet. Be the first to comment!')).toBeInTheDocument();

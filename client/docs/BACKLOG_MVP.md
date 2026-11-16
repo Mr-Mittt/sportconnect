@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-13 (CLIENT-GL-38 and SPORT-18 done; CLIENT-GL-49 filed; HF-22 filed)
+**Last updated:** 2026-11-16 (CLIENT-GL-50 done)
 
 ---
 
@@ -77,7 +77,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 9 | [BASELINE-UPDATE-1](MVP/BASELINE-UPDATE-1_VISUAL_BASELINES_FOR_THIS_RELEASE.md) | Standing ticket: the visual baselines each client ticket of this release expects to change (now CLIENT-SESSION-34 and SESSION-49), regenerated through the `client-visual` workflow and `/updatebaseline` before the release; then closed and `BASELINE-UPDATE-2` filed | `TODO` |
 | 10 | [SPORT-17](MVP/SPORT-17_SEEDED_ATTRIBUTE_DEFAULT_READS_AS_A_USER_EDIT.md) | A schema default seeded by `SportAttributesFields` reads as a user edit in the profile editor and the session detail edit section (same defect as the create-session form fixed in CLIENT-SESSION-34; attributes customise each sport app-wide, so audit every host) | `TODO` |
 | 11 | [ACCOUNT-8](MVP/ACCOUNT-8_REQUIRE_FIRST_NAME_IN_ACCOUNT_SETTINGS.md) | First name is required when editing the profile in account settings (from SESSION-49; pairs with auth A38) | `TODO` |
-| 13 | [CLIENT-GL-50](MVP/CLIENT-GL-50_CHIP_COMPOSER_AND_TAGGING_IN_THE_SESSION_THREAD.md) | Session thread: a chip composer (a picked name is one chip, Backspace removes it whole) and tagging people in normal comments with the `@` picker (everyone who can see the thread); depends on SESSION-GL-64 | `TODO` |
 | 14 | [CLIENT-SESSION-40](MVP/CLIENT-SESSION-40_GUESTS_IN_THE_RESULT_DIALOG.md) | Add a guest and pick guests in the result dialog | `TODO` |
 | 15 | [CLIENT-SESSION-41](MVP/CLIENT-SESSION-41_RESULT_STATISTICS_SCREENS.md) | Statistics screens: player totals and head-to-head | `TODO` |
 | 16 | [CLIENT-SESSION-42](MVP/CLIENT-SESSION-42_GROUP_LEADERBOARD_SCREENS.md) | Group leaderboard screens and the ranking-order settings | `TODO` |
@@ -145,6 +144,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 31 | [CLIENT-GL-50](MVP/CLIENT-GL-50_CHIP_COMPOSER_AND_TAGGING_IN_THE_SESSION_THREAD.md) | Session thread chip composer and tagging: a person picked with `@` is one chip that carries their id (Backspace removes it whole, copy gives `@Full Name`); `@` also works in normal comments and replies (everyone who can see the thread, `GET /sessions/{id}/thread-people`), stored as `@[Full Name](userId)` and drawn as chips in the thread; the length counts the stored text; record commands read player ids from chips and a pasted command resolves its names to chips; one shared client name matcher (word-start, accent-insensitive) also drives the friend-invite filter (3-character minimum removed) and the MSW users-search mock. Scoped Vitest and the relevant `e2e` subset green; `session-detail-*` and `session-results-section-*` baselines pending in `BASELINE-UPDATE-1` | `DONE` (2026-11-16) |
 | 30 | [CLIENT-GL-39](MVP/CLIENT-GL-39_THREAD_COMMAND_HINTS_AND_REPLIES.md) | Session thread: record commands `:add`, `:upd`, `:del` typed in the comment box (client parses and validates with the record schema, sends the same change set as the dialog, nothing posted to the thread; errors are caller-only system-style lines), command hints and an `@` player list, a copy-record-id button and a "my results" switch in the Result section (no record numbers there any more). Client only; follow-up SESSION-GL-63 | `DONE` (2026-11-15) |
 | 28 | [CLIENT-GL-38](MVP/CLIENT-GL-38_SESSION_DETAIL_RESULT_SECTION_AND_DIALOG.md) | Session detail: collapsible Result section (the games logged, drawn from the sport's record schema) and the record dialog (add, edit, delete with a per-row X / strike-through / undo, an always-present placeholder, red borders while typing and on Save, rejected rows kept at the bottom); the scoreboard moved to CLIENT-GL-49. 19 requirement mutations killed; e2e: new `session-results.spec.ts` and the session-detail specs passed; no baseline change expected | `DONE` (2026-11-13) |
 | 29 | [SPORT-18](MVP/SPORT-18_RESULT_SCHEMA_ADMIN_SCREEN.md) | Admin: "Record schema" section on the sport detail (same generic JSON editor as the profile and session attributes; `GET /sports/all/{id}/result-schema`, `PUT /sports/{id}/result-schema`), with a non-blocking hint when the app cannot read the document. 7 mutations killed; admin e2e passed; built with CLIENT-GL-38 | `DONE` (2026-11-13) |

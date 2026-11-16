@@ -8,8 +8,39 @@ import { parseRecordSchema, type RecordSchema } from '../recordSchema';
 import type { RecordChangeSetResponse } from '../resultTypes';
 import { MAX_NOTICES, useRecordCommands } from './useRecordCommands';
 import type { SessionResultData } from './useSessionResultData';
+import type { Segment } from '@/shared/lib/mentionMarkup';
 
 // CLIENT-GL-39: the record commands of the comment box.
+
+const PEOPLE: Array<{ id: string; name: string }> = [
+  { id: 'u-bao', name: 'Bao' },
+  { id: 'u-an', name: 'An' },
+  { id: 'u-binh', name: 'Bình' },
+];
+
+/** The tests write `@Name`; the box hands the hook a tag chip per picked person, so each known name becomes a chip. */
+function cmd(text: string): Segment[] {
+  const segments: Segment[] = [];
+  let rest = text;
+  while (rest.length > 0) {
+    const at = rest.indexOf('@');
+    const person = at < 0 ? undefined : PEOPLE.find((candidate) => rest.slice(at + 1).startsWith(candidate.name));
+    if (at < 0) {
+      segments.push({ kind: 'text', text: rest });
+      break;
+    }
+    if (person === undefined) {
+      // An unknown name stays plain text, as a name typed without being picked does.
+      segments.push({ kind: 'text', text: rest.slice(0, at + 1) });
+      rest = rest.slice(at + 1);
+      continue;
+    }
+    if (at > 0) segments.push({ kind: 'text', text: rest.slice(0, at) });
+    segments.push({ kind: 'mention', userId: person.id, name: person.name });
+    rest = rest.slice(at + 1 + person.name.length);
+  }
+  return segments;
+}
 
 const schema = parseRecordSchema(badminton) as RecordSchema;
 
@@ -73,7 +104,7 @@ describe('useRecordCommands', () => {
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
     let outcome: ReturnType<NonNullable<typeof result.current>['run']> | undefined;
     act(() => {
-      outcome = result.current?.run('see you at 7');
+      outcome = result.current?.run(cmd('see you at 7'));
     });
     expect(outcome).toEqual({ handled: false, accepted: false });
     expect(post).not.toHaveBeenCalled();
@@ -85,7 +116,7 @@ describe('useRecordCommands', () => {
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
     let outcome: ReturnType<NonNullable<typeof result.current>['run']> | undefined;
     act(() => {
-      outcome = result.current?.run(':add @Zed 21 vs 15 @An');
+      outcome = result.current?.run(cmd(':add @Zed 21 vs 15 @An'));
     });
     expect(outcome).toEqual({ handled: true, accepted: false });
     expect(post).not.toHaveBeenCalled();
@@ -98,7 +129,7 @@ describe('useRecordCommands', () => {
   it('refuses :del for an id the session does not hold', () => {
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
     act(() => {
-      result.current?.run(':del 99');
+      result.current?.run(cmd(':del 99'));
     });
     expect(result.current?.notices[0].text).toBe('There is no game with id 99.');
   });
@@ -108,7 +139,7 @@ describe('useRecordCommands', () => {
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
     let outcome: ReturnType<NonNullable<typeof result.current>['run']> | undefined;
     act(() => {
-      outcome = result.current?.run(':add @Bao 15 vs 21 @An');
+      outcome = result.current?.run(cmd(':add @Bao 15 vs 21 @An'));
     });
     expect(outcome).toEqual({ handled: true, accepted: true });
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -139,7 +170,7 @@ describe('useRecordCommands', () => {
     const post = vi.spyOn(apiClient, 'post').mockResolvedValue(reply({}));
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
     act(() => {
-      result.current?.run(':upd 7 @Bao 21 vs 15 @An');
+      result.current?.run(cmd(':upd 7 @Bao 21 vs 15 @An'));
     });
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
     expect(post.mock.calls[0][1]).toMatchObject({
@@ -149,7 +180,7 @@ describe('useRecordCommands', () => {
     });
     await waitFor(() => expect(result.current?.isRunning).toBe(false));
     act(() => {
-      result.current?.run(':del 7');
+      result.current?.run(cmd(':del 7'));
     });
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2));
     expect(post.mock.calls[1][1]).toEqual({ add: [], update: [], delete: [7] });
@@ -172,7 +203,7 @@ describe('useRecordCommands', () => {
     );
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
     act(() => {
-      result.current?.run(':add @Bao 21 vs 15 @An');
+      result.current?.run(cmd(':add @Bao 21 vs 15 @An'));
     });
     await waitFor(() => expect(result.current?.notices).toHaveLength(1));
     expect(result.current?.notices[0].text).toBe("A player in this result hasn't joined the session.");
@@ -182,7 +213,7 @@ describe('useRecordCommands', () => {
     vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('network'));
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
     act(() => {
-      result.current?.run(':add @Bao 21 vs 15 @An');
+      result.current?.run(cmd(':add @Bao 21 vs 15 @An'));
     });
     await waitFor(() => expect(result.current?.notices).toHaveLength(1));
     expect(result.current?.notices[0].text).toBe("Couldn't save the results. Try again.");
@@ -195,7 +226,7 @@ describe('useRecordCommands', () => {
     });
     for (const id of [1, 2, 3, 4]) {
       act(() => {
-        result.current?.run(`:del ${id + 100}`);
+        result.current?.run(cmd(`:del ${id + 100}`));
       });
     }
     expect(result.current?.notices.map((notice) => notice.text)).toEqual([

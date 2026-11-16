@@ -137,17 +137,23 @@ test('Session results — record commands in the thread: hints, invalid, add, co
   });
 
   await test.step('2. an invalid command shows a caller-only line, keeps its text and posts no comment', async () => {
-    await composer.fill(':add @Nobody 21 vs 15 @Priya Shah');
+    // A name typed without being picked is not a player (CLIENT-GL-50: a player is a chip that carries the id).
+    await composer.fill(':add @Nobody 21 vs 15');
     await composer.press('Enter');
     await expect(detail.getByTestId('command-notices')).toContainText("isn't a player in this session");
-    await expect(composer).toHaveValue(':add @Nobody 21 vs 15 @Priya Shah');
-    await expect(detail.getByText(':add @Nobody')).toHaveCount(0);
+    await expect(composer).toHaveText(':add @Nobody 21 vs 15');
+    await expect(detail.getByRole('region', { name: 'Discussion' }).locator('p', { hasText: ':add @Nobody' })).toHaveCount(0);
   });
 
   await test.step('3. a valid :add adds a game, clears the box and posts no comment', async () => {
-    await composer.fill(':add @Jordan Lee 21 vs 15 @Priya Shah');
+    await composer.fill('');
+    await composer.pressSequentially(':add @Jord');
     await composer.press('Enter');
-    await expect(composer).toHaveValue('');
+    await composer.pressSequentially('21 vs 15 @Priy');
+    await composer.press('Enter');
+    await expect(composer.getByRole('img')).toHaveCount(2);
+    await composer.press('Enter');
+    await expect(composer).toHaveText('');
     await expect(detail.getByRole('button', { name: /Results \(3\)/ })).toBeVisible();
     await expect(detail.getByText('21 vs 15')).toHaveCount(0);
   });

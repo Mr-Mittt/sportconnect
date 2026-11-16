@@ -347,6 +347,7 @@ export function FriendsPage() {
           isParticipantsError={discoverModalData.isParticipantsError}
           result={discoverModalData.result}
           recordCommands={discoverModalData.recordCommands}
+          mentionSource={discoverModalData.mentionSource}
           currentUserId={discoverModalData.currentUserId}
           canManage={discoverModalData.canManage}
           selectedCompletionLocation={discoverModalData.selectedCompletionLocation}

@@ -2,6 +2,7 @@ import type { Comment } from '@/features/feed/types';
 import { CommentItem } from '@/shared/components/CommentItem';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { EmptyHint } from '@/shared/components/EmptyHint';
+import type { MentionSource } from '@/shared/components/MentionInput';
 import { SystemNoticeLine } from '@/shared/components/SystemNoticeLine';
 import type { RecordCommandNotice } from '../hooks/useRecordCommands';
 import { SessionCommentComposer, type ComposerCommands } from './SessionCommentComposer';
@@ -32,6 +33,8 @@ interface SessionCommentSectionProps {
   commands?: ComposerCommands;
   /** CLIENT-GL-39: caller-only lines (a command's error) in the system-comment look; never stored. */
   notices?: RecordCommandNotice[];
+  /** CLIENT-GL-50: the people an `@` offers in the composer and the reply boxes; also turns tags in the thread into chips. */
+  mentionSource?: MentionSource;
 }
 
 /**
@@ -70,6 +73,7 @@ export function SessionCommentSection({
   onToggleCommentLike,
   commands,
   notices = [],
+  mentionSource,
   i18nOverridePrefix,
 }: SessionCommentSectionProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -86,6 +90,7 @@ export function SessionCommentSection({
         onAddComment={onAddComment}
         isPosting={isPosting}
         commands={commands}
+        mentionSource={mentionSource}
         i18nOverridePrefix={i18nOverridePrefix}
       />
       {notices.length > 0 && (
@@ -116,6 +121,7 @@ export function SessionCommentSection({
               onDelete={onDeleteComment}
               onReply={onAddReply}
               isSubmittingReply={isPosting}
+              mentionSource={mentionSource}
             />
           ))}
           {hasMore && (

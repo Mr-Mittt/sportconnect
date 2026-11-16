@@ -18,7 +18,7 @@ describe('SessionCommentComposer', () => {
     await user.type(input, 'Nice one!');
     await user.click(screen.getByRole('button', { name: 'Post comment' }));
     expect(onAddComment).toHaveBeenCalledWith('Nice one!');
-    expect(input).toHaveValue('');
+    expect(input).toBeEmptyDOMElement();
   });
 
   it('submits on Enter', async () => {

@@ -1,8 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
+import type { Segment } from '@/shared/lib/mentionMarkup';
 import {
   commandNameOf,
+  commandText,
   mentionPlayers,
   parseCommand,
   type CommandIssue,
@@ -35,7 +37,7 @@ export interface RecordCommandsData {
    * either refused locally (`accepted: false`, a notice says why, the text should stay in the box) or sent
    * (`accepted: true`, the box clears; a failure shows up as a notice later).
    */
-  run: (text: string) => { handled: boolean; accepted: boolean };
+  run: (draft: Segment[]) => { handled: boolean; accepted: boolean };
   isRunning: boolean;
   notices: RecordCommandNotice[];
 }
@@ -119,7 +121,9 @@ export function useRecordCommands(
   );
 
   const run = useCallback(
-    (text: string) => {
+    (draft: Segment[]) => {
+      // The players are read from the chips' ids (CLIENT-GL-50); a name typed without being picked is no player.
+      const text = commandText(draft);
       if (!available || schema === null || commandNameOf(text) === null) {
         return { handled: false, accepted: false };
       }

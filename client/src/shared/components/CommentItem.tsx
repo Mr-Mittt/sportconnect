@@ -9,8 +9,11 @@ import {
   IconX,
 } from '@tabler/icons-react';
 import i18next from 'i18next';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_COMMENT_LENGTH, type Comment } from '@/features/feed/types';
+import { MentionInput, type MentionDraft, type MentionInputHandle, type MentionSource } from '@/shared/components/MentionInput';
+import { MentionText } from '@/shared/components/MentionText';
+import { isEmptyDraft, serialize, trimSegments } from '@/shared/lib/mentionMarkup';
 import { formatRelativeTime } from '@/shared/lib/relativeTime';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
@@ -43,6 +46,9 @@ interface CommentItemProps {
    * copy (`sharedComponents.commentItem.*`) for a specific caller. No current caller passes
    * this. */
   i18nOverridePrefix?: string;
+  /** CLIENT-GL-50: session comments only. With it the comment text draws its `@[Name](id)` tags as chips and the reply
+   * box is a chip composer offering these people; without it (Post comments) both stay plain text. */
+  mentionSource?: MentionSource;
 }
 
 function initialsFor(fullName: string): string {
@@ -104,6 +110,7 @@ export function CommentItem({
   isSubmittingReply,
   onHashtagClick,
   i18nOverridePrefix,
+  mentionSource,
 }: CommentItemProps) {
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [showReplyBox, setShowReplyBox] = useState(false);
@@ -114,11 +121,33 @@ export function CommentItem({
   useEffect(() => {
     if (showReplyBox) replyInput.current?.focus();
   }, [showReplyBox]);
+  // CLIENT-GL-50: the chip reply box (session comments).
+  const [replyDraft, setReplyDraft] = useState<MentionDraft>({ segments: [], stored: '', plain: '' });
+  const [replyQuery, setReplyQuery] = useState<string | null>(null);
+  const onSourceQuery = mentionSource?.onQueryChange;
+  // Only an open reply box talks to the shared source: every comment of the thread mounts one of these, and a closed
+  // one must not reset what the composer (or another reply box) is searching for.
+  useEffect(() => {
+    if (!showReplyBox) return undefined;
+    onSourceQuery?.(replyQuery);
+    return () => onSourceQuery?.(null);
+  }, [onSourceQuery, replyQuery, showReplyBox]);
+  const sourceOptions = mentionSource?.options;
+  const replyOptions = useMemo(() => {
+    if (replyQuery === null) return [];
+    const tagged = new Set(replyDraft.segments.flatMap((segment) => (segment.kind === 'mention' ? [segment.userId] : [])));
+    return (sourceOptions ?? []).filter((person) => !tagged.has(person.id));
+  }, [replyQuery, replyDraft.segments, sourceOptions]);
+  const replyHandle = useRef<MentionInputHandle>(null);
   const closeReply = () => {
     setReplyContent('');
+    setReplyDraft({ segments: [], stored: '', plain: '' });
+    setReplyQuery(null);
     setReplyTouched(false);
     setShowReplyBox(false);
   };
+  const replyIsEmpty =
+    mentionSource === undefined ? replyContent.trim().length === 0 : isEmptyDraft(replyDraft.segments);
 
   const isOwnComment = currentUserId !== undefined && comment.userId === currentUserId;
   const canReply = comment.parentCommentId === null;
@@ -149,9 +178,8 @@ export function CommentItem({
   }
 
   const submitReply = () => {
-    const trimmed = replyContent.trim();
-    if (trimmed.length === 0) return;
-    onReply(comment.id, trimmed);
+    if (replyIsEmpty) return;
+    onReply(comment.id, mentionSource === undefined ? replyContent.trim() : serialize(trimSegments(replyDraft.segments)));
     closeReply();
   };
 
@@ -217,7 +245,9 @@ export function CommentItem({
                 </DropdownMenu>
               )}
             </div>
-            {onHashtagClick !== undefined ? (
+            {mentionSource !== undefined ? (
+              <MentionText text={comment.content} className="text-2sm text-text-primary" />
+            ) : onHashtagClick !== undefined ? (
               <HashtagText
                 text={comment.content}
                 onHashtagClick={onHashtagClick}
@@ -249,27 +279,49 @@ export function CommentItem({
                   {currentUser !== undefined ? initialsFor(currentUser.fullName) : ''}
                 </AvatarFallback>
               </Avatar>
-              <input
-                ref={replyInput}
-                type="text"
-                value={replyContent}
-                onChange={(event) => {
-                  setReplyContent(event.target.value.slice(0, MAX_COMMENT_LENGTH));
-                  setReplyTouched(true);
-                }}
-                // Leaving the box without ever typing closes it.
-                onBlur={() => {
-                  if (!replyTouched) closeReply();
-                }}
-                placeholder={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
-                aria-label={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
-                maxLength={MAX_COMMENT_LENGTH}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') submitReply();
-                }}
-                className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-              />
-              {replyContent.trim().length === 0 ? (
+              {mentionSource !== undefined ? (
+                <MentionInput
+                  ref={replyHandle}
+                  focusOnMount
+                  ariaLabel={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
+                  placeholder={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
+                  maxLength={MAX_COMMENT_LENGTH}
+                  options={replyOptions}
+                  pickerLabel={t('commentItem.mentionLabel')}
+                  onQueryChange={setReplyQuery}
+                  onChange={(draft) => {
+                    setReplyDraft(draft);
+                    setReplyTouched(true);
+                  }}
+                  onSubmit={submitReply}
+                  // Leaving the box without ever typing closes it.
+                  onBlur={() => {
+                    if (!replyTouched) closeReply();
+                  }}
+                />
+              ) : (
+                <input
+                  ref={replyInput}
+                  type="text"
+                  value={replyContent}
+                  onChange={(event) => {
+                    setReplyContent(event.target.value.slice(0, MAX_COMMENT_LENGTH));
+                    setReplyTouched(true);
+                  }}
+                  // Leaving the box without ever typing closes it.
+                  onBlur={() => {
+                    if (!replyTouched) closeReply();
+                  }}
+                  placeholder={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
+                  aria-label={t('commentItem.replyPlaceholder', { name: comment.userFullName })}
+                  maxLength={MAX_COMMENT_LENGTH}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') submitReply();
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                />
+              )}
+              {replyIsEmpty ? (
                 // Nothing to send: the button is the red X that closes the box.
                 <button
                   type="button"
@@ -312,6 +364,7 @@ export function CommentItem({
                   isSubmittingReply={isSubmittingReply}
                   onHashtagClick={onHashtagClick}
                   i18nOverridePrefix={i18nOverridePrefix}
+                  mentionSource={mentionSource}
                 />
               ))}
             </div>

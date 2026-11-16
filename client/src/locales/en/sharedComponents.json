@@ -40,7 +40,8 @@
     "reply": "Reply",
     "replyPlaceholder": "Reply to {{name}}",
     "cancelReply": "Cancel reply",
-    "post": "Post"
+    "post": "Post",
+    "mentionLabel": "People you can tag"
   },
   "createPostForm": {
     "placeholderWithName": "What's on your mind, {{firstName}}?",
@@ -148,5 +149,9 @@
     "moveDown": "Move {{label}} down",
     "selectedPosition": "{{label}} (selected, position {{index}})",
     "nothingOnProfile": "Nothing on your profile to pick from — use “Other…”."
+  },
+  "mention": {
+    "chipLabel": "Mention: {{name}}",
+    "lengthCounter": "{{count}} / {{max}}"
   }
 }

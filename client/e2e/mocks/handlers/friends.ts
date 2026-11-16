@@ -24,6 +24,7 @@ import {
   mockVerificationCode,
   mockExpiredCode,
 } from '../fixtures.ts';
+import { matchesName } from '../../../src/shared/lib/nameMatch.ts';
 import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 import { rejectProof } from './auth.ts';
@@ -248,7 +249,8 @@ export const friendHandlers: HttpHandler[] = [
     const session = friendsSessions.get(sessionIdFromRequest(request));
     const results = Object.values(KNOWN_USERS)
       .filter((user) => user.id !== mockUser.id)
-      .filter((user) => user.fullName.toLowerCase().includes(keyword.trim().toLowerCase()))
+      // The server's one name rule (SESSION-GL-64): first and last name, word-start, accent-insensitive; no username.
+      .filter((user) => matchesName(user.fullName, keyword))
       .map((user) => ({
         id: user.id,
         fullName: user.fullName,

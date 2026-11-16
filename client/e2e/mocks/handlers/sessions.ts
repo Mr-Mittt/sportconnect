@@ -25,6 +25,7 @@ import {
   mockUserInvitedRow,
   mockUserRequestedRow,
 } from '../fixtures.ts';
+import { matchesName } from '../../../src/shared/lib/nameMatch.ts';
 import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
 
@@ -1255,6 +1256,27 @@ export const sessionHandlers: HttpHandler[] = [
     return HttpResponse.json(
       apiResponse(mockPageResponse(session.commentsState[sessionId] ?? []), 'Comments retrieved successfully'),
     );
+  }),
+
+  // CLIENT-GL-50 (SESSION-GL-64): the people an `@` in a comment offers: the session's JOINED, REQUESTED and INVITED
+  // participants, matched on name with the server's rule, `size` 5 by default and at most 20. This mock does not model a
+  // group session's other members or the 403 for a stranger (both are IT-tested server-side).
+  http.get('/api/sessions/:sessionId/thread-people', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const url = new URL(request.url);
+    const query = url.searchParams.get('q') ?? '';
+    const asked = Number(url.searchParams.get('size') ?? 5);
+    const size = Math.min(Math.max(Number.isFinite(asked) ? Math.trunc(asked) : 5, 1), 20);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    ensureResultsFriend(session, request);
+    const people = (session.participantsState[sessionId] ?? [])
+      .filter((p) => ['JOINED', 'REQUESTED', 'INVITED'].includes(p.status) && matchesName(p.userFullName, query))
+      .sort((a, b) => a.userFullName.localeCompare(b.userFullName))
+      .slice(0, size)
+      .map((p) => ({ userId: p.userId, fullName: p.userFullName, avatarUrl: p.userAvatarUrl }));
+    return HttpResponse.json(apiResponse(people, 'People retrieved successfully'));
   }),
 
   http.post('/api/sessions/:sessionId/comments', async ({ request, params }) => {

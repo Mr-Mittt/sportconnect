@@ -7,6 +7,7 @@ import {
   type TeamData,
 } from './recordData';
 import type { RecordSchema } from './recordSchema';
+import type { Segment } from '@/shared/lib/mentionMarkup';
 import type { RecordData, SessionRecord } from './resultTypes';
 
 /*
@@ -23,6 +24,32 @@ import type { RecordData, SessionRecord } from './resultTypes';
  * swaps a team typed on the wrong side, as the dialog does). The record id is the real id the Result section's copy
  * button puts on the clipboard. Players are `@` plus the full name the record dialog shows (picked from the `@` list).
  */
+
+/** A tag chip inside a command text: `CHIP_OPEN id CHIP_NAME name CHIP_CLOSE` (private-use characters, never typed). */
+const CHIP_OPEN = '\uE000';
+const CHIP_NAME = '\uE002';
+const CHIP_CLOSE = '\uE001';
+const CHIP_PATTERN = /^\uE000([^\uE002]*)\uE002([^\uE001]*)\uE001/;
+
+/** The name part of a chip token is URI-encoded, so a name can never contain a blank or the word `vs` the parser splits on. */
+function decodeName(encoded: string): string {
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return encoded;
+  }
+}
+
+/** The text the command parser reads for a draft: typed text as it is, each tag chip as an id token. */
+export function commandText(segments: Segment[]): string {
+  return segments
+    .map((segment) =>
+      segment.kind === 'text'
+        ? segment.text
+        : `${CHIP_OPEN}${segment.userId}${CHIP_NAME}${encodeURIComponent(segment.name)}${CHIP_CLOSE}`,
+    )
+    .join('');
+}
 
 export type CommandName = 'add' | 'upd' | 'del';
 
@@ -109,14 +136,8 @@ interface SideRead {
   issues: CommandIssue[];
 }
 
-/** Longest token first, so `Ann Lee` is tried before `Ann`. */
-function tokensLongestFirst(players: MentionPlayer[]): MentionPlayer[] {
-  return [...players].sort((a, b) => b.token.length - a.token.length);
-}
-
 function readSide(text: string, side: 'left' | 'right', context: CommandContext, team: 1 | 2): SideRead {
   const read: SideRead = { players: [], scores: [], issues: [] };
-  const candidates = tokensLongestFirst(context.players);
   let rest = text.trim();
   let sawScore = false;
   let sawPlayer = false;
@@ -124,34 +145,29 @@ function readSide(text: string, side: 'left' | 'right', context: CommandContext,
     read.issues.push({ code, team, ...(quoted === undefined ? {} : { text: quoted }) });
 
   while (rest.length > 0) {
-    if (rest.startsWith('@')) {
-      const typed = normalize(rest.slice(1));
-      const hit = candidates.find((player) => {
-        const token = normalize(player.token);
-        return typed.startsWith(token) && (typed.length === token.length || /\s/.test(typed[token.length]));
-      });
+    if (rest.startsWith(CHIP_OPEN)) {
+      // A tag chip names its person by id: no name matching, so "Bao" and "Bao 15" can never be mixed up.
+      const chip = CHIP_PATTERN.exec(rest);
+      const chipText = chip === null ? rest.slice(1) : chip[0];
+      const hit = chip === null ? undefined : context.players.find((player) => player.id === chip[1]);
       if (hit === undefined) {
-        // A full name several participants share is only reachable with its `(n)` suffix.
-        const shared = context.players.find((player) => {
-          const name = normalize(player.name);
-          return (
-            player.token !== player.name &&
-            typed.startsWith(name) &&
-            (typed.length === name.length || /\s/.test(typed[name.length]))
-          );
-        });
-        const quoted = shared !== undefined ? shared.name : (/^\S+/.exec(rest.slice(1))?.[0] ?? '');
-        issue(shared !== undefined ? 'PLAYER_AMBIGUOUS' : 'PLAYER_UNKNOWN', quoted);
+        issue('PLAYER_UNKNOWN', chip === null ? '' : decodeName(chip[2]));
         sawPlayer = true;
-        // Skip the unreadable word and keep reading, so one typo does not hide the next one.
-        rest = rest.replace(/^@\S*\s*/, '');
-        continue;
+      } else {
+        if (side === 'left' && sawScore) issue('TEXT_UNEXPECTED', `@${hit.name}`);
+        else if (read.players.includes(hit.id)) issue('PLAYER_REPEATED', hit.name);
+        else read.players.push(hit.id);
+        sawPlayer = true;
       }
-      if (side === 'left' && sawScore) issue('TEXT_UNEXPECTED', `@${hit.token}`);
-      else if (read.players.includes(hit.id)) issue('PLAYER_REPEATED', hit.name);
-      else read.players.push(hit.id);
+      rest = rest.slice(chipText.length).trimStart();
+      continue;
+    }
+    if (rest.startsWith('@')) {
+      // An `@name` typed or pasted without being picked is not a player: the command is refused.
+      const quoted = /^@\S*/.exec(rest)?.[0].slice(1) ?? '';
+      issue('PLAYER_UNKNOWN', quoted);
       sawPlayer = true;
-      rest = rest.slice(1 + hit.token.length).trimStart();
+      rest = rest.replace(/^@\S*\s*/, '');
       continue;
     }
     const score = /^(\d+(?:,\d+)*)(?=\s|$)/.exec(rest);

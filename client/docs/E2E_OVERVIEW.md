@@ -230,6 +230,7 @@ e2e/
     matches-journey.spec.ts   # CLIENT-SESSION-1/CLIENT-SESSION-4/CLIENT-SESSION-5/CLIENT-SESSION-6/CLIENT-SESSION-8/CLIENT-SESSION-9/CLIENT-SESSION-17/CLIENT-SESSION-22/CLIENT-SESSION-23
     session-form-layout.spec.ts # CLIENT-SESSION-34
     session-results.spec.ts   # CLIENT-GL-38, CLIENT-GL-39
+    session-thread-tags.spec.ts # CLIENT-GL-50
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
@@ -1208,12 +1209,33 @@ Second test (CLIENT-GL-39, record commands in the thread; `resultsRecords` seeds
 | Step | What it does | Why it exists |
 |---|---|---|
 | 1. hints | `:` lists the three command templates, `:a` only `:add`, plain text none | The hint list follows the first word and only shows for a command candidate. |
-| 2. invalid command | `:add @Nobody 21 vs 15 @Priya Shah` → a caller-only line "Side 1: “Nobody” isn't a player in this session…", the text stays in the box, nothing is posted | A refused command keeps its text and posts no comment. |
-| 3. valid `:add` | `:add @Jordan Lee 21 vs 15 @Priya Shah` → the box clears, "Results (3)", no comment with that text | The same change set as the dialog reaches the mock server; a command is never a comment. |
+| 2. invalid command | `:add @Nobody 21 vs 15` (a name typed, not picked) → a caller-only line "Side 1: “Nobody” isn't a player in this session…", the text stays in the box, nothing is posted | A refused command keeps its text and posts no comment; a player is a picked chip (CLIENT-GL-50), a typed name is not one. |
+| 3. valid `:add` | Type `:add @Jord` + Enter (picks the chip), `21 vs 15 @Priy` + Enter, Enter → two chips, the box clears, "Results (3)", no comment with that text | The same change set as the dialog reaches the mock server; a command is never a comment. |
 | 4. copy id, `:del` | The copy button puts the real record id on the clipboard (digits), `:del <id>` → "Results (2)" | The id the button gives is the one `:del` takes. |
 | 5. notices reset | `:del 99999` → "There is no game with id 99999."; close the modal, open it again → no notice | The caller-only line lives only while the modal is open. |
 
 The "my results" switch has no e2e step (every seeded game has both players); Vitest covers it.
+
+### `e2e/flows/session-thread-tags.spec.ts` (CLIENT-GL-50, 2 `test()`s: 6 steps and 3 steps)
+
+The chip composer of the session thread. `resultsOngoing` (first test) and `resultsRecords` (second) make the Pickleball fixture "Sunday pickup run" ONGOING with Jordan Lee (the caller) and Priya Shah JOINED; the mock `GET /sessions/{id}/thread-people` follows SESSION-GL-64's name rule over the participants. Caret and Backspace over a chip can only be proven in a browser, so they live here and not in Vitest. The clipboard permission is granted.
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| 1. the list | `@shah` lists "Priya Shah" (a later word), `@iya` lists nobody (the middle of a word) | The picker follows the app name rule (word-start, accent-insensitive). |
+| 2. pick | `hi @pri` → wait for the list → Enter → one chip "Mention: Priya Shah", the box reads `hi @Priya Shah` | A pick is a chip that shows the name only. |
+| 2b. copy | Ctrl+A, Ctrl+C in the box → the clipboard holds `hi @Priya Shah` | Copying a chip gives the plain `@Full Name`, never the id. |
+| 3. Backspace | Backspace removes the blank, the next one removes the whole chip | A chip goes whole. |
+| 4. post | Tag again, type, Enter → the thread shows the chip and `hi @Priya Shah see you at 7`, no `](` anywhere; double-click the chip and copy → no id on the clipboard | The stored `@[Name](id)` is drawn as a chip; the id is never on screen or in a copy. |
+| 5. reply | Reply → `thanks @jor` → Jordan Lee listed → Enter, Enter → the reply shows the chip | The reply box is a chip composer with the same list, and a reply row draws its tags. |
+
+Second test (a pasted record command; `resultsRecords` seeds two games):
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| 1. paste | Paste `:add @Jordan Lee 21 vs 15 @Priya Shah ` (a `paste` event with text/plain) → "Jordan Lee" is a chip, the last `@Priya Shah` keeps no trailing blank and the "Players" list is open for it | A pasted command resolves its names to chips; the last `@` word is left to the picker. |
+| 2. send | Enter picks Priya, Enter sends → "Results (3)", no comment | A command built from chips logs a game. |
+| 3. unknown name | Paste `:add @Nobody 21 vs 15 @Priya Shah 3 ` → Enter → "isn't a player in this session" | A name nobody has stays plain text and the command is refused. |
 
 ### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
 

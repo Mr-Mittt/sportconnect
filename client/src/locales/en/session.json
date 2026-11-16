@@ -97,7 +97,8 @@
         "SCORE_FORMAT": "“{{text}}” has more scores than this sport records.",
         "EXTRA_TEXT": "Nothing can follow the id (“{{text}}”)."
       }
-    }
+    },
+    "tagLabel": "People you can tag"
   },
   "upcoming": {
     "title": "Upcoming sessions",
@@ -355,7 +356,6 @@
       "remove": "Remove {{name}}",
       "placeholder": "Search friends by name…",
       "searchLabel": "Search friends to invite",
-      "minChars": "Type at least {{min}} characters to search.",
       "noResults": "No friends found."
     },
     "autoApprove": {

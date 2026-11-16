@@ -69,31 +69,37 @@ describe('SessionCommentComposer record commands', () => {
     const { user, input } = setup();
     await user.type(input, ':');
     await user.click(screen.getByText(/^:del/));
-    expect(input).toHaveValue(':del ');
+    expect(input.textContent).toBe(':del ');
   });
 
-  it('hands a command to run and never posts it as a comment; the box clears when it was sent', async () => {
+  it('hands a command to run with the picked players as chips, never posts it, and clears the box once it was sent', async () => {
     const { user, input, onAddComment, run } = setup();
-    await user.type(input, ':add @Bao 21 vs 15 @An{Enter}');
-    expect(run).toHaveBeenCalledWith(':add @Bao 21 vs 15 @An');
+    await user.type(input, ':add @Ba{Enter}');
+    await user.type(input, '21 vs 15 @An{Enter}');
+    await user.keyboard('{Enter}');
+    expect(run).toHaveBeenCalledWith([
+      { kind: 'text', text: ':add ' },
+      { kind: 'mention', userId: 'u-bao', name: 'Bao' },
+      { kind: 'text', text: ' 21 vs 15 ' },
+      { kind: 'mention', userId: 'u-an', name: 'An' },
+    ]);
     expect(onAddComment).not.toHaveBeenCalled();
-    expect(input).toHaveValue('');
+    expect(input).toBeEmptyDOMElement();
   });
 
   it('keeps the text of a command that was refused so it can be fixed', async () => {
-    const { user, input, onAddComment } = setup(() => ({ handled: true, accepted: false }));
-    await user.type(input, ':add @Bao{Enter}');
+    const { user, input, onAddComment, run } = setup(() => ({ handled: true, accepted: false }));
+    await user.type(input, ':add hello{Enter}');
+    expect(run).toHaveBeenCalled();
     expect(onAddComment).not.toHaveBeenCalled();
-    expect(input).toHaveValue(':add @Bao');
+    expect(input.textContent).toBe(':add hello');
   });
 
   it('posts a text that is not a command as a normal comment', async () => {
-    const { user, input, onAddComment } = setup((text) =>
-      /^:add(\s|$)/.test(text) ? { handled: true, accepted: true } : { handled: false, accepted: false },
-    );
+    const { user, input, onAddComment } = setup(() => ({ handled: false, accepted: false }));
     await user.type(input, ':added yesterday{Enter}');
     expect(onAddComment).toHaveBeenCalledWith(':added yesterday');
-    expect(input).toHaveValue('');
+    expect(input).toBeEmptyDOMElement();
   });
 
   it('offers the players for an @ word and inserts the picked one', async () => {
@@ -105,7 +111,7 @@ describe('SessionCommentComposer record commands', () => {
     expect(screen.getByRole('option', { name: 'Anh Tuấn' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Bao' })).toBeNull();
     await user.click(screen.getByRole('option', { name: 'Anh Tuấn' }));
-    expect(input).toHaveValue(':add @Anh Tuấn ');
+    expect(input.textContent).toBe(':add @Anh Tuấn ');
     expect(screen.queryByRole('listbox', { name: 'Players' })).toBeNull();
   });
 
@@ -113,7 +119,7 @@ describe('SessionCommentComposer record commands', () => {
     const { user, input, run } = setup();
     await user.type(input, ':add @A');
     await user.keyboard('{ArrowDown}{Enter}');
-    expect(input).toHaveValue(':add @Anh Tuấn ');
+    expect(input.textContent).toBe(':add @Anh Tuấn ');
     expect(run).not.toHaveBeenCalled();
 
     await user.type(input, '1 vs @');

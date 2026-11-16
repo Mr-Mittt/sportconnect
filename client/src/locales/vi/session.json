@@ -97,7 +97,8 @@
         "SCORE_FORMAT": "“{{text}}” có nhiều điểm hơn số điểm môn này ghi nhận.",
         "EXTRA_TEXT": "Không thể có thêm gì sau id (“{{text}}”)."
       }
-    }
+    },
+    "tagLabel": "Người có thể gắn thẻ"
   },
   "upcoming": {
     "title": "Buổi chơi sắp tới",
@@ -355,7 +356,6 @@
       "remove": "Xóa {{name}}",
       "placeholder": "Tìm bạn bè theo tên…",
       "searchLabel": "Tìm bạn bè để mời",
-      "minChars": "Nhập ít nhất {{min}} ký tự để tìm kiếm.",
       "noResults": "Không tìm thấy bạn bè nào."
     },
     "autoApprove": {

@@ -19,6 +19,7 @@ import { RequiredMark } from '@/shared/components/RequiredMark';
 import { SportAttributesFields } from '@/shared/components/SportAttributesFields';
 import { hasEditedAttributeValues } from '@/shared/components/attributeFields/defaults';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
+import { matchesName } from '@/shared/lib/nameMatch';
 import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { formatGameMood, GAME_MOOD_DEFAULT } from '@/shared/lib/gameMood';
@@ -35,8 +36,6 @@ import { AutoApproveConfirmDialog, LeaveWithoutSavingDialog, SessionReadinessDia
 import { SectionSummary, SessionFormSection, type SectionSummaryItem } from './SessionFormSection';
 import { CostFields, OverviewFields, WhenFields, WhereFields, WhoFields } from './SessionSectionFields';
 import { EmptyHint } from '@/shared/components/EmptyHint';
-
-const INVITE_SEARCH_MIN_LENGTH = 3;
 
 type SectionKey = 'overview' | 'when' | 'where' | 'who' | 'cost' | 'detail';
 const ALL_SECTIONS_OPEN: Record<SectionKey, boolean> = {
@@ -58,7 +57,8 @@ function initialsFor(fullName: string): string {
     .toUpperCase();
 }
 
-/** CLIENT-SESSION-4's "Invite your friend" — client-side fullname filter (3+ characters) over the
+/** CLIENT-SESSION-4's "Invite your friend" — client-side fullname filter (CLIENT-GL-50: the app's name rule, from the first
+ * character) over the
  * full `useFriends()` list (no new search endpoint), dismissible selected badges above a plain
  * input, and a plain non-portaled inline result list below it. Deliberately never a Popover/
  * DropdownMenu: both silently failed to open when nested inside this modal's own Dialog
@@ -84,13 +84,11 @@ function InviteFriendField({
   const [query, setQuery] = useState('');
   const selectedIds = new Set(selected.map((friend) => friend.id));
   const trimmedQuery = query.trim();
+  // CLIENT-GL-50: the app's one name rule (word-start, accent-insensitive; `matchesName`) from the first character: the
+  // whole friend list is already here, so there is nothing to save by waiting for three characters.
   const results =
-    trimmedQuery.length >= INVITE_SEARCH_MIN_LENGTH
-      ? friends.filter(
-          (friend) =>
-            !selectedIds.has(friend.id) &&
-            friend.fullName.toLowerCase().includes(trimmedQuery.toLowerCase()),
-        )
+    trimmedQuery.length > 0
+      ? friends.filter((friend) => !selectedIds.has(friend.id) && matchesName(friend.fullName, trimmedQuery))
       : [];
 
   return (
@@ -121,10 +119,7 @@ function InviteFriendField({
         placeholder={t('create.invite.placeholder')}
         aria-label={t('create.invite.searchLabel')}
       />
-      {trimmedQuery.length > 0 && trimmedQuery.length < INVITE_SEARCH_MIN_LENGTH && (
-        <p className="text-2xs text-text-muted">{t('create.invite.minChars', { min: INVITE_SEARCH_MIN_LENGTH })}</p>
-      )}
-      {trimmedQuery.length >= INVITE_SEARCH_MIN_LENGTH &&
+      {trimmedQuery.length > 0 &&
         (isFriendsLoading ? (
           <p className="text-2xs text-text-muted">{t('common.loading')}</p>
         ) : results.length === 0 ? (

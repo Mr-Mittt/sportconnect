@@ -36,6 +36,7 @@ import { Input } from '@/shared/ui/input';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant, UpdateSessionPayload } from '../types';
+import type { MentionSource } from '@/shared/components/MentionInput';
 import { SessionCommentSection } from './SessionCommentSection';
 import { SessionReadinessDialog } from './SessionConfirmDialogs';
 import { SessionDetailSections, type CompletionFavorites } from './SessionDetailSections';
@@ -160,6 +161,8 @@ interface SessionDetailModalProps {
   isPostingComment: boolean;
   onDeleteComment: (comment: Comment) => void;
   onToggleCommentLike: (comment: Comment) => void;
+  /** CLIENT-GL-50: the people an `@` in a comment or reply offers. */
+  mentionSource?: MentionSource;
 }
 
 function initialsFor(fullName: string): string {
@@ -460,6 +463,7 @@ export function SessionDetailModal({
   isPostingComment,
   onDeleteComment,
   onToggleCommentLike,
+  mentionSource,
   i18nOverridePrefix,
 }: SessionDetailModalProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -959,6 +963,7 @@ export function SessionDetailModal({
                   isPosting={isPostingComment}
                   onDeleteComment={onDeleteComment}
                   onToggleCommentLike={onToggleCommentLike}
+                  mentionSource={mentionSource}
                   commands={recordCommands}
                   notices={recordCommands?.notices}
                 />

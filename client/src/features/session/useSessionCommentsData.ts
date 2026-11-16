@@ -1,10 +1,13 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import type { MentionSource } from '@/shared/components/MentionInput';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { getApiError } from '@/shared/lib/apiError';
 import type { Comment } from '@/features/feed/types';
 import { useCreateSessionComment } from './hooks/useCreateSessionComment';
 import { useDeleteSessionComment } from './hooks/useDeleteSessionComment';
 import { useLikeSessionComment } from './hooks/useLikeSessionComment';
 import { useSessionComments } from './hooks/useSessionComments';
+import { useThreadPeople } from './hooks/useThreadPeople';
 import { useUnlikeSessionComment } from './hooks/useUnlikeSessionComment';
 
 /**
@@ -22,6 +25,27 @@ export function useSessionCommentsData(sessionId: number | undefined, isOpen: bo
   const deleteMutation = useDeleteSessionComment();
   const likeMutation = useLikeSessionComment();
   const unlikeMutation = useUnlikeSessionComment();
+
+  // CLIENT-GL-50: the people an `@` in a comment or reply offers (SESSION-GL-64). One query shared by both boxes: only one
+  // has the caret at a time, and it reports the word after its `@` (`null` = none, the call stays off).
+  const [peopleQuery, setPeopleQuery] = useState<string | null>(null);
+  const debouncedPeopleQuery = useDebouncedValue(peopleQuery, 150);
+  const peopleQueryResult = useThreadPeople(isOpen ? sessionId : undefined, peopleQuery === null ? null : debouncedPeopleQuery);
+  const mentionSource = useMemo<MentionSource>(
+    () => ({
+      options:
+        peopleQuery === null
+          ? []
+          : (peopleQueryResult.data ?? []).map((person) => ({
+              id: person.userId,
+              name: person.fullName,
+              label: person.fullName,
+              avatarUrl: person.avatarUrl,
+            })),
+      onQueryChange: setPeopleQuery,
+    }),
+    [peopleQuery, peopleQueryResult.data],
+  );
 
   const comments = useMemo(
     () => commentsQuery.data?.pages.flatMap((page) => page.content) ?? [],
@@ -75,5 +99,6 @@ export function useSessionCommentsData(sessionId: number | undefined, isOpen: bo
     isPostingComment: createMutation.isPending,
     onDeleteComment: deleteComment,
     onToggleCommentLike: toggleCommentLike,
+    mentionSource,
   };
 }

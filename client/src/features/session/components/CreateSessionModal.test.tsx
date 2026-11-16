@@ -785,16 +785,25 @@ describe('CreateSessionModal', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Enter the fee amount.');
   });
 
-  it('"Invite your friend" shows nothing below 3 characters, then filters the friends list', async () => {
+  it('"Invite your friend" filters the friends list from the first character, on the app name rule (CLIENT-GL-50)', async () => {
     const user = userEvent.setup();
     render(<CreateSessionModal {...baseProps} />);
 
     const search = screen.getByLabelText('Search friends to invite');
-    await user.type(search, 'Pr');
-    expect(screen.queryByRole('button', { name: /Priya Shah/ })).not.toBeInTheDocument();
-    expect(screen.getByText('Type at least 3 characters to search.')).toBeInTheDocument();
+    // No minimum length any more: one character already lists the friends whose name has a word starting with it.
+    expect(screen.queryByText(/at least 3 characters/)).not.toBeInTheDocument();
+    await user.type(search, 'p');
+    expect(screen.getByRole('button', { name: /Priya Shah/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Priyanka Rao/ })).toBeInTheDocument();
 
-    await user.type(search, 'iya S');
+    // Word-start only: the middle of a word is not a match ("ya" is inside Priya, it does not start any word).
+    await user.clear(search);
+    await user.type(search, 'ya');
+    expect(screen.queryByRole('button', { name: /Priya Shah/ })).not.toBeInTheDocument();
+
+    // A later word counts, every typed word has to match, and case does not matter.
+    await user.clear(search);
+    await user.type(search, 'SHA pri');
     expect(screen.getByRole('button', { name: /Priya Shah/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Priyanka Rao/ })).not.toBeInTheDocument();
   });
