@@ -25,6 +25,7 @@ import com.sportconnect.session.api.dto.SessionDiscoverDateCountsResponse;
 import com.sportconnect.session.api.dto.SessionHistoryDateCount;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
+import com.sportconnect.session.api.dto.ThreadPersonResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
@@ -75,10 +76,12 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1159,6 +1162,48 @@ public class SessionServiceImpl implements SessionService {
     public Page<CommentResponse> getSessionComments(Long sessionId, UUID callerId, Pageable pageable) {
         Session session = requireSessionAccess(sessionId, callerId);
         return commentService.getSessionPostComments(session.getPostId(), callerId, pageable);
+    }
+
+    /** SESSION-GL-64: what {@link #searchThreadPeople} returns when the caller sends no size, and the most it ever returns. */
+    static final int THREAD_PEOPLE_DEFAULT_SIZE = 5;
+    static final int THREAD_PEOPLE_MAX_SIZE = 20;
+
+    /** SESSION-GL-64: a longer typed query is cut (a name has far fewer characters; the user search caps its words too). */
+    private static final int THREAD_PEOPLE_MAX_QUERY_LENGTH = 100;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ThreadPersonResponse> searchThreadPeople(Long sessionId, UUID callerId, String query, Integer size) {
+        Session session = requireSessionAccess(sessionId, callerId);
+        int limit = size == null ? THREAD_PEOPLE_DEFAULT_SIZE : Math.max(1, Math.min(size, THREAD_PEOPLE_MAX_SIZE));
+        String typed = query != null && query.length() > THREAD_PEOPLE_MAX_QUERY_LENGTH
+                ? query.substring(0, THREAD_PEOPLE_MAX_QUERY_LENGTH)
+                : query;
+
+        // Tier 1: the people in the session (the same statuses SessionGate lets read the thread).
+        List<UUID> participantIds = sessionParticipantRepository.findBySessionIdAndStatusIn(
+                        sessionId, List.of(ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED))
+                .stream().map(SessionParticipant::getUserId).distinct().toList();
+        List<UserSummaryResponse> people = new ArrayList<>(userService.searchUserSummaries(participantIds, typed, limit));
+
+        // Tier 2: a group session's other members, only for what tier 1 left free. A participant who did not match is not
+        // searched again as a member: same person, same name, same rule.
+        if (people.size() < limit && session.getGroupId() != null) {
+            Set<UUID> inSession = new HashSet<>(participantIds);
+            List<UUID> otherMembers = groupService.getMemberUserIds(session.getGroupId()).stream()
+                    .filter(memberId -> !inSession.contains(memberId))
+                    .distinct()
+                    .toList();
+            people.addAll(userService.searchUserSummaries(otherMembers, typed, limit - people.size()));
+        }
+
+        return people.stream()
+                .map(person -> ThreadPersonResponse.builder()
+                        .userId(person.getId())
+                        .fullName(person.getFullName())
+                        .avatarUrl(person.getAvatarUrl())
+                        .build())
+                .toList();
     }
 
     @Override

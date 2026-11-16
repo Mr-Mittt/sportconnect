@@ -14,6 +14,7 @@ import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.StartTimeFilter;
+import com.sportconnect.session.api.dto.ThreadPersonResponse;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.social.post.api.dto.CommentResponse;
@@ -450,6 +451,24 @@ public class SessionController {
         Page<CommentResponse> response = sessionService.getSessionComments(
                 sessionId, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success("Comments retrieved successfully", response));
+    }
+
+    @Operation(summary = "Search the people who can see a session's thread", description = "SESSION-GL-64 — for tagging in comments. Participants (JOINED/REQUESTED/INVITED) and, for a group session, the group's members; same gating as getSessionComments. q matches the start of a first or last name word (accent- and case-insensitive); size defaults to 5, at most 20.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "People (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a participant or group member"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
+    })
+    @GetMapping("/{sessionId}/thread-people")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<List<ThreadPersonResponse>>> searchThreadPeople(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "size", required = false) Integer size,
+            Authentication authentication) {
+        List<ThreadPersonResponse> response = sessionService.searchThreadPeople(
+                sessionId, SecurityUtils.extractUserId(authentication), query, size);
+        return ResponseEntity.ok(ApiResponse.success("People retrieved successfully", response));
     }
 
     @Operation(summary = "Comment on a session", description = "Same gating as getSessionComments.")

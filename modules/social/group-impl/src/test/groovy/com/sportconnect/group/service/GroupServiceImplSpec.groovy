@@ -959,6 +959,28 @@ class GroupServiceImplSpec extends Specification {
         result == false
     }
 
+    def "getMemberUserIds returns the ids of every member of an active group in one repository call"() {
+        given:
+        def ids = [UUID.randomUUID(), UUID.randomUUID()]
+
+        when:
+        def result = groupService.getMemberUserIds(testGroup.id)
+
+        then:
+        1 * groupMemberRepository.findUserIdsByGroupId(testGroup.id) >> ids
+        result == ids
+    }
+
+    def "getMemberUserIds returns nothing for a soft-deleted group, without reading its members"() {
+        when:
+        def result = groupService.getMemberUserIds(testGroup.id)
+
+        then:
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+        0 * groupMemberRepository.findUserIdsByGroupId(_)
+        result == []
+    }
+
     def "isGroupActive should return true for an active group"() {
         when: "checking group activity"
         def result = groupService.isGroupActive(testGroup.id)

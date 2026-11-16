@@ -11,6 +11,7 @@ import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.StartTimeFilter;
+import com.sportconnect.session.api.dto.ThreadPersonResponse;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
@@ -396,6 +397,23 @@ public interface SessionService {
 
     /** Same authorization/delegation contract as {@link #createSessionComment}. */
     Page<CommentResponse> getSessionComments(Long sessionId, UUID callerId, Pageable pageable);
+
+    /**
+     * SESSION-GL-64 — searches the people who can see this session's thread, for the {@code @} tag picker. The people are
+     * the {@code JOINED}, {@code REQUESTED} and {@code INVITED} participants and, for a group session, the group's members
+     * (the same people {@code SessionGate} lets read the thread); the caller may be in the list. The name rule is the
+     * app's one (see {@link com.sportconnect.user.api.service.UserService#searchUserSummaries}): first and last name,
+     * word-start, case- and accent-insensitive. Participants come before group members; within each, best match first.
+     *
+     * <p>Same authorization as {@link #getSessionComments}: {@code ResourceNotFoundException} ({@code SESSION_NOT_FOUND})
+     * if the session does not exist or its group is inactive, {@code ForbiddenException} ({@code SESSION_FORBIDDEN}) if
+     * {@code callerId} may not read the thread.
+     *
+     * @param query the typed text after the {@code @}; {@code null} or blank lists the first people
+     * @param size  how many to return; {@code null} means 5, a larger value is cut to 20, below 1 means 1
+     * @return at most the clamped size, each person once; never {@code null}
+     */
+    List<ThreadPersonResponse> searchThreadPeople(Long sessionId, UUID callerId, String query, Integer size);
 
     /** Same authorization/delegation contract as {@link #createSessionComment}. */
     void likeSessionComment(Long sessionId, Long commentId, UUID userId);
