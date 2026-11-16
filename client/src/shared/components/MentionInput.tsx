@@ -107,7 +107,7 @@ function readNodes(parent: Node): Segment[] {
  * rewrites its text while the user types (an IME such as Vietnamese Telex is composing in it); it only reads it. It
  * rewrites it on a pick, a paste and a clear. The box shows only names; the id lives in the draft's `stored` text.
  *
- * The `@` list is drawn in place, not in a portal (a nested popover misbehaves inside the session modal); arrows move,
+ * The `@` list floats over what is below the box (absolute, not in a portal: a nested popover misbehaves inside the session modal), as wide as its longest name; arrows move,
  * Enter or Tab pick, Esc closes. Enter outside the list sends and never adds a line.
  */
 export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(function MentionInput(
@@ -382,7 +382,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   };
 
   return (
-    <div className={cn('flex min-w-0 flex-1 flex-col gap-1', className)}>
+    <div className={cn('relative flex min-w-0 flex-1 flex-col gap-1', className)}>
       <div
         ref={rootRef}
         role="textbox"
@@ -430,7 +430,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
           aria-label={pickerLabel}
           // Keep focus in the box while the pointer is on the list.
           onMouseDown={(event) => event.preventDefault()}
-          className="flex max-h-40 flex-col overflow-y-auto rounded-md border-hairline border-border-strong bg-surface-2 py-0.5"
+          className="absolute top-full left-0 z-20 mt-1 flex max-h-40 w-max max-w-72 min-w-32 flex-col overflow-y-auto rounded-md border-hairline border-border-strong bg-surface-2 py-0.5 shadow-md"
         >
           {listed.map((person, index) => (
             <li key={person.id} role="presentation">

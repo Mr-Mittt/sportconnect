@@ -1,6 +1,6 @@
 # CLIENT-GL-50 · Chip composer and tagging in the session thread
 
-**Status:** `DONE` (2026-11-16)
+**Status:** `IN PROGRESS` (part 1, the session thread, built 2026-11-16; part 2, posts, waits for the group member search)
 **Type:** Feature · **Depends on:** SESSION-GL-64 (the people search) · follows CLIENT-GL-39
 **Filed:** 2026-11-15, owner request after CLIENT-GL-39: a picked `@` name should show in the comment box as a chip (Backspace removes the whole name), and the `@` picker should work in normal comments too, like tagging people.
 
@@ -16,7 +16,7 @@ Inputs and outputs: in, the typed text and picked people; out, the comment text 
 
 **Scope change 2026-11-16 (owner, raised at SESSION-GL-64 pickup): one name-matching rule on the client too.** The app's name-search standard is first and last name only, word-start only, accent-insensitive, case-insensitive, every typed word matching the start of some word (SESSION-GL-64 states it). This ticket builds **one shared client matcher** for it (the `@` picker's `startsAWord` of CLIENT-GL-39 moves onto it and gains accent folding) and uses it in two more places: the picker's local filtering where the list is already on the client, and **the friend-invite filter in `CreateSessionModal`** (`InviteFriendField`: today `fullName.toLowerCase().includes(query)` after 3 characters, a "contains" match that does not fold accents). The 3-character minimum of the friend filter is kept unless decided otherwise at pickup. The picker asks the server for at most 5 people per call by default (SESSION-GL-64). **Consumer census result from SESSION-GL-64 (2026-11-16):** `GET /api/users/search` (Friends page search, the group invite modal) now matches first and last name only, word-start, accent-insensitive (no username, no "contains"), and its response shape is unchanged, so those clients keep working as they are. The one drift is the hand-written MSW handler `client/e2e/mocks/handlers/friends.ts` (`/api/users/search`, reused by `groups.ts`), which still does `fullName.toLowerCase().includes(keyword)`: this ticket makes it follow the same rule through the shared matcher, so the e2e mock stays an honest copy of the server. No client copy promises a username search (checked: `friends.json` says "Search friends").
 
-**Out of scope:** notifying the tagged person (NOTIF-12); validating tags on the server; tagging people in feed posts and post comments; editing a comment.
+**Out of scope:** notifying the tagged person (NOTIF-12); validating tags on the server; editing a comment. (Tagging in feed posts and post comments was out of scope here and moved in on 2026-11-16: see "Scope change 2026-11-16 ... part 2" at the end.)
 
 **Tests:** Vitest for the markup parse and render, the chip insert and delete, and the composer (command and normal comment, reply box); a scoped e2e with MSW (tag someone, see the chip in the thread, record command with chips). Baseline impact to derive at pickup (the comment box and the thread draw differently).
 
@@ -32,7 +32,7 @@ Inputs and outputs: in, the typed text and picked people; out, the comment text 
 
 ---
 
-## Implementation summary (2026-11-16)
+## Implementation summary, part 1: the session thread (2026-11-16)
 
 **Design as approved.** One shared chip composer for the session thread's two boxes, built on a `contenteditable` field; one client name matcher; the command parser reads player ids from chips; the thread draws stored tags as chips.
 
@@ -62,3 +62,18 @@ Inputs and outputs: in, the typed text and picked people; out, the comment text 
 - **Not run:** a real backend (`bootRun` and the Vite dev server against SESSION-GL-64's endpoint), Firefox and Safari (Playwright here is Chromium only: caret and Backspace over a non-editable chip differ by browser), Storybook in a browser (stories added: `MentionInput`, `MentionText`, `SessionCommentComposer` with tagging).
 
 **Visual-regression expectation:** baselines `session-detail-{not-joined, already-joined, invited, requested, approval-queue, discussion, cancelled, preparing}-*` and `session-results-section-*` at 375, 768, 1280 can change (the comment box is a taller `contenteditable` box with a top-aligned avatar and button instead of a plain input); recorded in `BASELINE-UPDATE-1`, every other baseline must come back byte-identical. No baselined surface shows the friend filter, a chip, the `@` list or the counter. Visual regression was not run here, so it is neither passed nor failed.
+
+---
+
+## Scope change 2026-11-16 (owner, after part 1 was built): tagging in posts too, part 2
+
+Part 1 (the session thread, everything above) is built and pushed (`576e02c`); the ticket stays open for part 2. Tagging also works in **normal posts**, and the earlier "out of scope: tagging people in feed posts and post comments" no longer applies (notifying a tagged person stays NOTIF-12).
+
+1. **Where.** The create-post box (Home Feed, a group's feed, Profile: `CreatePostForm`) and the comment and reply boxes under any post (`CommentSection`, `CommentItem`).
+2. **Who can be tagged.** A user post (no group): the caller's friends (`useFriends`, the whole list is on the client, filtered with `matchesName`). A group post: the group's members, through a **new server search** (`GET` on the group, name search over its members with the SESSION-GL-64 rule, caller must be a member), filed as its own backend ticket in the group module; this part waits for it. Comments under a post use the same source as the post (a user post: friends, a group post: its members).
+3. **Post box is multi-line.** `MentionInput` gets a multi-line mode: Enter adds a line, the Post button sends, Enter while the `@` list is open still picks. The comment boxes stay single-line (Enter sends).
+4. **Stored and shown.** The same `@[Full Name](userId)` markup inside the post or comment text, counted against the post and comment length limits; `PostCard`, the post modal and the comment rows draw chips (`MentionText`) and keep their clickable `#hashtags`; the id is never shown or copied.
+5. **Picker (done in part 1's branch, 2026-11-16).** The `@` list now floats over what is below the box and is as wide as its longest name (`w-max`, between a minimum and `max-w-72`).
+6. Every new string en and vi; the census, i18n and baseline notes are redone for the final diff of part 2.
+
+Part 2 is blocked on the group member search ticket (backend): build it first, merge, then continue here.
