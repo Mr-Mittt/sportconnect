@@ -963,7 +963,8 @@ public class UserServiceImpl implements UserService {
             throw new BadRequestException("SEARCH_KEYWORD_TOO_SHORT", "Search keyword must be at least 2 characters", Map.of("min", 2));
         }
 
-        Page<User> users = userRepository.searchActiveUsers(callerId, keyword.trim(), pageable);
+        // SESSION-GL-64: the app's one name rule (first/last name, word-start, accent-insensitive), see UserNameSearch.
+        Page<User> users = userRepository.searchAll(callerId, keyword.trim(), pageable);
 
         Set<UUID> friendIds = new HashSet<>(userFriendService.getAcceptedFriendIds(callerId));
         Set<UUID> pendingSentTo = userFriendService.getPendingSentRequests(callerId).stream()
@@ -985,6 +986,31 @@ public class UserServiceImpl implements UserService {
                 .country(geoNames.countryName(user))
                 .friendshipStatus(resolveFriendshipStatus(user.getId(), friendIds, pendingSentTo, pendingReceivedFrom))
                 .build());
+    }
+
+    /** SESSION-GL-64: the hard ceiling of {@link #searchUserSummaries}, whatever size a caller asks for. */
+    private static final int MAX_SUMMARY_SEARCH_SIZE = 100;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserSummaryResponse> searchUserSummaries(Collection<UUID> scopeIds, String query, int size) {
+        if (scopeIds == null || scopeIds.isEmpty() || size <= 0) {
+            return List.of();
+        }
+        return userRepository.searchInScope(scopeIds, query, Math.min(size, MAX_SUMMARY_SEARCH_SIZE)).stream()
+                .map(user -> UserSummaryResponse.builder()
+                        .id(user.getId())
+                        .fullName(searchDisplayName(user))
+                        .avatarUrl(user.getAvatarUrl())
+                        .build())
+                .toList();
+    }
+
+    /** First and last name only (the search never returns a user with neither): a username, email or phone is not a name. */
+    private static String searchDisplayName(User user) {
+        String first = user.getFirstName() == null ? "" : user.getFirstName().trim();
+        String last = user.getLastName() == null ? "" : user.getLastName().trim();
+        return (first + " " + last).trim();
     }
 
     private UserFriendshipStatus resolveFriendshipStatus(

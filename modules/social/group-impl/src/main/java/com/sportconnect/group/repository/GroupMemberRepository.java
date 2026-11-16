@@ -47,4 +47,8 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     void deleteByGroupIdAndUserId(Long groupId, UUID userId);
 
     long countByGroupId(Long groupId);
+
+    /** SESSION-GL-64: just the user ids of a group's members (one query, no entity load). */
+    @Query("SELECT gm.userId FROM GroupMember gm WHERE gm.groupId = :groupId")
+    List<UUID> findUserIdsByGroupId(@Param("groupId") Long groupId);
 }

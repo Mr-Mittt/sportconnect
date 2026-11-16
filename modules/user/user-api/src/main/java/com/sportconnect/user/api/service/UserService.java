@@ -316,8 +316,28 @@ public interface UserService {
     void changeEmail(UUID userId, ChangeEmailRequest request);
 
     /**
-     * Search other active users by name/username, enriched with the caller's friendship status
-     * toward each result. keyword is required (minimum 2 characters).
+     * Search other active users by name, enriched with the caller's friendship status toward each result. keyword is
+     * required (minimum 2 characters). SESSION-GL-64: this is the app's one name-search rule (see
+     * {@link #searchUserSummaries}): first and last name only, word-start, accent- and case-insensitive; the username is
+     * no longer searched. The caller is never in the result; the response shape is unchanged.
      */
     Page<UserSearchResponse> searchUsers(UUID callerId, String keyword, Pageable pageable);
+
+    /**
+     * SESSION-GL-64 — the app's one user name search, narrowed to a caller-supplied scope. Matching: only the first and
+     * last name are searched; each typed word must begin a name (or a later word of it), never the middle of a word;
+     * case and accents are ignored ("tuan" finds "Tuấn", "dang" finds "Đặng"); several words must all match, in any
+     * order. Active users only; a user with neither a first nor a last name is never returned. Every caller adds its own
+     * scope (the people of a session thread, a group's members, a friend list) instead of writing its own matching.
+     *
+     * <p>Flow: one database query over {@code scopeIds} ordered best match first (a name beginning with the first typed
+     * word, then the rest, each by first name, last name, id), cut to {@code size}; no per-row calls. The summary's
+     * {@code fullName} is the first and last name only, never a username, email or phone.
+     *
+     * @param scopeIds the ids to search among; {@code null} or empty returns nothing
+     * @param query    the typed text; {@code null} or blank matches every named user of the scope
+     * @param size     the most results wanted; zero or negative returns nothing, the call never returns more than 100
+     * @return the matches, best first; never {@code null}
+     */
+    List<UserSummaryResponse> searchUserSummaries(Collection<UUID> scopeIds, String query, int size);
 }

@@ -2743,6 +2743,119 @@ class SessionServiceImplSpec extends Specification {
         result == page
     }
 
+    // ── searchThreadPeople (SESSION-GL-64) ───────────────────────────────────
+
+    private static SessionParticipant participantOf(UUID userId) {
+        SessionParticipant.builder().userId(userId).build()
+    }
+
+    private static UserSummaryResponse summaryOf(UUID id, String name) {
+        UserSummaryResponse.builder().id(id).fullName(name).avatarUrl("a-" + name).build()
+    }
+
+    def "searchThreadPeople on a standalone session gates, searches only the participants and never touches a group"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def b = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(null).build()
+
+        when:
+        def result = sessionService.searchThreadPeople(1L, callerId, "an", null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, callerId, _, _, _, _) >> session
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L,
+                [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED]) >>
+                [participantOf(a), participantOf(b)]
+        1 * userService.searchUserSummaries([a, b], "an", 5) >> [summaryOf(a, "An Le")]
+        0 * groupService.getMemberUserIds(_)
+        result*.userId == [a]
+        result*.fullName == ["An Le"]
+        result*.avatarUrl == ["a-An Le"]
+    }
+
+    def "searchThreadPeople on a group session fills what the participants left free with the other members only"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def inSession = UUID.randomUUID()
+        def memberOnly = UUID.randomUUID()
+        def found = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(7L).build()
+
+        when:
+        def result = sessionService.searchThreadPeople(1L, callerId, "an", 5)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, callerId, _, _, _, _) >> session
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, _) >> [participantOf(inSession)]
+        1 * userService.searchUserSummaries([inSession], "an", 5) >> [summaryOf(inSession, "Joined One"), summaryOf(inSession, "Joined Two")]
+        1 * groupService.getMemberUserIds(7L) >> [inSession, memberOnly]
+        // the participant is not searched again as a member, and only the 3 places left are asked for
+        1 * userService.searchUserSummaries([memberOnly], "an", 3) >> [summaryOf(found, "Member Three")]
+        result*.fullName == ["Joined One", "Joined Two", "Member Three"]
+    }
+
+    def "searchThreadPeople does not look at the group when the participants already fill the size"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def ids = (1..3).collect { UUID.randomUUID() }
+        def session = Session.builder().id(1L).groupId(7L).build()
+
+        when:
+        def result = sessionService.searchThreadPeople(1L, callerId, null, 3)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, callerId, _, _, _, _) >> session
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, _) >> ids.collect { participantOf(it) }
+        1 * userService.searchUserSummaries(ids, null, 3) >> ids.collect { summaryOf(it, "P") }
+        0 * groupService.getMemberUserIds(_)
+        result.size() == 3
+    }
+
+    def "searchThreadPeople clamps the size (default 5, at most 20, at least 1) and cuts a very long query"() {
+        given:
+        def session = Session.builder().id(1L).groupId(null).build()
+        def longQuery = "x" * 150
+
+        when:
+        sessionService.searchThreadPeople(1L, UUID.randomUUID(), longQuery, requested)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, _, _, _, _, _) >> session
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, _) >> [participantOf(UUID.randomUUID())]
+        1 * userService.searchUserSummaries(_, { it.length() == 100 }, expected) >> []
+
+        where:
+        requested || expected
+        null      || 5
+        100       || 20
+        20        || 20
+        7         || 7
+        0         || 1
+        -4        || 1
+    }
+
+    def "searchThreadPeople searches nobody when the gate refuses the caller"() {
+        given:
+        def session = Session.builder().id(1L).groupId(7L).build()
+
+        when:
+        sessionService.searchThreadPeople(1L, UUID.randomUUID(), "an", 5)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionGate.require(session, _, _, _, _, _) >> { throw new ForbiddenException("SESSION_FORBIDDEN", "no", null) }
+        thrown(ForbiddenException)
+        0 * sessionParticipantRepository.findBySessionIdAndStatusIn(_, _)
+        0 * userService.searchUserSummaries(_, _, _)
+        0 * groupService.getMemberUserIds(_)
+    }
+
     def "likeSessionComment gates via SessionGate then delegates to CommentService.likeSessionComment"() {
         given:
         def userId = UUID.randomUUID()

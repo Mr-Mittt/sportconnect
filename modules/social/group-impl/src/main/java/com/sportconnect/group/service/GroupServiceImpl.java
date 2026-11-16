@@ -1210,6 +1210,14 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<UUID> getMemberUserIds(Long groupId) {
+        if (!isGroupActive(groupId)) return List.of();
+
+        return groupMemberRepository.findUserIdsByGroupId(groupId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean canManageMembers(Long groupId, UUID userId) {
         return hasManagerRole(groupId, userId);
     }

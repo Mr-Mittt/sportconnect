@@ -1,3 +1,6 @@
+-- SESSION-GL-64: H2 stand-in for Postgres's immutable_unaccent() (migration V090); the name search calls it.
+CREATE ALIAS IF NOT EXISTS immutable_unaccent FOR "com.sportconnect.integration.H2Functions.immutableUnaccent";
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,

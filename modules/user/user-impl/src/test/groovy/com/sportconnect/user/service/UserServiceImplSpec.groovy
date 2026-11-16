@@ -1061,6 +1061,64 @@ class UserServiceImplSpec extends Specification {
         thrown(ResourceNotFoundException)
     }
 
+    // ── searchUserSummaries (SESSION-GL-64) ──────────────────────────────────
+
+    def "searchUserSummaries returns first and last name only, never a username or email, with the avatar"() {
+        given:
+        def id = UUID.randomUUID()
+        def user = User.builder().id(id).firstName("Tuấn").lastName("Nguyễn").username("handle")
+                .email("x@example.com").avatarUrl("http://img/1").isActive(true).build()
+
+        when:
+        def result = userService.searchUserSummaries([id], "tuan", 5)
+
+        then:
+        1 * userRepository.searchInScope([id], "tuan", 5) >> [user]
+        result*.id == [id]
+        result*.fullName == ["Tuấn Nguyễn"]
+        result*.avatarUrl == ["http://img/1"]
+    }
+
+    def "searchUserSummaries builds the name from whichever of first and last name exists"() {
+        given:
+        def onlyFirst = User.builder().id(UUID.randomUUID()).firstName(" Madonna ").lastName(null).username("m").isActive(true).build()
+        def onlyLast = User.builder().id(UUID.randomUUID()).firstName(null).lastName("Cher").username("c").isActive(true).build()
+
+        when:
+        def result = userService.searchUserSummaries([onlyFirst.id, onlyLast.id], null, 5)
+
+        then:
+        1 * userRepository.searchInScope(_, null, 5) >> [onlyFirst, onlyLast]
+        result*.fullName == ["Madonna", "Cher"]
+    }
+
+    def "searchUserSummaries searches nothing for an empty scope or a non-positive size"() {
+        when:
+        def none = userService.searchUserSummaries(scope, "an", size)
+
+        then:
+        0 * userRepository.searchInScope(_, _, _)
+        none == []
+
+        where:
+        scope            | size
+        null             | 5
+        []               | 5
+        [UUID.randomUUID()] | 0
+        [UUID.randomUUID()] | -1
+    }
+
+    def "searchUserSummaries never asks for more than 100 rows"() {
+        given:
+        def id = UUID.randomUUID()
+
+        when:
+        userService.searchUserSummaries([id], "an", 5000)
+
+        then:
+        1 * userRepository.searchInScope([id], "an", 100) >> []
+    }
+
     // ── searchUsers ──────────────────────────────────────────────────────────
 
     private User searchResultUser(UUID id, String firstName, String lastName, String username) {
@@ -1087,7 +1145,7 @@ class UserServiceImplSpec extends Specification {
         def result = userService.searchUsers(callerId, "jane", pageable)
 
         then:
-        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userRepository.searchAll(callerId, "jane", pageable) >> page
         1 * userFriendService.getAcceptedFriendIds(callerId) >> []
         1 * userFriendService.getPendingSentRequests(callerId) >> []
         1 * userFriendService.getPendingReceivedRequests(callerId) >> []
@@ -1109,7 +1167,7 @@ class UserServiceImplSpec extends Specification {
         def result = userService.searchUsers(callerId, "jane", pageable)
 
         then:
-        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userRepository.searchAll(callerId, "jane", pageable) >> page
         1 * userFriendService.getAcceptedFriendIds(callerId) >> [friendId]
         1 * userFriendService.getPendingSentRequests(callerId) >> []
         1 * userFriendService.getPendingReceivedRequests(callerId) >> []
@@ -1128,7 +1186,7 @@ class UserServiceImplSpec extends Specification {
         def result = userService.searchUsers(callerId, "jane", pageable)
 
         then:
-        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userRepository.searchAll(callerId, "jane", pageable) >> page
         1 * userFriendService.getAcceptedFriendIds(callerId) >> []
         1 * userFriendService.getPendingSentRequests(callerId) >> [sentRequest]
         1 * userFriendService.getPendingReceivedRequests(callerId) >> []
@@ -1147,7 +1205,7 @@ class UserServiceImplSpec extends Specification {
         def result = userService.searchUsers(callerId, "jane", pageable)
 
         then:
-        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userRepository.searchAll(callerId, "jane", pageable) >> page
         1 * userFriendService.getAcceptedFriendIds(callerId) >> []
         1 * userFriendService.getPendingSentRequests(callerId) >> []
         1 * userFriendService.getPendingReceivedRequests(callerId) >> [receivedRequest]
@@ -1165,7 +1223,7 @@ class UserServiceImplSpec extends Specification {
         def result = userService.searchUsers(callerId, "jane", pageable)
 
         then:
-        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userRepository.searchAll(callerId, "jane", pageable) >> page
         1 * userFriendService.getAcceptedFriendIds(callerId) >> []
         1 * userFriendService.getPendingSentRequests(callerId) >> []
         1 * userFriendService.getPendingReceivedRequests(callerId) >> []
@@ -1181,7 +1239,7 @@ class UserServiceImplSpec extends Specification {
         userService.searchUsers(callerId, "  ", pageable)
 
         then:
-        0 * userRepository.searchActiveUsers(_, _, _)
+        0 * userRepository.searchAll(_, _, _)
         def e = thrown(BadRequestException)
         e.errorCode == "SEARCH_KEYWORD_TOO_SHORT"
     }
@@ -1195,7 +1253,7 @@ class UserServiceImplSpec extends Specification {
         userService.searchUsers(callerId, "j", pageable)
 
         then:
-        0 * userRepository.searchActiveUsers(_, _, _)
+        0 * userRepository.searchAll(_, _, _)
         def e = thrown(BadRequestException)
         e.errorCode == "SEARCH_KEYWORD_TOO_SHORT"
         e.errorParams == [min: 2]
@@ -1211,7 +1269,7 @@ class UserServiceImplSpec extends Specification {
         userService.searchUsers(callerId, "  jane  ", pageable)
 
         then:
-        1 * userRepository.searchActiveUsers(callerId, "jane", pageable) >> page
+        1 * userRepository.searchAll(callerId, "jane", pageable) >> page
         1 * userFriendService.getAcceptedFriendIds(callerId) >> []
         1 * userFriendService.getPendingSentRequests(callerId) >> []
         1 * userFriendService.getPendingReceivedRequests(callerId) >> []
@@ -1396,7 +1454,7 @@ class UserServiceImplSpec extends Specification {
         def u3 = linkedUser(UUID.randomUUID(), 8L, null)
         def u4 = linkedUser(UUID.randomUUID(), null, null, "Typed Land")
         def u5 = linkedUser(UUID.randomUUID(), null, null, null)
-        userRepository.searchActiveUsers(callerId, "lin", pageable) >> new PageImpl<>([u1, u2, u3, u4, u5])
+        userRepository.searchAll(callerId, "lin", pageable) >> new PageImpl<>([u1, u2, u3, u4, u5])
         userFriendService.getAcceptedFriendIds(callerId) >> []
         userFriendService.getPendingSentRequests(callerId) >> []
         userFriendService.getPendingReceivedRequests(callerId) >> []
@@ -1414,7 +1472,7 @@ class UserServiceImplSpec extends Specification {
         given:
         def callerId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 20)
-        userRepository.searchActiveUsers(callerId, "lin", pageable) >> new PageImpl<>([linkedUser(UUID.randomUUID(), null, null, "Typed Land")])
+        userRepository.searchAll(callerId, "lin", pageable) >> new PageImpl<>([linkedUser(UUID.randomUUID(), null, null, "Typed Land")])
         userFriendService.getAcceptedFriendIds(callerId) >> []
         userFriendService.getPendingSentRequests(callerId) >> []
         userFriendService.getPendingReceivedRequests(callerId) >> []

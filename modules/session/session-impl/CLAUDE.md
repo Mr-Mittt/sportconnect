@@ -45,6 +45,7 @@ POST   /api/sessions/{sessionId}/join          rejected if the session is CANCEL
 DELETE /api/sessions/{sessionId}/leave         JOINED->LEFT, or INVITED->LEFT ("decline")/REQUESTED->LEFT ("cancel my request") — SESSION-9
 GET    /api/sessions/{sessionId}/participants  paginated, JOINED-only
 GET    /api/sessions/{sessionId}/comments                      participant or group-member (SESSION-10) — see SessionGate
+GET    /api/sessions/{sessionId}/thread-people?q=&size=        same gating (SESSION-GL-64) — who can see the thread, for the @ tag picker: JOINED/REQUESTED/INVITED participants first, then a group session's other members; first/last-name search, word-start, accent-insensitive (the app's one rule, see user-impl); `size` default 5, cut to 20; { userId, fullName, avatarUrl } only
 POST   /api/sessions/{sessionId}/comments                      same gating
 POST   /api/sessions/{sessionId}/comments/{commentId}/like      same gating
 DELETE /api/sessions/{sessionId}/comments/{commentId}/like      same gating

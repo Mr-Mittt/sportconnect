@@ -191,6 +191,15 @@ public interface GroupService {
     /** False for a non-existent groupId or a userId not a member; also false if the group itself is soft-deleted (B18) — see {@link #isGroupActive}. */
     boolean isGroupMember(Long groupId, UUID userId);
 
+    /**
+     * SESSION-GL-64 — the user ids of every member of the group, for a caller that needs the group as a scope for
+     * another domain's search (the people who can see a group session's thread). Ids only, in no particular order.
+     * Empty for a non-existent group, and for a soft-deleted one (B18, see {@link #isGroupActive}). A group's size is
+     * capped by its type (at most 500 members), so the list is bounded; it carries no names, roles or any access check
+     * of its own: the caller must already have authorized the request.
+     */
+    List<UUID> getMemberUserIds(Long groupId);
+
     boolean canManageMembers(Long groupId, UUID userId);
     
     boolean canManagePosts(Long groupId, UUID userId);

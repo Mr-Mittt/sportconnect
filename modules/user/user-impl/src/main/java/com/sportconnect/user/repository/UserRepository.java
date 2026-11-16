@@ -2,7 +2,6 @@ package com.sportconnect.user.repository;
 
 import com.sportconnect.user.entity.User;
 import jakarta.persistence.LockModeType;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -15,7 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, UUID>, UserNameSearchRepository {
 
     Optional<User> findByEmail(String email);
 
@@ -66,13 +65,4 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // Keyset pagination for services/chat's cold-start bootstrap pull (see
     // services/chat/docs/SYNC_DESIGN.md) — ordered by id, not offset-paginated.
     List<User> findByIdGreaterThanAndIsActiveTrueOrderByIdAsc(UUID id, Pageable pageable);
-
-    @Query("""
-            SELECT u FROM User u
-            WHERE u.isActive = true AND u.id <> :callerId
-              AND (LOWER(u.firstName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                OR LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%')))
-            """)
-    Page<User> searchActiveUsers(@Param("callerId") UUID callerId, @Param("keyword") String keyword, Pageable pageable);
 }
