@@ -46,6 +46,7 @@ POST   /api/groups/{groupId}/members
 DELETE /api/groups/{groupId}/members/{targetUserId}
 PUT    /api/groups/{groupId}/members/{targetUserId}/role
 GET    /api/groups/{groupId}/members
+GET    /api/groups/{groupId}/members/search?q=&size=   member-only (B23) - name search for tagging: id, full name, avatar; the app's one name rule (user-impl, SESSION-GL-64); size default 5, ceiling 20; 404 GROUP_NOT_FOUND checked before 403 GROUP_MEMBER_REQUIRED
 PUT    /api/groups/{groupId}/transfer-ownership
 DELETE /api/groups/{groupId}/leave
 

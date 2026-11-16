@@ -9,6 +9,7 @@ import com.sportconnect.group.api.dto.GroupGeneralDataResponse;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupMemberSearchResultResponse;
 import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSearchResponse;
@@ -240,6 +241,25 @@ public class GroupController {
             Pageable pageable) {
         Page<GroupMemberResponse> response = groupService.getGroupMembers(groupId, SecurityUtils.extractUserId(authentication), pageable);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @Operation(summary = "Search a group's members by name", description = "B23 - for tagging in a group post and its comments. Members only (any role). q matches the start of a first or last name word (accent- and case-insensitive, every typed word must match); size defaults to 5, at most 20.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Members (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a member of the group"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
+    })
+    @GetMapping("/{groupId}/members/search")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<List<GroupMemberSearchResultResponse>>> searchGroupMembers(
+            @PathVariable Long groupId,
+            @RequestParam(value = "q", required = false) String query,
+            @RequestParam(value = "size", required = false) Integer size,
+            Authentication authentication) {
+        List<GroupMemberSearchResultResponse> response = groupService.searchGroupMembers(
+                groupId, SecurityUtils.extractUserId(authentication), query, size);
+        return ResponseEntity.ok(ApiResponse.success("Members retrieved successfully", response));
     }
 
     @Operation(summary = "Transfer group ownership", description = "Current owner only. The new owner must already be a member; the previous owner becomes an admin.")

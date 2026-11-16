@@ -1014,6 +1014,87 @@ class GroupServiceImplSpec extends Specification {
         result == false
     }
 
+    // ─── searchGroupMembers (B23) ──────────────────────────────────────────────
+
+    private static UserSummaryResponse person(UUID id, String name) {
+        UserSummaryResponse.builder().id(id).fullName(name).avatarUrl("a/" + name).build()
+    }
+
+    def "searchGroupMembers searches the member ids as the scope and maps id, name and avatar only"() {
+        given:
+        def second = UUID.randomUUID()
+
+        when:
+        def result = groupService.searchGroupMembers(testGroup.id, userId, "bao", 7)
+
+        then:
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        1 * groupMemberRepository.findUserIdsByGroupId(testGroup.id) >> [userId, second]
+        1 * userService.searchUserSummaries([userId, second], "bao", 7) >> [person(second, "Bao Le")]
+
+        and:
+        result.size() == 1
+        result[0].userId == second
+        result[0].fullName == "Bao Le"
+        result[0].avatarUrl == "a/Bao Le"
+    }
+
+    def "searchGroupMembers is a 404 for an inactive group, before any membership or search"() {
+        when:
+        groupService.searchGroupMembers(testGroup.id, userId, "bao", null)
+
+        then:
+        1 * groupRepository.existsByIdAndIsActiveTrue(testGroup.id) >> false
+        0 * groupMemberRepository.existsByGroupIdAndUserId(*_)
+        0 * userService.searchUserSummaries(*_)
+        def e = thrown(NotFoundException)
+        e.errorCode == "GROUP_NOT_FOUND"
+    }
+
+    def "searchGroupMembers is a 403 for a caller who is not a member, and never searches"() {
+        when:
+        groupService.searchGroupMembers(testGroup.id, userId, "bao", null)
+
+        then:
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> false
+        0 * userService.searchUserSummaries(*_)
+        def e = thrown(ForbiddenException)
+        e.errorCode == "GROUP_MEMBER_REQUIRED"
+    }
+
+    def "searchGroupMembers sizes: default #expected for #asked, cut to 20, at least 1"() {
+        when:
+        groupService.searchGroupMembers(testGroup.id, userId, null, asked)
+
+        then:
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        1 * groupMemberRepository.findUserIdsByGroupId(testGroup.id) >> [userId]
+        1 * userService.searchUserSummaries([userId], null, expected) >> []
+
+        where:
+        asked | expected
+        null  | 5
+        1     | 1
+        0     | 1
+        -3    | 1
+        20    | 20
+        21    | 20
+        500   | 20
+    }
+
+    def "searchGroupMembers cuts a long query to 100 characters and leaves a short one alone"() {
+        given:
+        def tooLong = "a" * 150
+
+        when:
+        groupService.searchGroupMembers(testGroup.id, userId, tooLong, null)
+
+        then:
+        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
+        1 * groupMemberRepository.findUserIdsByGroupId(testGroup.id) >> [userId]
+        1 * userService.searchUserSummaries([userId], "a" * 100, 5) >> []
+    }
+
     // ─── canManageMembers / canManagePosts (B20: both delegate to the private hasManagerRole,
     // a single findByGroupIdAndUserId + findById(roleId) lookup instead of composing
     // isGroupOwner/isGroupAdmin) ──────────────────────────────────────────────
