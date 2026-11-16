@@ -12,6 +12,7 @@ import com.sportconnect.group.api.dto.GroupGeneralDataResponse;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupMemberSearchResultResponse;
 import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
@@ -603,6 +604,37 @@ public class GroupServiceImpl implements GroupService {
                         .collect(Collectors.toMap(GroupRole::getId, r -> r));
 
         return membersPage.map(member -> mapToGroupMemberResponse(member, usersById, rolesById));
+    }
+
+    /** B23: what {@link #searchGroupMembers} returns when the caller sends no size, and the most it ever returns. */
+    static final int MEMBER_SEARCH_DEFAULT_SIZE = 5;
+    static final int MEMBER_SEARCH_MAX_SIZE = 20;
+
+    /** B23: a longer typed query is cut (a name has far fewer characters), same as the session thread search. */
+    static final int MEMBER_SEARCH_MAX_QUERY_LENGTH = 100;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GroupMemberSearchResultResponse> searchGroupMembers(Long groupId, UUID callerId, String query, Integer size) {
+        // Available first, visible second: isGroupMember is also false for an inactive group, which must stay a 404.
+        if (!isGroupActive(groupId)) {
+            throw new NotFoundException("GROUP_NOT_FOUND", "Group not found", null);
+        }
+        if (!isGroupMember(groupId, callerId)) {
+            throw new ForbiddenException("GROUP_MEMBER_REQUIRED", "Only group members can search the members", null);
+        }
+        int limit = size == null ? MEMBER_SEARCH_DEFAULT_SIZE : Math.max(1, Math.min(size, MEMBER_SEARCH_MAX_SIZE));
+        String typed = query != null && query.length() > MEMBER_SEARCH_MAX_QUERY_LENGTH
+                ? query.substring(0, MEMBER_SEARCH_MAX_QUERY_LENGTH)
+                : query;
+
+        return userService.searchUserSummaries(getMemberUserIds(groupId), typed, limit).stream()
+                .map(person -> GroupMemberSearchResultResponse.builder()
+                        .userId(person.getId())
+                        .fullName(person.getFullName())
+                        .avatarUrl(person.getAvatarUrl())
+                        .build())
+                .toList();
     }
 
     @Override

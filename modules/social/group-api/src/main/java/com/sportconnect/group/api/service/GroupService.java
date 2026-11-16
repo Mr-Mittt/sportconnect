@@ -7,6 +7,7 @@ import com.sportconnect.group.api.dto.GroupGeneralDataResponse;
 import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
+import com.sportconnect.group.api.dto.GroupMemberSearchResultResponse;
 import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
@@ -73,6 +74,22 @@ public interface GroupService {
     void updateMemberRole(Long groupId, UUID adminUserId, UUID targetUserId, String newRoleName);
     
     Page<GroupMemberResponse> getGroupMembers(Long groupId, UUID currentUserId, Pageable pageable);
+
+    /**
+     * B23 - searches the members of a group by name, for tagging in a group post and its comments.
+     *
+     * <p>Flow: the group must be active (404 {@code GROUP_NOT_FOUND}, checked first because {@link #isGroupMember} is
+     * also false for an inactive group) and the caller one of its members, whatever their role (403
+     * {@code GROUP_MEMBER_REQUIRED}); then {@link #getMemberUserIds} is the scope of the app's one name search
+     * ({@code UserService.searchUserSummaries}: first and last name, word-start, accent- and case-insensitive, every
+     * typed word must match; a deactivated user is never returned). The caller may be in the result. One database
+     * search, never the members loaded one by one.
+     *
+     * @param query the typed words; null or blank lists the first members by name; cut to 100 characters
+     * @param size  default 5, at least 1, at most 20
+     * @return id, full name and avatar only, best match first
+     */
+    List<GroupMemberSearchResultResponse> searchGroupMembers(Long groupId, UUID callerId, String query, Integer size);
     
     void transferOwnership(Long groupId, UUID currentOwnerId, UUID newOwnerId);
     
