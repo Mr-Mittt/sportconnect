@@ -1,11 +1,13 @@
 import { IconBallFootball, IconMapPin, IconPhoto, IconSpeakerphone } from '@tabler/icons-react';
-import { createElement, useLayoutEffect, useRef, useState } from 'react';
+import { createElement, useMemo, useRef, useState } from 'react';
 import { MAX_POST_LENGTH } from '@/features/feed/types';
 import { useUnsavedChangesGuard } from '@/shared/hooks/useUnsavedChangesGuard';
+import { isEmptyDraft, serialize, trimSegments } from '@/shared/lib/mentionMarkup';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
+import { MentionInput, type MentionDraft, type MentionInputHandle, type MentionSource } from './MentionInput';
 import { UnsavedPostConfirmDialog } from './UnsavedPostConfirmDialog';
 
 interface CreatePostFormProps {
@@ -32,6 +34,9 @@ interface CreatePostFormProps {
   isError?: boolean;
   /** CLIENT-ERR-6: code-specific failure text (e.g. not a member of the group); replaces the generic line when set. */
   errorText?: string;
+  /** CLIENT-GL-50 part 2: who an `@` in the post can tag (a user post: the caller's friends, a group post: the group's
+   * members). Absent = nobody can be tagged and the text is sent as typed. */
+  mentionSource?: MentionSource;
   /** CLIENT-I18N-4: i18next `"namespace:key.path"` prefix overriding this component's default
    * copy (`sharedComponents.createPostForm.*`) for a specific caller. No current caller passes
    * this. */
@@ -56,6 +61,9 @@ function initialsFor(fullName: string): string {
  * Home Feed component (client/CLAUDE.md): owns only its own transient
  * textarea value, clearing itself immediately on submit rather than waiting
  * for the mutation to resolve — same shape as CommentSection's composer.
+ *
+ * CLIENT-GL-50 part 2: the box is a `MentionInput` in its multi-line mode: `@` tags a friend (user post) or a group
+ * member (group post), Enter adds a line, the Post button sends. The text is stored with the tags as `@[Name](id)`.
  *
  * Photo/Location/Tag-sport stay inert mockup buttons per the ticket's scope
  * delta; only content is sent to the backend (postType/groupId/sportId all
@@ -85,31 +93,30 @@ export function CreatePostForm({
   canBroadcast = false,
   isError = false,
   errorText,
+  mentionSource,
   i18nOverridePrefix,
 }: CreatePostFormProps) {
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
-  const [content, setContent] = useState('');
+  const [draft, setDraft] = useState<MentionDraft>({ segments: [], stored: '', plain: '' });
   const [isBroadcastOn, setIsBroadcastOn] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputHandle = useRef<MentionInputHandle>(null);
+  const [query, setQuery] = useState<string | null>(null);
 
-  // Mirrors the design reference's autosize() — grow the textarea to fit its
-  // content instead of scrolling internally, matching the mockup's rows="1"
-  // + reset-then-measure technique.
-  useLayoutEffect(() => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [content]);
+  // A person already tagged is not offered again.
+  const options = useMemo(() => {
+    if (query === null) return [];
+    const tagged = new Set(draft.segments.flatMap((segment) => (segment.kind === 'mention' ? [segment.userId] : [])));
+    return (mentionSource?.options ?? []).filter((person) => !tagged.has(person.id));
+  }, [query, draft.segments, mentionSource?.options]);
 
-  const hasText = content.trim().length > 0;
+  const hasText = !isEmptyDraft(draft.segments);
   const unsavedGuard = useUnsavedChangesGuard(hasText);
 
   const submitPost = () => {
-    const trimmed = content.trim();
-    if (trimmed.length === 0) return;
-    onSubmit(trimmed, { asBroadcast: canBroadcast && isBroadcastOn });
-    setContent('');
+    if (!hasText) return;
+    // The text is stored as typed (tags as `@[Name](id)`), trimmed at both ends; inner line breaks stay.
+    onSubmit(serialize(trimSegments(draft.segments)), { asBroadcast: canBroadcast && isBroadcastOn });
+    inputHandle.current?.clear();
     setIsBroadcastOn(false);
   };
 
@@ -122,19 +129,25 @@ export function CreatePostForm({
             {currentUser !== undefined ? initialsFor(currentUser.fullName) : ''}
           </AvatarFallback>
         </Avatar>
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={content}
-          onChange={(event) => setContent(event.target.value.slice(0, MAX_POST_LENGTH))}
+        <MentionInput
+          ref={inputHandle}
+          multiline
+          ariaLabel={t('createPostForm.ariaLabel')}
           placeholder={
             currentUser !== undefined
               ? t('createPostForm.placeholderWithName', { firstName: currentUser.firstName })
               : t('createPostForm.placeholderDefault')
           }
-          aria-label={t('createPostForm.ariaLabel')}
           maxLength={MAX_POST_LENGTH}
-          className="min-w-0 flex-1 resize-none border-none bg-transparent py-2 text-sm text-text-primary outline-none placeholder:text-text-muted"
+          options={options}
+          pickerLabel={t('createPostForm.mentionLabel')}
+          onQueryChange={(next) => {
+            setQuery(next);
+            mentionSource?.onQueryChange(next);
+          }}
+          onChange={setDraft}
+          // Enter adds a line here; the Post button below sends.
+          onSubmit={submitPost}
         />
       </div>
       <div className="border-hairline-t mt-1 flex items-center justify-between gap-2 border-border pt-2.5">

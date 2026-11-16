@@ -140,7 +140,7 @@ test('Session results — record commands in the thread: hints, invalid, add, co
     // A name typed without being picked is not a player (CLIENT-GL-50: a player is a chip that carries the id).
     await composer.fill(':add @Nobody 21 vs 15');
     await composer.press('Enter');
-    await expect(detail.getByTestId('command-notices')).toContainText("isn't a player in this session");
+    await expect(detail.getByTestId('command-notices')).toContainText('Your update is invalid. Follow the hint, [...] is optional.');
     await expect(composer).toHaveText(':add @Nobody 21 vs 15');
     await expect(detail.getByRole('region', { name: 'Discussion' }).locator('p', { hasText: ':add @Nobody' })).toHaveCount(0);
   });
@@ -171,7 +171,7 @@ test('Session results — record commands in the thread: hints, invalid, add, co
   await test.step('5. the caller-only line is gone after closing and reopening the modal', async () => {
     await composer.fill(':del 99999');
     await composer.press('Enter');
-    await expect(detail.getByTestId('command-notices')).toContainText('There is no game with id 99999.');
+    await expect(detail.getByTestId('command-notices')).toContainText('Your update is invalid. Follow the hint, [...] is optional.');
     await page.keyboard.press('Escape');
     await expect(detail).not.toBeVisible();
     await page.getByRole('button', { name: /Sunday pickup run — View details/ }).click();

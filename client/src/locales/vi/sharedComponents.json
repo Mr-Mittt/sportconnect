@@ -29,7 +29,8 @@
     "commentAriaLabel": "Viết bình luận",
     "postComment": "Đăng bình luận",
     "like": "Thích",
-    "unlike": "Bỏ thích"
+    "unlike": "Bỏ thích",
+    "mentionLabel": "Người có thể gắn thẻ"
   },
   "commentItem": {
     "commentOptions": "Tùy chọn bình luận",
@@ -52,7 +53,8 @@
     "tagSport": "Gắn thẻ môn thể thao",
     "broadcast": "Thông báo",
     "post": "Đăng",
-    "error": "Không thể đăng bài. Vui lòng thử lại."
+    "error": "Không thể đăng bài. Vui lòng thử lại.",
+    "mentionLabel": "Người có thể gắn thẻ"
   },
   "groupBroadcasts": {
     "ariaLabel": "Thông báo từ nhóm",

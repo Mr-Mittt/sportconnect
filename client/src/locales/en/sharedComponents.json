@@ -29,7 +29,8 @@
     "commentAriaLabel": "Add a comment",
     "postComment": "Post comment",
     "like": "Like",
-    "unlike": "Unlike"
+    "unlike": "Unlike",
+    "mentionLabel": "People you can tag"
   },
   "commentItem": {
     "commentOptions": "Comment options",
@@ -52,7 +53,8 @@
     "tagSport": "Tag sport",
     "broadcast": "Broadcast",
     "post": "Post",
-    "error": "Couldn't create post. Try again."
+    "error": "Couldn't create post. Try again.",
+    "mentionLabel": "People you can tag"
   },
   "groupBroadcasts": {
     "ariaLabel": "Group broadcasts",

@@ -64,30 +64,14 @@ export function commandNameOf(text: string): CommandName | null {
 /** A player a command can name, with the exact `@` text that names them. */
 export interface MentionPlayer {
   id: string;
-  /** The text after `@`: the full name, or `Name (1)`, `Name (2)` when several participants share a full name. */
+  /** The name the `@` list shows (the same as `name`: a chip carries the id, so two players with one name need no suffix). */
   token: string;
   name: string;
 }
 
-function normalize(value: string): string {
-  return value.normalize('NFC').toLocaleLowerCase();
-}
-
-/** The players a command can name, in roster order; participants with the same full name get `(1)`, `(2)`, ... */
+/** The players a command can name, in roster order. */
 export function mentionPlayers(players: Array<{ id: string; name: string }>): MentionPlayer[] {
-  const totals = new Map<string, number>();
-  for (const player of players) {
-    const key = normalize(player.name);
-    totals.set(key, (totals.get(key) ?? 0) + 1);
-  }
-  const seen = new Map<string, number>();
-  return players.map((player) => {
-    const key = normalize(player.name);
-    if ((totals.get(key) ?? 0) < 2) return { id: player.id, token: player.name, name: player.name };
-    const position = (seen.get(key) ?? 0) + 1;
-    seen.set(key, position);
-    return { id: player.id, token: `${player.name} (${position})`, name: player.name };
-  });
+  return players.map((player) => ({ id: player.id, token: player.name, name: player.name }));
 }
 
 /** What is wrong with a command (the dialog's own problem codes are reused for the record itself). */
@@ -98,7 +82,6 @@ export type CommandIssueCode =
   | 'VS_MISSING'
   | 'VS_MULTIPLE'
   | 'PLAYER_UNKNOWN'
-  | 'PLAYER_AMBIGUOUS'
   | 'PLAYER_REPEATED'
   | 'TEXT_UNEXPECTED'
   | 'SCORE_FORMAT'

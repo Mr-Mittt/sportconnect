@@ -32,3 +32,8 @@ export const ShortLimit: Story = { args: { maxLength: 20 } };
 
 /** No people to offer (none loaded, or the request failed): the box keeps working without a list. */
 export const NoPeople: Story = { args: { options: [] } };
+
+/** The post box (CLIENT-GL-50 part 2): Enter adds a line, the Post button of its owner sends; Enter while the list is open still picks. */
+export const Multiline: Story = {
+  args: { multiline: true, ariaLabel: 'Create a post', placeholder: "What's on your mind?", maxLength: 5000 },
+};

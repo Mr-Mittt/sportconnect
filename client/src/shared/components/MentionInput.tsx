@@ -22,6 +22,7 @@ import {
   type Segment,
 } from '@/shared/lib/mentionMarkup';
 import { resolvePaste, type PastePerson } from '@/shared/lib/resolvePaste';
+import { listStyle, measureCaret, sameAnchor, type CaretAnchor } from '@/shared/lib/mentionListPlacement';
 
 /** A person the `@` list offers. `label` is what the row shows (it tells two same-name people apart); the chip shows `name`. */
 export interface MentionOptionItem {
@@ -72,6 +73,12 @@ interface MentionInputProps {
   onBlur?: () => void;
   /** Puts the caret in the box when it appears (the reply box). */
   focusOnMount?: boolean;
+  /**
+   * The post box (CLIENT-GL-50 part 2): Enter adds a line, so `onSubmit` is never called from the keyboard (the owner's
+   * Post button sends), Enter while the `@` list is open still picks, pasted line breaks are kept, and the box grows
+   * to a maximum height and then scrolls.
+   */
+  multiline?: boolean;
   className?: string;
 }
 
@@ -107,8 +114,9 @@ function readNodes(parent: Node): Segment[] {
  * rewrites its text while the user types (an IME such as Vietnamese Telex is composing in it); it only reads it. It
  * rewrites it on a pick, a paste and a clear. The box shows only names; the id lives in the draft's `stored` text.
  *
- * The `@` list floats over what is below the box (absolute, not in a portal: a nested popover misbehaves inside the session modal), as wide as its longest name; arrows move,
- * Enter or Tab pick, Esc closes. Enter outside the list sends and never adds a line.
+ * The `@` list floats at the caret (absolute, not in a portal: a nested popover misbehaves inside the session modal), as wide as its longest name; arrows move,
+ * Enter or Tab pick, Esc closes. Enter outside the list sends and never adds a line, unless `multiline` (the post box).
+ * When the list closes (a pick, Esc, blur, the caret leaving the word) the owner is told there is no `@` word any more.
  */
 export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(function MentionInput(
   {
@@ -123,6 +131,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     pasteResolvePeople,
     onBlur,
     focusOnMount = false,
+    multiline = false,
     className,
   },
   ref,
@@ -131,10 +140,18 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const [mention, setMention] = useState<ActiveMention | null>(null);
-  const [closed, setClosed] = useState(false);
+  const [closed, setClosedState] = useState(false);
+  // The same flag for the handlers that read it before React re-renders (keyup right after Esc).
+  const closedRef = useRef(false);
+  const setClosed = useCallback((value: boolean) => {
+    closedRef.current = value;
+    setClosedState(value);
+  }, []);
   const [active, setActive] = useState(0);
   const [length, setLength] = useState(0);
   const lastQuery = useRef<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<CaretAnchor | null>(null);
 
   const chip = useCallback(
     (userId: string, name: string): HTMLSpanElement => {
@@ -179,7 +196,10 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   const updateQuery = useCallback(() => {
     const next = activeMention();
     setMention(next);
-    const query = next === null ? null : next.query;
+    const measured = next === null || closedRef.current ? null : measureCaret(wrapRef.current);
+    setAnchor((current) => (sameAnchor(current, measured) ? current : measured));
+    // A closed list (Esc, blur) is no `@` word for the owner: its search goes idle and the next `@` starts empty.
+    const query = next === null || closedRef.current ? null : next.query;
     if (lastQuery.current !== query) {
       lastQuery.current = query;
       onQueryChange?.(query);
@@ -247,12 +267,39 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     if (focusOnMount) rootRef.current?.focus();
   }, [focusOnMount]);
 
+  /** A line break at the caret (a selection is replaced); refused at the limit like any typed character. */
+  const insertNewline = useCallback(() => {
+    const root = rootRef.current;
+    const selection = window.getSelection();
+    if (root === null || selection === null || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (!root.contains(range.startContainer)) return;
+    range.deleteContents();
+    if (storedLength(readNodes(root)) + 1 > maxLength) return;
+    // A zero-width character follows the break: without content after it, a browser puts the caret before a trailing
+    // line break, and the next word would land in front of it. `readNodes` drops the character.
+    const node = document.createTextNode('\n\u200b');
+    range.insertNode(node);
+    caretAfter(node, 1);
+    root.normalize();
+    setClosed(false);
+    setActive(0);
+    emit();
+    updateQuery();
+  }, [emit, maxLength, setClosed, updateQuery]);
+
   // A text that would pass the limit is refused before it is typed (not while an IME is composing).
   useEffect(() => {
     const root = rootRef.current;
     if (root === null) return;
     const block = (event: Event) => {
       const input = event as InputEvent;
+      // A virtual keyboard sends Enter as an input event, not a key: it is the same line break (or nothing, single-line).
+      if (input.inputType === 'insertParagraph' || input.inputType === 'insertLineBreak') {
+        input.preventDefault();
+        if (multiline) insertNewline();
+        return;
+      }
       if (input.isComposing || input.inputType !== 'insertText' || input.data === null) return;
       const selection = window.getSelection();
       if (selection === null || !selection.isCollapsed) return;
@@ -260,7 +307,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     };
     root.addEventListener('beforeinput', block);
     return () => root.removeEventListener('beforeinput', block);
-  }, [maxLength]);
+  }, [maxLength, multiline, insertNewline]);
 
   // The caret moved by mouse or keys: the `@` word it is in may have changed.
   useEffect(() => {
@@ -317,12 +364,14 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         event.preventDefault();
         event.stopPropagation();
         setClosed(true);
+        updateQuery();
         return;
       }
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      onSubmit();
+      if (multiline) insertNewline();
+      else onSubmit();
     }
   };
 
@@ -330,7 +379,9 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     event.preventDefault();
     const root = rootRef.current;
     if (root === null) return;
-    const raw = event.clipboardData.getData('text/plain').replace(/\s*[\r\n]+\s*/g, ' ');
+    const clipboard = event.clipboardData.getData('text/plain');
+    // A line box keeps its line breaks; the one-line box turns them into one blank.
+    const raw = multiline ? clipboard.replace(/\r\n?/g, '\n') : clipboard.replace(/\s*[\r\n]+\s*/g, ' ');
     if (raw === '') return;
     const selection = window.getSelection();
     if (selection === null) return;
@@ -382,7 +433,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   };
 
   return (
-    <div className={cn('relative flex min-w-0 flex-1 flex-col gap-1', className)}>
+    <div ref={wrapRef} className={cn('relative flex min-w-0 flex-1 flex-col gap-1', className)}>
       <div
         ref={rootRef}
         role="textbox"
@@ -390,7 +441,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         tabIndex={0}
         suppressContentEditableWarning
         aria-label={ariaLabel}
-        aria-multiline="false"
+        aria-multiline={multiline}
         aria-autocomplete="list"
         aria-controls={open ? listId : undefined}
         aria-activedescendant={open ? `${listId}-${activeIndex}` : undefined}
@@ -411,12 +462,16 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         }}
         onBlur={() => {
           setClosed(true);
+          updateQuery();
           onBlur?.();
         }}
         onPaste={onPaste}
         onCopy={(event) => onCopyOrCut(event, false)}
         onCut={(event) => onCopyOrCut(event, true)}
-        className="min-h-9 w-full cursor-text overflow-hidden rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm break-words whitespace-pre-wrap text-text-primary empty:before:text-text-muted empty:before:content-[attr(data-placeholder)] focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:outline-none"
+        className={cn(
+          'min-h-9 w-full cursor-text rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm break-words whitespace-pre-wrap text-text-primary empty:before:text-text-muted empty:before:content-[attr(data-placeholder)] focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:outline-none',
+          multiline ? 'max-h-60 min-h-20 overflow-y-auto' : 'overflow-hidden',
+        )}
       />
       {length >= maxLength * COUNTER_FROM && (
         <p className="self-end text-2xs text-text-muted" aria-live="polite">
@@ -430,7 +485,11 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
           aria-label={pickerLabel}
           // Keep focus in the box while the pointer is on the list.
           onMouseDown={(event) => event.preventDefault()}
-          className="absolute top-full left-0 z-20 mt-1 flex max-h-40 w-max max-w-72 min-w-32 flex-col overflow-y-auto rounded-md border-hairline border-border-strong bg-surface-2 py-0.5 shadow-md"
+          className={cn(
+            'absolute z-20 flex max-h-40 w-max max-w-72 min-w-32 flex-col overflow-y-auto rounded-md border-hairline border-border-strong bg-surface-2 py-0.5 shadow-md',
+            anchor === null && 'top-full left-0 mt-1',
+          )}
+          style={listStyle(anchor, listed.length)}
         >
           {listed.map((person, index) => (
             <li key={person.id} role="presentation">

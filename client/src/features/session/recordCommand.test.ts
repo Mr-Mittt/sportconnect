@@ -67,13 +67,14 @@ describe('commandNameOf', () => {
 });
 
 describe('mentionPlayers', () => {
-  it('uses the full name, and (1), (2) when several participants share it', () => {
+  it('uses the full name as it is, with no (1), (2) when several participants share it (a chip carries the id)', () => {
     const list = mentionPlayers([
       { id: 'a', name: 'Nam' },
       { id: 'b', name: 'Lan' },
       { id: 'c', name: 'nam' },
     ]);
-    expect(list.map((p) => p.token)).toEqual(['Nam (1)', 'Lan', 'nam (2)']);
+    expect(list.map((p) => p.token)).toEqual(['Nam', 'Lan', 'nam']);
+    expect(list.map((p) => p.id)).toEqual(['a', 'b', 'c']);
   });
 });
 

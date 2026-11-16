@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
+import { useAuthStore } from '@/app/authStore';
 import badminton from '../recordSchema/badminton-record-schema-v1.json';
 import { parseRecordSchema, type RecordSchema } from '../recordSchema';
 import type { RecordChangeSetResponse } from '../resultTypes';
@@ -76,7 +77,12 @@ function reply(data: Partial<RecordChangeSetResponse>) {
   };
 }
 
-afterEach(() => vi.restoreAllMocks());
+const INVALID = 'Your update is invalid. Follow the hint, [...] is optional.';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  useAuthStore.setState({ user: null, accessToken: null, isBootstrapping: false });
+});
 
 describe('useRecordCommands', () => {
   it('is unavailable to someone who cannot edit, on a hidden section, or without a schema', () => {
@@ -121,17 +127,88 @@ describe('useRecordCommands', () => {
     expect(outcome).toEqual({ handled: true, accepted: false });
     expect(post).not.toHaveBeenCalled();
     expect(result.current?.notices).toHaveLength(1);
-    expect(result.current?.notices[0].text).toBe(
-      'Side 1: “Zed” isn\'t a player in this session. Pick one from the @ list.',
-    );
+    expect(result.current?.notices[0].text).toBe(INVALID);
   });
 
-  it('refuses :del for an id the session does not hold', () => {
+  it('says the same one line whatever is wrong with the command', () => {
     const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
+    for (const text of [':del 99', ':add @Bao 21', ':add', ':upd', ':add @Bao hello 21 vs 15 @An']) {
+      const fresh = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
+      act(() => {
+        fresh.result.current?.run(cmd(text));
+      });
+      expect(fresh.result.current?.notices.map((notice) => notice.text)).toEqual([INVALID]);
+    }
+    expect(result.current?.notices).toEqual([]);
+  });
+
+  it('counts the refusals in a row on one line, and a command that goes through starts the count again', async () => {
+    vi.spyOn(apiClient, 'post').mockResolvedValue(reply({}));
+    const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
+    const refuse = () =>
+      act(() => {
+        result.current?.run(cmd(':del 99'));
+      });
+    refuse();
+    expect(result.current?.notices.map((notice) => notice.text)).toEqual([INVALID]);
+    refuse();
+    expect(result.current?.notices.map((notice) => notice.text)).toEqual([`${INVALID} (2)`]);
+    refuse();
+    expect(result.current?.notices.map((notice) => notice.text)).toEqual([`${INVALID} (3)`]);
+
+    act(() => {
+      result.current?.run(cmd(':add @Bao 15 vs 21 @An'));
+    });
+    refuse();
+    expect(result.current?.notices.map((notice) => notice.text)).toEqual([INVALID]);
+  });
+
+  it('starts the count again for another session', () => {
+    const { result, rerender } = renderHook(({ id }) => useRecordCommands(id, resultData()), {
+      wrapper,
+      initialProps: { id: 9 as number | null },
+    });
     act(() => {
       result.current?.run(cmd(':del 99'));
     });
-    expect(result.current?.notices[0].text).toBe('There is no game with id 99.');
+    act(() => {
+      result.current?.run(cmd(':del 99'));
+    });
+    rerender({ id: null });
+    rerender({ id: 10 });
+    act(() => {
+      result.current?.run(cmd(':del 99'));
+    });
+    expect(result.current?.notices.map((notice) => notice.text)).toEqual([INVALID]);
+  });
+
+  it('lists the caller first and marks them, when they are a player', () => {
+    useAuthStore.setState({
+      user: {
+        id: 'u-an',
+        email: 'an@example.com',
+        firstName: 'An',
+        lastName: 'X',
+        username: 'an',
+        phoneNumber: null,
+        avatarUrl: null,
+        roles: ['ROLE_USER'],
+      },
+      accessToken: 'token',
+      isBootstrapping: false,
+    });
+    const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
+    expect(result.current?.mentions.map((mention) => [mention.name, mention.isCurrentUser])).toEqual([
+      ['An', true],
+      ['Bao', false],
+      ['Bình', false],
+    ]);
+  });
+
+  it('keeps the roster order and marks nobody when the caller is not a player', () => {
+    const { result } = renderHook(() => useRecordCommands(9, resultData()), { wrapper });
+    expect(result.current?.mentions.map((mention) => mention.name)).toEqual(['Bao', 'An', 'Bình']);
+    expect(result.current?.mentions.some((mention) => mention.isCurrentUser)).toBe(false);
   });
 
   it('sends a valid :add as the same change set the dialog builds, and shows nothing on success', async () => {
@@ -219,21 +296,20 @@ describe('useRecordCommands', () => {
     expect(result.current?.notices[0].text).toBe("Couldn't save the results. Try again.");
   });
 
-  it(`keeps the ${MAX_NOTICES} newest notices, newest first, and drops them when the session changes`, () => {
+  it(`keeps the ${MAX_NOTICES} newest notices, newest first, and drops them when the session changes`, async () => {
     const { result, rerender } = renderHook(({ id }) => useRecordCommands(id, resultData()), {
       wrapper,
       initialProps: { id: 9 as number | null },
     });
-    for (const id of [1, 2, 3, 4]) {
+    vi.spyOn(apiClient, 'post').mockRejectedValue(new Error('boom'));
+    for (let attempt = 0; attempt < MAX_NOTICES + 1; attempt += 1) {
       act(() => {
-        result.current?.run(cmd(`:del ${id + 100}`));
+        result.current?.run(cmd(':add @Bao 15 vs 21 @An'));
       });
+      await waitFor(() => expect(result.current?.notices.length).toBe(Math.min(attempt + 1, MAX_NOTICES)));
     }
-    expect(result.current?.notices.map((notice) => notice.text)).toEqual([
-      'There is no game with id 104.',
-      'There is no game with id 103.',
-      'There is no game with id 102.',
-    ]);
+    expect(result.current?.notices).toHaveLength(MAX_NOTICES);
+    expect(new Set(result.current?.notices.map((notice) => notice.id)).size).toBe(MAX_NOTICES);
     rerender({ id: null });
     rerender({ id: 9 });
     expect(result.current?.notices).toEqual([]);

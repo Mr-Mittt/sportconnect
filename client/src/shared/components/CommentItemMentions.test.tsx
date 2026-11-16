@@ -85,10 +85,10 @@ describe('CommentItem tags', () => {
     expect(onQueryChange).toHaveBeenLastCalledWith('Pr');
   });
 
-  it('leaves a Post comment (no source) exactly as stored', () => {
+  it('draws the chips of a comment even where no source is given (the markup is never shown raw)', () => {
     renderItem({});
-    expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.getByText(`Nice one @[Priya Shah](${ID})`)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Mention: Priya Shah' })).toBeInTheDocument();
+    expect(screen.queryByText(/@\[Priya Shah\]/)).toBeNull();
   });
 
   it('lets a reply tag someone and sends the id markup', async () => {

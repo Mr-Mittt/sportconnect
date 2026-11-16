@@ -383,3 +383,11 @@ export interface PageResponse<T> {
 }
 
 export type PagedApiResponse<T> = ApiResponse<PageResponse<T>>;
+
+/** CLIENT-GL-50 part 2 — one member of `GET /groups/{groupId}/members/search` (B23). Typed 1:1 against
+ * `GroupMemberSearchResultResponse`; nothing else is ever sent (no role, email or status). */
+export interface GroupMemberSearchResult {
+  userId: string;
+  fullName: string;
+  avatarUrl: string | null;
+}

@@ -32,9 +32,9 @@ const commands = {
     { command: 'del' as const, template: ':del <id>' },
   ],
   mentions: [
-    { id: 'a', token: 'Alice Nguyen', name: 'Alice Nguyen', avatarUrl: null },
-    { id: 'b', token: 'Bob Tran', name: 'Bob Tran', avatarUrl: null },
-    { id: 'c', token: 'Carol Le', name: 'Carol Le', avatarUrl: null },
+    { id: 'a', token: 'Alice Nguyen', name: 'Alice Nguyen', avatarUrl: null, isCurrentUser: false },
+    { id: 'b', token: 'Bob Tran', name: 'Bob Tran', avatarUrl: null, isCurrentUser: false },
+    { id: 'c', token: 'Carol Le', name: 'Carol Le', avatarUrl: null, isCurrentUser: false },
   ],
   run: () => ({ handled: true, accepted: true }),
   isRunning: false,

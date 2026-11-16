@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MAX_POST_LENGTH } from '@/features/feed/types';
 import { CreatePostForm } from './CreatePostForm';
+import type { MentionSource } from './MentionInput';
 
 const currentUser = { firstName: 'Jordan', fullName: 'Jordan Lee', avatarUrl: null };
 const noop = () => {};
@@ -36,12 +37,18 @@ function renderForm(ui: React.ReactElement) {
 describe('CreatePostForm', () => {
   it("shows the current user's first name in the placeholder", () => {
     renderForm(<CreatePostForm {...baseProps} />);
-    expect(screen.getByPlaceholderText("What's on your mind, Jordan?")).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Create a post' })).toHaveAttribute(
+      'data-placeholder',
+      "What's on your mind, Jordan?",
+    );
   });
 
   it('falls back to a name-less placeholder when currentUser is undefined', () => {
     renderForm(<CreatePostForm {...baseProps} currentUser={undefined} />);
-    expect(screen.getByPlaceholderText("What's on your mind?")).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Create a post' })).toHaveAttribute(
+      'data-placeholder',
+      "What's on your mind?",
+    );
   });
 
   it('disables Post until there is text, then enables it', async () => {
@@ -61,17 +68,17 @@ describe('CreatePostForm', () => {
     expect(screen.getByRole('button', { name: 'Post' })).toBeDisabled();
   });
 
-  it('calls onSubmit with trimmed content, asBroadcast false, and clears the textarea', async () => {
+  it('calls onSubmit with trimmed content, asBroadcast false, and clears the box', async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     renderForm(<CreatePostForm {...baseProps} onSubmit={onSubmit} />);
 
-    const textarea = screen.getByLabelText('Create a post');
-    await user.type(textarea, '  Great match today!  ');
+    const box = screen.getByRole('textbox', { name: 'Create a post' });
+    await user.type(box, '  Great match today!  ');
     await user.click(screen.getByRole('button', { name: 'Post' }));
 
     expect(onSubmit).toHaveBeenCalledWith('Great match today!', { asBroadcast: false });
-    expect(textarea).toHaveValue('');
+    expect(box).toHaveTextContent('');
   });
 
   it('disables Post while a submission is in flight', () => {
@@ -79,12 +86,45 @@ describe('CreatePostForm', () => {
     expect(screen.getByRole('button', { name: 'Post' })).toBeDisabled();
   });
 
-  it('enforces MAX_POST_LENGTH via the textarea maxLength attribute', () => {
+  it('refuses typing past MAX_POST_LENGTH and shows the counter near it', async () => {
+    const user = userEvent.setup();
     renderForm(<CreatePostForm {...baseProps} />);
-    expect(screen.getByLabelText('Create a post')).toHaveAttribute(
-      'maxLength',
-      String(MAX_POST_LENGTH),
-    );
+    const box = screen.getByRole('textbox', { name: 'Create a post' });
+    await user.click(box);
+    await user.paste('a'.repeat(MAX_POST_LENGTH - 1));
+    await user.keyboard('bc');
+    expect(box.textContent).toHaveLength(MAX_POST_LENGTH);
+    expect(screen.getByText(`${MAX_POST_LENGTH} / ${MAX_POST_LENGTH}`)).toBeInTheDocument();
+  });
+
+  it('Enter adds a line and never sends; the Post button sends the text with its line break', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    renderForm(<CreatePostForm {...baseProps} onSubmit={onSubmit} />);
+    const box = screen.getByRole('textbox', { name: 'Create a post' });
+    await user.type(box, 'first');
+    await user.keyboard('{Enter}');
+    await user.keyboard('second');
+    expect(onSubmit).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+    expect(onSubmit).toHaveBeenCalledWith('first\nsecond', { asBroadcast: false });
+  });
+
+  it('keeps the line breaks of a pasted text', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    renderForm(<CreatePostForm {...baseProps} onSubmit={onSubmit} />);
+    await user.click(screen.getByRole('textbox', { name: 'Create a post' }));
+    await user.paste('one\ntwo');
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+    expect(onSubmit).toHaveBeenCalledWith('one\ntwo', { asBroadcast: false });
+  });
+
+  it('a line break alone is not a post', async () => {
+    const user = userEvent.setup();
+    renderForm(<CreatePostForm {...baseProps} />);
+    await user.type(screen.getByRole('textbox', { name: 'Create a post' }), '{Enter}{Enter}');
+    expect(screen.getByRole('button', { name: 'Post' })).toBeDisabled();
   });
 
   it('reports the inert Photo/Location/Tag sport affordances as clicks, not omitted', async () => {
@@ -173,7 +213,7 @@ describe('CreatePostForm', () => {
       await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
 
       expect(router.state.location.pathname).toBe('/a');
-      expect(screen.getByLabelText('Create a post')).toHaveValue('Great match today!');
+      expect(screen.getByRole('textbox', { name: 'Create a post' })).toHaveTextContent('Great match today!');
     });
 
     it('does not block navigation when the composer is empty', async () => {
@@ -184,5 +224,59 @@ describe('CreatePostForm', () => {
       await waitFor(() => expect(router.state.location.pathname).toBe('/b'));
       expect(screen.queryByRole('dialog', { name: 'Leave without posting?' })).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('CreatePostForm tagging (CLIENT-GL-50 part 2)', () => {
+  const PRIYA = '123e4567-e89b-12d3-a456-426614174000';
+  const source = (): MentionSource => ({
+    options: [{ id: PRIYA, name: 'Priya Shah', label: 'Priya Shah', avatarUrl: null }],
+    onQueryChange: vi.fn(),
+  });
+
+  it('offers the source people for an @ word, tells the source what was typed, and sends the tag as markup', async () => {
+    const onSubmit = vi.fn();
+    const mentionSource = source();
+    const user = userEvent.setup();
+    renderForm(<CreatePostForm {...baseProps} onSubmit={onSubmit} mentionSource={mentionSource} />);
+    const box = screen.getByRole('textbox', { name: 'Create a post' });
+    await user.type(box, 'see @Pr');
+    expect(mentionSource.onQueryChange).toHaveBeenLastCalledWith('Pr');
+    const list = screen.getByRole('listbox', { name: 'People you can tag' });
+    await user.click(within(list).getByRole('option', { name: /Priya Shah/ }));
+    expect(screen.getByRole('img', { name: 'Mention: Priya Shah' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+    expect(onSubmit).toHaveBeenCalledWith(`see @[Priya Shah](${PRIYA})`, { asBroadcast: false });
+  });
+
+  it('Enter while the @ list is open picks the person and adds no line', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    renderForm(<CreatePostForm {...baseProps} onSubmit={onSubmit} mentionSource={source()} />);
+    await user.type(screen.getByRole('textbox', { name: 'Create a post' }), '@Pr');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('img', { name: 'Mention: Priya Shah' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+    expect(onSubmit).toHaveBeenCalledWith(`@[Priya Shah](${PRIYA})`, { asBroadcast: false });
+  });
+
+  it('does not offer a person already tagged in the post', async () => {
+    const user = userEvent.setup();
+    renderForm(<CreatePostForm {...baseProps} mentionSource={source()} />);
+    const box = screen.getByRole('textbox', { name: 'Create a post' });
+    await user.type(box, '@Pr');
+    await user.keyboard('{Enter}');
+    await user.type(box, '@Pr');
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('without a source nobody is offered and the text is sent as typed', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    renderForm(<CreatePostForm {...baseProps} onSubmit={onSubmit} />);
+    await user.type(screen.getByRole('textbox', { name: 'Create a post' }), 'hi @Pr');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Post' }));
+    expect(onSubmit).toHaveBeenCalledWith('hi @Pr', { asBroadcast: false });
   });
 });

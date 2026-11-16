@@ -90,14 +90,16 @@ test('Session thread — tag a person in a comment and in a reply, Backspace rem
     expect(copiedFromThread).not.toMatch(/[0-9a-f]{8}-/);
   });
 
-  await test.step('5. a reply can tag too, with the same list', async () => {
+  await test.step('5. a reply can tag too, with the same list; the caller is never offered themselves in a normal comment', async () => {
     await discussion.getByRole('button', { name: 'Reply' }).first().click();
     const reply = discussion.getByRole('textbox', { name: /Reply to/ });
     await reply.pressSequentially('thanks @jor');
-    await expect(listed('Jordan Lee')).toBeVisible();
+    await expect(detail.getByRole('listbox', { name: 'People you can tag' })).toHaveCount(0);
+    await reply.fill('thanks @pri');
+    await expect(listed('Priya Shah')).toBeVisible();
     await reply.press('Enter');
     await reply.press('Enter');
-    await expect(discussion.getByRole('img', { name: 'Mention: Jordan Lee' })).toBeVisible();
+    await expect(discussion.getByRole('img', { name: 'Mention: Priya Shah' })).toHaveCount(2);
   });
 });
 
@@ -131,9 +133,30 @@ test('Session thread — a pasted record command turns its names into chips (CLI
     await expect(detail.getByText('21 vs 15')).toHaveCount(0);
   });
 
+  await test.step('2b. the caller is a player: the list says (you) and puts them first', async () => {
+    await composer.pressSequentially(':add @');
+    const options = detail.getByRole('listbox', { name: 'Players' }).getByRole('option');
+    await expect(options.first()).toContainText('Jordan Lee (you)');
+    await composer.press('Escape');
+    await composer.press('Control+A');
+    await composer.press('Backspace');
+    await expect(composer).toHaveText('');
+  });
+
   await test.step('3. a pasted name nobody has stays plain text and the command is refused', async () => {
     await pasteInto(page, ':add @Nobody 21 vs 15 @Priya Shah 3 ');
     await composer.press('Enter');
-    await expect(detail.getByTestId('command-notices')).toContainText("isn't a player in this session");
+    const notices = detail.getByTestId('command-notices');
+    await expect(notices).toContainText('Your update is invalid. Follow the hint, [...] is optional.');
+    await expect(notices).not.toContainText('(2)');
+  });
+
+  await test.step('4. the same refusal again counts: one line, "(2)", then "(3)"', async () => {
+    const notices = detail.getByTestId('command-notices');
+    await composer.press('Enter');
+    await expect(notices).toContainText('Your update is invalid. Follow the hint, [...] is optional. (2)');
+    await composer.press('Enter');
+    await expect(notices).toContainText('(3)');
+    await expect(notices.getByText(/Your update is invalid/)).toHaveCount(1);
   });
 });

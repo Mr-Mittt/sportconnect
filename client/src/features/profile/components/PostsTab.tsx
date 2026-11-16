@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuthStore } from '@/app/authStore';
+import { usePostMentionSource } from '@/features/feed/hooks/usePostMentionSource';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { usePost } from '@/features/feed/hooks/usePost';
@@ -61,6 +62,9 @@ export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }
   const hashtagResultsData = useHashtagResultsData(activeHashtag, isHashtagModalOpen);
 
   const activeCommentsPost = activeCommentsPostQuery.data ?? null;
+  // CLIENT-GL-50 part 2: who an `@` can tag. The post box makes a user post (friends), the comments follow the open post.
+  const composerMentionSource = usePostMentionSource(null);
+  const commentMentionSource = usePostMentionSource(activeCommentsPost?.groupId ?? null, activeCommentsPostId !== null);
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
@@ -91,6 +95,7 @@ export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }
         onTagSportClick={() => {}}
         isError={isCreatePostError}
         errorText={getCodedErrorMessage(createPostError)}
+        mentionSource={composerMentionSource}
       />
       <Feed
         posts={data.posts}
@@ -119,6 +124,7 @@ export function PostsTab({ i18nOverridePrefix }: { i18nOverridePrefix?: string }
         onClose={closeComments}
         currentUserId={currentUserId}
         currentUser={{ fullName: `${user.firstName} ${user.lastName}`, avatarUrl: user.avatarUrl }}
+        mentionSource={commentMentionSource}
         post={activeCommentsPost}
         sport={activeCommentsPostSport}
         isPostLoading={activeCommentsPostQuery.isLoading}

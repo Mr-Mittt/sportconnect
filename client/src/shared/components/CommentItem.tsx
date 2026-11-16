@@ -25,7 +25,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/ui/dropdown-menu';
-import { HashtagText } from './HashtagText';
+import { PostText } from './PostText';
 
 interface CommentItemProps {
   comment: Comment;
@@ -245,16 +245,15 @@ export function CommentItem({
                 </DropdownMenu>
               )}
             </div>
-            {mentionSource !== undefined ? (
-              <MentionText text={comment.content} className="text-2sm text-text-primary" />
-            ) : onHashtagClick !== undefined ? (
-              <HashtagText
+            {/* A post comment (hashtags clickable) draws chips and hashtags; a session comment draws chips only. */}
+            {onHashtagClick !== undefined ? (
+              <PostText
                 text={comment.content}
                 onHashtagClick={onHashtagClick}
                 className="text-2sm text-text-primary"
               />
             ) : (
-              <p className="text-2sm text-text-primary">{comment.content}</p>
+              <MentionText text={comment.content} className="text-2sm text-text-primary" />
             )}
           </div>
           <div className="mt-1 flex items-center gap-3 px-1">

@@ -231,6 +231,7 @@ e2e/
     session-form-layout.spec.ts # CLIENT-SESSION-34
     session-results.spec.ts   # CLIENT-GL-38, CLIENT-GL-39
     session-thread-tags.spec.ts # CLIENT-GL-50
+    post-tags.spec.ts           # CLIENT-GL-50 part 2
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
@@ -1216,7 +1217,7 @@ Second test (CLIENT-GL-39, record commands in the thread; `resultsRecords` seeds
 
 The "my results" switch has no e2e step (every seeded game has both players); Vitest covers it.
 
-### `e2e/flows/session-thread-tags.spec.ts` (CLIENT-GL-50, 2 `test()`s: 6 steps and 3 steps)
+### `e2e/flows/session-thread-tags.spec.ts` (CLIENT-GL-50, 2 `test()`s: 6 steps and 5 steps)
 
 The chip composer of the session thread. `resultsOngoing` (first test) and `resultsRecords` (second) make the Pickleball fixture "Sunday pickup run" ONGOING with Jordan Lee (the caller) and Priya Shah JOINED; the mock `GET /sessions/{id}/thread-people` follows SESSION-GL-64's name rule over the participants. Caret and Backspace over a chip can only be proven in a browser, so they live here and not in Vitest. The clipboard permission is granted.
 
@@ -1227,7 +1228,7 @@ The chip composer of the session thread. `resultsOngoing` (first test) and `resu
 | 2b. copy | Ctrl+A, Ctrl+C in the box → the clipboard holds `hi @Priya Shah` | Copying a chip gives the plain `@Full Name`, never the id. |
 | 3. Backspace | Backspace removes the blank, the next one removes the whole chip | A chip goes whole. |
 | 4. post | Tag again, type, Enter → the thread shows the chip and `hi @Priya Shah see you at 7`, no `](` anywhere; double-click the chip and copy → no id on the clipboard | The stored `@[Name](id)` is drawn as a chip; the id is never on screen or in a copy. |
-| 5. reply | Reply → `thanks @jor` → Jordan Lee listed → Enter, Enter → the reply shows the chip | The reply box is a chip composer with the same list, and a reply row draws its tags. |
+| 5. reply | Reply → `thanks @jor` → no list (the caller is never offered themselves), `thanks @pri` → Priya Shah listed → Enter, Enter → the reply shows the chip (2 chips in the thread) | The reply box is a chip composer with the same list, a reply row draws its tags, and nobody tags themselves in a normal comment. |
 
 Second test (a pasted record command; `resultsRecords` seeds two games):
 
@@ -1235,7 +1236,24 @@ Second test (a pasted record command; `resultsRecords` seeds two games):
 |---|---|---|
 | 1. paste | Paste `:add @Jordan Lee 21 vs 15 @Priya Shah ` (a `paste` event with text/plain) → "Jordan Lee" is a chip, the last `@Priya Shah` keeps no trailing blank and the "Players" list is open for it | A pasted command resolves its names to chips; the last `@` word is left to the picker. |
 | 2. send | Enter picks Priya, Enter sends → "Results (3)", no comment | A command built from chips logs a game. |
-| 3. unknown name | Paste `:add @Nobody 21 vs 15 @Priya Shah 3 ` → Enter → "isn't a player in this session" | A name nobody has stays plain text and the command is refused. |
+| 2b. you | `:add @` → the first row of the "Players" list reads "Jordan Lee (you)"; Esc and clear | The caller is marked and first in the record-command player list (part 3). |
+| 3. unknown name | Paste `:add @Nobody 21 vs 15 @Priya Shah 3 ` → Enter → the one generic line "Your update is invalid. Follow the hint, [...] is optional." (no "(2)" yet) | A name nobody has stays plain text and the command is refused, with one generic message. |
+| 4. count | Enter again → the same line with "(2)", again → "(3)", still one line | A streak of refusals shows as one line with a count (part 3). |
+
+### `e2e/flows/post-tags.spec.ts` (CLIENT-GL-50 parts 2 and 3, 3 `test()`s: 4 steps, 3 steps and 1)
+
+Tagging in normal posts. The first test runs on Home Feed (a user post: the fixture friend Priya Shah is the only friend), the second on `/groups` in "Weekend Tennis Ladder" (a group post: the mock `GET /groups/{id}/members/search` follows B23 over the group's members, Sam Ito and Alex Chen besides the caller). Real caret and line-break behaviour is only provable in a browser, so it is proven here.
+
+| Step | What it does | Why it exists |
+|---|---|---|
+| Home 1. list and Enter | `derby with @shah` → "Priya Shah" listed → Enter picks (one chip, no line break) → type `#derby`, Enter, `Court 3 at 7pm` → the box reads the two lines and no post exists yet | The post box offers friends; Enter picks while the list is open and adds a line otherwise; the caret lands after the break (a browser puts it before a trailing break otherwise). |
+| Home 2. Post | The Post button sends → the first article has the text, the chip, a clickable `#derby`, no `@[` markup, and `#derby\nCourt 3 at 7pm` as its text; the box is empty | The stored markup is drawn as a chip, the hashtag still works, line breaks show (`pre-line`). |
+| Home 3. comment | View comments → `see you @pri` → list → Enter picks → Enter sends → the dialog shows two chips (post and comment) | A comment under a user post tags the same friends. |
+| Home 4. reply and Esc | Reply → `@shah` → list → Esc closes the list and keeps the dialog → space, `@pri` → list again | Esc leaves the dialog alone while a list is open, and the next `@` searches again. |
+| Group 1. members only | `@ito` lists "Sam Ito"; `@priya` (a friend, not a member) lists nobody; `bring @alex` → Alex Chen → Enter → chip | A group post tags the group's members, not the caller's friends. |
+| Group 2. post | The Post button sends → the group feed's first article shows the Alex Chen chip, no `@[` | The tag is drawn in a group post (the mock now keeps the `sportId` the page tags the post with, so it stays under its pill). |
+| Group 3. comment | View comments → `@sam` → Sam Ito listed → Enter, Enter → the chip shows in the dialog | A comment under a group post tags the members too. |
+| Caret (own test) | `a long line of words before the tag @shah` → the list is far from the left edge of the box and inside the box's own height | The `@` list opens at the caret, not under the box (part 3). |
 
 ### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
 

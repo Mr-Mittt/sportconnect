@@ -403,7 +403,7 @@ describe('HomeFeedPage', () => {
     expect(reverted[0]).toHaveTextContent('14');
   });
 
-  it('creating a post via the composer prepends it to the feed and clears the textarea', async () => {
+  it('creating a post via the composer prepends it to the feed and clears the box', async () => {
     const user = userEvent.setup();
     // Same reasoning as the like-toggle test above: onSettled invalidates
     // feedKeys.all in the background, which refetches the mounted feed query
@@ -434,13 +434,13 @@ describe('HomeFeedPage', () => {
     render(<HomeFeedPage />, { wrapper });
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
 
-    const composer = screen.getByLabelText('Create a post');
+    const composer = screen.getByRole('textbox', { name: 'Create a post' });
     await user.type(composer, 'Fresh off the pitch!');
     await user.click(screen.getByRole('button', { name: 'Post' }));
 
     await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(5));
     expect(screen.getAllByRole('article')[0]).toHaveTextContent('Fresh off the pitch!');
-    expect(composer).toHaveValue('');
+    expect(composer).toHaveTextContent('');
   });
 
   // SPORT-5 **reverses** HF-2's aria-disabled-at-the-cap behaviour asserted here before.

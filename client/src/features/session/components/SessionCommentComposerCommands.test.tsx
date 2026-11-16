@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { MentionOption } from '../hooks/useRecordCommands';
@@ -13,15 +13,18 @@ const hints = [
 ];
 
 const mentions: MentionOption[] = [
-  { id: 'u-bao', token: 'Bao', name: 'Bao', avatarUrl: null },
-  { id: 'u-an', token: 'An', name: 'An', avatarUrl: null },
-  { id: 'u-anh', token: 'Anh Tuấn', name: 'Anh Tuấn', avatarUrl: null },
+  { id: 'u-bao', token: 'Bao', name: 'Bao', avatarUrl: null, isCurrentUser: false },
+  { id: 'u-an', token: 'An', name: 'An', avatarUrl: null, isCurrentUser: false },
+  { id: 'u-anh', token: 'Anh Tuấn', name: 'Anh Tuấn', avatarUrl: null, isCurrentUser: false },
 ];
 
-function setup(run: ComposerCommands['run'] = () => ({ handled: true, accepted: true })) {
+function setup(
+  run: ComposerCommands['run'] = () => ({ handled: true, accepted: true }),
+  players: MentionOption[] = mentions,
+) {
   const user = userEvent.setup();
   const onAddComment = vi.fn();
-  const commands: ComposerCommands = { hints, mentions, run: vi.fn(run), isRunning: false };
+  const commands: ComposerCommands = { hints, mentions: players, run: vi.fn(run), isRunning: false };
   render(
     <SessionCommentComposer
       currentUser={{ fullName: 'Jordan Lee', avatarUrl: null }}
@@ -132,5 +135,29 @@ describe('SessionCommentComposer record commands', () => {
     const { user, input } = setup();
     await user.type(input, 'see you @A');
     expect(screen.queryByRole('listbox', { name: 'Players' })).toBeNull();
+  });
+
+  it('marks the caller with (you) in the player list, in the order the list was given (the caller first)', async () => {
+    const { user, input } = setup(undefined, [
+      { id: 'u-an', token: 'An', name: 'An', avatarUrl: null, isCurrentUser: true },
+      { id: 'u-bao', token: 'Bao', name: 'Bao', avatarUrl: null, isCurrentUser: false },
+    ]);
+    await user.type(input, ':add @');
+    const names = within(screen.getByRole('listbox', { name: 'Players' }))
+      .getAllByRole('option')
+      .map((option) => option.querySelector('span.truncate')?.textContent);
+    expect(names).toEqual(['An (you)', 'Bao']);
+  });
+
+  it('writes two players with the same name the same way: no (1), (2)', async () => {
+    const { user, input } = setup(undefined, [
+      { id: 'u-nam1', token: 'Nam', name: 'Nam', avatarUrl: null, isCurrentUser: false },
+      { id: 'u-nam2', token: 'Nam', name: 'Nam', avatarUrl: null, isCurrentUser: false },
+    ]);
+    await user.type(input, ':add @');
+    const names = within(screen.getByRole('listbox', { name: 'Players' }))
+      .getAllByRole('option')
+      .map((option) => option.querySelector('span.truncate')?.textContent);
+    expect(names).toEqual(['Nam', 'Nam']);
   });
 });

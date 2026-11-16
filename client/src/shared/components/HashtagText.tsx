@@ -4,6 +4,8 @@ interface HashtagTextProps {
   text: string;
   onHashtagClick: (tag: string) => void;
   className?: string;
+  /** The element to draw: a `<p>` by default, a `<span>` where the text sits inside a paragraph already (PostText). */
+  as?: 'p' | 'span';
 }
 
 // Same `#(\w+)` shape as the real backend's extraction regex
@@ -20,7 +22,7 @@ const HASHTAG_PATTERN = /#(\w+)/g;
  * comment content (`CommentItem`) — one component, not three copies of the
  * same regex-split-and-render logic.
  */
-export function HashtagText({ text, onHashtagClick, className }: HashtagTextProps) {
+export function HashtagText({ text, onHashtagClick, className, as: Tag = 'p' }: HashtagTextProps) {
   const nodes: ReactNode[] = [];
   let lastIndex = 0;
 
@@ -49,5 +51,5 @@ export function HashtagText({ text, onHashtagClick, className }: HashtagTextProp
     nodes.push(text.slice(lastIndex));
   }
 
-  return <p className={className}>{nodes}</p>;
+  return <Tag className={className}>{nodes}</Tag>;
 }

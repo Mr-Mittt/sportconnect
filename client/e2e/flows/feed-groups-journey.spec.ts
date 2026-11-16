@@ -102,7 +102,7 @@ test('Feed/groups journey', async ({ page, mockSessionId }) => {
     await expect(page.getByText("Couldn't create post. Try again.")).toBeVisible();
     // The composer clears on submit regardless of outcome (CreatePostForm's
     // existing behavior, not changed by FEED-10) — retyping is the retry.
-    await expect(composer).toHaveValue('');
+    await expect(composer).toHaveText('');
 
     await composer.fill('Great match, see everyone next week!');
     await page.getByRole('button', { name: 'Post', exact: true }).click();

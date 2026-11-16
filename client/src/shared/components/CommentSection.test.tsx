@@ -185,7 +185,7 @@ describe('CommentSection', () => {
     await user.type(input, 'Nice one!');
     await user.click(screen.getByRole('button', { name: 'Post comment' }));
     expect(onAddComment).toHaveBeenCalledWith('Nice one!');
-    expect(input).toHaveValue('');
+    expect(input).toHaveTextContent('');
   });
 
   it('send button stays disabled (muted) while the composer is empty, solid once there is text', async () => {

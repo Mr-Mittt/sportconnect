@@ -7,6 +7,7 @@ import { useHomeFeedStore } from '@/app/homeFeedStore';
 import { usePost } from '@/features/feed/hooks/usePost';
 import { usePostErrorGuard } from '@/features/feed/postErrors';
 import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
+import { usePostMentionSource } from '@/features/feed/hooks/usePostMentionSource';
 import { useCommentsData } from '@/features/feed/useCommentsData';
 import { useHashtagResultsData } from '@/features/feed/useHashtagResultsData';
 import { CreateSessionModal } from '@/features/session/components/CreateSessionModal';
@@ -198,6 +199,9 @@ export function HomeFeedPage() {
   // that has this post, and falls through to a real fetch otherwise (a post
   // outside every loaded cache, or a cold `/posts/:id` load).
   const activeCommentsPost = activeCommentsPostQuery.data ?? null;
+  // CLIENT-GL-50 part 2: who an `@` can tag. The post box makes a user post (friends), the comments follow the open post.
+  const composerMentionSource = usePostMentionSource(null);
+  const commentMentionSource = usePostMentionSource(activeCommentsPost?.groupId ?? null, activeCommentsPostId !== null);
   const activeCommentsPostSportKey =
     activeCommentsPost !== null ? sportKeyForId(activeCommentsPost.sportId) : undefined;
   const activeCommentsPostSport =
@@ -270,6 +274,7 @@ export function HomeFeedPage() {
           onPhotoClick={noop}
           onLocationClick={noop}
           onTagSportClick={noop}
+          mentionSource={composerMentionSource}
         />
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
           <div className="min-w-0">
@@ -337,6 +342,7 @@ export function HomeFeedPage() {
             fullName: `${user.firstName} ${user.lastName}`,
             avatarUrl: user.avatarUrl,
           }}
+          mentionSource={commentMentionSource}
           post={activeCommentsPost}
           sport={activeCommentsPostSport}
           isPostLoading={activeCommentsPostQuery.isLoading}

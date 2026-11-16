@@ -16,8 +16,8 @@ const people: MentionOptionItem[] = [
 ];
 
 const mentions: MentionOption[] = [
-  { id: 'u-bao', token: 'Bao', name: 'Bao', avatarUrl: null },
-  { id: 'u-an', token: 'An', name: 'An', avatarUrl: null },
+  { id: 'u-bao', token: 'Bao', name: 'Bao', avatarUrl: null, isCurrentUser: false },
+  { id: 'u-an', token: 'An', name: 'An', avatarUrl: null, isCurrentUser: false },
 ];
 
 /** The names a list shows (the avatar's initials are not part of the name). */

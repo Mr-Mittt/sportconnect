@@ -74,10 +74,15 @@ export function SessionCommentComposer({
     if (commandMode && commands !== undefined) {
       return commands.mentions
         .filter((player) => !tagged.has(player.id) && matchesName(player.name, query))
-        .map((player) => ({ id: player.id, name: player.name, label: player.token, avatarUrl: player.avatarUrl }));
+        .map((player) => ({
+          id: player.id,
+          name: player.name,
+          label: player.isCurrentUser ? `${player.token} ${t('detail.qualifier.you')}` : player.token,
+          avatarUrl: player.avatarUrl,
+        }));
     }
     return (mentionSource?.options ?? []).filter((person) => !tagged.has(person.id));
-  }, [query, commandMode, commands, mentionSource, draft.segments]);
+  }, [query, commandMode, commands, mentionSource, draft.segments, t]);
 
   const submitComment = () => {
     const segments = trimSegments(draft.segments);
