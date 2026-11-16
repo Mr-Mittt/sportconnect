@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-16 (CLIENT-GL-50 done, parts 1 to 3)
+**Last updated:** 2026-11-16 (CLIENT-GL-50 done, parts 1 to 4)
 
 ---
 
@@ -144,7 +144,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 31 | [CLIENT-GL-50](MVP/CLIENT-GL-50_CHIP_COMPOSER_AND_TAGGING_IN_THE_SESSION_THREAD.md) | Chip composer and tagging (2026-11-16): the session thread's and, in part 2, the posts' comment, reply and post boxes are chip boxes (`@` tags friends or group members via server B23, stored as `@[Name](userId)`, drawn next to clickable hashtags, no self tag outside record commands, line breaks in posts); part 3: `(host)` and `(you)` labels, no `(x)` for same names, one generic invalid-command line with a failure count, the `@` list at the caret, Waiting for approval folded into Players; one name matcher for the friend filter and the mocks | `DONE` (2026-11-16) |
+| 31 | [CLIENT-GL-50](MVP/CLIENT-GL-50_CHIP_COMPOSER_AND_TAGGING_IN_THE_SESSION_THREAD.md) | Chip composer and tagging (2026-11-16): the session thread's and, in part 2, the posts' comment, reply and post boxes are chip boxes (`@` tags friends or group members via server B23, stored as `@[Name](userId)`, drawn next to clickable hashtags, no self tag outside record commands, line breaks in posts); part 3: `(host)` and `(you)` labels, no `(x)` for same names, one generic invalid-command line with a failure count, the `@` list at the caret, Waiting for approval folded into Players; part 4: keyboard and bold for the command hints, whole-row highlight and a saved line in the record dialog, `Results (mine/all)` | `DONE` (2026-11-16) |
 | 30 | [CLIENT-GL-39](MVP/CLIENT-GL-39_THREAD_COMMAND_HINTS_AND_REPLIES.md) | Session thread: record commands `:add`, `:upd`, `:del` typed in the comment box (client parses and validates with the record schema, sends the same change set as the dialog, nothing posted to the thread; errors are caller-only system-style lines), command hints and an `@` player list, a copy-record-id button and a "my results" switch in the Result section (no record numbers there any more). Client only; follow-up SESSION-GL-63 | `DONE` (2026-11-15) |
 | 28 | [CLIENT-GL-38](MVP/CLIENT-GL-38_SESSION_DETAIL_RESULT_SECTION_AND_DIALOG.md) | Session detail: collapsible Result section (the games logged, drawn from the sport's record schema) and the record dialog (add, edit, delete with a per-row X / strike-through / undo, an always-present placeholder, red borders while typing and on Save, rejected rows kept at the bottom); the scoreboard moved to CLIENT-GL-49. 19 requirement mutations killed; e2e: new `session-results.spec.ts` and the session-detail specs passed; no baseline change expected | `DONE` (2026-11-13) |
 | 29 | [SPORT-18](MVP/SPORT-18_RESULT_SCHEMA_ADMIN_SCREEN.md) | Admin: "Record schema" section on the sport detail (same generic JSON editor as the profile and session attributes; `GET /sports/all/{id}/result-schema`, `PUT /sports/{id}/result-schema`), with a non-blocking hint when the app cannot read the document. 7 mutations killed; admin e2e passed; built with CLIENT-GL-38 | `DONE` (2026-11-13) |

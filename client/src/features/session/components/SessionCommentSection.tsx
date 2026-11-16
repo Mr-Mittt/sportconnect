@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import type { Comment } from '@/features/feed/types';
 import { CommentItem } from '@/shared/components/CommentItem';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
@@ -35,6 +36,10 @@ interface SessionCommentSectionProps {
   notices?: RecordCommandNotice[];
   /** CLIENT-GL-50: the people an `@` offers in the composer and the reply boxes; also turns tags in the thread into chips. */
   mentionSource?: MentionSource;
+  /** The caret goes into the composer when the modal opens. */
+  composerFocusRef?: Ref<{ focus: () => void }>;
+  /** Told whether the composer or a reply box holds text (the modal asks before closing over it). */
+  onDraftChange?: (key: string, hasDraft: boolean) => void;
 }
 
 /**
@@ -74,6 +79,8 @@ export function SessionCommentSection({
   commands,
   notices = [],
   mentionSource,
+  composerFocusRef,
+  onDraftChange,
   i18nOverridePrefix,
 }: SessionCommentSectionProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -91,6 +98,9 @@ export function SessionCommentSection({
         isPosting={isPosting}
         commands={commands}
         mentionSource={mentionSource}
+        focusOnOpen={composerFocusRef !== undefined}
+        focusRef={composerFocusRef}
+        onDraftChange={onDraftChange}
         i18nOverridePrefix={i18nOverridePrefix}
       />
       {notices.length > 0 && (
@@ -122,6 +132,7 @@ export function SessionCommentSection({
               onReply={onAddReply}
               isSubmittingReply={isPosting}
               mentionSource={mentionSource}
+              onDraftChange={onDraftChange}
             />
           ))}
           {hasMore && (

@@ -76,6 +76,10 @@ const noop = () => {};
  * `usePost`, not a feed-cache lookup — decoupling the dialog from feed
  * pagination and making it work from a cold load with no prior fetch at all.
  */
+/** `/` and `/posts/:postId` are the same page: opening or closing a post moves between them without leaving it. */
+const isHomeFeedPath = (path: string) => path === '/' || /^\/posts\/[^/]+$/.test(path);
+const isInsideHomeFeed = (fromPath: string, toPath: string) => isHomeFeedPath(fromPath) && isHomeFeedPath(toPath);
+
 export function HomeFeedPage() {
   const { t } = useTranslation('homeFeed');
   const activeSport = useHomeFeedStore((state) => state.activeSport);
@@ -275,6 +279,8 @@ export function HomeFeedPage() {
           onLocationClick={noop}
           onTagSportClick={noop}
           mentionSource={composerMentionSource}
+          // Opening a post (`/posts/:id`) and closing it (`/`) keeps this page, and the draft, in place.
+          isSamePage={isInsideHomeFeed}
         />
         <div className="grid grid-cols-1 gap-3.5 md:grid-cols-[1.6fr_1fr]">
           <div className="min-w-0">

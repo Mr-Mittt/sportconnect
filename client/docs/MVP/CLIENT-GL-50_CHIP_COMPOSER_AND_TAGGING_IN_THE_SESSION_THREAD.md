@@ -1,6 +1,6 @@
 # CLIENT-GL-50 · Chip composer and tagging in the session thread
 
-**Status:** `DONE` (2026-11-16: parts 1, 2 and 3)
+**Status:** `DONE` (2026-11-16: parts 1 to 5)
 **Type:** Feature · **Depends on:** SESSION-GL-64 (the people search) · follows CLIENT-GL-39
 **Filed:** 2026-11-15, owner request after CLIENT-GL-39: a picked `@` name should show in the comment box as a chip (Backspace removes the whole name), and the `@` picker should work in normal comments too, like tagging people.
 
@@ -152,3 +152,64 @@ Folded into this ticket by the owner (one PR for the whole tagging story, includ
 **E2E:** `session-results`, `session-thread-tags`, `matches-journey`, `post-tags` and `a11y`: 28 passed and 1 failed on the first run; the failure was my own new `(you)` assertion in a step where that player was already a chip (the list rightly leaves out a tagged person); moved to its own step, `session-thread-tags` passed 2 of 2. The rest of the `e2e` project was not run. Not run: a live backend, Firefox and Safari, Storybook in a browser, visual regression.
 
 **Visual-regression expectation:** baselines `session-detail-approval-queue-*` at 375, 768, 1280 change (Waiting for approval folded into Players); the `@` list, `(host)`, `(you)` and the invalid line are in no baseline; recorded in `BASELINE-UPDATE-1`; every other baseline must come back byte-identical. Visual regression was not run here.
+
+---
+
+## Scope change 2026-11-16 (owner, after parts 1 to 3 were committed and pushed as `cce2698`): part 4, record commands, record dialog and Results section
+
+Folded into this ticket by the owner (same PR). Meanings, from the owner's batch:
+
+**Record commands (the hints under the comment box)**
+1. **Keyboard.** The command hints are real keyboard stops: Down from the box focuses the first hint, Up and Down move between hints (Up from the first returns to the box), Enter or Space starts the command (as a click does now). Tab from the box goes to the first hint, through the rest, and only then to the Send button (the hints come before Send in the tab order, still drawn below the row).
+2. **Bold for what is typed.** Each hint stays visible while typing, and the parts of its template that the typed text already covers are bold, matched by role: typing `:add @Bao 21 vs` bolds `:add`, the first player, the left `[score]` and `vs`; parts not typed yet and optional parts skipped stay normal. Same for `:upd <id>` and `:del <id>`.
+
+**Record dialog**
+3. **Edited highlight for players and dropdowns.** A changed score slot already gets the focus-colored border; a changed player and a changed dropdown (the game's other fields) get the same.
+4. **Saved message.** After a successful save the footer shows a green, centered "Results saved" line (en and vi); it clears when the user edits again or closes the dialog.
+
+**Results section**
+5. **My results count.** With the "My results" switch on, the title reads `Results ({my records}/{all records})`; off, it is as before.
+
+**Out of scope (unchanged):** server changes (none), guests, statistics screens.
+
+---
+
+## Implementation summary, part 4: command hints, record dialog and Results title (2026-11-16)
+
+**Design as approved** ("approved, go implement"; the owner chose to highlight the whole row being edited when the highlight item was ambiguous), built as designed. All client-side.
+
+1. **Hints, keyboard.** The composer row is now a grid: the DOM order is avatar, box, hints, Send, while the hints are drawn under the box (row 2). Tab therefore goes box, hints, Send, with no `tabIndex`. Down from the box (when no `@` list is open, that list keeps its own arrows) focuses the first hint; in the hints Up and Down move focus, Up from the first and Esc return to the box; Enter and Space start the command as a click does. The handlers sit on `role="presentation"` wrappers (the a11y lint rules).
+2. **Hints, bold.** `buildCommandHints` also returns each template as `parts` (`command`, `id`, `player` and `score` with their side, `vs`; the template is the parts joined). New `coveredHintParts(hint, draft)` reads the draft the way the parser does (`commandText`: a chip is a player of the side it stands on, a number or a `3,2` list the score of its side, the id right after `:upd` or `:del`, `vs` switches the side) and returns how many characters of each part are covered; the command word counts a typed prefix. The hint button draws covered text in `font-semibold text-text-primary`; its text content is still the whole template. A name typed without being picked, optional parts skipped and parts not yet typed stay plain.
+3. **Record dialog, row highlight.** `RecordEditor` computes `rowEdited` (a saved record, not deleted, that differs from what was saved in any player or score); every player select and score input of that row takes the accent border and ring. Before, only the changed field did. A new row is never highlighted (nothing saved to differ from); undo clears it.
+4. **Record dialog, saved message.** After a successful save the footer shows `session:result.dialog.saved` ("Results saved" / "Đã lưu kết quả") in `text-text-success`, centered, as a `role="status"`: while the mutation succeeded, the draft is clean and there is no whole-request error. The next edit makes the draft dirty (message gone), closing unmounts it, and a rejected row keeps the draft dirty so it never shows beside one.
+5. **Results title.** With "My results" on (and a known caller) the section title is `session:result.headingMine` (`Results ({{mine}}/{{count}})`, vi `Kết quả (...)`): mine is the number of games the caller plays in, count all games; off, `Results ({{count}})` as before.
+
+**Consumer census.** `CommandHint` gained a required `parts` (one producer, `buildCommandHints`; three hand-made fixtures in the composer stories and two composer tests pass `parts: []`, which draws the bare template); `RecordEditor`'s per-field `edited` is now the row's (its one consumer is the record dialog; `PlayerSelect`'s `edited` prop is unchanged); `SessionResultSection`'s title is the only reader of the new key. Locale keys added: `session:result.headingMine`, `session:result.dialog.saved` (en and vi). No I18N-4 census row changes.
+
+**Tests.** Vitest: `recordCommandHints.test` (parts, `coveredHintParts`: prefix, whole word, other command, players, unpicked name, scores, `vs`, optional parts, id of `:upd` and `:del`), `SessionCommentComposerCommands.test` (Down, Up, Esc, Enter, Tab through the hints to Send, Tab straight to Send without hints, arrows not taken over from an open `@` list, bold words, the whole template text), `SessionResultDialog.test` (whole-row highlight for a score and a player change, undo, new row; the saved line: not before, after a save, gone on the next edit, none beside a rejected row), `SessionResultSection.test` (`Results (1/2)`, off again `(2)`, `(0/1)`). e2e: `session-results` step 1b (focus path, Tab order, bold) and the saved line in step 4 (text, centered, green).
+
+**Mutation check.** 17 mutants of the part 4 logic against the scoped specs; 15 killed, 2 equivalent survivors. Killed: the command word's typed prefix not covered (8 tests), the id not covered, `vs` not switching the side (3), players matched on any side (3), the `3,2` score list not read, Down not reaching the hints (2), Up from the first hint staying, Esc not returning to the box, the hints out of the tab order, nothing bold, a score change not seen by the row highlight, a player change not seen, the saved line staying after an edit (2), the saved line never shown (2), the title ignoring the switch (2), the title counting all games as mine (2). Equivalent survivors: `coveredHintParts` returning early for a lone command word (nothing after it could change the result) and a deleted row being highlighted (an edited result has an Undo button instead of Delete, so the UI cannot delete a row that is edited; the `!deleted` guard only protects a state the screen cannot reach).
+
+**E2E:** `session-results`, `session-thread-tags`, `matches-journey` and `a11y`: 26 passed. The rest of the `e2e` project was not run. Vitest: the whole `features/session` folder passes (57 files, 803 tests). Not run: a live backend, Firefox and Safari, Storybook in a browser, visual regression.
+
+**Visual-regression expectation:** no baselined surface changes (no visual spec types `:`, edits or saves a result, or turns "My results" on); recorded in `BASELINE-UPDATE-1`, with a note to look at the composer's new grid first if a `session-detail-*` file differs. Visual regression was not run here.
+
+---
+
+## Implementation summary, part 5: post box look, leave questions and focus (2026-11-16)
+
+**Design as approved** ("approved, go implement"); the leave question for comments and replies and the "Keep editing" focus were added by the owner during the implementation. All client-side.
+
+1. **Post box look reverted.** `MentionInput` has a `bare` option (no border, transparent background, `py-2 text-sm`, one row high, growing to its maximum height); `CreatePostForm` turns it on. The comment, reply and session boxes keep the tinted, bordered look.
+2. **Home composer and opening a post.** Opening a post on Home moves `/` to `/posts/:id` on the same page, and `useBlocker` read it as leaving. `useUnsavedChangesGuard(hasChanges, isSamePage?)` now lets a move the page itself makes through; `CreatePostForm` takes `isSamePage`, `HomeFeedPage` passes "both paths are `/` or `/posts/:id`". Leaving for any other route still asks. Groups and Profile never changed route, so they were not affected.
+3. **Caret in the comment box.** The post modal and the session modal take `onOpenAutoFocus`, cancel Radix's focus on the first button and focus the comment box (`SessionCommentComposer` also takes `focusOnOpen`, for a session that loads after the modal opened).
+4. **Leave question for comments and replies.** `useDraftRegistry` (which boxes hold text, by key) and `useCloseWithDraftGuard(hasDraft, onClose)` (`shared/hooks/useCloseWithDraftGuard.ts`, no router needed). `CommentSection` and `SessionDetailModal` close through it: X, Esc and an outside click ask "Leave without posting?" (own copy `sharedDialogs:unsavedComment`, en and vi) when the comment box or any open reply box holds text. `CommentItem`, `SessionCommentComposer` and the post's comment box report through `onDraftChange(key, hasDraft)`. Closing the tab gets the browser prompt. A draft sent or emptied while the question is up cancels it.
+5. **"Keep editing" returns to the text.** A box with unsent text marks itself `data-unsent="true"` (`MentionInput`, the plain reply input); `focusFirstUnsent(scope)` focuses the first one in document order inside the modal (or the Home composer) with the caret at its end; `UnsavedPostConfirmDialog` takes `onStayFocus` and uses `onCloseAutoFocus` so Radix does not hand the focus back to the close button. Several unsent boxes: the comment box before the reply boxes under it.
+
+**Consumer census.** `useUnsavedChangesGuard` gained an optional second argument (other callers unchanged); `UnsavedPostConfirmDialog` an optional `onStayFocus` (its other callers unchanged, it now also reports Esc and X as a stay through one handler); `CommentItem`, `SessionCommentSection`, `SessionCommentComposer` and `CreatePostForm` gained optional props; the `sharedDialogs:unsavedComment` keys (en and vi) are new. No I18N-4 census row changes.
+
+**Tests.** Vitest: `useUnsavedChangesGuard.test` (`isSamePage` through both ways, still blocks another page), `HomeFeedPage.test` (open and close a post with a draft: nothing asked, draft kept, caret in the comment box), `CommentSection.test` and `SessionDetailModal.test` (caret on open), `CommentSectionCloseGuard.test` and the new block in `SessionDetailModal.test` (closes at once with no draft, asks for a comment and for a reply, Keep editing and Leave, not after a send, not after Leave and a reopen, Keep editing focus order), `CreatePostForm.test` (plain look; Keep editing returns to the box). e2e: `post-tags` Home draft test (3 steps).
+
+**Mutation check.** 14 mutants of the new logic; all killed except 2 equivalents: the session modal's explicit `focus()` call (jsdom cannot tell it from the composer's `focusOnMount`; it is kept because in a browser Radix's own focus runs after the composer mounts, which only the explicit call beats; not proven in a real browser here), and the composer's unmount cleanup of its draft flag (a new composer reports "empty" on mount, which clears it).
+
+**Not run:** a live backend, Firefox and Safari, Storybook in a browser, visual regression.

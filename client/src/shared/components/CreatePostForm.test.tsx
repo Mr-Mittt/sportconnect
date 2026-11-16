@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -35,6 +35,23 @@ function renderForm(ui: React.ReactElement) {
 }
 
 describe('CreatePostForm', () => {
+  it('"Keep editing" after the leave question puts the caret back in the post box (owner, 2026-11-16)', async () => {
+    const user = userEvent.setup();
+    const { router } = renderForm(<CreatePostForm {...baseProps} />);
+    await user.type(screen.getByRole('textbox', { name: 'Create a post' }), 'half');
+    await act(async () => router.navigate('/b'));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Create a post' })).toHaveFocus());
+    expect(router.state.location.pathname).toBe('/a');
+  });
+
+  it('keeps the plain look it had before tagging: one row, no border, no tinted background (owner, 2026-11-16)', () => {
+    renderForm(<CreatePostForm {...baseProps} />);
+    const box = screen.getByRole('textbox', { name: 'Create a post' });
+    expect(box).toHaveClass('min-h-9', 'bg-transparent');
+    expect(box).not.toHaveClass('min-h-20', 'bg-surface-1', 'border-hairline');
+  });
+
   it("shows the current user's first name in the placeholder", () => {
     renderForm(<CreatePostForm {...baseProps} />);
     expect(screen.getByRole('textbox', { name: 'Create a post' })).toHaveAttribute(

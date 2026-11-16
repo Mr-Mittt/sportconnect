@@ -12,7 +12,7 @@ import {
   type Icon,
 } from '@tabler/icons-react';
 import i18next from 'i18next';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import type { Comment } from '@/features/feed/types';
 import { SportIcon } from '@/shared/components/SportIcon';
@@ -31,6 +31,9 @@ import { cn } from '@/shared/lib/utils';
 import type { ResolvedSportAttributeSchema, SportKey, SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button } from '@/shared/ui/button';
+import { focusFirstUnsent } from '@/shared/lib/focusFirstUnsent';
+import { UnsavedPostConfirmDialog } from '@/shared/components/UnsavedPostConfirmDialog';
+import { useCloseWithDraftGuard, useDraftRegistry } from '@/shared/hooks/useCloseWithDraftGuard';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
@@ -535,6 +538,14 @@ export function SessionDetailModal({
   // `canJoinOrLeave` also gates approve/reject, not just non-empty: the backend rejects both once the session is
   // CANCELLED (same reason cancelSession itself is blocked on COMPLETED/CANCELLED), so it stays hidden rather than
   // showing buttons that would only ever 400.
+  const composerFocus = useRef<{ focus: () => void }>(null);
+  // Closing over an unsent comment or reply asks first (owner, 2026-11-16).
+  const drafts = useDraftRegistry();
+  const closeGuard = useCloseWithDraftGuard(drafts.hasDraft, () => {
+    setRejectingUserId(null);
+    setRejectReason('');
+    onClose();
+  });
   const approvalQueue =
     canJoinOrLeave && requestedParticipants.length > 0 ? (
       <section aria-label={t('detail.approval.label')} className="flex flex-col gap-2">
@@ -677,14 +688,20 @@ export function SessionDetailModal({
       <Dialog
         open={isOpen}
         onOpenChange={(open) => {
-          if (!open) {
-            setRejectingUserId(null);
-            setRejectReason('');
-            onClose();
-          }
+          if (!open) closeGuard.requestClose();
         }}
       >
-        <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
+        <DialogContent
+          fixedHeight
+          fixedHeightVh={72}
+          className="max-w-[35rem]"
+          data-unsent-scope="session-modal"
+          // The caret goes to the comment box, not to the first button (owner, 2026-11-16).
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            composerFocus.current?.focus();
+          }}
+        >
           <div className="border-hairline-b flex flex-col gap-[9px] border-border px-4 py-3">
             <div className="grid w-full grid-cols-[1fr_minmax(0,auto)_1fr] items-start gap-2">
               <span aria-hidden="true" />
@@ -984,6 +1001,8 @@ export function SessionDetailModal({
                   onDeleteComment={onDeleteComment}
                   onToggleCommentLike={onToggleCommentLike}
                   mentionSource={tagSource}
+                  composerFocusRef={composerFocus}
+                  onDraftChange={drafts.report}
                   commands={recordCommands}
                   notices={recordCommands?.notices}
                 />
@@ -1054,6 +1073,13 @@ export function SessionDetailModal({
           )}
         </DialogContent>
       </Dialog>
+      <UnsavedPostConfirmDialog
+        isOpen={closeGuard.isAsking}
+        onStay={closeGuard.stay}
+        onLeave={closeGuard.leave}
+        onStayFocus={() => focusFirstUnsent('[data-unsent-scope="session-modal"]')}
+        i18nOverridePrefix="sharedDialogs:unsavedComment"
+      />
       {session !== undefined &&
         result !== undefined &&
         result.access.visible &&

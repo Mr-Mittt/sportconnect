@@ -443,6 +443,38 @@ describe('HomeFeedPage', () => {
     expect(composer).toHaveTextContent('');
   });
 
+  it('opening and closing a post with a draft in the composer asks nothing and keeps the draft (owner, 2026-11-16)', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
+      const staticResponse = staticGetResponse(url);
+      if (staticResponse) return staticResponse;
+      if (url === '/posts/feed') {
+        return { data: { success: true, message: '', data: feedPage(feedPosts), timestamp: '' } };
+      }
+      if (url.startsWith('/posts/') && url.endsWith('/comments')) {
+        return { data: { success: true, message: '', data: feedPage([]), timestamp: '' } };
+      }
+      throw new Error(`unexpected GET ${url}`);
+    });
+
+    render(<HomeFeedPage />, { wrapper });
+    await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(4));
+    await user.type(screen.getByRole('textbox', { name: 'Create a post' }), 'half written');
+
+    await user.click(screen.getAllByRole('button', { name: /view comments/i })[0]);
+    const commentsDialog = await screen.findByRole('dialog');
+    expect(screen.queryByText('Leave without posting?')).not.toBeInTheDocument();
+    // the caret is in the comment box, not on the first button
+    await waitFor(() =>
+      expect(within(commentsDialog).getByRole('textbox', { name: /comment/i })).toHaveFocus(),
+    );
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByText('Leave without posting?')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Create a post' })).toHaveTextContent('half written');
+  });
+
   // SPORT-5 **reverses** HF-2's aria-disabled-at-the-cap behaviour asserted here before.
   // Holding every catalogue sport now opens a dialog that says so, instead of a dead pill.
   it('"Add sport" with every catalogue sport held opens the explanatory dialog (SPORT-5)', async () => {

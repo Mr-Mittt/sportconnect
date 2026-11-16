@@ -49,6 +49,8 @@ interface CommentItemProps {
   /** CLIENT-GL-50: session comments only. With it the comment text draws its `@[Name](id)` tags as chips and the reply
    * box is a chip composer offering these people; without it (Post comments) both stay plain text. */
   mentionSource?: MentionSource;
+  /** Told whether the open reply box holds text (the modal asks before closing over an unsent reply). */
+  onDraftChange?: (key: string, hasDraft: boolean) => void;
 }
 
 function initialsFor(fullName: string): string {
@@ -111,6 +113,7 @@ export function CommentItem({
   onHashtagClick,
   i18nOverridePrefix,
   mentionSource,
+  onDraftChange,
 }: CommentItemProps) {
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [showReplyBox, setShowReplyBox] = useState(false);
@@ -148,6 +151,12 @@ export function CommentItem({
   };
   const replyIsEmpty =
     mentionSource === undefined ? replyContent.trim().length === 0 : isEmptyDraft(replyDraft.segments);
+  const replyKey = `reply-${comment.id}`;
+  const hasReplyDraft = showReplyBox && !replyIsEmpty;
+  useEffect(() => {
+    onDraftChange?.(replyKey, hasReplyDraft);
+  }, [onDraftChange, replyKey, hasReplyDraft]);
+  useEffect(() => () => onDraftChange?.(replyKey, false), [onDraftChange, replyKey]);
 
   const isOwnComment = currentUserId !== undefined && comment.userId === currentUserId;
   const canReply = comment.parentCommentId === null;
@@ -303,6 +312,7 @@ export function CommentItem({
                   ref={replyInput}
                   type="text"
                   value={replyContent}
+                  data-unsent={replyIsEmpty ? undefined : 'true'}
                   onChange={(event) => {
                     setReplyContent(event.target.value.slice(0, MAX_COMMENT_LENGTH));
                     setReplyTouched(true);

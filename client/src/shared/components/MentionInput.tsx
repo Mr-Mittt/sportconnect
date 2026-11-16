@@ -15,6 +15,7 @@ import { cn } from '@/shared/lib/utils';
 import { initialsFor } from '@/shared/lib/initialsFor';
 import {
   clipSegments,
+  isEmptyDraft,
   mergeSegments,
   plainText,
   serialize,
@@ -79,6 +80,11 @@ interface MentionInputProps {
    * to a maximum height and then scrolls.
    */
   multiline?: boolean;
+  /**
+   * The post box's own look (the one the plain textarea had before tagging): no border, no tinted background, one row
+   * high until the text needs more. Without it the box is the tinted, bordered comment box.
+   */
+  bare?: boolean;
   className?: string;
 }
 
@@ -132,6 +138,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
     onBlur,
     focusOnMount = false,
     multiline = false,
+    bare = false,
     className,
   },
   ref,
@@ -149,6 +156,8 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
   }, []);
   const [active, setActive] = useState(0);
   const [length, setLength] = useState(0);
+  // Holds something that is not sent yet (what "Keep editing" returns the focus to, `focusFirstUnsent`).
+  const [unsent, setUnsent] = useState(false);
   const lastQuery = useRef<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<CaretAnchor | null>(null);
@@ -236,6 +245,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
       draft = readDraft();
     }
     setLength(draft.stored.length);
+    setUnsent(!isEmptyDraft(draft.segments));
     onChange(draft);
     return draft;
   }, [maxLength, nodesFor, onChange, readDraft]);
@@ -446,6 +456,7 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         aria-controls={open ? listId : undefined}
         aria-activedescendant={open ? `${listId}-${activeIndex}` : undefined}
         data-placeholder={placeholder}
+        data-unsent={unsent ? 'true' : undefined}
         spellCheck={false}
         onInput={() => {
           setClosed(false);
@@ -469,8 +480,12 @@ export const MentionInput = forwardRef<MentionInputHandle, MentionInputProps>(fu
         onCopy={(event) => onCopyOrCut(event, false)}
         onCut={(event) => onCopyOrCut(event, true)}
         className={cn(
-          'min-h-9 w-full cursor-text rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm break-words whitespace-pre-wrap text-text-primary empty:before:text-text-muted empty:before:content-[attr(data-placeholder)] focus-visible:ring-2 focus-visible:ring-border-accent focus-visible:outline-none',
-          multiline ? 'max-h-60 min-h-20 overflow-y-auto' : 'overflow-hidden',
+          'min-h-9 w-full cursor-text break-words whitespace-pre-wrap text-text-primary empty:before:text-text-muted empty:before:content-[attr(data-placeholder)] focus-visible:outline-none',
+          bare
+            ? 'bg-transparent py-2 text-sm'
+            : 'rounded-lg border-hairline border-border bg-surface-1 px-3 py-1.5 text-2sm focus-visible:ring-2 focus-visible:ring-border-accent',
+          multiline ? 'max-h-60 overflow-y-auto' : 'overflow-hidden',
+          multiline && !bare && 'min-h-20',
         )}
       />
       {length >= maxLength * COUNTER_FROM && (

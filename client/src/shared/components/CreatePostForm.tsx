@@ -8,6 +8,7 @@ import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
 import { MentionInput, type MentionDraft, type MentionInputHandle, type MentionSource } from './MentionInput';
+import { focusFirstUnsent } from '@/shared/lib/focusFirstUnsent';
 import { UnsavedPostConfirmDialog } from './UnsavedPostConfirmDialog';
 
 interface CreatePostFormProps {
@@ -41,6 +42,8 @@ interface CreatePostFormProps {
    * copy (`sharedComponents.createPostForm.*`) for a specific caller. No current caller passes
    * this. */
   i18nOverridePrefix?: string;
+  /** A route change the hosting page makes while it stays mounted (Home Feed opening a post): not leaving, nothing is asked. */
+  isSamePage?: (fromPath: string, toPath: string) => boolean;
 }
 
 function initialsFor(fullName: string): string {
@@ -95,6 +98,7 @@ export function CreatePostForm({
   errorText,
   mentionSource,
   i18nOverridePrefix,
+  isSamePage,
 }: CreatePostFormProps) {
   const t = useOverridableText('sharedComponents', i18nOverridePrefix);
   const [draft, setDraft] = useState<MentionDraft>({ segments: [], stored: '', plain: '' });
@@ -110,7 +114,7 @@ export function CreatePostForm({
   }, [query, draft.segments, mentionSource?.options]);
 
   const hasText = !isEmptyDraft(draft.segments);
-  const unsavedGuard = useUnsavedChangesGuard(hasText);
+  const unsavedGuard = useUnsavedChangesGuard(hasText, isSamePage);
 
   const submitPost = () => {
     if (!hasText) return;
@@ -121,7 +125,7 @@ export function CreatePostForm({
   };
 
   return (
-    <div className="border-hairline mb-3.5 rounded-xl border-border bg-surface-2 p-3.5">
+    <div data-unsent-scope="post-composer" className="border-hairline mb-3.5 rounded-xl border-border bg-surface-2 p-3.5">
       <div className="flex gap-2.5">
         <Avatar className="size-9 shrink-0">
           {currentUser?.avatarUrl != null && <AvatarImage src={currentUser.avatarUrl} alt="" />}
@@ -132,6 +136,7 @@ export function CreatePostForm({
         <MentionInput
           ref={inputHandle}
           multiline
+          bare
           ariaLabel={t('createPostForm.ariaLabel')}
           placeholder={
             currentUser !== undefined
@@ -217,6 +222,7 @@ export function CreatePostForm({
         isOpen={unsavedGuard.isLeaveDialogOpen}
         onStay={unsavedGuard.cancelLeave}
         onLeave={unsavedGuard.proceed}
+        onStayFocus={() => focusFirstUnsent('[data-unsent-scope="post-composer"]')}
       />
     </div>
   );

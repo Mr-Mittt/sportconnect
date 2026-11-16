@@ -134,3 +134,40 @@ test('Home Feed — the @ list opens at the caret, not under the box (CLIENT-GL-
   expect(box!.x).toBeGreaterThan(field!.x + 150);
   expect(box!.y).toBeLessThan(field!.y + field!.height);
 });
+
+test('Home Feed — opening a post keeps a half-written post; closing over an unsent comment asks, and Keep editing returns to it (owner, 2026-11-16)', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  await seedAuthenticatedSession(page);
+  const composer = page.getByRole('textbox', { name: 'Create a post' });
+  const asked = page.getByText('Leave without posting?');
+
+  await test.step('1. a half-written post: opening a post asks nothing, the caret lands in the comment box', async () => {
+    await composer.click();
+    await composer.pressSequentially('half written post');
+    await page.getByRole('article').first().getByRole('button', { name: 'View comments' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('textbox', { name: 'Add a comment' })).toBeFocused();
+    await expect(asked).toHaveCount(0);
+  });
+
+  await test.step('2. closing over an unsent comment asks; Keep editing puts the caret back in it', async () => {
+    const dialog = page.getByRole('dialog');
+    const comment = dialog.getByRole('textbox', { name: 'Add a comment' });
+    await comment.pressSequentially('half comment');
+    await page.keyboard.press('Escape');
+    await expect(asked).toBeVisible();
+    await page.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(comment).toBeFocused();
+    await expect(comment).toHaveText('half comment');
+  });
+
+  await test.step('3. Leave closes the post; the half-written post is still in the box and nothing more is asked', async () => {
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Leave', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(asked).toHaveCount(0);
+    await expect(composer).toHaveText('half written post');
+  });
+});

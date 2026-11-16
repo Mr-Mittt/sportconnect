@@ -30,6 +30,14 @@
     "keepEditing": "Tiếp tục chỉnh sửa",
     "leave": "Rời đi"
   },
+  "unsavedComment": {
+    "unsavedPost": {
+      "title": "Rời đi mà không đăng?",
+      "body": "Bạn có một bình luận chưa gửi. Rời đi ngay bây giờ sẽ mất nội dung bạn đã nhập.",
+      "keepEditing": "Tiếp tục chỉnh sửa",
+      "leave": "Rời đi"
+    }
+  },
   "addSportIntro": {
     "title": "Thêm môn thể thao này vào hồ sơ của bạn?",
     "body": "Đây là nhóm {{sportName}} — chấp nhận lời mời này sẽ thêm môn thể thao này vào hồ sơ của bạn.",

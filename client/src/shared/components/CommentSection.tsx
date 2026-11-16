@@ -1,5 +1,5 @@
 import { IconHeart, IconHeartFilled, IconSend } from '@tabler/icons-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Comment, Post } from '@/features/feed/types';
 import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
 import { isEmptyDraft, serialize, trimSegments } from '@/shared/lib/mentionMarkup';
@@ -10,7 +10,10 @@ import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
 import { Button, POST_BUTTON_DISABLED_OVERRIDE } from '@/shared/ui/button';
+import { useCloseWithDraftGuard, useDraftRegistry } from '@/shared/hooks/useCloseWithDraftGuard';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { focusFirstUnsent } from '@/shared/lib/focusFirstUnsent';
+import { UnsavedPostConfirmDialog } from './UnsavedPostConfirmDialog';
 import { Skeleton } from '@/shared/ui/skeleton';
 import { CommentItem } from './CommentItem';
 import { MentionInput, type MentionDraft, type MentionInputHandle, type MentionSource } from './MentionInput';
@@ -128,6 +131,19 @@ export function CommentSection({
 
   const isDraftEmpty = isEmptyDraft(draft.segments);
 
+  // Closing over an unsent comment or reply asks first (owner, 2026-11-16).
+  const drafts = useDraftRegistry();
+  const reportDraft = drafts.report;
+  useEffect(() => {
+    reportDraft('comment', !isDraftEmpty);
+  }, [reportDraft, isDraftEmpty]);
+  const closeGuard = useCloseWithDraftGuard(drafts.hasDraft, () => {
+    // The box is gone with the closed dialog, so what it held is too.
+    setDraft({ segments: [], stored: '', plain: '' });
+    setQuery(null);
+    onClose();
+  });
+
   const submitComment = () => {
     if (isDraftEmpty) return;
     onAddComment(serialize(trimSegments(draft.segments)));
@@ -137,8 +153,19 @@ export function CommentSection({
   const displayName = post?.userFullName ?? t('commentSection.unknownUser');
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent fixedHeight fixedHeightVh={72} className="max-w-[35rem]">
+    <>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && closeGuard.requestClose()}>
+      <DialogContent
+        fixedHeight
+        fixedHeightVh={72}
+        className="max-w-[35rem]"
+        data-unsent-scope="comment-modal"
+        // The caret goes to the comment box, not to the first button (owner, 2026-11-16).
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          inputHandle.current?.focus();
+        }}
+      >
         <DialogTitle className="sr-only">
           {t('commentSection.dialogTitle', { name: displayName })}
         </DialogTitle>
@@ -274,6 +301,7 @@ export function CommentSection({
             <div className="flex flex-col gap-3">
               {comments.map((comment) => (
                 <CommentItem
+                  onDraftChange={drafts.report}
                   key={comment.id}
                   comment={comment}
                   currentUserId={currentUserId}
@@ -301,5 +329,13 @@ export function CommentSection({
         </div>
       </DialogContent>
     </Dialog>
+    <UnsavedPostConfirmDialog
+      isOpen={closeGuard.isAsking}
+      onStay={closeGuard.stay}
+      onLeave={closeGuard.leave}
+      onStayFocus={() => focusFirstUnsent('[data-unsent-scope="comment-modal"]')}
+      i18nOverridePrefix="sharedDialogs:unsavedComment"
+    />
+    </>
   );
 }
