@@ -9,6 +9,7 @@ import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
+import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
@@ -349,6 +350,85 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
                     .getContent();
             assertThat(notifications).hasSize(1);
             assertThat(notifications.get(0).getActorCount()).isEqualTo(2);
+        });
+    }
+
+    /**
+     * NTF-8: the host's reason travels from the rejection event into the notification's {@code message}, through the
+     * real exchange, queue, consumer and Hibernate round trip (the Spock specs mock each hop).
+     */
+    @Test
+    void sessionJoinRequestRejectedEvent_carriesTheHostsReasonIntoTheNotification() throws Exception {
+        UUID hostId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        SessionJoinRequestRejectedEvent payload = SessionJoinRequestRejectedEvent.builder()
+                .sessionId(997L).actorId(hostId).recipientUserId(requesterId).reason("  The session is full  ").build();
+
+        publish("session.join_request.rejected", "it-test:" + UUID.randomUUID(), payload);
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(requesterId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).hasSize(1);
+            assertThat(notifications.get(0).getType()).isEqualTo("session.join_request.rejected");
+            assertThat(notifications.get(0).getMessage()).isEqualTo("The session is full");
+        });
+    }
+
+    /** A rejection with no reason (or a blank one) leaves the message empty. */
+    @Test
+    void sessionJoinRequestRejectedEvent_withoutAReason_leavesNoMessage() throws Exception {
+        UUID requesterId = UUID.randomUUID();
+        SessionJoinRequestRejectedEvent payload = SessionJoinRequestRejectedEvent.builder()
+                .sessionId(996L).actorId(UUID.randomUUID()).recipientUserId(requesterId).reason("   ").build();
+
+        publish("session.join_request.rejected", "it-test:" + UUID.randomUUID(), payload);
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(requesterId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).hasSize(1);
+            assertThat(notifications.get(0).getMessage()).isNull();
+        });
+    }
+
+    /**
+     * NTF-8's merge rule: a second rejection of the same session before the first notification was read lands in the
+     * same unread row, and the latest event's message wins, including no message at all. Each step waits for the one
+     * before it, so the messages are applied in order.
+     */
+    @Test
+    void aSecondRejectionBeforeTheFirstIsRead_overwritesTheReason_andANullReasonClearsIt() throws Exception {
+        UUID hostId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        Long sessionId = 995L;
+
+        publishRejection(hostId, requesterId, sessionId, "First reason");
+        awaitRejectionRow(requesterId, 1, "First reason");
+
+        publishRejection(hostId, requesterId, sessionId, "Second reason");
+        awaitRejectionRow(requesterId, 2, "Second reason");
+
+        publishRejection(hostId, requesterId, sessionId, null);
+        awaitRejectionRow(requesterId, 3, null);
+    }
+
+    private void publishRejection(UUID hostId, UUID requesterId, Long sessionId, String reason) throws Exception {
+        publish("session.join_request.rejected", "it-test:" + UUID.randomUUID(),
+                SessionJoinRequestRejectedEvent.builder()
+                        .sessionId(sessionId).actorId(hostId).recipientUserId(requesterId).reason(reason).build());
+    }
+
+    private void awaitRejectionRow(UUID requesterId, int actorCount, String message) {
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(requesterId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).hasSize(1);
+            assertThat(notifications.get(0).getActorCount()).isEqualTo(actorCount);
+            assertThat(notifications.get(0).getMessage()).isEqualTo(message);
         });
     }
 }

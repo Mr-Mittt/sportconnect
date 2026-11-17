@@ -320,6 +320,147 @@ class NotificationServiceImplSpec extends Specification {
         result.content[0].entityTitle == null
     }
 
+    // ---- NTF-8: the message on a notification
+
+    private Notification openRejectionGroup(String message) {
+        Notification.builder()
+                .id(8L)
+                .recipientUserId(recipientId)
+                .type("session.join_request.rejected")
+                .entityType("SESSION")
+                .entityId("42")
+                .actorIds([actorId])
+                .actorCount(1)
+                .message(message)
+                .isRead(false)
+                .build()
+    }
+
+    def "recordEvent stores the message, trimmed, on a new row"() {
+        given:
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
+                recipientId, "session.join_request.rejected", "SESSION", "42") >> Optional.empty()
+
+        when:
+        notificationService.recordEvent(recipientId, "session.join_request.rejected", "SESSION", "42", actorId, "  The session is full \n")
+
+        then:
+        1 * notificationRepository.save({ Notification n -> n.message == "The session is full" }) >> { Notification n -> n.tap { id = 9L } }
+    }
+
+    def "a missing or blank message is stored as null"() {
+        given:
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(_, _, _, _) >> Optional.empty()
+
+        when:
+        notificationService.recordEvent(recipientId, "session.join_request.rejected", "SESSION", "42", actorId, message)
+
+        then:
+        1 * notificationRepository.save({ Notification n -> n.message == null }) >> { Notification n -> n.tap { id = 9L } }
+
+        where:
+        message << [null, "", "   ", " \t\n "]
+    }
+
+    def "a message of exactly 500 characters is kept and one over is cut to 500"() {
+        given:
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(_, _, _, _) >> Optional.empty()
+
+        when:
+        notificationService.recordEvent(recipientId, "session.join_request.rejected", "SESSION", "42", actorId, "x" * length)
+
+        then:
+        1 * notificationRepository.save({ Notification n -> n.message.length() == stored }) >> { Notification n -> n.tap { id = 9L } }
+
+        where:
+        length | stored
+        500    | 500
+        501    | 500
+        900    | 500
+    }
+
+    def "a later rejection merged into the open group overwrites the message (the latest event's wins)"() {
+        given:
+        def existing = openRejectionGroup("Old reason")
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
+                recipientId, "session.join_request.rejected", "SESSION", "42") >> Optional.of(existing)
+
+        when:
+        notificationService.recordEvent(recipientId, "session.join_request.rejected", "SESSION", "42", actorId, "New reason")
+
+        then:
+        1 * notificationRepository.save({ Notification n -> n.id == 8L && n.message == "New reason" && n.actorCount == 2 }) >> existing
+    }
+
+    def "a later rejection with no reason clears the earlier reason rather than leaving it next to the newer rejection"() {
+        given:
+        def existing = openRejectionGroup("Old reason")
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
+                recipientId, "session.join_request.rejected", "SESSION", "42") >> Optional.of(existing)
+
+        when:
+        notificationService.recordEvent(recipientId, "session.join_request.rejected", "SESSION", "42", actorId, message)
+
+        then:
+        1 * notificationRepository.save({ Notification n -> n.message == null }) >> existing
+
+        where:
+        message << [null, "  "]
+    }
+
+    def "the five-argument recordEvent is the message-less form: it stores no message"() {
+        given:
+        notificationRepository.findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(_, _, _, _) >> Optional.empty()
+
+        when:
+        notificationService.recordEvent(recipientId, "post.comment.created", "POST", "42", actorId)
+
+        then:
+        1 * notificationRepository.save({ Notification n -> n.message == null }) >> { Notification n -> n.tap { id = 9L } }
+    }
+
+    def "getNotifications puts the stored message on the response"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def withMessage = openRejectionGroup("The session is full")
+        def without = Notification.builder().id(9L).recipientUserId(recipientId).type("session.comment.created")
+                .entityType("SESSION").entityId("42").actorIds([]).actorCount(1).isRead(false).build()
+        notificationRepository.findByRecipientUserIdOrderByUpdatedAtDesc(recipientId, pageable) >>
+                new PageImpl<>([withMessage, without])
+        userService.getUserSummariesByIds(_) >> [(actorId): new UserSummaryResponse(id: actorId, fullName: "Alice Nguyen")]
+        sessionService.getSessionTitlesByIds(_) >> [(42L): "Friday Pickup Game"]
+
+        when:
+        def result = notificationService.getNotifications(recipientId, pageable)
+
+        then:
+        result.content[0].message == "The session is full"
+        result.content[1].message == null
+    }
+
+    // ---- NTF-8: delete the caller's read notifications
+
+    def "deleteReadNotifications deletes through the repository for that recipient and returns the count"() {
+        when:
+        def deleted = notificationService.deleteReadNotifications(recipientId)
+
+        then:
+        1 * notificationRepository.deleteReadByRecipientUserId(recipientId) >> 4
+        deleted == 4L
+    }
+
+    def "deleteReadNotifications returns 0 when nothing is read, and never touches another recipient or deletes by anything else"() {
+        when:
+        def deleted = notificationService.deleteReadNotifications(recipientId)
+
+        then:
+        1 * notificationRepository.deleteReadByRecipientUserId(recipientId) >> 0
+        0 * notificationRepository.deleteAll(*_)
+        0 * notificationRepository.deleteById(_)
+        0 * notificationRepository.delete(_)
+        deleted == 0L
+    }
+
     def "getUnreadCount delegates to the repository"() {
         given:
         notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientId) >> 3L

@@ -7,10 +7,13 @@ import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.repository.SessionRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -129,5 +132,88 @@ class NotificationAccessGateIntegrationTest extends BaseIT {
             notificationRepository.deleteAll();
             sessionRepository.deleteById(sessionId);
         }
+    }
+
+    private Notification createNotification(UUID recipientId, boolean isRead, String message) {
+        return notificationRepository.save(Notification.builder()
+                .recipientUserId(recipientId)
+                .type("session.join_request.rejected")
+                .entityType("SESSION")
+                .entityId("42")
+                .isRead(isRead)
+                .message(message)
+                .build());
+    }
+
+    private List<Notification> notificationsOf(UUID recipientId) {
+        return notificationRepository.findAll().stream()
+                .filter(n -> n.getRecipientUserId().equals(recipientId))
+                .toList();
+    }
+
+    /** NTF-8: the list carries the notification's message (null when there is none). */
+    @Test
+    void list_returnsTheMessageOfANotificationThatHasOne() throws Exception {
+        UUID recipientId = UUID.randomUUID();
+        createNotification(recipientId, false, "The session is full");
+        authenticateAs(recipientId);
+
+        mockMvc.perform(get("/api/notifications"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].message").value("The session is full"));
+    }
+
+    /**
+     * NTF-8: {@code DELETE /api/notifications/read} hard-deletes the caller's read notifications and nothing else:
+     * the caller's unread one stays, and so does another user's read one.
+     */
+    @Test
+    void deleteRead_removesTheCallersReadNotifications_andKeepsUnreadAndOtherUsersRows() throws Exception {
+        UUID callerId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        createNotification(callerId, true, "Reason one");
+        createNotification(callerId, true, null);
+        Long unreadId = createNotification(callerId, false, "Still unread").getId();
+        Long othersReadId = createNotification(otherId, true, "Not yours").getId();
+        authenticateAs(callerId);
+
+        mockMvc.perform(delete("/api/notifications/read"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(2));
+
+        assertThat(notificationsOf(callerId)).extracting(Notification::getId).containsExactly(unreadId);
+        assertThat(notificationsOf(otherId)).extracting(Notification::getId).containsExactly(othersReadId);
+        // The unread count is untouched: only read rows went.
+        mockMvc.perform(get("/api/notifications/unread-count"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(1));
+    }
+
+    /** A repeat call (or a caller with nothing read) deletes nothing and is still a 200 with 0. */
+    @Test
+    void deleteRead_whenThereIsNothingRead_returnsZero() throws Exception {
+        UUID callerId = UUID.randomUUID();
+        createNotification(callerId, false, null);
+        authenticateAs(callerId);
+
+        mockMvc.perform(delete("/api/notifications/read"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(0));
+        mockMvc.perform(delete("/api/notifications/read"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(0));
+
+        assertThat(notificationsOf(callerId)).hasSize(1);
+    }
+
+    @Test
+    void deleteRead_withoutAuthentication_returnsUnauthorized_andDeletesNothing() throws Exception {
+        UUID recipientId = UUID.randomUUID();
+        createNotification(recipientId, true, "Keep me");
+
+        mockMvc.perform(delete("/api/notifications/read"))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(notificationsOf(recipientId)).hasSize(1);
     }
 }

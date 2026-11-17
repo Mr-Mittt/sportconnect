@@ -68,7 +68,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 27 | [CLIENT-NOTIF-7](MVP/CLIENT-NOTIF-7_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | The rejected-join-request notification shows the host's reason (**standalone chain**; depends on NTF-8) | `TODO` |
+| 27 | [CLIENT-NOTIF-7](MVP/CLIENT-NOTIF-7_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | The rejected-join-request notification shows the host's reason, and a "Clear read notifications" control (**standalone chain**; depends on NTF-8) | `TODO` |
 | 28 | [CLIENT-SESSION-51](MVP/CLIENT-SESSION-51_LOCALISED_FIELD_CHANGE_SYSTEM_COMMENTS.md) | Localised system comments for the fields a host changed (**standalone chain**; depends on SESSION-67) | `TODO` |
 | 29 | [CLIENT-SESSION-49](MVP/CLIENT-SESSION-49_INVITE_FRIENDS_DIALOG_IN_THE_PLAYERS_SECTION.md) | "Invite friends" dialog from the Players section header: friends not joined first with checkboxes, joined friends below, "Invite (x)" (**standalone chain**; depends on SESSION-66) | `TODO` |
 | 2 | [FRIEND-3](MVP/FRIEND-3_CHAT_BOX_NOT_READY_AFTER_ACCEPTING_A_FRIEND_REQUEST.md) | The 1:1 chat box on `/friends` stays unavailable after accepting a friend request until a reload (found 2026-10-30, INFRA-7 live checks) — `useAcceptFriendRequest` invalidates only `friendKeys`, and the chat service's friendship cache may lag; cause to be confirmed at pickup | `TODO` |

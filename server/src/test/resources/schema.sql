@@ -447,6 +447,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     actor_ids VARCHAR(500),
     actor_count INTEGER NOT NULL DEFAULT 0,
     is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    message VARCHAR(500),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
 );

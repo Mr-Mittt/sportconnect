@@ -36,4 +36,11 @@ public class NotificationResponse {
      * their own outbox wiring ships).
      */
     private String entityTitle;
+
+    /**
+     * NTF-8: a short text that belongs to this notification (at most 500 characters), {@code null} when there is
+     * none. Today only a {@code session.join_request.rejected} notification has one: the host's reason for declining.
+     * Free text written by another user, to be shown as written.
+     */
+    private String message;
 }

@@ -181,7 +181,7 @@ class SessionEventsConsumerSpec extends Specification {
         })
     }
 
-    def "dispatches session.join_request.rejected as a single-recipient event"() {
+    def "dispatches session.join_request.rejected as a single-recipient event that carries the host's reason (NTF-8)"() {
         given:
         def actorId = UUID.randomUUID()
         def recipientId = UUID.randomUUID()
@@ -193,8 +193,36 @@ class SessionEventsConsumerSpec extends Specification {
 
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
-            e.type() == "session.join_request.rejected" && e.singleRecipient() == recipientId
+            e.type() == "session.join_request.rejected" && e.singleRecipient() == recipientId && e.message() == "full"
         })
+    }
+
+    def "a rejection without a reason carries no message; a blank one is passed on as written (the service trims it to nothing)"() {
+        given:
+        def body = objectMapper.writeValueAsString(SessionJoinRequestRejectedEvent.builder()
+                .sessionId(1L).actorId(UUID.randomUUID()).recipientUserId(UUID.randomUUID()).reason(reason).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.join_request.rejected", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e -> e.message() == reason })
+
+        where:
+        reason << [null, "   "]
+    }
+
+    def "no other event type carries a message"() {
+        given:
+        def recipientId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(SessionJoinRequestApprovedEvent.builder()
+                .sessionId(1L).actorId(UUID.randomUUID()).recipientUserId(recipientId).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.join_request.approved", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e -> e.message() == null })
     }
 
     def "dispatches session.invitation.created as a single-recipient event"() {
