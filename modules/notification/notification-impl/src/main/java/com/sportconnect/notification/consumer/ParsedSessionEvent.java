@@ -20,6 +20,10 @@ import java.util.UUID;
  * <p>{@code fanOutSessionStatuses} is set exactly when {@code fanOutStatuses} is (SESSION-20) —
  * it's meaningless for a single-recipient event, whose recipient is already known and is not
  * conditioned on session status.
+ *
+ * <p>{@code message} (NTF-8) is the short text the notification carries, {@code null} for every event
+ * but a join-request rejection (the host's reason); {@link SessionEventProcessor} hands it to
+ * {@code NotificationService.recordEvent} as it is.
  */
 record ParsedSessionEvent(
         String type,
@@ -27,15 +31,20 @@ record ParsedSessionEvent(
         UUID actorId,
         UUID singleRecipient,
         List<ParticipantStatus> fanOutStatuses,
-        List<SessionStatus> fanOutSessionStatuses) {
+        List<SessionStatus> fanOutSessionStatuses,
+        String message) {
 
     static ParsedSessionEvent single(String type, Long sessionId, UUID actorId, UUID recipientUserId) {
-        return new ParsedSessionEvent(type, sessionId, actorId, recipientUserId, null, null);
+        return single(type, sessionId, actorId, recipientUserId, null);
+    }
+
+    static ParsedSessionEvent single(String type, Long sessionId, UUID actorId, UUID recipientUserId, String message) {
+        return new ParsedSessionEvent(type, sessionId, actorId, recipientUserId, null, null, message);
     }
 
     static ParsedSessionEvent fanOut(String type, Long sessionId, UUID actorId,
                                      List<ParticipantStatus> participantStatuses,
                                      List<SessionStatus> sessionStatuses) {
-        return new ParsedSessionEvent(type, sessionId, actorId, null, participantStatuses, sessionStatuses);
+        return new ParsedSessionEvent(type, sessionId, actorId, null, participantStatuses, sessionStatuses, null);
     }
 }

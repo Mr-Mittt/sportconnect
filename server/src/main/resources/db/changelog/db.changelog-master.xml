@@ -246,5 +246,7 @@
     <include file="db/changelog/changes/V090__users_name_search_unaccent_trigram.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-GL-63: system_code and system_params on comments and posts -->
     <include file="db/changelog/changes/V091__system_entry_code_and_params.sql" relativeToChangelogFile="false"/>
+    <!-- NTF-8: notifications.message, the host's reason on a rejected join request -->
+    <include file="db/changelog/changes/V092__notifications_message.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

@@ -1,6 +1,6 @@
-# NTF-8 · A notification can carry a short message; the join-request rejection puts the host's reason in it
+# NTF-8 · A notification can carry a short message; the join-request rejection puts the host's reason in it; the caller can delete their read notifications
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-17)
 **Type:** Enhancement
 **Depends on:** none (client side: CLIENT-NOTIF-7)
 **Filed:** 2026-11-17, owner decision (the standalone-session list: finish the standalone session first, then group and group sessions), checked against the existing backlogs and filed in the same planning pass. Found while checking the list: the reason is already stored (SESSION-6, `session_participants.reject_reason`) and travels in `SessionJoinRequestRejectedEvent.reason`, but `SessionEventsConsumer` drops it and the `notifications` table has no free-text column (only type, entity, actors, count).
@@ -11,6 +11,42 @@ When a host rejects a join request with a message, the rejected person's notific
 
 **Privacy.** The message is host-written free text shown only to its recipient; it is never logged and is cleared with the notification. No new Redis key or port.
 
-**Out of scope:** Any other notification type carrying a message, the group invitation reject reason (a separate flow, GRP-8), changing what the reject endpoint accepts.
+**Decided at pickup (2026-11-17, owner): the merge rule.** A rejection for a session whose earlier rejection notification is still unread merges into that row (the aggregation key is unchanged), and the **latest event's message wins**, including no message: a rejection with a blank reason clears the earlier one, so a row never shows a stale reason next to a newer rejection.
 
-**Tests:** Spock for the consumer mapping (reason present, blank, null, 500 characters); the `SessionEventsConsumerIntegrationTest` family gains the case (mind the known flake, NTF-7); an IT that the read endpoint returns the message.
+**Scope change (2026-11-17, owner, at pickup): hard delete of the caller's read notifications.** The notification module has no delete of any kind today (no soft-delete column, no endpoint, no retention job; `NotificationGate` notes it has no lifecycle concept). Added to this ticket:
+
+- **One endpoint, no delete by id:** `DELETE /api/notifications/read` removes **every notification of the caller that is already read**, for good (a hard delete, no `deleted` flag), and returns how many it removed (`ApiResponse<Long>`; zero when there is nothing to clear, so a repeat call is harmless). An unread notification is never touched, so there is no "delete an unread one" case and no `NOTIFICATION_NOT_READ` code. It only ever acts on the caller's own rows (`recipientUserId` from the token), so there is no 403/404 either.
+- **Repository:** one derived or `@Modifying` delete, `deleteByRecipientUserIdAndIsReadTrue` returning the count, in the service's transaction.
+- **Account lifecycle:** an authenticated, user-triggered write. The per-request gate (A25) refuses a deactivated caller before the controller, and the service acts only on the caller's own rows; no extra `isActive` call is needed, same as `markAsRead`.
+- **What it does not affect:** the unread count (only read rows go), the aggregation (a read row is already a closed group; the next matching event starts a fresh row, as after any mark-read), the STOMP live update (no push on delete) and `processed_messages` (the dedup markers).
+- **Client:** folded into **CLIENT-NOTIF-7** (owner's choice): a "Clear read notifications" control, en/vi, MSW handler. No new error code, so no `errors:codes` entry.
+- **Consumer census:** a new endpoint, so nothing existing changes. `NotificationService` (an `-api` interface) gains `deleteReadNotifications(UUID)`; the only implementer is `NotificationServiceImpl`; no other module calls it. The MSW notification handlers gain the route in CLIENT-NOTIF-7.
+- **Privacy:** hard delete is the point: the host-written `message` goes with the row.
+- **Tests:** Spock (deletes only the caller's read rows and returns the count, leaves unread rows and other users' rows, returns 0 when nothing is read); an IT through the real pipeline (`DELETE` as the caller with a mix of read, unread and another user's rows; 401 without a token); the `NotificationAccessGateIntegrationTest` family gains the boundary (another user's read notification survives).
+
+**Out of scope:** Any other notification type carrying a message, the group invitation reject reason (a separate flow, GRP-8), changing what the reject endpoint accepts, deleting a single notification by id, deleting an unread notification, a soft delete or a retention/expiry job.
+
+**Tests:** (the delete endpoint's tests are listed in the scope change above) Spock for the consumer mapping (reason present, blank, null, 500 characters) and the merge rule (a later rejection overwrites the message, a blank one clears it); the `SessionEventsConsumerIntegrationTest` family gains the case (mind the known flake, NTF-7); an IT that the read endpoint returns the message.
+
+
+## Implementation summary (2026-11-17)
+
+**Design as approved** ("go ahead"); no divergence. Scope at pickup (owner): the merge rule (the latest event's message wins, including none) and the hard delete of the caller's read notifications, one endpoint only, no delete by id (see the two paragraphs above).
+
+**Built.**
+- **Migration and entity.** `V092__notifications_message.sql` adds the nullable `notifications.message VARCHAR(500)` (registered in `db.changelog-master.xml`, mirrored in the test `schema.sql`); `Notification.message`.
+- **Writing the message.** `NotificationService` (`notification-api`) gets `recordEvent(..., actorId, String message)`; the five-argument form is now a `default` method that passes `null`, so `UserEventProcessor` and every other caller is unchanged. `NotificationServiceImpl.recordEvent` sets the group's message on **every** write: trimmed, a blank text is `null`, over 500 characters cut to 500. Because the aggregation key includes the type, only `session.join_request.rejected` rows ever hold a message, so applying it unconditionally is safe for every other type and gives the merge rule for free: a later rejection replaces the text, and one with no reason clears it.
+- **Carrying the reason.** `ParsedSessionEvent` has a nullable `message`; `SessionEventsConsumer` sets it from `SessionJoinRequestRejectedEvent.getReason()` for the rejected key only; `SessionEventProcessor` passes it on.
+- **Reading it.** `NotificationResponse.message`, filled by `toResponse`. The STOMP ping stays lightweight and does not carry it. The text is never logged.
+- **Delete.** `NotificationRepository.deleteReadByRecipientUserId` is one `@Modifying` bulk `delete ... where recipientUserId = :id and isRead = true` (a derived `deleteBy` would load and delete each row); `NotificationService.deleteReadNotifications(UUID)` returns the count; `DELETE /api/notifications/read` returns `ApiResponse<Long>`, `@PreAuthorize("hasRole('USER')")`. No error code, nothing to translate. A deactivated caller is refused by the per-request gate (A25) before the controller.
+
+**Consumer census.** `NotificationResponse` gains a nullable field and there is a new endpoint: nothing existing changes. `recordEvent`'s five-argument form is kept, so both processors compile unchanged; only the session processor now calls the six-argument form (its spec updated). Client: the type, the MSW handlers and the display are CLIENT-NOTIF-7 (filed, now also carrying the "Clear read" control), compatible as-is until then. No other module reads the table.
+
+**Tests.**
+- **Spock** (`notification-impl`): `NotificationServiceImplSpec` (30 cases: the message stored and trimmed, blank and `null` and whitespace to `null`, 500 kept and 501 and 900 cut to 500, a later message overwrites, a later none clears, the five-argument form stores none, the response carries it, `deleteReadNotifications` delegates and returns 4 and 0); `SessionEventsConsumerSpec` (the reason is carried, a missing or blank one is passed as written, no other type carries a message); `SessionEventProcessorSpec` (the message reaches `recordEvent`; the existing interactions moved to the six-argument form).
+- **Integration:** `SessionEventsConsumerIntegrationTest` gains three tests over real RabbitMQ (the reason lands trimmed in the row; a blank reason leaves none; a second and third rejection of the same session overwrite the text and then clear it, `actorCount` 1, 2, 3); `NotificationAccessGateIntegrationTest` gains four through MockMvc (the list returns the message; `DELETE /api/notifications/read` removes the caller's read rows, keeps the unread one and another user's read one, and the unread count stays; a repeat call returns 0; no token is a 401 and deletes nothing). The NTF-7 flake did not show up.
+- **Mutation check.** 10 mutants, all killed: the message not cleared by a later none, not trimmed, a blank kept, no 500 cap, the cap at 501, the response dropping the message, the consumer dropping the reason, the processor dropping the message, the delete also removing unread rows, and the delete reaching other users' read rows (the last two only an integration test can see, the repository is mocked in Spock).
+
+**Verification.** `:modules:notification:notification-impl:test` and `:server:test` both green (server: 802 tests, 0 failures, up from 795; the 7 new ones are the integration tests above). Migration `V092` applied by Liquibase to the real dev Postgres (`notifications.message varchar(500)`, nullable, `databasechangelog` row present). N+1: none (the delete is one statement; `getNotifications` is unchanged). **Not run:** a live server answering the new endpoint (the one start attempt applied the migration but could not bind port 8080, which another process was already using, so it was left alone; the endpoint is covered by the MockMvc integration tests), `:modules:session:session-impl:test` (no session code changed), and the client.
+
+**Release notes.** `documentation/release-notes/SERVER.md` Unreleased: Changes (the message, the delete), Applied automatically (V092), Manual actions (none), Rollback (the delete cannot be undone), Depends on (CLIENT-NOTIF-7, ship the server first).

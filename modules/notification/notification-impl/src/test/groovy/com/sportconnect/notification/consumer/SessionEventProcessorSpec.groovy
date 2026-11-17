@@ -33,11 +33,28 @@ class SessionEventProcessorSpec extends Specification {
 
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
-        1 * notificationService.recordEvent(recipientId, "session.join_request.created", "SESSION", "1", actorId) >>
+        1 * notificationService.recordEvent(recipientId, "session.join_request.created", "SESSION", "1", actorId, null) >>
                 new NotificationRecordResult(10L, 2L)
         1 * eventPublisher.publishEvent({ NotificationLiveUpdateEvent e ->
             e.recipientUserId() == recipientId && e.notificationId() == 10L && e.unreadCount() == 2L
         })
+    }
+
+    def "process() hands the event's message to recordEvent (NTF-8: the host's reason on a rejected join request)"() {
+        given:
+        def actorId = UUID.randomUUID()
+        def recipientId = UUID.randomUUID()
+        def event = ParsedSessionEvent.single("session.join_request.rejected", 1L, actorId, recipientId, "The session is full")
+
+        when:
+        processor.process("mid-1", event)
+
+        then:
+        1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
+        1 * notificationService.recordEvent(
+                recipientId, "session.join_request.rejected", "SESSION", "1", actorId, "The session is full") >>
+                new NotificationRecordResult(10L, 1L)
+        1 * eventPublisher.publishEvent(_)
     }
 
     def "process() skips recordEvent and the live-update event for a single-recipient event when the recipient is the actor"() {
@@ -69,11 +86,11 @@ class SessionEventProcessorSpec extends Specification {
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
         1 * sessionService.getParticipantIdsByStatuses(1L, statuses, sessionStatuses) >> [actorId, other1, other2]
-        1 * notificationService.recordEvent(other1, "session.comment.created", "SESSION", "1", actorId) >>
+        1 * notificationService.recordEvent(other1, "session.comment.created", "SESSION", "1", actorId, null) >>
                 new NotificationRecordResult(11L, 1L)
-        1 * notificationService.recordEvent(other2, "session.comment.created", "SESSION", "1", actorId) >>
+        1 * notificationService.recordEvent(other2, "session.comment.created", "SESSION", "1", actorId, null) >>
                 new NotificationRecordResult(12L, 3L)
-        0 * notificationService.recordEvent(actorId, _, _, _, _)
+        0 * notificationService.recordEvent(actorId, _, _, _, _, _)
         1 * eventPublisher.publishEvent({ NotificationLiveUpdateEvent e ->
             e.recipientUserId() == other1 && e.notificationId() == 11L && e.unreadCount() == 1L
         })
@@ -96,9 +113,9 @@ class SessionEventProcessorSpec extends Specification {
         then:
         1 * processedMessageRepository.insertIfAbsent("mid-1") >> 1
         1 * sessionService.getParticipantIdsByStatuses(1L, statuses, sessionStatuses) >> [recipient1, recipient2]
-        1 * notificationService.recordEvent(recipient1, "session.status.started", "SESSION", "1", null) >>
+        1 * notificationService.recordEvent(recipient1, "session.status.started", "SESSION", "1", null, null) >>
                 new NotificationRecordResult(21L, 1L)
-        1 * notificationService.recordEvent(recipient2, "session.status.started", "SESSION", "1", null) >>
+        1 * notificationService.recordEvent(recipient2, "session.status.started", "SESSION", "1", null, null) >>
                 new NotificationRecordResult(22L, 2L)
     }
 

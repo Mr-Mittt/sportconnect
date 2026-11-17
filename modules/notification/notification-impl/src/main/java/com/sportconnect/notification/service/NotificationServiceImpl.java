@@ -34,6 +34,9 @@ public class NotificationServiceImpl implements NotificationService {
 
     private static final String ENTITY_TYPE_SESSION = "SESSION";
 
+    /** Longest {@code message} the column holds (the reject request is capped at the same 500). */
+    static final int MAX_MESSAGE_LENGTH = 500;
+
     private final NotificationRepository notificationRepository;
     private final NotificationGate notificationGate;
     private final UserService userService;
@@ -110,7 +113,8 @@ public class NotificationServiceImpl implements NotificationService {
      */
     @Override
     @Transactional
-    public NotificationRecordResult recordEvent(UUID recipientUserId, String type, String entityType, String entityId, UUID actorId) {
+    public NotificationRecordResult recordEvent(
+            UUID recipientUserId, String type, String entityType, String entityId, UUID actorId, String message) {
         Notification notification = notificationRepository
                 .findByRecipientUserIdAndTypeAndEntityTypeAndEntityIdAndIsReadFalse(
                         recipientUserId, type, entityType, entityId)
@@ -131,10 +135,32 @@ public class NotificationServiceImpl implements NotificationService {
             notification.setActorIds(actorIds);
         }
         notification.setActorCount(notification.getActorCount() + 1);
+        // NTF-8: the latest event's message wins, including no message (a blank reason clears an older one).
+        notification.setMessage(normalizeMessage(message));
 
         Notification saved = notificationRepository.save(notification);
         long unreadCount = notificationRepository.countByRecipientUserIdAndIsReadFalse(recipientUserId);
         return new NotificationRecordResult(saved.getId(), unreadCount);
+    }
+
+    /** Trims; blank becomes {@code null}; cut to {@link #MAX_MESSAGE_LENGTH} (a defence, the reject request is capped too). */
+    private static String normalizeMessage(String message) {
+        if (message == null) {
+            return null;
+        }
+        String trimmed = message.strip();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() > MAX_MESSAGE_LENGTH ? trimmed.substring(0, MAX_MESSAGE_LENGTH) : trimmed;
+    }
+
+    @Override
+    @Transactional
+    public long deleteReadNotifications(UUID recipientUserId) {
+        int deleted = notificationRepository.deleteReadByRecipientUserId(recipientUserId);
+        log.debug("Deleted {} read notifications of user {}", deleted, recipientUserId);
+        return deleted;
     }
 
     private NotificationResponse toResponse(
@@ -161,6 +187,7 @@ public class NotificationServiceImpl implements NotificationService {
                 .updatedAt(notification.getUpdatedAt())
                 .actors(actors)
                 .entityTitle(entityTitle)
+                .message(notification.getMessage())
                 .build();
     }
 }

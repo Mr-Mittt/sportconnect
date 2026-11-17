@@ -131,7 +131,9 @@ public class SessionEventsConsumer {
             }
             case "session.join_request.rejected" -> {
                 SessionJoinRequestRejectedEvent e = objectMapper.readValue(body, SessionJoinRequestRejectedEvent.class);
-                yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId());
+                // NTF-8: the host's reason travels with the notification (the one event type that carries a message).
+                yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId(),
+                        e.getReason());
             }
             case "session.invitation.created" -> {
                 SessionInvitationCreatedEvent e = objectMapper.readValue(body, SessionInvitationCreatedEvent.class);

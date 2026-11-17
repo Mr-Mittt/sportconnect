@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -68,5 +69,19 @@ public class NotificationController {
             @PathVariable Long notificationId) {
         notificationService.markAsRead(UUID.fromString(userIdStr), notificationId);
         return ResponseEntity.ok(ApiResponse.success("Notification marked read", null));
+    }
+
+    @Operation(summary = "Delete all of the caller's read notifications",
+            description = "NTF-8: a hard delete of every read notification of the caller, in one call. Unread ones are never "
+                    + "touched. Returns how many were deleted (0 when there is nothing read, so a repeat call is harmless).")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "How many notifications were deleted"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
+    })
+    @DeleteMapping("/read")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Long>> deleteReadNotifications(@AuthenticationPrincipal String userIdStr) {
+        long deleted = notificationService.deleteReadNotifications(UUID.fromString(userIdStr));
+        return ResponseEntity.ok(ApiResponse.success("Read notifications deleted", deleted));
     }
 }

@@ -71,6 +71,15 @@ public class Notification {
     @Builder.Default
     private Boolean isRead = false;
 
+    /**
+     * NTF-8: a short text that belongs to this notification, shown to its recipient: the host's reason on a
+     * {@code session.join_request.rejected} one, {@code null} for every other type and when there is none. At most 500
+     * characters. Free text written by another user, so it is never logged. The latest event of a group sets it (see
+     * {@code NotificationServiceImpl.recordEvent}).
+     */
+    @Column(length = 500)
+    private String message;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/notification` (new — `notification-api` + `notification-impl`)
-**Last updated:** 2026-08-16
+**Last updated:** 2026-11-17 (NTF-8 done)
 
 ---
 
@@ -24,7 +24,6 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 3 | [NTF-8](MVP/NTF-8_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | A notification can carry a short `message`; the join-request rejection puts the host's reason in it (**standalone chain**; client CLIENT-NOTIF-7) | `TODO` |
 | 1 | [NTF-6](MVP/NTF-6_DISCONNECT_OPEN_SOCKETS_ON_DEACTIVATION.md) | Low priority: close a user's already-open STOMP sockets when their account is deactivated (A28 added the CONNECT-time active check; an open socket stays until the client reconnects) | `TODO` |
 | 2 | [NTF-7](MVP/NTF-7_FLAKY_SESSION_EVENTS_CONSUMER_IT.md) | Find and fix the flaky `SessionEventsConsumerIntegrationTest` (failed in CI on the A29 PR, green on re-run; second occurrence) | `TODO` |
 
@@ -34,8 +33,9 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [NTF-5](MVP/NTF-5_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the notification module | `DONE` |
-| 2 | [NTF-4](MVP/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md) | `NotificationResponse` enrichment — actor names + entity title | `DONE` |
-| 3 | [NTF-1](MVP/NTF-1_MODULE_SCAFFOLDING.md) | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
-| 4 | [NTF-2](MVP/NTF-2_RABBITMQ_CONSUMER.md) | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `DONE` |
-| 5 | [NTF-3](MVP/NTF-3_STOMP_LIVE_DELIVERY.md) | STOMP-over-RabbitMQ live delivery to the client | `DONE` |
+| 1 | [NTF-8](MVP/NTF-8_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | A notification can carry a short `message`; the join-request rejection puts the host's reason in it; `DELETE /api/notifications/read` hard-deletes the caller's read notifications (**standalone chain**; client CLIENT-NOTIF-7) | `DONE` (2026-11-17) |
+| 2 | [NTF-5](MVP/NTF-5_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the notification module | `DONE` |
+| 3 | [NTF-4](MVP/NTF-4_NOTIFICATION_RESPONSE_ENRICHMENT.md) | `NotificationResponse` enrichment — actor names + entity title | `DONE` |
+| 4 | [NTF-1](MVP/NTF-1_MODULE_SCAFFOLDING.md) | Module scaffolding — entity, aggregation logic, read REST endpoints | `DONE` |
+| 5 | [NTF-2](MVP/NTF-2_RABBITMQ_CONSUMER.md) | RabbitMQ consumer — `sportconnect.events` exchange, recipient resolution | `DONE` |
+| 6 | [NTF-3](MVP/NTF-3_STOMP_LIVE_DELIVERY.md) | STOMP-over-RabbitMQ live delivery to the client | `DONE` |

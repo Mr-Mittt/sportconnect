@@ -69,7 +69,7 @@ public class SessionEventProcessor {
 
     private void recordAndPublish(UUID recipientId, ParsedSessionEvent event, String entityId) {
         NotificationRecordResult result = notificationService.recordEvent(
-                recipientId, event.type(), ENTITY_TYPE_SESSION, entityId, event.actorId());
+                recipientId, event.type(), ENTITY_TYPE_SESSION, entityId, event.actorId(), event.message());
         eventPublisher.publishEvent(
                 new NotificationLiveUpdateEvent(recipientId, result.notificationId(), result.unreadCount()));
     }
