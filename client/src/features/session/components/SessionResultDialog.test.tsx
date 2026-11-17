@@ -305,7 +305,7 @@ describe('SessionResultDialog', () => {
 
   it('is a six column table: the Winner and Loser labels (text only, no box) are the 2nd and 5th cells of the first row', () => {
     renderDialog();
-    const head = Array.from(document.querySelectorAll('thead tr th')).map(
+    const head = Array.from(document.querySelectorAll('table[aria-label] thead tr th')).map(
       (cell) => cell.textContent,
     );
     expect(head).toEqual(['', 'Winner', '', '', 'Loser', '']);
@@ -317,7 +317,7 @@ describe('SessionResultDialog', () => {
 
   it('keeps the labels on top while the rows scroll', () => {
     renderDialog();
-    for (const cell of Array.from(document.querySelectorAll('thead tr th'))) {
+    for (const cell of Array.from(document.querySelectorAll('table[aria-label] thead tr th'))) {
       expect(cell).toHaveClass('sticky', 'top-0');
       expect(cell.className).toContain('bg-surface-2');
     }
@@ -338,7 +338,7 @@ describe('SessionResultDialog', () => {
   it('puts the winner last (the Loser label in the 2nd cell) when the schema says winnerAlign RIGHT', () => {
     renderDialog({ schema: { ...schema, ui: { ...schema.ui, winnerAlign: 'RIGHT' } } });
     expect(
-      Array.from(document.querySelectorAll('thead tr th')).map((cell) => cell.textContent),
+      Array.from(document.querySelectorAll('table[aria-label] thead tr th')).map((cell) => cell.textContent),
     ).toEqual(['', 'Loser', '', '', 'Winner', '']);
     const cells = Array.from(rows()[0].children) as HTMLElement[];
     expect(within(cells[1]).getByLabelText('Loser, player 1')).toHaveTextContent('Bob Tran');
@@ -771,5 +771,73 @@ describe('SessionResultDialog', () => {
     const { onClose } = renderDialog();
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('SessionResultDialog scoreboard (CLIENT-GL-49)', () => {
+  const custom: RecordSchema = {
+    ...schema,
+    scoreboard: {
+      ...schema.scoreboard,
+      columns: ['games', 'wins', 'losses', 'winDiff', 'scoreDiff'],
+      sort: [
+        { by: 'wins', dir: 'DESC' },
+        { by: 'scoreDiff', dir: 'DESC' },
+        { by: 'name', dir: 'ASC' },
+      ],
+    },
+  };
+  const board = () => screen.getByTestId('result-scoreboard');
+  const boardRow = (name: string) =>
+    within(board()).getAllByTestId('scoreboard-row').find((row) => within(row).queryByText(name) !== null) as HTMLElement;
+  const boardCells = (row: HTMLElement) => Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent);
+
+  it('shows the scoreboard of the saved records above the rows, numbered from 1', () => {
+    renderDialog({ schema: custom });
+    // sorted by wins, then points: Carol (+6) is first, Alice (+3) second
+    expect(boardCells(boardRow('Alice Nguyen'))).toEqual(['2', '1', '1', '0', '+1', '+3']);
+    expect(boardCells(boardRow('Dan Pham'))).toEqual(['4', '1', '0', '1', '-1', '-6']);
+  });
+
+  it('follows the rows: a struck-through row stops counting, and undo brings it back', async () => {
+    const user = userEvent.setup();
+    renderDialog({ schema: custom });
+    await user.click(screen.getByRole('button', { name: 'Delete result 1' }));
+    expect(boardCells(boardRow('Alice Nguyen'))).toEqual(['3', '-', '-', '-', '-', '-']);
+    expect(within(board()).getAllByTestId('scoreboard-row')).toHaveLength(4);
+    await user.click(screen.getByRole('button', { name: 'Undo changes to result 1' }));
+    expect(boardCells(boardRow('Alice Nguyen'))[2]).toBe('1');
+  });
+
+  it('follows a score edit', async () => {
+    const user = userEvent.setup();
+    renderDialog({ schema: custom });
+    const first = rows()[0];
+    await user.clear(within(first).getByLabelText('Loser, Point'));
+    await user.type(within(first).getByLabelText('Loser, Point'), '20');
+    expect(boardCells(boardRow('Alice Nguyen'))[5]).toBe('+1');
+  });
+
+  it('is not shown without a valid row, or when the sport switches it off', () => {
+    renderDialog({ records: [] });
+    expect(screen.queryByTestId('result-scoreboard')).not.toBeInTheDocument();
+  });
+
+  it('is not shown when the sport switches it off', () => {
+    renderDialog({ schema: { ...schema, scoreboard: { ...schema.scoreboard, enabled: false } } });
+    expect(screen.queryByTestId('result-scoreboard')).not.toBeInTheDocument();
+  });
+});
+
+describe('SessionResultDialog scoreboard folding (CLIENT-GL-49)', () => {
+  it('is open by default and folds from its title bar', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    const bar = within(screen.getByTestId('result-scoreboard')).getByRole('button', { name: /Scoreboard/ });
+    expect(bar).toHaveAttribute('aria-expanded', 'true');
+    expect(within(screen.getByTestId('result-scoreboard')).queryByRole('table')).not.toBeNull();
+    await user.click(bar);
+    expect(bar).toHaveAttribute('aria-expanded', 'false');
+    expect(within(screen.getByTestId('result-scoreboard')).queryByRole('table')).toBeNull();
   });
 });

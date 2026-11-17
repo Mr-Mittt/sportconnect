@@ -7,8 +7,10 @@ import type { RecordSchema } from '../recordSchema';
 import type { PlayerNames } from '../resultDisplay';
 import type { SessionRecord } from '../resultTypes';
 import { readTeams } from '../recordData';
+import { buildScoreboard } from '../scoreboard';
 import { showableRecords } from '../showableRecords';
 import { CopyRecordIdButton } from './CopyRecordIdButton';
+import { ResultScoreboard } from './ResultScoreboard';
 import { RecordCard, RecordListHeader } from './RecordCard';
 import { SessionFormSection } from './SessionFormSection';
 import { EmptyHint } from '@/shared/components/EmptyHint';
@@ -30,8 +32,10 @@ interface SessionResultSectionProps {
   canEdit: boolean;
   /** The 24 hours after `scheduledEndAt` have passed: a line explains why nothing can change. */
   windowClosed: boolean;
-  /** The caller, for the "my results" switch. */
+  /** The caller, for the "my results" switch and the highlighted scoreboard row. */
   currentUserId?: string;
+  /** The JOINED participants: every one of them gets a scoreboard row. */
+  playerIds: string[];
   onUpdate: () => void;
 }
 
@@ -39,8 +43,9 @@ interface SessionResultSectionProps {
  * CLIENT-GL-38: the session detail's collapsible Result section (collapsed by default), under Players.
  * It lists the session's saved records, oldest first (#1, #2, ...), each drawn from the sport's record
  * schema (`RecordCard`); the header's Update button opens the record dialog and only shows for a JOINED
- * participant inside the window. A record that fails the schema is skipped, not shown. The scoreboard
- * is CLIENT-GL-49.
+ * participant inside the window. A record that fails the schema is skipped, not shown. CLIENT-GL-49: below the
+ * list, the collapsible scoreboard (`ResultScoreboard`, open by default) of the whole session, built from the sport's `record.scoreboard`; the
+ * "my results" switch narrows the list only, never the scoreboard.
  */
 export function SessionResultSection({
   i18nOverridePrefix,
@@ -53,11 +58,14 @@ export function SessionResultSection({
   canEdit,
   windowClosed,
   currentUserId,
+  playerIds,
   onUpdate,
 }: SessionResultSectionProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   const [open, setOpen] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
+  /** The scoreboard is open until the user folds it; the state lives here so it survives opening and closing the section. */
+  const [scoreboardOpen, setScoreboardOpen] = useState(true);
   const saved = records === undefined ? [] : showableRecords(schema, records);
   // CLIENT-GL-39: the "my results" switch narrows the list (and the 3-latest preview) to the games the caller plays in;
   // the heading reads `Results (mine/all)` while it is on, and the number of all games otherwise.
@@ -72,6 +80,24 @@ export function SessionResultSection({
   // Collapsed: the 3 latest records and a line saying it is a short list. Open: every record.
   const latest = shown.slice(-LATEST_RECORDS);
   const emptyText = mineOnly && saved.length > 0 ? t('result.myRecordsEmpty') : t('result.empty');
+  const scoreboard =
+    schema.scoreboard.enabled && saved.length > 0 ? (
+      <ResultScoreboard
+        i18nOverridePrefix={i18nOverridePrefix}
+        schema={schema}
+        locale={locale}
+        currentUserId={currentUserId}
+        open={scoreboardOpen}
+        onOpenChange={setScoreboardOpen}
+        rows={buildScoreboard({
+          schema,
+          records: saved,
+          joinedIds: playerIds,
+          names,
+          formerPlayerLabel: t('result.formerPlayer'),
+        })}
+      />
+    ) : null;
   const renderCards = (list: typeof shown) => (
     <div className="flex flex-col gap-1">
       <RecordListHeader
@@ -114,16 +140,23 @@ export function SessionResultSection({
         // Collapsed (owner, 2026-11-13): an empty section says so, a section with records shows the 3 latest and a line
         // saying it is a short list; opening it shows them all.
         summary={
-          isLoading || isError ? undefined : shown.length === 0 ? (
+          isLoading || isError ? undefined : shown.length === 0 && scoreboard === null ? (
             <EmptyHint size="2xs">{emptyText}</EmptyHint>
           ) : (
-            <div className="flex flex-col gap-1">
-              {renderCards(latest)}
-              {shown.length > latest.length && (
-                <EmptyHint size="2xs" className="italic">
-                  {t('result.latestHint', { count: latest.length, total: shown.length })}
-                </EmptyHint>
+            <div className="flex flex-col gap-2">
+              {shown.length === 0 ? (
+                <EmptyHint size="2xs">{emptyText}</EmptyHint>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {renderCards(latest)}
+                  {shown.length > latest.length && (
+                    <EmptyHint size="2xs" className="italic">
+                      {t('result.latestHint', { count: latest.length, total: shown.length })}
+                    </EmptyHint>
+                  )}
+                </div>
               )}
+              {scoreboard}
             </div>
           )
         }
@@ -160,6 +193,7 @@ export function SessionResultSection({
           <EmptyHint size="2xs">{emptyText}</EmptyHint>
         )}
         {shown.length > 0 && renderCards(shown)}
+        {!isLoading && !isError && scoreboard}
       </SessionFormSection>
     </section>
   );

@@ -36,6 +36,7 @@ const meta = {
     isLoading: false,
     isError: false,
     names,
+    playerIds: ['a', 'b', 'c', 'd'],
     locale: 'en',
     canEdit: true,
     windowClosed: false,
@@ -113,4 +114,32 @@ export const TwoScoreSlots: Story = {
 /** CLIENT-GL-39: the "my results" switch narrows the list to the games the caller plays in (here: Carol). */
 export const WithMyResultsSwitch: Story = {
   args: { currentUserId: 'c' },
+};
+
+/** CLIENT-GL-49: the sport's own columns and titles (win rate, score columns, a renamed column), and the caller's row highlighted. */
+export const ScoreboardCustomColumns: Story = {
+  args: {
+    currentUserId: 'a',
+    schema: {
+      ...schema,
+      scoreboard: {
+        ...schema.scoreboard,
+        columns: ['games', 'wins', 'winRate', 'scoreFor', 'scoreAgainst', 'scoreDiff'],
+        titles: { scoreDiff: { en: 'Net points', vi: 'Điểm ròng' } },
+      },
+    },
+  },
+  play: WithRecords.play,
+};
+
+/** CLIENT-GL-49: a player who has not played yet shows "-" in every column and sorts last. */
+export const ScoreboardPlayerWithoutGames: Story = {
+  args: { playerIds: ['a', 'b', 'c', 'd', 'z'] },
+  play: WithRecords.play,
+};
+
+/** CLIENT-GL-49: a sport that switches its scoreboard off. */
+export const ScoreboardOff: Story = {
+  args: { schema: { ...schema, scoreboard: { ...schema.scoreboard, enabled: false } } },
+  play: WithRecords.play,
 };

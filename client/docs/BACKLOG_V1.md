@@ -2,7 +2,7 @@
 
 **Version:** V1
 **Module:** `client`
-**Last updated:** 2026-10-20
+**Last updated:** 2026-11-17
 **Prerequisite:** MVP backlog (`client/docs/BACKLOG_MVP.md`) should be closed, or at least the ticket
 that filed an entry here, before picking anything up.
 
@@ -25,6 +25,7 @@ that filed an entry here, before picking anything up.
 | 2 | I18N-1 | Introduce i18n / multi-language UI text support — **superseded 2026-09-25 by MVP ticket [CLIENT-I18N-1](MVP/CLIENT-I18N-1_I18N_INFRASTRUCTURE_AND_LOCALE_STORE.md)**, which answers this ticket's six open questions | `SUPERSEDED` |
 | 3 | ADMIN-3 | Replace the attribute-schema textarea with a real JSON editor — **deferred out of MVP 2026-08-21** mid-pickup; the tree-vs-text product question outranks the dependency choice | `TODO` |
 | 4 | AUTH-18 | Register and login pages for a phone number — moved from MVP 2026-10-20 (phone accounts topic; waits for the phone-OTP delivery decision, auth A22) | `TODO` |
+| 5 | CLIENT-SESSION-47 | Warn when the same players and winner were logged moments ago (BA open question 3) — moved from MVP 2026-11-17 (owner: no duplicate warning for now) | `TODO` |
 
 **Chat (CHAT-2, CHAT-4) archived 2026-07-26** (user decision) — moved to
 `documentation/md/archive/chat/CHAT-2_CHAT-4_CLIENT_TICKETS.md` pending a fresh chat re-plan.
@@ -334,3 +335,14 @@ Phone verification (auth A33), recovery for accounts with no email (auth A22), t
 #### Tests
 
 Storybook stories for the register page with phone-only, email-only and both, and the two error states; the `keycloak-e2e` job (`client/e2e/keycloak/redirect.spec.ts`) gains a phone-only registration and a sign-in by phone. Visual baselines for the changed register and login stories come from the `update-baselines` dispatch.
+
+---
+
+### CLIENT-SESSION-47 · Warn when the same players and winner were logged moments ago (BA open question 3)
+**Status:** `TODO` · **Type:** Enhancement · **Depends on:** CLIENT-GL-38 (done) · **Filed:** 2026-11-12, by the `/feature` session "game logging" (BA document `D:\Planningusiness-analyst\Requirements - Games, Statistics and Leaderboards.md`; design: `modules/session/docs/SESSION_RECORDS_DESIGN.md`). **Moved from the MVP backlog on 2026-11-17** (owner: no duplicate warning for now).
+
+Two players logging the same game at once is not blocked (the server never rejects for concurrency). The dialog warns when a record with the same players and winner appears within a few minutes, so a duplicate can be removed. Decide the time window at pickup.
+
+**Out of scope:** A server-side duplicate check.
+
+**Tests:** Vitest.

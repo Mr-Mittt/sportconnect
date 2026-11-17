@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import badminton from '../recordSchema/badminton-record-schema-v1.json';
@@ -52,6 +52,7 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof SessionRes
       isLoading={false}
       isError={false}
       names={names}
+      playerIds={['a', 'b', 'c', 'd', 'e']}
       locale="en"
       canEdit
       windowClosed={false}
@@ -109,8 +110,8 @@ describe('SessionResultSection', () => {
     it('has no Won / Lost label, and the winner and loser take the schema tones (tokens, never hex)', async () => {
       renderSection();
       await open();
-      expect(screen.queryByText('Won')).toBeNull();
-      expect(screen.queryByText('Lost')).toBeNull();
+      expect(within(card()).queryByText('Won')).toBeNull();
+      expect(within(card()).queryByText('Lost')).toBeNull();
       expect(card().querySelector('[data-team="winner"]')?.className).toContain(
         'text-text-success',
       );
@@ -193,7 +194,7 @@ describe('SessionResultSection', () => {
     it('names a player who is no longer in the session as a former player', async () => {
       renderSection({ names: new Map() });
       await open();
-      expect(screen.getAllByText('Former player')).toHaveLength(2);
+      expect(within(card()).getAllByText('Former player')).toHaveLength(2);
     });
   });
 
@@ -391,5 +392,148 @@ describe('SessionResultSection', () => {
     renderSection({ records: undefined, isLoading: true });
     await open();
     expect(screen.getByText('Loading…')).toBeInTheDocument();
+  });
+});
+
+describe('SessionResultSection scoreboard (CLIENT-GL-49)', () => {
+  // A sport that chose its own columns, order and a title (the badminton example uses the catalog default).
+  const custom: RecordSchema = {
+    ...schema,
+    scoreboard: {
+      ...schema.scoreboard,
+      columns: ['games', 'wins', 'losses', 'winDiff', 'scoreDiff'],
+      titles: { scoreDiff: { en: 'Points +/-', vi: 'Hiệu số điểm' } },
+      sort: [
+        { by: 'wins', dir: 'DESC' },
+        { by: 'scoreDiff', dir: 'DESC' },
+        { by: 'name', dir: 'ASC' },
+      ],
+    },
+  };
+  const rows = () => screen.getAllByTestId('scoreboard-row');
+  const rowOf = (name: string) => rows().find((row) => within(row).queryByText(name) !== null) as HTMLElement;
+  const cells = (row: HTMLElement) => Array.from(row.querySelectorAll('td')).slice(1).map((cell) => cell.textContent); // after the index
+  const index = (row: HTMLElement) => row.querySelector('td')?.textContent;
+  const played = [game(1, ['a'], ['b'], [21, 18]), game(2, ['a'], ['c'], [21, 10]), game(3, ['b'], ['c'], [21, 19])];
+
+  it('shows the whole session above the list: a row per joined player, in the configured columns and order', async () => {
+    renderSection({ schema: custom, records: played, playerIds: ['a', 'b', 'c', 'd'] });
+    await open();
+    const headers = within(screen.getByTestId('result-scoreboard')).getAllByRole('columnheader').map((h) => h.textContent);
+    expect(headers).toEqual(['#', 'Player', 'Games', 'Won', 'Lost', 'Win +/-', 'Points +/-']);
+    // the index numbers the rows in the order shown, from 1
+    expect(rows().map(index)).toEqual(['1', '2', '3', '4']);
+    expect(rows().map((row) => within(row).getByRole('rowheader').textContent)).toEqual([
+      'Alice Nguyen', 'Bob Tran', 'Carolina Fernandez', 'Dan Pham',
+    ]);
+    expect(cells(rowOf('Alice Nguyen'))).toEqual(['2', '2', '0', '+2', '+14']);
+    expect(cells(rowOf('Carolina Fernandez'))).toEqual(['2', '0', '2', '-2', '-13']);
+  });
+
+  it('shows "-" for a joined player who has not played', async () => {
+    renderSection({ schema: custom, records: played, playerIds: ['a', 'b', 'c', 'd'] });
+    await open();
+    expect(cells(rowOf('Dan Pham'))).toEqual(['-', '-', '-', '-', '-']);
+  });
+
+  it('keeps a player who left, as "Former player", with their games', async () => {
+    renderSection({ schema: custom, records: played, playerIds: ['a', 'b'], names: new Map([['a', { name: 'Alice Nguyen', avatarUrl: null }], ['b', { name: 'Bob Tran', avatarUrl: null }]]) });
+    await open();
+    expect(cells(rowOf('Former player'))).toEqual(['2', '0', '2', '-2', '-13']);
+  });
+
+  it('highlights the current user row and marks it "You"', async () => {
+    renderSection({ records: played, currentUserId: 'b' });
+    await open();
+    expect(rowOf('Bob Tran')).toHaveAttribute('aria-current', 'true');
+    expect(within(rowOf('Bob Tran')).getByText('(You)')).toBeInTheDocument();
+    expect(rowOf('Alice Nguyen')).not.toHaveAttribute('aria-current');
+  });
+
+  it('is the whole session: the "my results" switch does not change it', async () => {
+    renderSection({ schema: custom, records: played, currentUserId: 'a' });
+    await open();
+    await userEvent.setup().click(screen.getByRole('switch', { name: /my/i }));
+    expect(rows()).toHaveLength(5);
+    expect(cells(rowOf('Bob Tran'))).toEqual(['2', '1', '1', '0', '-1']);
+  });
+
+  it('draws the badminton schema as configured: index, player, games, won, lost, win +/-', async () => {
+    renderSection({ records: played, playerIds: ['a', 'b', 'c', 'd'] });
+    await open();
+    const headers = within(screen.getByTestId('result-scoreboard')).getAllByRole('columnheader').map((h) => h.textContent);
+    expect(headers).toEqual(['#', 'Player', 'Games', 'Won', 'Lost', 'Win +/-']);
+    expect(cells(rowOf('Alice Nguyen'))).toEqual(['2', '2', '0', '+2']);
+  });
+
+  it('is also shown while the section is collapsed, above the latest records', () => {
+    renderSection({ records: played });
+    expect(screen.getByTestId('result-scoreboard')).toBeInTheDocument();
+  });
+
+  it('draws a column title the sport set, in the language of the viewer', async () => {
+    renderSection({ schema: custom, records: played, locale: 'vi' });
+    await open();
+    expect(screen.getByRole('columnheader', { name: 'Hiệu số điểm' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Games' })).toBeInTheDocument(); // a column the sport did not retitle keeps the client default
+  });
+
+  it('is not shown without a valid record, or when the sport switches it off', async () => {
+    renderSection({ records: [broken] });
+    expect(screen.queryByTestId('result-scoreboard')).not.toBeInTheDocument();
+    cleanup();
+    renderSection({ records: played, schema: { ...schema, scoreboard: { ...schema.scoreboard, enabled: false } } });
+    expect(screen.queryByTestId('result-scoreboard')).not.toBeInTheDocument();
+  });
+});
+
+describe('SessionResultSection scoreboard folding and place (CLIENT-GL-49)', () => {
+  const toggle = () => within(screen.getByTestId('result-scoreboard')).getByRole('button', { name: /Scoreboard/ });
+  const table = () => within(screen.getByTestId('result-scoreboard')).queryByRole('table');
+  const played = [game(1, ['a'], ['b']), game(2, ['a'], ['c'])];
+
+  it('is open by default', async () => {
+    renderSection({ records: played });
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(table()).not.toBeNull();
+    await open();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+    expect(table()).not.toBeNull();
+  });
+
+  it('folds and unfolds from its title bar, which stays visible', async () => {
+    const user = userEvent.setup();
+    renderSection({ records: played });
+    await user.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(table()).toBeNull();
+    expect(screen.getByTestId('result-scoreboard')).toBeInTheDocument();
+    await user.click(toggle());
+    expect(table()).not.toBeNull();
+  });
+
+  it('keeps its state when the section opens and closes', async () => {
+    const user = userEvent.setup();
+    renderSection({ records: played });
+    await user.click(toggle());
+    await open();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(table()).toBeNull();
+  });
+
+  it('sits below the record list, collapsed and open', async () => {
+    renderSection({ records: played });
+    const after = () =>
+      Boolean(screen.getAllByTestId('record-card').at(-1)!.compareDocumentPosition(screen.getByTestId('result-scoreboard')) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(after()).toBe(true);
+    await open();
+    expect(after()).toBe(true);
+  });
+
+  it('is still below the empty hint when the my-results switch leaves no record', async () => {
+    renderSection({ records: played, currentUserId: 'd' });
+    await userEvent.setup().click(screen.getByRole('switch', { name: /my/i }));
+    expect(screen.getAllByText('None of the results include you.').length).toBeGreaterThan(0);
+    expect(screen.getByTestId('result-scoreboard')).toBeInTheDocument();
   });
 });

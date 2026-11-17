@@ -1195,6 +1195,8 @@ Real-browser layout check (jsdom has no layout) of the sectioned create form and
 
 ### `e2e/flows/session-results.spec.ts` (CLIENT-GL-38, CLIENT-GL-39 and CLIENT-GL-50, 2 `test()`s: 5 steps and 6 steps)
 
+**CLIENT-GL-49 additions (test 1, steps 1, 4 and 5):** with no valid record there is no scoreboard (`result-scoreboard`); after the save the scoreboard above the card has the headers `#`, Player, Games, Won, Lost, Win +/- (the mock schema's columns), the caller's row is the only `aria-current` one and reads "(You)", the winner row reads `1 1 1 0 +1`, and it does not scroll sideways at 320 px; in step 5 the Update dialog shows it too, and striking the only record out removes it.
+
 The session detail's Result section and the record dialog. `overrides.resultsOngoing` (seed `seedResultsOngoingOnNextLoad`) makes the Pickleball fixture "Sunday pickup run" ONGOING with an end time an hour away and the fixture friend JOINED next to the caller; the mock server stores records like SESSION-50 (a bad record is REJECTED on its own, the others are stored). The mock schema is the badminton one (1 to 2 players a side, one required Point score above zero, winner on the left).
 
 | Step | What it does | Why it exists |
