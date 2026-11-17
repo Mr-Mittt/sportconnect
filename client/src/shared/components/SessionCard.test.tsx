@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
@@ -225,6 +225,7 @@ describe('SessionCard', () => {
     render(
       <SessionCard
         session={makeSession({
+          scheduledStart: new Date(Date.now() + 86_400_000).toISOString(), // CLIENT-GL-51: Leave ends 15 minutes before the start
           callerParticipation: {
             id: 1,
             sessionId: 1,
@@ -463,5 +464,81 @@ describe('SessionCard game mood and gender split (CLIENT-SESSION-34)', () => {
   it('a title-less session shows the "<Sport> session" fallback title', () => {
     renderCard({ title: null });
     expect(screen.getByText('Basketball session')).toBeInTheDocument();
+  });
+});
+
+describe('SessionCard participation questions (CLIENT-GL-51)', () => {
+  const caller = (status: 'JOINED' | 'REQUESTED' | 'INVITED') => ({
+    id: 1,
+    sessionId: 1,
+    userId: 'user-1',
+    userFullName: '',
+    userAvatarUrl: null,
+    status,
+    rejectReason: null,
+    createdAt: '2026-07-01T10:00:00',
+  });
+  const show = (status: 'JOINED' | 'REQUESTED' | 'INVITED', onParticipationAction = vi.fn(), onViewDetails = vi.fn()) => {
+    render(
+      <SessionCard
+        session={makeSession({ scheduledStart: new Date(Date.now() + 2 * 86_400_000).toISOString(), callerParticipation: caller(status) })}
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={onViewDetails}
+        onParticipationAction={onParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    return { onParticipationAction, onViewDetails };
+  };
+
+  it('Leave asks "Are you leaving?" first: Stay sends nothing, Leave sends once', async () => {
+    const user = userEvent.setup();
+    const { onParticipationAction, onViewDetails } = show('JOINED');
+    await user.click(screen.getByRole('button', { name: /leave/i }));
+    const dialog = await screen.findByRole('dialog', { name: 'Are you leaving?' });
+    expect(onParticipationAction).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Stay' }));
+    expect(onParticipationAction).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /leave/i }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Are you leaving?' })).getByRole('button', { name: 'Leave' }));
+    expect(onParticipationAction).toHaveBeenCalledTimes(1);
+    expect(onParticipationAction).toHaveBeenCalledWith(1, 'LEAVE');
+    expect(onViewDetails).not.toHaveBeenCalled(); // the questions never open the card's details
+  });
+
+  it('Cancel asks "Cancel your request?" first: Keep waiting sends nothing, Cancel sends once', async () => {
+    const user = userEvent.setup();
+    const { onParticipationAction, onViewDetails } = show('REQUESTED');
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    const dialog = await screen.findByRole('dialog', { name: 'Cancel your request?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Keep waiting' }));
+    expect(onParticipationAction).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+    await user.click(within(await screen.findByRole('dialog', { name: 'Cancel your request?' })).getByRole('button', { name: 'Cancel' }));
+    expect(onParticipationAction).toHaveBeenCalledTimes(1);
+    expect(onParticipationAction).toHaveBeenCalledWith(1, 'CANCEL');
+    expect(onViewDetails).not.toHaveBeenCalled();
+  });
+
+  it('Accept goes straight through, with no question', async () => {
+    const user = userEvent.setup();
+    const { onParticipationAction } = show('INVITED');
+    await user.click(screen.getByRole('button', { name: /accept/i }));
+    expect(onParticipationAction).toHaveBeenCalledWith(1, 'ACCEPT');
+  });
+
+  it('shows no Leave within 15 minutes of the start', () => {
+    render(
+      <SessionCard
+        session={makeSession({ scheduledStart: new Date(Date.now() + 10 * 60_000).toISOString(), callerParticipation: caller('JOINED') })}
+        sportsByKey={sportsByKey}
+        currentUserId="user-2"
+        onViewDetails={() => {}}
+        onParticipationAction={() => {}}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /leave/i })).not.toBeInTheDocument();
   });
 });

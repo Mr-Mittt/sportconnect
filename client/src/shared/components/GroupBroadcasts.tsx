@@ -1,5 +1,5 @@
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
-import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { formatFullDateTime, formatTimestamp } from '@/shared/lib/timestamp';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Skeleton } from '@/shared/ui/skeleton';
@@ -88,8 +88,8 @@ export function GroupBroadcasts({
               <span className="min-w-0">
                 <span className="block text-xs font-medium text-text-primary">
                   {broadcast.groupName}{' '}
-                  <span className="font-normal text-text-muted">
-                    {formatRelativeTime(broadcast.createdAt)}
+                  <span className="font-normal text-text-muted" title={formatFullDateTime(broadcast.createdAt)}>
+                    {formatTimestamp(broadcast.createdAt)}
                   </span>
                 </span>
                 <span className="line-clamp-2 text-xs leading-snug text-text-secondary">

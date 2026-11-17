@@ -4,7 +4,7 @@ import type { Comment, Post } from '@/features/feed/types';
 import { MAX_COMMENT_LENGTH } from '@/features/feed/types';
 import { isEmptyDraft, serialize, trimSegments } from '@/shared/lib/mentionMarkup';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
-import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { formatFullDateTime, formatTimestamp } from '@/shared/lib/timestamp';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
@@ -207,7 +207,9 @@ export function CommentSection({
               </Avatar>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-text-primary">{displayName}</div>
-                <div className="text-xs text-text-muted">{formatRelativeTime(post.createdAt)}</div>
+                <div className="text-xs text-text-muted" title={formatFullDateTime(post.createdAt)}>
+                  {formatTimestamp(post.createdAt)}
+                </div>
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end justify-center gap-1.5">

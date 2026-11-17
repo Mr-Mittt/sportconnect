@@ -336,4 +336,58 @@ describe('PostCard', () => {
     );
     expect(screen.queryByRole('button', { name: 'Post options' })).not.toBeInTheDocument();
   });
+
+  describe('timestamp (CLIENT-GL-51)', () => {
+    it('shows the date, not "Nd ago", for a post more than a week old, with the date and time on hover', () => {
+      const iso = new Date(Date.now() - 20 * 86_400_000).toISOString();
+      render(
+        <PostCard
+          post={{ ...post, createdAt: iso }}
+          sport={football}
+          currentUserId="someone-else"
+          groupName={null}
+          onToggleLike={noop}
+          onHashtagClick={noop}
+          onDeletePost={noop}
+          onOpenComments={noop}
+        />,
+      );
+      expect(screen.queryByText(/d ago/)).not.toBeInTheDocument();
+      const stamp = screen.getByTitle(/\d{1,2}:\d{2}/);
+      expect(stamp.textContent).toMatch(/\d/);
+      expect(stamp.textContent).not.toMatch(/ago/);
+    });
+  });
+
+  describe('a server-written post (CLIENT-GL-51)', () => {
+    const welcome: Post = {
+      ...post,
+      content: 'Linh joined the group \u{1F44B}',
+      systemCode: 'GROUP_MEMBER_JOINED_INVITED',
+      systemParams: { name: 'Linh', inviter: 'Bao' },
+    };
+    const show = (p: Post) =>
+      render(
+        <PostCard
+          post={p}
+          sport={football}
+          currentUserId="someone-else"
+          groupName={null}
+          onToggleLike={noop}
+          onHashtagClick={noop}
+          onDeletePost={noop}
+          onOpenComments={noop}
+        />,
+      );
+
+    it('shows the sentence for its code, with the inviter', () => {
+      show(welcome);
+      expect(screen.getByText('Linh joined the group \u2014 invited by Bao \u{1F44B}')).toBeInTheDocument();
+    });
+
+    it('shows the stored content when it has no code', () => {
+      show({ ...welcome, systemCode: undefined, systemParams: undefined });
+      expect(screen.getByText('Linh joined the group \u{1F44B}')).toBeInTheDocument();
+    });
+  });
 });

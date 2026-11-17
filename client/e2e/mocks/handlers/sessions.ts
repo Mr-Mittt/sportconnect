@@ -302,7 +302,10 @@ function defaultSessionsSession(): SessionsSession {
           userId: mockUser.id,
           userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
           userAvatarUrl: null,
-          content: `${mockFriend.fullName} joined the session`,
+          // CLIENT-GL-51: shown from the code (en/vi); `content` is only the fallback, so it differs on purpose.
+          content: `${mockFriend.fullName} joined the session (stored text)`,
+          systemCode: 'SESSION_JOINED',
+          systemParams: { name: mockFriend.fullName },
           parentCommentId: null,
           likeCount: 0,
           replyCount: 0,

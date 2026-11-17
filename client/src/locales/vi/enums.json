@@ -28,6 +28,14 @@
     "decline": "Từ chối",
     "accept": "Đồng ý"
   },
+  "systemEntries": {
+    "SESSION_JOINED": "{{name}} đã tham gia buổi chơi",
+    "SESSION_LEFT": "{{name}} đã rời buổi chơi",
+    "SESSION_STARTED": "Buổi chơi đã bắt đầu",
+    "SESSION_RECORDS_UPDATED": "{{name}} đã cập nhật kết quả",
+    "GROUP_MEMBER_JOINED": "{{name}} đã tham gia nhóm 👋",
+    "GROUP_MEMBER_JOINED_INVITED": "{{name}} đã tham gia nhóm — được {{inviter}} mời 👋"
+  },
   "notifications": {
     "someone": "Ai đó",
     "yourSession": "trận của bạn",
@@ -45,6 +53,7 @@
     "sessionJoinRequestRejectedSuffix": " của bạn đã bị từ chối",
     "sessionInvitationCreated": " đã mời bạn tham gia ",
     "sessionDetailsUpdated": " đã cập nhật ",
+    "sessionRecordChanged": " đã cập nhật kết quả của ",
     "friendRequestCreated": " muốn kết bạn với bạn",
     "friendRequestAccepted": " đã trở thành bạn bè của bạn"
   }

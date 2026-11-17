@@ -412,7 +412,12 @@ interface CostFieldsProps extends CommonProps {
   onFeeNoteChange: (next: string) => void;
 }
 
-/** The Cost section: the fee (Free / Split / Fixed amount) and the optional fee note with its counter. */
+/**
+ * The Cost section: the fee (Free / Split / Fixed amount) and the optional fee note with its counter.
+ * CLIENT-GL-51 (owner): two columns, every fee option on the left and the note on the right, once the
+ * section is wide enough (a container query, not the viewport: the dialog is narrower than the screen);
+ * stacked below that.
+ */
 export function CostFields({
   feeType,
   onFeeTypeChange,
@@ -425,31 +430,33 @@ export function CostFields({
 }: CostFieldsProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   return (
-    <div className="flex flex-col gap-3.5">
-      <div>
-        <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-          {t('create.fee.label')}
-        </span>
-        <FeeTypeFields
-          value={feeType}
-          onChange={onFeeTypeChange}
-          amount={feeAmount}
-          onAmountChange={onFeeAmountChange}
-          idPrefix={idPrefix}
-        />
-      </div>
-      <div>
-        <Label htmlFor={`${idPrefix}-fee-note`}>{t('create.feeNote.label')}</Label>
-        <Input
-          id={`${idPrefix}-fee-note`}
-          value={feeNote}
-          maxLength={FEE_NOTE_MAX}
-          onChange={(event) => onFeeNoteChange(event.target.value)}
-          placeholder={t('create.feeNote.placeholder')}
-        />
-        <p className="mt-1 text-right text-2xs text-text-muted">
-          {t('create.feeNote.counter', { count: feeNote.length, max: FEE_NOTE_MAX })}
-        </p>
+    <div className="@container">
+      <div className="grid grid-cols-1 gap-3.5 @sm:grid-cols-2 @sm:gap-4" data-testid="cost-columns">
+        <div>
+          <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
+            {t('create.fee.label')}
+          </span>
+          <FeeTypeFields
+            value={feeType}
+            onChange={onFeeTypeChange}
+            amount={feeAmount}
+            onAmountChange={onFeeAmountChange}
+            idPrefix={idPrefix}
+          />
+        </div>
+        <div>
+          <Label htmlFor={`${idPrefix}-fee-note`}>{t('create.feeNote.label')}</Label>
+          <Input
+            id={`${idPrefix}-fee-note`}
+            value={feeNote}
+            maxLength={FEE_NOTE_MAX}
+            onChange={(event) => onFeeNoteChange(event.target.value)}
+            placeholder={t('create.feeNote.placeholder')}
+          />
+          <p className="mt-1 text-right text-2xs text-text-muted">
+            {t('create.feeNote.counter', { count: feeNote.length, max: FEE_NOTE_MAX })}
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Comment } from '@/features/feed/types';
 import { CommentItem } from './CommentItem';
 
@@ -252,7 +252,7 @@ describe('CommentItem', () => {
   it('shows the full date and time of the comment on hover of its timestamp', () => {
     render(
       <CommentItem
-        comment={makeComment({ createdAt: '2026-03-05T14:30:00Z' })}
+        comment={makeComment({ createdAt: '2025-03-05T14:30:00Z' })}
         currentUserId="someone-else"
         onToggleLike={noop}
         onDelete={noop}
@@ -262,8 +262,8 @@ describe('CommentItem', () => {
       />,
     );
     const title =
-      screen.getByText(/ago|now|on/i, { selector: 'span[title]' }).getAttribute('title') ?? '';
-    expect(title).toMatch(/2026/);
+      screen.getByText('Mar 5, 2025', { selector: 'span[title]' }).getAttribute('title') ?? '';
+    expect(title).toMatch(/2025/);
     expect(title).toMatch(/Mar/);
   });
 
@@ -491,6 +491,84 @@ describe('CommentItem', () => {
       expect(screen.getByText('Marcus Lee')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /like comment/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Reply' })).toBeInTheDocument();
+    });
+  });
+
+  describe('system entries by code (CLIENT-GL-51)', () => {
+    const coded = (overrides: Partial<Comment> = {}) =>
+      makeComment({
+        commentType: 'SESSION_SYSTEM',
+        content: 'Priya Shah has updated the result',
+        systemCode: 'SESSION_RECORDS_UPDATED',
+        systemParams: { name: 'Priya Shah' },
+        ...overrides,
+      });
+    const show = (comment: Comment) =>
+      render(
+        <CommentItem
+          comment={comment}
+          currentUserId="someone-else"
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+        />,
+      );
+
+    it('shows the sentence for the code, not the stored content', () => {
+      show(coded({ content: 'STORED ENGLISH' }));
+      expect(screen.getByText('Priya Shah has updated the result')).toBeInTheDocument();
+      expect(screen.queryByText('STORED ENGLISH')).not.toBeInTheDocument();
+    });
+
+    it('shows the stored content for an old entry without a code', () => {
+      show(coded({ systemCode: undefined, systemParams: undefined, content: 'Priya Shah joined the session' }));
+      expect(screen.getByText('Priya Shah joined the session')).toBeInTheDocument();
+    });
+
+    it('shows the stored content for a code from a newer server', () => {
+      show(coded({ systemCode: 'SOMETHING_NEW', content: 'Something new happened' }));
+      expect(screen.getByText('Something new happened')).toBeInTheDocument();
+    });
+  });
+
+  describe('timestamp (CLIENT-GL-51)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 10, 17, 12, 0));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    const daysAgo = (days: number, extraMs = 0) => new Date(Date.now() - days * 86_400_000 - extraMs).toISOString();
+    const show = (createdAt: string) =>
+      render(
+        <CommentItem
+          comment={makeComment({ createdAt })}
+          currentUserId="someone-else"
+          onToggleLike={noop}
+          onDelete={noop}
+          onReply={noop}
+          isSubmittingReply={false}
+        />,
+      );
+
+    it('stays relative up to and including 7 days', () => {
+      show(daysAgo(7));
+      expect(screen.getByText('7d ago')).toBeInTheDocument();
+    });
+
+    it('shows the date, without the year, once it is more than 7 days old in the current year; the hover has date and time', () => {
+      show(new Date(2026, 10, 9, 21, 30).toISOString()); // the clock is pinned to 2026-11-17 below
+      const stamp = screen.getByText('Nov 9');
+      expect(screen.queryByText(/d ago/)).not.toBeInTheDocument();
+      expect(stamp.getAttribute('title')).toMatch(/2026/);
+      expect(stamp.getAttribute('title')).toMatch(/\d{1,2}:\d{2}/);
+    });
+
+    it('keeps the year for an earlier year', () => {
+      show(new Date(2025, 10, 3, 9, 0).toISOString());
+      expect(screen.getByText('Nov 3, 2025')).toBeInTheDocument();
     });
   });
 });

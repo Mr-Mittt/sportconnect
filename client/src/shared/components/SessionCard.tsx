@@ -1,4 +1,9 @@
 import { IconClock, IconCoin, IconMapPin, IconUsers } from '@tabler/icons-react';
+import { useState } from 'react';
+import {
+  ConfirmCancelRequestDialog,
+  ConfirmLeaveDialog,
+} from '@/features/session/components/SessionConfirmDialogs';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { formatGameMood, GAME_MOOD_BADGE_CLASSES, getGameMoodLevel } from '@/shared/lib/gameMood';
@@ -108,6 +113,8 @@ export function SessionCard({
   const sport = sportKey !== undefined ? sportsByKey[sportKey] : undefined;
   const title = session.title ?? t('card.defaultTitle', { sport: getSportLabelForId(session.sportId, session.sportName) });
   const action = getParticipationAction(session);
+  /** CLIENT-GL-51: leaving, and withdrawing a join request, ask first (the same questions as the detail modal). */
+  const [confirming, setConfirming] = useState<'leave' | 'cancel' | null>(null);
   const isActionPending = isParticipationActionPending(session.id);
   const isLeaveHiddenForCreator = action?.kind === 'LEAVE' && session.createdBy === currentUserId;
   const genderSplit = genderSplitText(session.maleSlots, session.femaleSlots, {
@@ -117,98 +124,123 @@ export function SessionCard({
   const timeRange = formatSessionTimeRange(session.scheduledStart, session.scheduledEndAt);
 
   return (
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-    <div className={s.wrapper} onClick={() => onViewDetails(session.id)}>
-      <div className={s.header}>
-        {sport !== undefined && (
-          <span className={cn(s.badge, getRampBadgeClasses(sport.colorRamp))}>
-            <SportIcon iconUrl={sport.iconUrl} className={s.icon} />
+    // The questions are siblings of the card, not inside it: a dialog's clicks bubble through the React tree and would
+    // otherwise open the card's details.
+    <>
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      <div className={s.wrapper} onClick={() => onViewDetails(session.id)}>
+        <div className={s.header}>
+          {sport !== undefined && (
+            <span className={cn(s.badge, getRampBadgeClasses(sport.colorRamp))}>
+              <SportIcon iconUrl={sport.iconUrl} className={s.icon} />
+            </span>
+          )}
+          <div className={s.title} title={title}>
+            {title}
+          </div>
+          <span className={cn('shrink-0 text-2xs font-medium uppercase', SESSION_STATUS_CLASSES[session.status])}>
+            {getSessionStatusLabel(session.status)}
           </span>
+        </div>
+
+        <div className={s.detailRow}>
+          <IconClock className={s.detailIcon} aria-hidden="true" />
+          {/* CLIENT-SESSION-30: "start – end" in 24h; a multi-day range can be long, so it ellipsises
+              like the location line rather than wrapping (the compact rail card is narrow). */}
+          <span className="min-w-0 truncate" title={timeRange}>
+            {timeRange}
+          </span>
+        </div>
+
+        <div className={s.detailRow}>
+          <IconMapPin className={s.detailIcon} aria-hidden="true" />
+          {/* SESSION-24: null on a PREPARING session created without a location. CLIENT-SESSION-23:
+              single line, ellipsised — never wraps to a second line (which is what made cards in
+              one grid row differ in height); the full name stays available on hover via `title`. */}
+          <span className="min-w-0 truncate" title={session.location?.name}>
+            {session.location?.name ?? t('card.locationPending')}
+          </span>
+        </div>
+
+        <div className={s.feeRow}>
+          <div className="flex items-center gap-1">
+            <IconCoin className={s.detailIcon} aria-hidden="true" />
+            {formatFeeDisplay(session.feeType, session.feeAmountVnd)}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
+              {s.showParticipantIcon && <IconUsers className={s.detailIcon} aria-hidden="true" />}
+              {formatParticipantCount(session.participantCount, session.capacity)}
+            </span>
+            {/* CLIENT-SESSION-34 (SESSION-46): the game mood — the number is the signal, the colour an
+                accent; the full wording ("5 · Normal") is the tooltip and the accessible name. */}
+            <span
+              title={formatGameMood(session.gameMood)}
+              aria-label={t('card.mood', { mood: formatGameMood(session.gameMood) })}
+              className={cn(
+                'rounded-full px-1.5 text-2xs font-semibold text-white',
+                GAME_MOOD_BADGE_CLASSES[getGameMoodLevel(session.gameMood)],
+              )}
+            >
+              {session.gameMood}
+            </span>
+          </div>
+        </div>
+        {/* The gender split of the open seats, only when the host set one (and only on the roomy card). */}
+        {size === 'full' && genderSplit !== '' && (
+          <div className="text-2xs text-text-muted">{t('card.genderSplit', { split: genderSplit })}</div>
         )}
-        <div className={s.title} title={title}>
-          {title}
-        </div>
-        <span className={cn('shrink-0 text-2xs font-medium uppercase', SESSION_STATUS_CLASSES[session.status])}>
-          {getSessionStatusLabel(session.status)}
-        </span>
-      </div>
 
-      <div className={s.detailRow}>
-        <IconClock className={s.detailIcon} aria-hidden="true" />
-        {/* CLIENT-SESSION-30: "start – end" in 24h; a multi-day range can be long, so it ellipsises
-            like the location line rather than wrapping (the compact rail card is narrow). */}
-        <span className="min-w-0 truncate" title={timeRange}>
-          {timeRange}
-        </span>
-      </div>
-
-      <div className={s.detailRow}>
-        <IconMapPin className={s.detailIcon} aria-hidden="true" />
-        {/* SESSION-24: null on a PREPARING session created without a location. CLIENT-SESSION-23:
-            single line, ellipsised — never wraps to a second line (which is what made cards in
-            one grid row differ in height); the full name stays available on hover via `title`. */}
-        <span className="min-w-0 truncate" title={session.location?.name}>
-          {session.location?.name ?? t('card.locationPending')}
-        </span>
-      </div>
-
-      <div className={s.feeRow}>
-        <div className="flex items-center gap-1">
-          <IconCoin className={s.detailIcon} aria-hidden="true" />
-          {formatFeeDisplay(session.feeType, session.feeAmountVnd)}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="flex items-center gap-1">
-            {s.showParticipantIcon && <IconUsers className={s.detailIcon} aria-hidden="true" />}
-            {formatParticipantCount(session.participantCount, session.capacity)}
-          </span>
-          {/* CLIENT-SESSION-34 (SESSION-46): the game mood — the number is the signal, the colour an
-              accent; the full wording ("5 · Normal") is the tooltip and the accessible name. */}
-          <span
-            title={formatGameMood(session.gameMood)}
-            aria-label={t('card.mood', { mood: formatGameMood(session.gameMood) })}
-            className={cn(
-              'rounded-full px-1.5 text-2xs font-semibold text-white',
-              GAME_MOOD_BADGE_CLASSES[getGameMoodLevel(session.gameMood)],
-            )}
-          >
-            {session.gameMood}
-          </span>
-        </div>
-      </div>
-      {/* The gender split of the open seats, only when the host set one (and only on the roomy card). */}
-      {size === 'full' && genderSplit !== '' && (
-        <div className="text-2xs text-text-muted">{t('card.genderSplit', { split: genderSplit })}</div>
-      )}
-
-      <div className={s.actionsRow}>
-        <button
-          type="button"
-          // Sibling cards would otherwise expose identical "View details" names to a screen reader.
-          aria-label={t('card.viewDetailsLabel', { title })}
-          onClick={(event) => {
-            event.stopPropagation();
-            onViewDetails(session.id);
-          }}
-          className={ACTION_BUTTON_CLASSES}
-        >
-          {t('card.viewDetails')}
-        </button>
-        {action !== null && !isLeaveHiddenForCreator && (
+        <div className={s.actionsRow}>
           <button
             type="button"
-            aria-label={t('card.actionLabel', { title, action: action.label })}
-            disabled={isActionPending}
+            // Sibling cards would otherwise expose identical "View details" names to a screen reader.
+            aria-label={t('card.viewDetailsLabel', { title })}
             onClick={(event) => {
               event.stopPropagation();
-              onParticipationAction(session.id, action.kind);
+              onViewDetails(session.id);
             }}
             className={ACTION_BUTTON_CLASSES}
           >
-            {isActionPending ? t('card.working') : action.label}
+            {t('card.viewDetails')}
           </button>
-        )}
+          {action !== null && !isLeaveHiddenForCreator && (
+            <button
+              type="button"
+              aria-label={t('card.actionLabel', { title, action: action.label })}
+              disabled={isActionPending}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (action.kind === 'LEAVE') setConfirming('leave');
+                else if (action.kind === 'CANCEL') setConfirming('cancel');
+                else onParticipationAction(session.id, action.kind);
+              }}
+              className={ACTION_BUTTON_CLASSES}
+            >
+              {isActionPending ? t('card.working') : action.label}
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+      <ConfirmLeaveDialog
+        i18nOverridePrefix={i18nOverridePrefix}
+        isOpen={confirming === 'leave'}
+        scheduledStart={session.scheduledStart}
+        onStay={() => setConfirming(null)}
+        onConfirm={() => {
+          setConfirming(null);
+          onParticipationAction(session.id, 'LEAVE');
+        }}
+      />
+      <ConfirmCancelRequestDialog
+        i18nOverridePrefix={i18nOverridePrefix}
+        isOpen={confirming === 'cancel'}
+        onKeep={() => setConfirming(null)}
+        onConfirm={() => {
+          setConfirming(null);
+          onParticipationAction(session.id, 'CANCEL');
+        }}
+      />
+    </>
   );
 }

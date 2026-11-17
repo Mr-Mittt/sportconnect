@@ -49,6 +49,10 @@ export interface Comment {
   userFullName: string;
   userAvatarUrl: string | null;
   content: string;
+  // SESSION-GL-63: a server-written entry carries a code and params the client turns into en/vi text
+  // (`systemEntryText`); `content` is the English fallback. Absent on a user's comment and on old rows.
+  systemCode?: string | null;
+  systemParams?: Record<string, string> | null;
   parentCommentId: number | null;
   likeCount: number;
   replyCount: number;
@@ -72,6 +76,9 @@ export interface Post {
   postType: PostType;
   groupId: number | null;
   content: string;
+  // SESSION-GL-63: see Comment.systemCode (the group welcome post).
+  systemCode?: string | null;
+  systemParams?: Record<string, string> | null;
   latitude: number | null;
   longitude: number | null;
   locationName: string | null;

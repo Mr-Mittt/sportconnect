@@ -224,8 +224,26 @@ type Story = StoryObj<typeof meta>;
 
 export const NotJoinedYet: Story = {};
 
+/** CLIENT-GL-51: a start a few days out, so the header counts down and the Leave button, with its hint, is still there. */
+const startsIn = (ms: number) => new Date(Date.now() + ms).toISOString();
+
 export const AlreadyJoined: Story = {
-  args: { session: makeSession({ callerParticipation: makeCallerParticipation('JOINED') }) },
+  args: {
+    session: makeSession({
+      scheduledStart: startsIn(2 * 86_400_000 + 3 * 3_600_000),
+      callerParticipation: makeCallerParticipation('JOINED'),
+    }),
+  },
+};
+
+/** CLIENT-GL-51 / SESSION-65: within 15 minutes of the start the Leave button and its hint are gone. */
+export const TooLateToLeave: Story = {
+  args: {
+    session: makeSession({
+      scheduledStart: startsIn(10 * 60_000),
+      callerParticipation: makeCallerParticipation('JOINED'),
+    }),
+  },
 };
 
 export const InvitedPendingAcceptDecline: Story = {
@@ -233,7 +251,12 @@ export const InvitedPendingAcceptDecline: Story = {
 };
 
 export const RequestedPendingApproval: Story = {
-  args: { session: makeSession({ callerParticipation: makeCallerParticipation('REQUESTED') }) },
+  args: {
+    session: makeSession({
+      scheduledStart: startsIn(3_600_000),
+      callerParticipation: makeCallerParticipation('REQUESTED'),
+    }),
+  },
 };
 
 /** CLIENT-SESSION-30: header shows "start – end" in 24h, and the creator line leads with "Auto approval." */
@@ -318,12 +341,12 @@ export const PreparingNotManager: Story = {
   args: { session: makeSession({ status: 'PREPARING', location: null, feeType: null }) },
 };
 
-/** CLIENT-SESSION-37: read-only mode with both sections opened (Session information, then Players). */
+/** CLIENT-SESSION-37: read-only mode with both sections opened (Information, then Players). */
 export const ReadOnlyExpanded: Story = {
   args: { session: makeSession({ capacity: 10, scheduledEndAt: '2026-08-01T20:30:00' }) },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
-    await userEvent.click(await body.findByRole('button', { name: /Session information/ }));
+    await userEvent.click(await body.findByRole('button', { name: /^Information/ }));
     await userEvent.click(await body.findByRole('button', { name: /^Players/ }));
   },
 };

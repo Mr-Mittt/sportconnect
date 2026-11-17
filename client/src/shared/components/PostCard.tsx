@@ -6,7 +6,8 @@ import {
 } from '@tabler/icons-react';
 import type { Post } from '@/features/feed/types';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
-import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { formatFullDateTime, formatTimestamp } from '@/shared/lib/timestamp';
+import { systemEntryText } from '@/shared/lib/systemEntryText';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import type { SportProfile } from '@/shared/types/sport';
@@ -130,7 +131,9 @@ export function PostCard({
               </>
             )}
           </div>
-          <div className="text-xs text-text-muted">{formatRelativeTime(post.createdAt)}</div>
+          <div className="text-xs text-text-muted" title={formatFullDateTime(post.createdAt)}>
+            {formatTimestamp(post.createdAt)}
+          </div>
         </div>
         {sport !== null && (
           <span
@@ -167,7 +170,7 @@ export function PostCard({
       </div>
 
       <PostText
-        text={post.content}
+        text={systemEntryText(post.systemCode, post.systemParams, post.content)}
         onHashtagClick={onHashtagClick}
         className="mb-2 text-sm leading-normal text-text-primary"
       />

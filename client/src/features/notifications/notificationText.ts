@@ -73,6 +73,8 @@ export function getNotificationText(notification: Notification): NotificationTex
     case 'session.invitation.created':
       return [actor, plain(i18next.t('enums:notifications.sessionInvitationCreated')), entity];
     // SESSION-24: deliberately field-agnostic — fires on any successful updateSession call.
+    case 'session.record.changed':
+      return [actor, plain(i18next.t('enums:notifications.sessionRecordChanged')), entity];
     case 'session.details.updated':
       return [actor, plain(i18next.t('enums:notifications.sessionDetailsUpdated')), entity];
     // U13 / CLIENT-NOTIF-5 — `entityType` is USER, not SESSION, so there is no

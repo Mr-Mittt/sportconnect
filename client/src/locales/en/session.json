@@ -6,6 +6,7 @@
     "weekdayDayMonth": "EEE, do MMM",
     "dayMonth": "do MMM",
     "dayMonthYear": "MMM d, yyyy",
+    "monthDay": "MMM d",
     "monthYear": "MMMM yyyy",
     "weekdayNarrow": "EEEEE",
     "fullDate": "EEEE, MMMM d, yyyy"
@@ -32,6 +33,11 @@
     "participants_other": "{{count}} participants",
     "participantsOfCapacity_one": "{{count}}/{{capacity}} participant",
     "participantsOfCapacity_other": "{{count}}/{{capacity}} participants"
+  },
+  "countdown": {
+    "span": "{{time}}",
+    "spanWithDays_one": "{{count}} day, {{time}}",
+    "spanWithDays_other": "{{count}} days, {{time}}"
   },
   "participation": {
     "join": "Join",
@@ -214,7 +220,7 @@
     "autoCancelledReason": "the session setup was not completed in time.",
     "reason": "Reason: {{reason}}",
     "information": {
-      "title": "Session information"
+      "title": "Information"
     },
     "players": {
       "label": "Players",
@@ -243,6 +249,22 @@
     "unlike": "Unlike",
     "actionError": "Couldn't complete that action. Try again.",
     "waitingForHost": "Waiting for host approval.",
+    "leaveHint": "You can leave only until {{minutes}} minutes before the start.",
+    "startsIn": "Starts in {{span}}",
+    "starting": "Starting…",
+    "leaveConfirm": {
+      "title": "Are you leaving?",
+      "body": "Oh, this session will start in {{span}}. Do you still want to leave?",
+      "bodySoon": "Oh, this session is about to start. Do you still want to leave?",
+      "stay": "Stay",
+      "leave": "Leave"
+    },
+    "cancelRequestConfirm": {
+      "title": "Cancel your request?",
+      "body": "Your request is waiting for approval. Do you want to wait a bit?",
+      "keep": "Keep waiting",
+      "cancel": "Cancel"
+    },
     "decline": "Decline",
     "pending": {
       "JOIN": "Joining…",
