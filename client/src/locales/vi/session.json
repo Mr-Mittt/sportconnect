@@ -6,6 +6,7 @@
     "weekdayDayMonth": "EEE, d MMM",
     "dayMonth": "d MMM",
     "dayMonthYear": "d MMM, yyyy",
+    "monthDay": "d MMM",
     "monthYear": "MMMM yyyy",
     "weekdayNarrow": "EEEEE",
     "fullDate": "EEEE, d MMMM, yyyy"
@@ -32,6 +33,11 @@
     "participants_other": "{{count}} người tham gia",
     "participantsOfCapacity_one": "{{count}}/{{capacity}} người tham gia",
     "participantsOfCapacity_other": "{{count}}/{{capacity}} người tham gia"
+  },
+  "countdown": {
+    "span": "{{time}}",
+    "spanWithDays_one": "{{count}} ngày, {{time}}",
+    "spanWithDays_other": "{{count}} ngày, {{time}}"
   },
   "participation": {
     "join": "Tham gia",
@@ -214,7 +220,7 @@
     "autoCancelledReason": "buổi chơi chưa được thiết lập xong đúng hạn.",
     "reason": "Lý do: {{reason}}",
     "information": {
-      "title": "Thông tin buổi chơi"
+      "title": "Thông tin"
     },
     "players": {
       "label": "Người chơi",
@@ -243,6 +249,22 @@
     "unlike": "Bỏ thích",
     "actionError": "Không thể hoàn tất thao tác đó. Vui lòng thử lại.",
     "waitingForHost": "Đang chờ chủ trì duyệt.",
+    "leaveHint": "Bạn chỉ có thể rời buổi chơi trước giờ bắt đầu {{minutes}} phút.",
+    "startsIn": "Bắt đầu sau {{span}}",
+    "starting": "Sắp bắt đầu…",
+    "leaveConfirm": {
+      "title": "Bạn muốn rời đi?",
+      "body": "Ôi, buổi chơi này sẽ bắt đầu sau {{span}}. Bạn vẫn muốn rời đi?",
+      "bodySoon": "Ôi, buổi chơi này sắp bắt đầu. Bạn vẫn muốn rời đi?",
+      "stay": "Ở lại",
+      "leave": "Rời đi"
+    },
+    "cancelRequestConfirm": {
+      "title": "Hủy yêu cầu tham gia?",
+      "body": "Yêu cầu của bạn đang chờ duyệt. Bạn có muốn chờ thêm một chút không?",
+      "keep": "Tiếp tục chờ",
+      "cancel": "Hủy yêu cầu"
+    },
     "decline": "Từ chối",
     "pending": {
       "JOIN": "Đang tham gia…",

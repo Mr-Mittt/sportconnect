@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-17 (CLIENT-GL-51 filed)
+**Last updated:** 2026-11-17 (CLIENT-GL-51 done)
 
 ---
 
@@ -88,7 +88,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
 | 24 | [CLIENT-GL-49](MVP/CLIENT-GL-49_SESSION_RESULT_SCOREBOARD.md) | Session Result section: the client-computed scoreboard (split out of CLIENT-GL-38) | `TODO` |
 | 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request` | `TODO` |
-| 26 | [CLIENT-GL-51](MVP/CLIENT-GL-51_LOCALISED_SYSTEM_ENTRIES_AND_RECORD_NOTIFICATION.md) | Localised system comments and the group welcome post (by `systemCode`, en/vi, old rows keep their text) and the record-changed notification type (follow-up of SESSION-GL-63) | `TODO` |
 
 #### Removed / Deferred
 
@@ -145,6 +144,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 32 | [CLIENT-GL-51](MVP/CLIENT-GL-51_LOCALISED_SYSTEM_ENTRIES_AND_RECORD_NOTIFICATION.md) | Localised system comments and the group welcome post (by `systemCode`, en/vi, old rows keep their text) and the record-changed notification type (follow-up of SESSION-GL-63) | `DONE` (2026-11-17) |
 | 31 | [CLIENT-GL-50](MVP/CLIENT-GL-50_CHIP_COMPOSER_AND_TAGGING_IN_THE_SESSION_THREAD.md) | Chip composer and tagging (2026-11-16): the session thread's and, in part 2, the posts' comment, reply and post boxes are chip boxes (`@` tags friends or group members via server B23, stored as `@[Name](userId)`, drawn next to clickable hashtags, no self tag outside record commands, line breaks in posts); part 3: `(host)` and `(you)` labels, no `(x)` for same names, one generic invalid-command line with a failure count, the `@` list at the caret, Waiting for approval folded into Players; part 4: keyboard and bold for the command hints, whole-row highlight and a saved line in the record dialog, `Results (mine/all)` | `DONE` (2026-11-16) |
 | 30 | [CLIENT-GL-39](MVP/CLIENT-GL-39_THREAD_COMMAND_HINTS_AND_REPLIES.md) | Session thread: record commands `:add`, `:upd`, `:del` typed in the comment box (client parses and validates with the record schema, sends the same change set as the dialog, nothing posted to the thread; errors are caller-only system-style lines), command hints and an `@` player list, a copy-record-id button and a "my results" switch in the Result section (no record numbers there any more). Client only; follow-up SESSION-GL-63 | `DONE` (2026-11-15) |
 | 28 | [CLIENT-GL-38](MVP/CLIENT-GL-38_SESSION_DETAIL_RESULT_SECTION_AND_DIALOG.md) | Session detail: collapsible Result section (the games logged, drawn from the sport's record schema) and the record dialog (add, edit, delete with a per-row X / strike-through / undo, an always-present placeholder, red borders while typing and on Save, rejected rows kept at the bottom); the scoreboard moved to CLIENT-GL-49. 19 requirement mutations killed; e2e: new `session-results.spec.ts` and the session-detail specs passed; no baseline change expected | `DONE` (2026-11-13) |

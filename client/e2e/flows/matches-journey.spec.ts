@@ -85,6 +85,10 @@ test('Matches journey', async ({ page }) => {
   // run with `--reporter=list`, not assumed) — the fix is more budget for genuinely more work,
   // not a papered-over race.
   test.setTimeout(60000);
+  // CLIENT-GL-51: the fixtures start in early August 2026, and a joined participant cannot leave within 15 minutes of
+  // the start (SESSION-65), so Leave only exists while the clock is before that. Pinned a week before the first
+  // fixture, which keeps every start label as it was (7 or more calendar days away); timers keep running.
+  await page.clock.setFixedTime(new Date(2026, 6, 25, 12, 0));
   await seedAuthenticatedSession(page, '/matches');
 
   await test.step('1. load — defaults to the first sport profile (Badminton); its own sessions render', async () => {
@@ -124,7 +128,7 @@ test('Matches journey', async ({ page }) => {
     await expect(dialog.getByText('Players (1/10)')).toBeVisible();
     // CLIENT-SESSION-37: the creator of a SCHEDULED session is a read-only viewer now — Session information and
     // Players are both collapsed. Open Players to see the roster; the uppercase status is CSS only.
-    const sessionInfo = dialog.getByRole('button', { name: /Session information/ });
+    const sessionInfo = dialog.getByRole('button', { name: /^Information/ });
     await expect(sessionInfo).toHaveAttribute('aria-expanded', 'false');
     await expect(dialog.getByText('Jordan Lee', { exact: true })).toHaveCount(0);
     await dialog.getByRole('button', { name: /Players \(1\/10\)/ }).click();
@@ -193,6 +197,20 @@ test('Matches journey', async ({ page }) => {
 
     await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Join' })).not.toBeVisible();
+    // CLIENT-GL-51: the rule is shown beside the button, the header counts down, and Leave asks first.
+    await expect(dialog.getByText('You can leave only until 15 minutes before the start.')).toBeVisible();
+    await expect(dialog.getByTestId('session-countdown')).toHaveText(/^Starts in 8 days, \d\d:\d\d:\d\d$/);
+    await dialog.getByRole('button', { name: 'Leave' }).click();
+    const leaveQuestion = page.getByRole('dialog', { name: 'Are you leaving?' });
+    await expect(leaveQuestion.getByText(/Oh, this session will start in 8 days, /)).toBeVisible();
+    await leaveQuestion.getByRole('button', { name: 'Stay' }).click();
+    await expect(leaveQuestion).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Leave' })).toBeVisible();
+    // Ten minutes before the start the button and the hint go by themselves (no reload).
+    await page.clock.setFixedTime(new Date(2026, 7, 2, 18, 50));
+    await expect(dialog.getByRole('button', { name: 'Leave' })).toHaveCount(0);
+    await expect(dialog.getByText(/You can leave only until/)).toHaveCount(0);
+    await page.clock.setFixedTime(new Date(2026, 6, 25, 12, 0));
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
 
@@ -217,6 +235,11 @@ test('Matches journey', async ({ page }) => {
     // from the list outright — the old client-side group fan-out kept showing it with a Join
     // button, which is no longer the contract.
     await page.getByRole('button', { name: /Friday 5-a-side — Leave/ }).click();
+    // CLIENT-GL-51: the card's Leave asks too; Stay keeps the card, Leave removes it.
+    await page.getByRole('dialog', { name: 'Are you leaving?' }).getByRole('button', { name: 'Stay' }).click();
+    await expect(page.getByRole('button', { name: /Friday 5-a-side — Leave/ })).toBeVisible();
+    await page.getByRole('button', { name: /Friday 5-a-side — Leave/ }).click();
+    await page.getByRole('dialog', { name: 'Are you leaving?' }).getByRole('button', { name: 'Leave' }).click();
     await expect(page.getByRole('button', { name: /Friday 5-a-side/ })).toHaveCount(0);
   });
 
@@ -265,6 +288,11 @@ test('Matches journey', async ({ page }) => {
     // this session lands SCHEDULED, not PREPARING (the PREPARING path is covered by its own
     // journey, step 11 below).
     await createDialog.getByRole('checkbox', { name: 'Free' }).check();
+    // CLIENT-GL-51: the fee options sit on the left and the fee note on the right (one row).
+    const freeBox = await createDialog.getByRole('checkbox', { name: 'Free' }).boundingBox();
+    const noteBox = await createDialog.getByLabel('Fee note').boundingBox();
+    expect(noteBox!.x).toBeGreaterThan(freeBox!.x + freeBox!.width);
+    expect(Math.abs(noteBox!.y - freeBox!.y)).toBeLessThan(80);
 
     // CLIENT-SESSION-4: invite a friend (dismissible badge) and turn on auto-approve — CLIENT-SESSION-34:
     // ticking it opens a confirmation, "Turn on" is what checks the box.
@@ -495,8 +523,14 @@ test('Matches journey', async ({ page }) => {
     await expect(dialog.getByText(/Need host approval\. Created by/)).toBeVisible();
     await expect(dialog.getByText('Waiting for host approval.')).toBeVisible();
 
-    // Cancel the request → back to Join, hint gone.
+    // Cancel the request → asks first (CLIENT-GL-51): Keep waiting changes nothing, Cancel withdraws it.
     await dialog.getByRole('button', { name: 'Cancel' }).click();
+    const cancelQuestion = page.getByRole('dialog', { name: 'Cancel your request?' });
+    await cancelQuestion.getByRole('button', { name: 'Keep waiting' }).click();
+    await expect(cancelQuestion).toHaveCount(0);
+    await expect(dialog.getByText('Waiting for host approval.')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await page.getByRole('dialog', { name: 'Cancel your request?' }).getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog.getByRole('button', { name: 'Join' })).toBeVisible();
     await expect(dialog.getByText('Waiting for host approval.')).toHaveCount(0);
 

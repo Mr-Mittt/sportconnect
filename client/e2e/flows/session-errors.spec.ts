@@ -117,10 +117,13 @@ test('opening a session that no longer exists shows the "no longer available" st
 test('leaving from a card when the caller is no longer a participant shows the dialog, no modal involved', async ({
   page,
 }) => {
+  // CLIENT-GL-51: a joined participant has no Leave within 15 minutes of the start; the fixtures start in August 2026.
+  await page.clock.setFixedTime(new Date(2026, 6, 25, 12, 0));
   await seedAuthenticatedSession(page, '/matches');
   await forceFailure(page, /\/api\/sessions\/\d+\/leave$/, 'DELETE', 409, 'SESSION_NOT_PARTICIPANT');
 
   await page.getByRole('button', { name: /Friday 5-a-side — Leave/ }).click();
+  await page.getByRole('dialog', { name: 'Are you leaving?' }).getByRole('button', { name: 'Leave' }).click();
 
   const dialog = errorDialog(page);
   await expect(dialog.getByRole('alert')).toHaveText("You're no longer part of this session.");

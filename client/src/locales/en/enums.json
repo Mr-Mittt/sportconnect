@@ -28,6 +28,14 @@
     "decline": "Decline",
     "accept": "Accept"
   },
+  "systemEntries": {
+    "SESSION_JOINED": "{{name}} joined the session",
+    "SESSION_LEFT": "{{name}} left the session",
+    "SESSION_STARTED": "The session has started",
+    "SESSION_RECORDS_UPDATED": "{{name}} has updated the result",
+    "GROUP_MEMBER_JOINED": "{{name}} joined the group 👋",
+    "GROUP_MEMBER_JOINED_INVITED": "{{name}} joined the group — invited by {{inviter}} 👋"
+  },
   "notifications": {
     "someone": "Someone",
     "yourSession": "your session",
@@ -45,6 +53,7 @@
     "sessionJoinRequestRejectedSuffix": " was declined",
     "sessionInvitationCreated": " invited you to join ",
     "sessionDetailsUpdated": " updated ",
+    "sessionRecordChanged": " updated the result of ",
     "friendRequestCreated": " wants to be your friend",
     "friendRequestAccepted": " is now your friend"
   }

@@ -34,6 +34,8 @@ export type NotificationType =
   // SESSION-24 / CLIENT-SESSION-21: fired on every successful updateSession call, regardless of
   // which field changed — field-agnostic by design, hence the generic text below.
   | 'session.details.updated'
+  // SESSION-GL-63 / CLIENT-GL-51: a result was changed in a session the user takes part in.
+  | 'session.record.changed'
   | 'user.friend_request.created'
   | 'user.friend_request.accepted';
 

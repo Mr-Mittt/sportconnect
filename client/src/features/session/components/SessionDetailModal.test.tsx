@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError, type AxiosResponse } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
@@ -67,6 +67,12 @@ const location: Location = {
   createdAt: '2026-06-01T10:00:00',
   updatedAt: '2026-06-01T10:00:00',
 };
+
+/** CLIENT-GL-51: a start this far from now, for the countdown and the leave cutoff (the clock is real). */
+const startIn = (ms: number) => new Date(Date.now() + ms).toISOString();
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
 
 function makeSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -371,11 +377,14 @@ describe('SessionDetailModal', () => {
     render(
       <SessionDetailModal
         {...baseProps}
-        session={makeSession({ callerParticipation: makeCallerParticipation('JOINED') })}
+        session={makeSession({ scheduledStart: startIn(DAY_MS), callerParticipation: makeCallerParticipation('JOINED') })}
         onLeave={onLeave}
       />,
     );
     await user.click(screen.getByRole('button', { name: 'Leave' }));
+    // CLIENT-GL-51: the click asks first; the question's own Leave sends it.
+    expect(onLeave).not.toHaveBeenCalled();
+    await user.click(within(await screen.findByRole('dialog', { name: 'Are you leaving?' })).getByRole('button', { name: 'Leave' }));
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Join' })).not.toBeInTheDocument();
   });
@@ -426,6 +435,8 @@ describe('SessionDetailModal', () => {
     // CLIENT-SESSION-30: says why the only action is Cancel.
     expect(screen.getByText('Waiting for host approval.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    // CLIENT-GL-51: asks first.
+    await user.click(within(await screen.findByRole('dialog', { name: 'Cancel your request?' })).getByRole('button', { name: 'Cancel' }));
     expect(onLeave).toHaveBeenCalledTimes(1);
   });
 
@@ -1195,7 +1206,7 @@ describe('SessionDetailModal', () => {
 
   describe('collapsible sections only where the session can be edited', () => {
     const sectionNames = ['Overview', 'When', 'Where', 'Who', 'Cost'];
-    const informationToggle = () => screen.getByRole('button', { name: /Session information/ });
+    const informationToggle = () => screen.getByRole('button', { name: /^Information/ });
     const toggles = () =>
       screen.queryAllByRole('button').filter((button) => button.hasAttribute('aria-expanded') &&
         sectionNames.some((name) => (button.textContent ?? '').startsWith(name)));
@@ -1205,7 +1216,7 @@ describe('SessionDetailModal', () => {
       expect(toggles()).toHaveLength(5);
     });
 
-    it('a viewer gets the read-only mode: one collapsed "Session information" section, no per-field sections, no Edit — even while Preparing', () => {
+    it('a viewer gets the read-only mode: one collapsed "Information" section, no per-field sections, no Edit — even while Preparing', () => {
       render(
         <SessionDetailModal
           {...baseProps}
@@ -1223,7 +1234,7 @@ describe('SessionDetailModal', () => {
       expect(screen.getByText('Location:')).toBeInTheDocument();
     });
 
-    it('collapsed Session information breaks the line for each group', () => {
+    it('collapsed Information breaks the line for each group', () => {
       render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T20:30:00' })} />);
       const lineOf = (label: string) => screen.getByText(`${label}:`).parentElement?.parentElement as HTMLElement;
       // Same line within a group, a different line from the next group.
@@ -1235,7 +1246,7 @@ describe('SessionDetailModal', () => {
       expect(new Set(lines).size).toBe(5);
     });
 
-    it('expanding Session information lists every field as its own row, with no sub-headings', () => {
+    it('expanding Information lists every field as its own row, with no sub-headings', () => {
       render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T20:30:00' })} />);
       fireEvent.click(informationToggle());
       expect(informationToggle()).toHaveAttribute('aria-expanded', 'true');
@@ -1317,6 +1328,166 @@ describe('SessionDetailModal', () => {
       );
       expect(screen.getByText('Format:').parentElement).toHaveTextContent('Format: Doubles');
       expect(screen.queryByRole('button', { name: 'Session detail' })).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('SessionDetailModal: countdown, leave rule and confirmations (CLIENT-GL-51)', () => {
+  const joinedSession = (startMs: number, overrides: Partial<Session> = {}) =>
+    makeSession({
+      scheduledStart: startIn(startMs),
+      callerParticipation: makeCallerParticipation('JOINED'),
+      ...overrides,
+    });
+
+  describe('the header countdown', () => {
+    it('counts down to a scheduled session, with the days when there are some', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledStart: startIn(2 * DAY_MS + 3 * HOUR_MS + 30_000) })} />);
+      expect(screen.getByTestId('session-countdown')).toHaveTextContent(/^Starts in 2 days, 03:00:\d\d$/);
+    });
+
+    it('leaves the days out when the start is less than a day away', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledStart: startIn(5 * HOUR_MS + 30_000) })} />);
+      expect(screen.getByTestId('session-countdown')).toHaveTextContent(/^Starts in 05:00:\d\d$/);
+    });
+
+    it('says "Starting…" once the start has passed but the status has not changed yet', () => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledStart: startIn(-MINUTE_MS) })} />);
+      expect(screen.getByTestId('session-countdown')).toHaveTextContent('Starting…');
+    });
+
+    it.each(['ONGOING', 'COMPLETED', 'CANCELLED', 'PREPARING'] as const)('is not shown for a %s session', (status) => {
+      render(<SessionDetailModal {...baseProps} session={makeSession({ status, scheduledStart: startIn(DAY_MS) })} />);
+      expect(screen.queryByTestId('session-countdown')).not.toBeInTheDocument();
+    });
+
+    it('ticks every second', () => {
+      vi.useFakeTimers();
+      try {
+        render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledStart: startIn(HOUR_MS + 30_000) })} />);
+        const before = screen.getByTestId('session-countdown').textContent;
+        act(() => {
+          vi.advanceTimersByTime(3000);
+        });
+        expect(screen.getByTestId('session-countdown').textContent).not.toBe(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('leaving', () => {
+    it('asks first: "Stay" keeps the place, nothing is sent', async () => {
+      const user = userEvent.setup();
+      const onLeave = vi.fn();
+      render(<SessionDetailModal {...baseProps} session={joinedSession(2 * DAY_MS)} onLeave={onLeave} />);
+      await user.click(screen.getByRole('button', { name: 'Leave' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Are you leaving?' });
+      expect(within(dialog).getByText(/Oh, this session will start in 1 day, 23:59:\d\d\. Do you still want to leave\?/)).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Stay' }));
+      expect(onLeave).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Are you leaving?' })).not.toBeInTheDocument());
+    });
+
+    it('Escape also stays', async () => {
+      const user = userEvent.setup();
+      const onLeave = vi.fn();
+      render(<SessionDetailModal {...baseProps} session={joinedSession(2 * DAY_MS)} onLeave={onLeave} />);
+      await user.click(screen.getByRole('button', { name: 'Leave' }));
+      await screen.findByRole('dialog', { name: 'Are you leaving?' });
+      await user.keyboard('{Escape}');
+      expect(onLeave).not.toHaveBeenCalled();
+    });
+
+    it('"Leave" in the question leaves, once', async () => {
+      const user = userEvent.setup();
+      const onLeave = vi.fn();
+      render(<SessionDetailModal {...baseProps} session={joinedSession(2 * DAY_MS)} onLeave={onLeave} />);
+      await user.click(screen.getByRole('button', { name: 'Leave' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Are you leaving?' });
+      await user.click(within(dialog).getByRole('button', { name: 'Leave' }));
+      expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows the rule as a hint next to the button', () => {
+      render(<SessionDetailModal {...baseProps} session={joinedSession(2 * DAY_MS)} />);
+      expect(screen.getByText('You can leave only until 15 minutes before the start.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument();
+    });
+
+    it('hides the button and the hint within 15 minutes of the start', () => {
+      render(<SessionDetailModal {...baseProps} session={joinedSession(14 * MINUTE_MS)} />);
+      expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/You can leave only until/)).not.toBeInTheDocument();
+    });
+
+    it('keeps the button just before the cutoff', () => {
+      render(<SessionDetailModal {...baseProps} session={joinedSession(16 * MINUTE_MS)} />);
+      expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument();
+    });
+
+    it('hides the button on its own when the cutoff passes while the modal is open', () => {
+      vi.useFakeTimers();
+      try {
+        render(<SessionDetailModal {...baseProps} session={joinedSession(15 * MINUTE_MS + 5000)} />);
+        expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument();
+        act(() => {
+          vi.advanceTimersByTime(7000);
+        });
+        expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('hides it for an ongoing session', () => {
+      render(<SessionDetailModal {...baseProps} session={joinedSession(-HOUR_MS, { status: 'ONGOING' })} />);
+      expect(screen.queryByRole('button', { name: 'Leave' })).not.toBeInTheDocument();
+    });
+
+    it('still lets a late invitee decline, without a question', async () => {
+      const user = userEvent.setup();
+      const onLeave = vi.fn();
+      render(
+        <SessionDetailModal
+          {...baseProps}
+          session={makeSession({ scheduledStart: startIn(5 * MINUTE_MS), callerParticipation: makeCallerParticipation('INVITED') })}
+          onLeave={onLeave}
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Decline' }));
+      expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('cancelling a join request', () => {
+    const requested = () =>
+      makeSession({ scheduledStart: startIn(5 * MINUTE_MS), callerParticipation: makeCallerParticipation('REQUESTED') });
+
+    it('asks first: "Keep waiting" keeps the request', async () => {
+      const user = userEvent.setup();
+      const onLeave = vi.fn();
+      render(<SessionDetailModal {...baseProps} session={requested()} onLeave={onLeave} />);
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Cancel your request?' });
+      expect(within(dialog).getByText('Your request is waiting for approval. Do you want to wait a bit?')).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Keep waiting' }));
+      expect(onLeave).not.toHaveBeenCalled();
+    });
+
+    it('"Cancel" in the question withdraws the request, once', async () => {
+      const user = userEvent.setup();
+      const onLeave = vi.fn();
+      render(<SessionDetailModal {...baseProps} session={requested()} onLeave={onLeave} />);
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Cancel your request?' });
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows no leave hint', () => {
+      render(<SessionDetailModal {...baseProps} session={requested()} />);
+      expect(screen.queryByText(/You can leave only until/)).not.toBeInTheDocument();
     });
   });
 });

@@ -1,5 +1,7 @@
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { useNow } from '@/shared/hooks/useNow';
+import { formatCountdownSpan } from '@/shared/lib/countdown';
 import { getSessionStatusLabel } from '@/shared/lib/sessionStatus';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import type { MissingField } from '../sessionReadiness';
@@ -160,6 +162,102 @@ export function LeaveWithoutSavingDialog({
           </Button>
           <Button variant="primary" size="sm" onClick={onStay}>
             {t('create.leave.stay')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+interface ConfirmLeaveDialogProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
+  isOpen: boolean;
+  /** The session's start, for the "will start in ..." line. */
+  scheduledStart: string;
+  /** "Stay" (also Escape): keep the place. */
+  onStay: () => void;
+  /** "Leave": the participant really leaves. */
+  onConfirm: () => void;
+}
+
+/**
+ * CLIENT-GL-51: asked before a JOINED participant leaves a session ("Are you leaving?"). The body says how long
+ * is left before the start, ticking while the dialog is open. "Stay" is the primary button and Escape and a click
+ * outside choose it, so a stray tap never gives up the place. Same sibling-`Dialog` shape as the others here.
+ */
+export function ConfirmLeaveDialog({
+  isOpen,
+  scheduledStart,
+  onStay,
+  onConfirm,
+  i18nOverridePrefix,
+}: ConfirmLeaveDialogProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
+  const now = useNow(1000, isOpen);
+  const span = formatCountdownSpan(scheduledStart, now);
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onStay()}>
+      <DialogContent centered className="p-4" onOpenAutoFocus={(event) => event.preventDefault()}>
+        <DialogTitle className="mb-1 text-sm font-semibold text-text-primary">{t('detail.leaveConfirm.title')}</DialogTitle>
+        <p className="mb-3 text-2sm text-text-secondary">
+          {span === null ? t('detail.leaveConfirm.bodySoon') : t('detail.leaveConfirm.body', { span })}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onConfirm}
+            className="border-text-danger text-text-danger hover:bg-bg-accent"
+          >
+            {t('detail.leaveConfirm.leave')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={onStay}>
+            {t('detail.leaveConfirm.stay')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ConfirmCancelRequestDialogProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
+  isOpen: boolean;
+  /** "Keep waiting" (also Escape): the request stays. */
+  onKeep: () => void;
+  /** "Cancel": withdraw the join request. */
+  onConfirm: () => void;
+}
+
+/** CLIENT-GL-51: asked before a join request is withdrawn; "Keep waiting" is the primary, safe choice. */
+export function ConfirmCancelRequestDialog({
+  isOpen,
+  onKeep,
+  onConfirm,
+  i18nOverridePrefix,
+}: ConfirmCancelRequestDialogProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onKeep()}>
+      <DialogContent centered className="p-4" onOpenAutoFocus={(event) => event.preventDefault()}>
+        <DialogTitle className="mb-1 text-sm font-semibold text-text-primary">
+          {t('detail.cancelRequestConfirm.title')}
+        </DialogTitle>
+        <p className="mb-3 text-2sm text-text-secondary">{t('detail.cancelRequestConfirm.body')}</p>
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onConfirm}
+            className="border-text-danger text-text-danger hover:bg-bg-accent"
+          >
+            {t('detail.cancelRequestConfirm.cancel')}
+          </Button>
+          <Button variant="primary" size="sm" onClick={onKeep}>
+            {t('detail.cancelRequestConfirm.keep')}
           </Button>
         </div>
       </DialogContent>

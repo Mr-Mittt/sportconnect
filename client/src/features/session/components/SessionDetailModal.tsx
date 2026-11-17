@@ -26,6 +26,9 @@ import {
   type ParticipationActionKind,
 } from '@/shared/lib/sessionParticipation';
 import { getSessionStatusLabel, SESSION_STATUS_CLASSES } from '@/shared/lib/sessionStatus';
+import { useNow } from '@/shared/hooks/useNow';
+import { formatCountdownSpan } from '@/shared/lib/countdown';
+import { LEAVE_CUTOFF_MINUTES } from '@/shared/lib/leaveCutoff';
 import { formatSessionHeaderDateTime, formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import type { ResolvedSportAttributeSchema, SportKey, SportProfile } from '@/shared/types/sport';
@@ -41,7 +44,11 @@ import type { Location } from '@/shared/types/location';
 import type { Session, SessionParticipant, UpdateSessionPayload } from '../types';
 import type { MentionSource } from '@/shared/components/MentionInput';
 import { SessionCommentSection } from './SessionCommentSection';
-import { SessionReadinessDialog } from './SessionConfirmDialogs';
+import {
+  ConfirmCancelRequestDialog,
+  ConfirmLeaveDialog,
+  SessionReadinessDialog,
+} from './SessionConfirmDialogs';
 import { SessionDetailSections, type CompletionFavorites } from './SessionDetailSections';
 import { SessionFormSection } from './SessionFormSection';
 import { SessionResultDialog } from './SessionResultDialog';
@@ -481,11 +488,18 @@ export function SessionDetailModal({
   const [isApprovalCollapsed, setIsApprovalCollapsed] = useState(false);
   /** CLIENT-GL-38: the record dialog, a sibling Dialog of this one (a nested popup misbehaves here). */
   const [isResultDialogOpen, setIsResultDialogOpen] = useState(false);
+  /** CLIENT-GL-51: which participation confirmation is open (leaving, or withdrawing a join request). */
+  const [confirming, setConfirming] = useState<'leave' | 'cancel' | null>(null);
+  // Ticks once a second while the start is still ahead: it drives the header countdown and makes the Leave
+  // button disappear by itself at the cutoff (SESSION-65). A session that has begun needs no timer.
+  const isStartAhead =
+    isOpen && session !== undefined && (session.status === 'SCHEDULED' || session.status === 'PREPARING');
+  const now = useNow(1000, isStartAhead);
 
   // SESSION-9/CLIENT-SESSION-9: derived from `session.callerParticipation`, not a lookup into
   // `participants` (which only ever holds JOINED rows for a non-manager — see the Players
   // section below).
-  const participationAction = session !== undefined ? getParticipationAction(session) : null;
+  const participationAction = session !== undefined ? getParticipationAction(session, now) : null;
   // CLIENT-SESSION-21: PREPARING is fully joinable (SESSION-24) — approve/reject aren't blocked
   // on it either (backend only rejects CANCELLED), so this gate must include it too.
   const canJoinOrLeave =
@@ -725,7 +739,7 @@ export function SessionDetailModal({
               <DialogClose aria-label={t('common.close')} className="justify-self-end" />
             </div>
             {session !== undefined && (
-              <div className="flex items-center gap-1.5 text-2sm">
+              <div className="flex flex-wrap items-center gap-x-1.5 text-2sm">
                 <span
                   className={cn(
                     'size-1.5 shrink-0 rounded-full bg-current',
@@ -742,6 +756,18 @@ export function SessionDetailModal({
                   {' '}
                   · {formatSessionHeaderDateTime(session.scheduledStart, session.scheduledEndAt)}
                 </span>
+                {session.status === 'SCHEDULED' && (
+                  // CLIENT-GL-51: on the same line as the status and the times, not under them.
+                  <>
+                    <span className="text-text-muted">{' '}·{' '}</span>
+                    <span className="tabular-nums text-text-secondary" data-testid="session-countdown">
+                    {(() => {
+                      const span = formatCountdownSpan(session.scheduledStart, now);
+                      return span === null ? t('detail.starting') : t('detail.startsIn', { span });
+                    })()}
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1045,6 +1071,12 @@ export function SessionDetailModal({
                       {t('detail.waitingForHost')}
                     </p>
                   )}
+                  {participationAction.kind === 'LEAVE' && (
+                    // SESSION-65: why the button will go away, while it is still there.
+                    <p className="self-center text-2xs text-text-muted">
+                      {t('detail.leaveHint', { minutes: LEAVE_CUTOFF_MINUTES })}
+                    </p>
+                  )}
                   {participationAction.kind === 'ACCEPT' && (
                     <Button variant="outline" disabled={isJoining || isLeaving} onClick={onLeave}>
                       <ActionButtonContent
@@ -1058,7 +1090,11 @@ export function SessionDetailModal({
                   <Button
                     variant={isAcceptOrJoin ? 'primary' : 'outline'}
                     disabled={isJoining || isLeaving}
-                    onClick={isAcceptOrJoin ? onJoin : onLeave}
+                    onClick={
+                      isAcceptOrJoin
+                        ? onJoin
+                        : () => setConfirming(participationAction.kind === 'CANCEL' ? 'cancel' : 'leave')
+                    }
                   >
                     <ActionButtonContent
                       Icon={PARTICIPATION_ACTION_ICON[participationAction.kind]}
@@ -1073,6 +1109,29 @@ export function SessionDetailModal({
           )}
         </DialogContent>
       </Dialog>
+      {session !== undefined && (
+        <>
+          <ConfirmLeaveDialog
+            i18nOverridePrefix={i18nOverridePrefix}
+            isOpen={confirming === 'leave'}
+            scheduledStart={session.scheduledStart}
+            onStay={() => setConfirming(null)}
+            onConfirm={() => {
+              setConfirming(null);
+              onLeave();
+            }}
+          />
+          <ConfirmCancelRequestDialog
+            i18nOverridePrefix={i18nOverridePrefix}
+            isOpen={confirming === 'cancel'}
+            onKeep={() => setConfirming(null)}
+            onConfirm={() => {
+              setConfirming(null);
+              onLeave();
+            }}
+          />
+        </>
+      )}
       <UnsavedPostConfirmDialog
         isOpen={closeGuard.isAsking}
         onStay={closeGuard.stay}

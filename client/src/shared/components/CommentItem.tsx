@@ -8,13 +8,13 @@ import {
   IconTrash,
   IconX,
 } from '@tabler/icons-react';
-import i18next from 'i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_COMMENT_LENGTH, type Comment } from '@/features/feed/types';
 import { MentionInput, type MentionDraft, type MentionInputHandle, type MentionSource } from '@/shared/components/MentionInput';
 import { MentionText } from '@/shared/components/MentionText';
 import { isEmptyDraft, serialize, trimSegments } from '@/shared/lib/mentionMarkup';
-import { formatRelativeTime } from '@/shared/lib/relativeTime';
+import { formatFullDateTime, formatTimestamp } from '@/shared/lib/timestamp';
+import { systemEntryText } from '@/shared/lib/systemEntryText';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/shared/ui/avatar';
@@ -89,14 +89,6 @@ function initialsFor(fullName: string): string {
  * disabled rather than wired to a no-op, so it doesn't look like a working save that silently
  * discards the caller's edit.
  */
-/** The full date and time of a comment, for the timestamp's hover (owner, 2026-11-14), in the active language. */
-function fullDateTime(iso: string): string {
-  return new Intl.DateTimeFormat(i18next.language, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(iso));
-}
-
 /** Replies are listed newest first (owner, 2026-11-14): by creation time, the id breaking a tie. */
 function newestFirst(replies: Comment[]): Comment[] {
   return [...replies].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id - a.id);
@@ -174,12 +166,12 @@ export function CommentItem({
   if (comment.commentType === 'SESSION_SYSTEM') {
     return (
       <SystemNoticeLine
-        text={comment.content}
+        text={systemEntryText(comment.systemCode, comment.systemParams, comment.content)}
         trailing={
           // The dash lives inside the timestamp rather than as its own element, so a wrap can never
           // strand it alone at the end of the first line.
-          <span className="text-2xs italic text-text-muted" title={fullDateTime(comment.createdAt)}>
-            - {formatRelativeTime(comment.createdAt)}
+          <span className="text-2xs italic text-text-muted" title={formatFullDateTime(comment.createdAt)}>
+            - {formatTimestamp(comment.createdAt)}
           </span>
         }
       />
@@ -205,8 +197,8 @@ export function CommentItem({
           <div className="rounded-lg bg-surface-1 px-2.5 py-1.5">
             <div className="flex items-center gap-1.5">
               <span className="text-2sm font-medium text-text-primary">{comment.userFullName}</span>
-              <span className="text-2xs text-text-muted" title={fullDateTime(comment.createdAt)}>
-                {formatRelativeTime(comment.createdAt)}
+              <span className="text-2xs text-text-muted" title={formatFullDateTime(comment.createdAt)}>
+                {formatTimestamp(comment.createdAt)}
               </span>
               <button
                 type="button"
