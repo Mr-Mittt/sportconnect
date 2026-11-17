@@ -48,6 +48,9 @@ const meta = {
     hasUnreadLoaded: false,
     onMarkAllRead: () => {},
     isMarkingAllRead: false,
+    hasReadLoaded: false,
+    onClearRead: () => {},
+    isClearingRead: false,
   },
 } satisfies Meta<typeof NotificationBell>;
 
@@ -71,9 +74,19 @@ export const OpenEmpty: Story = {
 };
 
 export const OpenPopulated: Story = {
-  args: { unreadCount: 1, isOpen: true, notifications, hasUnreadLoaded: true },
+  args: { unreadCount: 1, isOpen: true, notifications, hasUnreadLoaded: true, hasReadLoaded: true },
 };
 
 export const OpenWithLoadMore: Story = {
-  args: { unreadCount: 1, isOpen: true, notifications, hasUnreadLoaded: true, hasNextPage: true },
+  args: { unreadCount: 1, isOpen: true, notifications, hasUnreadLoaded: true, hasReadLoaded: true, hasNextPage: true },
+};
+
+/** Only read items loaded: "Clear read" shows, "Mark all read" does not. */
+export const OpenOnlyRead: Story = {
+  args: { isOpen: true, notifications: notifications.filter((n) => n.isRead), hasReadLoaded: true },
+};
+
+/** The request runs: "Clear read" is disabled. */
+export const OpenClearing: Story = {
+  args: { unreadCount: 1, isOpen: true, notifications, hasUnreadLoaded: true, hasReadLoaded: true, isClearingRead: true },
 };

@@ -1,5 +1,6 @@
 import {
   seedAuthenticatedSession,
+  seedRejectedJoinRequestNotifications,
   seedStaleAcceptedFriendNotification,
   seedUnavailableFriendRequestNotification,
 } from '../mocks/fixtures.ts';
@@ -150,4 +151,52 @@ test('Notification bell journey — a stale "is now your friend" notification la
   await expect(page).toHaveURL(/^http:\/\/localhost:5174\/friends$/);
   await expect(page.getByText('Select a friend to view their profile and chat.')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Friend request unavailable' })).not.toBeVisible();
+});
+
+/*
+ * CLIENT-NOTIF-7 (NTF-8): "Clear read" in the bell. Default fixtures: ids 1 and 2 unread, ids 3 to 7
+ * read. The read rows go (the server hard-deletes them), the two unread rows and the badge stay, the
+ * button leaves with nothing read, and the list is refetched afterwards.
+ */
+test('Notification bell journey — "Clear read" removes the read notifications and keeps the unread ones', async ({
+  page,
+}) => {
+  await seedAuthenticatedSession(page);
+  await page.getByRole('button', { name: 'Notifications' }).click();
+  await expect(page.getByText('Your request to join "Sunday pickup run" was approved')).toBeVisible();
+  await expect(page.getByText('Hana Kim wants to be your friend')).toBeVisible();
+
+  const refetched = page.waitForResponse(
+    (response) => response.url().includes('/api/notifications?') && response.request().method() === 'GET',
+  );
+  await page.getByRole('button', { name: 'Clear read' }).click();
+  await refetched;
+
+  await expect(page.getByText('Your request to join "Sunday pickup run" was approved')).not.toBeVisible();
+  await expect(page.getByText('Hana Kim wants to be your friend')).not.toBeVisible();
+  await expect(page.getByText('Priya Shah is now your friend')).not.toBeVisible();
+  await expect(page.getByText('Priya Shah and 1 other commented on "Sunday pickup run"')).toBeVisible();
+  await expect(page.getByText('Priya Shah requested to join "Sunday pickup run"')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Clear read' })).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Mark all read' })).toBeVisible();
+  await expect(page.getByLabel('2 unread notifications')).toHaveText('2');
+});
+
+/*
+ * CLIENT-NOTIF-7 (NTF-8): the host's reason shows under a declined join request; a decline with no
+ * reason shows no extra line.
+ */
+test('Notification bell journey — a declined join request shows the reason the host gave', async ({
+  page,
+  mockSessionId,
+}) => {
+  await seedRejectedJoinRequestNotifications(mockSessionId);
+  await seedAuthenticatedSession(page);
+
+  await page.getByRole('button', { name: 'Notifications' }).click();
+
+  await expect(page.getByText('Your request to join "Sunday pickup run" was declined')).toBeVisible();
+  await expect(page.getByText('Reason: The session is full, try the next one')).toBeVisible();
+  await expect(page.getByText('Your request to join "Tuesday night hoops" was declined')).toBeVisible();
+  await expect(page.getByText(/Reason:/)).toHaveCount(1);
 });

@@ -45,6 +45,9 @@ function baseProps() {
     hasUnreadLoaded: false,
     onMarkAllRead: vi.fn(),
     isMarkingAllRead: false,
+    hasReadLoaded: false,
+    onClearRead: vi.fn(),
+    isClearingRead: false,
   };
 }
 
@@ -110,6 +113,70 @@ describe('NotificationBell', () => {
     await player.click(screen.getByRole('button', { name: 'Mark all read' }));
 
     expect(onMarkAllRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows "Clear read" only when a loaded notification is read, and wires it to onClearRead', async () => {
+    const player = userEvent.setup();
+    const onClearRead = vi.fn();
+    const { rerender } = render(<NotificationBell {...baseProps()} isOpen hasReadLoaded={false} onClearRead={onClearRead} />);
+    expect(screen.queryByRole('button', { name: 'Clear read' })).not.toBeInTheDocument();
+
+    rerender(<NotificationBell {...baseProps()} isOpen hasReadLoaded onClearRead={onClearRead} />);
+    await player.click(screen.getByRole('button', { name: 'Clear read' }));
+
+    expect(onClearRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables "Clear read" while the request runs', () => {
+    render(<NotificationBell {...baseProps()} isOpen hasReadLoaded isClearingRead />);
+    expect(screen.getByRole('button', { name: 'Clear read' })).toBeDisabled();
+  });
+
+  it('shows both header buttons when the loaded list mixes read and unread, and neither on an empty list', () => {
+    const { rerender } = render(
+      <NotificationBell {...baseProps()} isOpen hasUnreadLoaded hasReadLoaded notifications={[notification({ id: 1 }), notification({ id: 2, isRead: true })]} />,
+    );
+    expect(screen.getByRole('button', { name: 'Mark all read' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear read' })).toBeInTheDocument();
+
+    rerender(<NotificationBell {...baseProps()} isOpen />);
+    expect(screen.queryByRole('button', { name: 'Mark all read' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear read' })).not.toBeInTheDocument();
+  });
+
+  it('after "Clear read" moves the focus to the first remaining row', async () => {
+    const player = userEvent.setup();
+    const unread = notification({ id: 1 });
+    const read = notification({ id: 2, isRead: true });
+    const props = { ...baseProps(), isOpen: true, hasUnreadLoaded: true };
+    const { rerender } = render(<NotificationBell {...props} hasReadLoaded notifications={[unread, read]} />);
+
+    await player.click(screen.getByRole('button', { name: 'Clear read' }));
+    rerender(<NotificationBell {...props} hasReadLoaded={false} notifications={[unread]} />);
+
+    expect(screen.queryByRole('button', { name: 'Clear read' })).not.toBeInTheDocument();
+    expect(screen.getByText(fullText('Alice Nguyen commented on "Friday Pickup Game"')).closest('button')).toHaveFocus();
+  });
+
+  it('after "Clear read" empties the list, the focus lands on the list itself', async () => {
+    const player = userEvent.setup();
+    const props = { ...baseProps(), isOpen: true };
+    const { rerender } = render(<NotificationBell {...props} hasReadLoaded notifications={[notification({ isRead: true })]} />);
+
+    await player.click(screen.getByRole('button', { name: 'Clear read' }));
+    rerender(<NotificationBell {...props} hasReadLoaded={false} notifications={[]} />);
+
+    expect(screen.getByText("You're all caught up.").parentElement).toHaveFocus();
+  });
+
+  it('does not move the focus when the read rows go for any other reason than a click on "Clear read"', () => {
+    const unread = notification({ id: 1 });
+    const props = { ...baseProps(), isOpen: true, hasUnreadLoaded: true };
+    const { rerender } = render(<NotificationBell {...props} hasReadLoaded notifications={[unread, notification({ id: 2, isRead: true })]} />);
+
+    rerender(<NotificationBell {...props} hasReadLoaded={false} notifications={[unread]} />);
+
+    expect(screen.getByText(fullText('Alice Nguyen commented on "Friday Pickup Game"')).closest('button')).not.toHaveFocus();
   });
 
   it('shows "Load more" only when hasNextPage, and wires it to onLoadMore', async () => {

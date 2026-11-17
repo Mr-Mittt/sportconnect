@@ -71,6 +71,7 @@ describe('useNotificationBellData', () => {
 
     await waitFor(() => expect(result.current.notifications).toHaveLength(1));
     expect(result.current.hasUnreadLoaded).toBe(true);
+    expect(result.current.hasReadLoaded).toBe(false);
   });
 
   it('onSelect marks the notification read, closes the popover, and calls onViewSession with the numeric entityId for a SESSION entity — no navigation involved', async () => {
@@ -192,5 +193,67 @@ describe('useNotificationBellData', () => {
       expect(put).toHaveBeenCalledWith('/notifications/2/read');
     });
     expect(put).not.toHaveBeenCalledWith('/notifications/3/read');
+  });
+
+  it('hasReadLoaded is true once a loaded notification is read', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation((url) => {
+      if (url === '/notifications/unread-count') return Promise.resolve(apiResponse(1));
+      if (url === '/notifications') {
+        return Promise.resolve(apiResponse(pageOf([notification({ id: 1 }), notification({ id: 2, isRead: true })])));
+      }
+      throw new Error(`Unmocked GET ${url}`);
+    });
+
+    const { result } = renderHook(() => useNotificationBellData(vi.fn(), vi.fn()), { wrapper });
+    act(() => result.current.onOpenChange(true));
+
+    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+    expect(result.current.hasReadLoaded).toBe(true);
+    expect(result.current.hasUnreadLoaded).toBe(true);
+  });
+
+  it('onClearRead calls DELETE /notifications/read and the read rows leave the loaded list', async () => {
+    let list = [notification({ id: 1 }), notification({ id: 2, isRead: true })];
+    vi.spyOn(apiClient, 'get').mockImplementation((url) => {
+      if (url === '/notifications/unread-count') return Promise.resolve(apiResponse(1));
+      if (url === '/notifications') return Promise.resolve(apiResponse(pageOf(list)));
+      throw new Error(`Unmocked GET ${url}`);
+    });
+    const del = vi.spyOn(apiClient, 'delete').mockImplementation(() => {
+      list = list.filter((n) => !n.isRead);
+      return Promise.resolve(apiResponse(1));
+    });
+
+    const { result } = renderHook(() => useNotificationBellData(vi.fn(), vi.fn()), { wrapper });
+    act(() => result.current.onOpenChange(true));
+    await waitFor(() => expect(result.current.notifications).toHaveLength(2));
+
+    act(() => result.current.onClearRead());
+
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/notifications/read'));
+    await waitFor(() => expect(result.current.notifications.map((n) => n.id)).toEqual([1]));
+    expect(result.current.hasReadLoaded).toBe(false);
+    expect(result.current.unreadCount).toBe(1);
+  });
+
+  it('isClearingRead is true while the delete runs and false after', async () => {
+    vi.spyOn(apiClient, 'get').mockImplementation((url) => {
+      if (url === '/notifications/unread-count') return Promise.resolve(apiResponse(0));
+      if (url === '/notifications') return Promise.resolve(apiResponse(pageOf([notification({ id: 2, isRead: true })])));
+      throw new Error(`Unmocked GET ${url}`);
+    });
+    let finish: (value: unknown) => void = () => {};
+    vi.spyOn(apiClient, 'delete').mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+
+    const { result } = renderHook(() => useNotificationBellData(vi.fn(), vi.fn()), { wrapper });
+    act(() => result.current.onOpenChange(true));
+    await waitFor(() => expect(result.current.notifications).toHaveLength(1));
+    expect(result.current.isClearingRead).toBe(false);
+
+    act(() => result.current.onClearRead());
+    await waitFor(() => expect(result.current.isClearingRead).toBe(true));
+
+    await act(async () => finish(apiResponse(1)));
+    await waitFor(() => expect(result.current.isClearingRead).toBe(false));
   });
 });

@@ -69,6 +69,50 @@ describe('NotificationRow', () => {
     expect(screen.queryByText('Unread')).not.toBeInTheDocument();
   });
 
+  describe('the host\'s reason on a declined join request (CLIENT-NOTIF-7)', () => {
+    const rejected: Notification = {
+      ...notification,
+      type: 'session.join_request.rejected',
+      actors: [],
+      actorIds: [],
+      message: 'The session is full',
+    };
+
+    it('shows "Reason: ..." under the text', () => {
+      render(<NotificationRow notification={rejected} onSelect={vi.fn()} />);
+      expect(screen.getByText('Reason: The session is full')).toBeInTheDocument();
+    });
+
+    it('carries the full text on hover and clamps a long one to two lines', () => {
+      const long = 'Sorry, '.repeat(60).trim();
+      render(<NotificationRow notification={{ ...rejected, message: long }} onSelect={vi.fn()} />);
+      const line = screen.getByText(`Reason: ${long}`);
+      expect(line).toHaveAttribute('title', long);
+      expect(line).toHaveClass('line-clamp-2');
+    });
+
+    it('includes the reason in the row\'s accessible name', () => {
+      render(<NotificationRow notification={rejected} onSelect={vi.fn()} />);
+      expect(screen.getByRole('button')).toHaveTextContent('Reason: The session is full');
+    });
+
+    it('trims the text it shows', () => {
+      render(<NotificationRow notification={{ ...rejected, message: '  The session is full \n' }} onSelect={vi.fn()} />);
+      expect(screen.getByText('Reason: The session is full')).toBeInTheDocument();
+    });
+
+    it.each([[null], [undefined], [''], ['   ']])('shows no reason line for %j', (message) => {
+      render(<NotificationRow notification={{ ...rejected, message }} onSelect={vi.fn()} />);
+      expect(screen.queryByText(/Reason:/)).not.toBeInTheDocument();
+    });
+
+    it('shows no reason line for any other type, whatever message it carries', () => {
+      render(<NotificationRow notification={{ ...notification, message: 'Not a rejection' }} onSelect={vi.fn()} />);
+      expect(screen.queryByText(/Reason:/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Not a rejection/)).not.toBeInTheDocument();
+    });
+  });
+
   it('calls onSelect with the notification when clicked', async () => {
     const player = userEvent.setup();
     const onSelect = vi.fn();

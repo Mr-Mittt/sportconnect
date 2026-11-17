@@ -103,3 +103,25 @@ export const UnknownType: Story = {
   // what the backend emits at this build, and the whole point of this story is a value outside it.
   args: { notification: { ...baseNotification, type: 'not.a.real.routing.key' as NotificationType } },
 };
+
+const rejected: Notification = {
+  ...baseNotification,
+  type: 'session.join_request.rejected',
+  actors: [],
+  actorIds: [],
+};
+
+/** CLIENT-NOTIF-7: a declined request with the host's reason under the text. */
+export const RejectedWithReason: Story = {
+  args: { notification: { ...rejected, message: 'The session is full, try the next one' } },
+};
+
+/** The reason is clamped to two lines; the full text is the row's hover title. */
+export const RejectedWithLongReason: Story = {
+  args: { notification: { ...rejected, message: 'Sorry, this one is for the regular group only. '.repeat(8).trim() } },
+};
+
+/** A decline with no reason shows no extra line. */
+export const RejectedWithoutReason: Story = {
+  args: { notification: { ...rejected, message: null } },
+};
