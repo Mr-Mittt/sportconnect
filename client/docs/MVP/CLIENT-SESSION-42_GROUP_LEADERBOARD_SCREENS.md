@@ -6,6 +6,8 @@
 
 Single and Pair boards for a group, the season picker, and the admin settings for the ranking order and the minimum games. En/vi copy.
 
+**Group-only (owner, 2026-11-17):** this exists for group sessions only. The standalone-session chain is finished first (SESSION-65, 66, 67, NTF-8 and their client pairs), then the group chain; a standalone session keeps only its own scoreboard (CLIENT-GL-49).
+
 **Out of scope:** The server side (SESSION-54).
 
 **Tests:** Vitest and a scoped e2e.

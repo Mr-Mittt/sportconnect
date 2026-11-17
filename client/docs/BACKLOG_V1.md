@@ -26,6 +26,8 @@ that filed an entry here, before picking anything up.
 | 3 | ADMIN-3 | Replace the attribute-schema textarea with a real JSON editor — **deferred out of MVP 2026-08-21** mid-pickup; the tree-vs-text product question outranks the dependency choice | `TODO` |
 | 4 | AUTH-18 | Register and login pages for a phone number — moved from MVP 2026-10-20 (phone accounts topic; waits for the phone-OTP delivery decision, auth A22) | `TODO` |
 | 5 | CLIENT-SESSION-47 | Warn when the same players and winner were logged moments ago (BA open question 3) — moved from MVP 2026-11-17 (owner: no duplicate warning for now) | `TODO` |
+| 6 | CLIENT-SESSION-45 | Result dialog: recent players and previous pairings as shortcuts (BA GL-8) — moved from MVP 2026-11-17 (owner decision) | `TODO` |
+| 7 | CLIENT-SESSION-46 | Keep a result change made offline and send it when the connection returns (BA GL-9) — moved from MVP 2026-11-17 (owner decision) | `TODO` |
 
 **Chat (CHAT-2, CHAT-4) archived 2026-07-26** (user decision) — moved to
 `documentation/md/archive/chat/CHAT-2_CHAT-4_CLIENT_TICKETS.md` pending a fresh chat re-plan.
@@ -339,10 +341,32 @@ Storybook stories for the register page with phone-only, email-only and both, an
 ---
 
 ### CLIENT-SESSION-47 · Warn when the same players and winner were logged moments ago (BA open question 3)
-**Status:** `TODO` · **Type:** Enhancement · **Depends on:** CLIENT-GL-38 (done) · **Filed:** 2026-11-12, by the `/feature` session "game logging" (BA document `D:\Planningusiness-analyst\Requirements - Games, Statistics and Leaderboards.md`; design: `modules/session/docs/SESSION_RECORDS_DESIGN.md`). **Moved from the MVP backlog on 2026-11-17** (owner: no duplicate warning for now).
+**Status:** `TODO` · **Type:** Enhancement · **Depends on:** CLIENT-GL-38 (done) · **Filed:** 2026-11-12, by the `/feature` session "game logging" (BA document `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards.md`; design: `modules/session/docs/SESSION_RECORDS_DESIGN.md`). **Moved from the MVP backlog on 2026-11-17** (owner: no duplicate warning for now).
 
 Two players logging the same game at once is not blocked (the server never rejects for concurrency). The dialog warns when a record with the same players and winner appears within a few minutes, so a duplicate can be removed. Decide the time window at pickup.
 
 **Out of scope:** A server-side duplicate check.
 
 **Tests:** Vitest.
+
+---
+
+### CLIENT-SESSION-45 · Result dialog: recent players and previous pairings as shortcuts (BA GL-8)
+**Status:** `TODO` · **Type:** Enhancement · **Depends on:** CLIENT-GL-38 (done) · **Filed:** 2026-11-12, by the `/feature` session "game logging" (BA document `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards.md`; design: `modules/session/docs/SESSION_RECORDS_DESIGN.md`). **Moved from the MVP backlog on 2026-11-17** (owner decision).
+
+Offer recent players and previous pairings in the result dialog to speed up picking. Can be derived from the session's own records at first. Open at pickup: whether "recent" stays inside the session or needs cross-session history (a server endpoint), chips above the table versus a group at the top of each player dropdown (the dropdowns are native `<select>`s on purpose), and whether a "repeat the last game" action belongs here.
+
+**Out of scope:** Guests.
+
+**Tests:** Vitest.
+
+---
+
+### CLIENT-SESSION-46 · Keep a result change made offline and send it when the connection returns (BA GL-9)
+**Status:** `TODO` · **Type:** Enhancement · **Depends on:** CLIENT-GL-38 (done) · **Filed:** 2026-11-12, by the `/feature` session "game logging" (BA document and design as above). **Moved from the MVP backlog on 2026-11-17** (owner decision).
+
+If the connection drops, a change set entered on the phone is kept and sent when the connection returns. The change set's client UUIDs (`clientRef`) already make a retry safe on the server (SESSION-50), so this is a client queue. Settle what happens when the 24-hour window closes while the change waits.
+
+**Out of scope:** The server side (idempotency already exists).
+
+**Tests:** Vitest with a simulated offline period; a scoped e2e.

@@ -68,6 +68,10 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 26 | [CLIENT-SESSION-50](MVP/CLIENT-SESSION-50_FOCUS_THE_FIRST_MISSING_FIELD_ON_CONTINUE_EDITING.md) | "Continue editing" in the "Are you ready?" popup focuses the first missing field, top to bottom (**standalone chain**) | `TODO` |
+| 27 | [CLIENT-NOTIF-7](MVP/CLIENT-NOTIF-7_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | The rejected-join-request notification shows the host's reason (**standalone chain**; depends on NTF-8) | `TODO` |
+| 28 | [CLIENT-SESSION-51](MVP/CLIENT-SESSION-51_LOCALISED_FIELD_CHANGE_SYSTEM_COMMENTS.md) | Localised system comments for the fields a host changed (**standalone chain**; depends on SESSION-67) | `TODO` |
+| 29 | [CLIENT-SESSION-49](MVP/CLIENT-SESSION-49_INVITE_FRIENDS_DIALOG_IN_THE_PLAYERS_SECTION.md) | "Invite friends" dialog from the Players section header: friends not joined first with checkboxes, joined friends below, "Invite (x)" (**standalone chain**; depends on SESSION-66) | `TODO` |
 | 2 | [FRIEND-3](MVP/FRIEND-3_CHAT_BOX_NOT_READY_AFTER_ACCEPTING_A_FRIEND_REQUEST.md) | The 1:1 chat box on `/friends` stays unavailable after accepting a friend request until a reload (found 2026-10-30, INFRA-7 live checks) — `useAcceptFriendRequest` invalidates only `friendKeys`, and the chat service's friendship cache may lag; cause to be confirmed at pickup | `TODO` |
 | 3 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
 | 6 | [CLIENT-SESSION-18](MVP/CLIENT-SESSION-18_REF_OTHER_MODAL_SUGGESTED_RESULTS.md) | Suggested-results typeahead inside the `CLIENT-SESSION-17` `#ref` "Other…" add-modal — debounced backend search over an aggregated value pool, shared with `SPORT-6`. **Hard-blocked on backend `A14`** (postponed) — same block as `SPORT-6`, sequence together. Split out of the CLIENT-SESSION-17 pickup (user decision 2026-09-08). | `TODO` |
@@ -82,8 +86,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 16 | [CLIENT-SESSION-42](MVP/CLIENT-SESSION-42_GROUP_LEADERBOARD_SCREENS.md) | Group leaderboard screens and the ranking-order settings | `TODO` |
 | 17 | [CLIENT-SESSION-43](MVP/CLIENT-SESSION-43_SEASON_KPI_AND_RECAP_SCREENS.md) | Season management, KPI progress and the season recap | `TODO` |
 | 18 | [CLIENT-SESSION-44](MVP/CLIENT-SESSION-44_POINT_ADJUSTMENT_SCREENS.md) | Point adjustment dialog and adjustment history | `TODO` |
-| 19 | [CLIENT-SESSION-45](MVP/CLIENT-SESSION-45_RECENT_PLAYERS_AND_PAIRINGS_SHORTCUTS.md) | Result dialog: recent players and previous pairings as shortcuts (BA GL-8) | `TODO` |
-| 20 | [CLIENT-SESSION-46](MVP/CLIENT-SESSION-46_OFFLINE_QUEUE_FOR_RESULT_CHANGES.md) | Keep a result change made offline and send it when the connection returns (BA GL-9) | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
 | 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request` | `TODO` |
 

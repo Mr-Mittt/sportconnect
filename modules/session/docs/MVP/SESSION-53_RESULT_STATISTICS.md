@@ -6,6 +6,8 @@
 
 Server-side statistics calculated from the stored records, never kept as editable totals (ST-5), reading the fields the sport's result schema names and skipping a malformed record. Per player: games, wins, losses, win rate, net points; head-to-head for two players as opponents and as partners; pair stats; scope all-time, a season or one session; most frequent and best partners and the opponent a player loses to most (Should). Target: head-to-head under 2 seconds on a phone connection, so measure with real data and add the GIN index on `session_records.player_ids` here if the query needs it (or a rebuildable projection table). Standalone games count toward a player's career statistics and head-to-head, never toward a group board. Visibility: group members only for group statistics, session participants only for standalone ones (NF-6).
 
+**Group-only (owner, 2026-11-17):** this exists for group sessions only. The standalone-session chain is finished first (SESSION-65, 66, 67, NTF-8 and their client pairs), then the group chain; a standalone session keeps only its own scoreboard (CLIENT-GL-49). This **supersedes** the clause below that standalone games count toward a player's career statistics and head-to-head: no statistics, head-to-head or board is computed from a standalone session.
+
 **Out of scope:** Boards and ranking (SESSION-54), seasons (SESSION-55), adjustments (SESSION-56).
 
 **Tests:** Spock for the maths against the worked example month in the BA acceptance criteria; an IT through the real endpoint for the visibility rules; a query-plan check for the speed target.

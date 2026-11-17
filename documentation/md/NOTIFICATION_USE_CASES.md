@@ -167,6 +167,8 @@ be sent at all when the old address was never verified. U26 settles it at pickup
 
 SESSION-46 makes `PREPARING` a fully editable draft that the host leaves with an explicit Schedule action. Should the people who already joined or requested a `PREPARING` session be told when the host schedules it ("the details are final")? Related: every successful edit while `PREPARING` already fans out `session.details.updated` to the joined participants, which may be chatty while a host edits several times; should those be throttled or batched until Schedule? Open: recipients (joined only, or also requested/invited), one notice or one per edit, and how it relates to NOTIF-7 (the auto-cancel of a `PREPARING` session that never got scheduled).
 
+**Partly answered (2026-11-17, owner, SESSION-67):** what changed in a `PREPARING` edit is told in the discussion thread, one system comment per changed field; the generic notification stays as it is, and throttling it remains open.
+
 ### NOTIF-11 · A result record is added, changed or deleted in a session
 **Date added:** 2026-11-12
 **Status:** `DECIDED` (2026-11-17, SESSION-GL-63)
@@ -182,3 +184,10 @@ SESSION-50 lets any joined participant (or any group member in a group session) 
 **Source:** CLIENT-GL-50 / SESSION-GL-64 scoping (`/ticket` session) — surfaced, not resolved on the spot; the owner will handle it later.
 
 CLIENT-GL-50 lets a user tag people in a session comment (the text carries `@[Full Name](userId)`). Should a tagged person be notified ("X mentioned you in <session>")? Open: whether the server reads the markup at write time (`createSessionComment`) or the client sends the tagged ids; whether a tagged person who is not a participant yet (requested, invited, a group member) is notified and what tapping it opens; whether a reply tag and a comment tag are the same notice; throttling (many tags in one comment); and how it relates to NOTIF-1 (a new comment already notifies the session's participants, so a tagged participant would get two). CLIENT-GL-50 and SESSION-GL-64 send nothing.
+
+### NOTIF-13 · A joined participant shares a session with a friend
+**Date added:** 2026-11-17
+**Status:** `DECIDED` (2026-11-17, SESSION-66)
+**Source:** the owner's standalone-session list (the "Invite friends" button in the Players header).
+
+A `JOINED` participant of a `PREPARING` or `SCHEDULED` standalone session picks friends and sends them the session. **Decision (owner):** each friend gets a notification (the existing `session.invitation.created`, actor = the sharer); clicking it opens the session modal; the friend decides to send a join request or not. It is a share, not an invitation: no participant row, no `INVITED` status, the normal join rules apply (host approval unless auto-approve). Recipients must be the sharer's friends; people already joined, requested or invited are skipped. Open: whether the notification text needs its own type; group sessions are a later ticket.
