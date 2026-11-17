@@ -68,6 +68,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
@@ -120,6 +121,13 @@ public class SessionServiceImpl implements SessionService {
     /** SESSION-23 — same serialized-size ceiling profile attributes use
      * ({@code UserSportProfileServiceImpl.MAX_ATTRIBUTES_BYTES}); checked against the filtered map. */
     private static final int MAX_ATTRIBUTES_BYTES = 4096;
+
+    /** SESSION-65 — a {@code JOINED} participant may leave only until this long before {@code scheduledStart}.
+     * The client mirrors the number ({@code LEAVE_CUTOFF_MINUTES} in {@code leaveCutoff.ts}); this is the authority. */
+    static final Duration LEAVE_CUTOFF = Duration.ofMinutes(15);
+
+    /** Replaceable in tests (same pattern as {@code SessionRecordServiceImpl}); not a constructor dependency. */
+    private Clock clock = Clock.systemUTC();
 
     /** SESSION-27 — the session/participant-status populations getUpcomingSessions/
      * getSessionHistory(Dates) query against. Native-query variants need the enum names as
@@ -813,6 +821,18 @@ public class SessionServiceImpl implements SessionService {
                         || p.getStatus() == ParticipantStatus.INVITED
                         || p.getStatus() == ParticipantStatus.REQUESTED)
                 .orElseThrow(() -> new ConflictException("SESSION_NOT_PARTICIPANT", "Not currently a participant in this session", null));
+        // SESSION-65: only a JOINED participant is held to the cutoff, in every session status (CANCELLED
+        // included) and for group sessions alike. Declining an invitation (INVITED) and cancelling a join
+        // request (REQUESTED) are not giving up a place anyone counted on, so they stay possible at any
+        // time. Refused BEFORE any write, so a refused call leaves no row change, event or comment.
+        if (participant.getStatus() == ParticipantStatus.JOINED) {
+            Instant cutoffAt = session.getScheduledStart().minus(LEAVE_CUTOFF);
+            if (clock.instant().isAfter(cutoffAt)) {
+                throw new ConflictException("SESSION_LEAVE_TOO_LATE",
+                        "You can leave only until 15 minutes before the session starts",
+                        Map.of("cutoffAt", cutoffAt.toString()));
+            }
+        }
         // SESSION-19: read BEFORE the flip below — the row is mutated in place, so after
         // setStatus(LEFT) there is no way left to tell which of the three allowed source states
         // this leave actually came from.

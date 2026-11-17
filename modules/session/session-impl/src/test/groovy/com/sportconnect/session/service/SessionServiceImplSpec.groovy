@@ -56,7 +56,9 @@ import org.springframework.data.domain.Sort
 import spock.lang.Specification
 import spock.lang.Subject
 
+import java.time.Clock
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.Instant
 import java.time.LocalTime
 import java.time.ZoneId
@@ -91,7 +93,11 @@ class SessionServiceImplSpec extends Specification {
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
 
+    /** SESSION-65: the instant the leave tests pin the service clock to. */
+    static final Instant LEAVE_NOW = Instant.parse("2026-11-17T12:00:00Z")
+
     def setup() {
+        sessionService.clock = Clock.fixed(LEAVE_NOW, ZoneOffset.UTC)
         // SESSION-10/A17: every createSession call creates a companion SESSION_POST first â€” a
         // lenient default so tests that aren't specifically about this behavior don't each need
         // to stub it themselves, same convention as stubBatchEnrichment().
@@ -910,7 +916,7 @@ class SessionServiceImplSpec extends Specification {
     def "leaveSession flips a JOINED row to LEFT and writes a session.participant.left outbox row"() {
         given:
         def userId = UUID.randomUUID()
-        def session = Session.builder().id(1L).build()
+        def session = Session.builder().id(1L).scheduledStart(LEAVE_NOW.plusSeconds(3600)).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
 
         when:
@@ -960,6 +966,103 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionOutboxWriter.record(_, _)
     }
 
+    // ---- SESSION-65: a JOINED participant may leave only until 15 minutes before the start ----
+
+    private Session leaveSessionStartingIn(long seconds, SessionStatus status = SessionStatus.SCHEDULED, Long groupId = null) {
+        Session.builder().id(1L).postId(999L).createdBy(UUID.randomUUID()).groupId(groupId).status(status)
+                .scheduledStart(LEAVE_NOW.plusSeconds(seconds)).build()
+    }
+
+    def "leaveSession lets a JOINED participant leave exactly 15 minutes before the start"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = leaveSessionStartingIn(15 * 60)
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+    }
+
+    def "leaveSession refuses a JOINED participant one second after the cutoff with SESSION_LEAVE_TOO_LATE and the cutoff instant"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = leaveSessionStartingIn(15 * 60 - 1)
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_LEAVE_TOO_LATE'
+        e.errorParams == [cutoffAt: LEAVE_NOW.minusSeconds(1).toString()]
+        // nothing is written: no row change, no event, no system comment
+        0 * sessionParticipantRepository.save(_)
+        0 * sessionOutboxWriter.record(_, _)
+        0 * commentService.createSystemSessionComment(*_)
+        existing.status == ParticipantStatus.JOINED
+    }
+
+    def "leaveSession refuses a JOINED participant in a #status session that is past the cutoff"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = leaveSessionStartingIn(-3600, status)
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        thrown(ConflictException)
+        0 * sessionParticipantRepository.save(_)
+
+        where:
+        status << SessionStatus.values().toList()
+    }
+
+    def "leaveSession applies the same cutoff to a group session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = leaveSessionStartingIn(60, SessionStatus.SCHEDULED, 5L)
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_LEAVE_TOO_LATE'
+    }
+
+    def "leaveSession still lets an #status row go after the cutoff: declining and cancelling a request are not leaving a place"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = leaveSessionStartingIn(-3600, SessionStatus.ONGOING)
+        def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(status).build()
+
+        when:
+        sessionService.leaveSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
+
+        where:
+        status << [ParticipantStatus.INVITED, ParticipantStatus.REQUESTED]
+    }
+
     def "leaveSession rejects the creator of a standalone session, even though they're auto-JOINED"() {
         given:
         def userId = UUID.randomUUID()
@@ -977,7 +1080,7 @@ class SessionServiceImplSpec extends Specification {
     def "leaveSession allows a group-linked session's creator to leave if they joined like a normal member"() {
         given:
         def userId = UUID.randomUUID()
-        def session = Session.builder().id(1L).groupId(5L).createdBy(userId).build()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(userId).scheduledStart(LEAVE_NOW.plusSeconds(3600)).build()
         def existing = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.JOINED).build()
 
         when:
@@ -3134,7 +3237,8 @@ class SessionServiceImplSpec extends Specification {
         given:
         def creatorId = UUID.randomUUID()
         def leaverId = UUID.randomUUID()
-        def session = Session.builder().id(1L).postId(999L).createdBy(creatorId).groupId(5L).build()
+        def session = Session.builder().id(1L).postId(999L).createdBy(creatorId).groupId(5L)
+                .scheduledStart(LEAVE_NOW.plusSeconds(3600)).build()
         def participant = SessionParticipant.builder().id(9L).sessionId(1L).userId(leaverId)
                 .status(ParticipantStatus.JOINED).build()
         def leaver = UserSummaryResponse.builder().id(leaverId).fullName("Alice Nguyen").build()

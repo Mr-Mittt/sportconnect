@@ -7,10 +7,12 @@ import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
+import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.user.entity.User;
@@ -100,6 +102,10 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
     }
 
     private Long seedSession(Long sessionGroupId, SessionStatus status) {
+        return seedSession(sessionGroupId, status, Instant.now().plusSeconds(86400));
+    }
+
+    private Long seedSession(Long sessionGroupId, SessionStatus status, Instant scheduledStart) {
         return sessionRepository.save(Session.builder().title("Test session")
                 .groupId(sessionGroupId)
                 .isPublic(sessionGroupId == null)
@@ -108,7 +114,7 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
                 .createdBy(creatorId)
                 .sportId(1L)
                 .locationId(1L)
-                .scheduledStart(Instant.now().plusSeconds(86400))
+                .scheduledStart(scheduledStart)
                 .status(status)
                 .capacity(9999)
                 .feeType(FeeType.FREE)
@@ -331,6 +337,31 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
         mockMvc.perform(delete("/api/sessions/{id}/leave", sessionId))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_NOT_PARTICIPANT"));
+    }
+
+    @Test
+    void leave_whenJoinedAndInsideTheLast15Minutes_is409SessionLeaveTooLateAndChangesNothing() throws Exception {
+        // SESSION-65: a JOINED participant can leave only until 15 minutes before the start.
+        Long sessionId = seedSession(null, SessionStatus.SCHEDULED, Instant.now().plusSeconds(10 * 60));
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId).userId(outsiderId).status(ParticipantStatus.JOINED).build());
+        authenticateAs(outsiderId);
+        mockMvc.perform(delete("/api/sessions/{id}/leave", sessionId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_LEAVE_TOO_LATE"))
+                .andExpect(jsonPath("$.errorParams.cutoffAt").isNotEmpty());
+        org.junit.jupiter.api.Assertions.assertEquals(ParticipantStatus.JOINED,
+                sessionParticipantRepository.findBySessionIdAndUserId(sessionId, outsiderId).orElseThrow().getStatus());
+    }
+
+    @Test
+    void leave_whenInvitedAndInsideTheLast15Minutes_stillDeclines() throws Exception {
+        Long sessionId = seedSession(null, SessionStatus.SCHEDULED, Instant.now().plusSeconds(5 * 60));
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId).userId(outsiderId).status(ParticipantStatus.INVITED).build());
+        authenticateAs(outsiderId);
+        mockMvc.perform(delete("/api/sessions/{id}/leave", sessionId))
+                .andExpect(status().isOk());
     }
 
     // -- 400 -----------------------------------------------------------------------------------

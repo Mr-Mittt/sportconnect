@@ -219,6 +219,7 @@ SESSION-45 moved statuses the same way A11 and A18 did: permission failures 400 
 | `SESSION_NOT_PREPARING` | 409 | `{status}` | `PUT /api/sessions/{id}` on a session that is not `PREPARING`: the whole call is refused, no field is editable once it is `SCHEDULED` or later (SESSION-46; before it only `locationId`/`feeType` were locked). Also `POST /api/sessions/{id}/schedule` on a session that is not `PREPARING`. |
 | `SESSION_NOT_PARTICIPANT` | 409 | none | Leaving a session the caller has no active participant row in (moved from 400). |
 | `SESSION_CREATOR_CANNOT_LEAVE` | 400 | none | The creator of a standalone session calls leave (cancel is their way out). |
+| `SESSION_LEAVE_TOO_LATE` | 409 | `{cutoffAt}` (ISO-8601 instant) | A `JOINED` participant calls leave later than 15 minutes before `scheduledStart`, in any session status (`CANCELLED` included) and for group sessions too (SESSION-65). Declining an invitation (`INVITED`) and cancelling a request (`REQUESTED`) are not subject to it. |
 | `SESSION_SPORT_REQUIRED` | 400 | none | Creating a standalone session without `sportId`. |
 | `SESSION_TITLE_REQUIRED` | 400 | none | Creating a session without a title, or updating one to a blank title (SESSION-49). |
 | `SESSION_LOCATION_SPORT_MISMATCH` | 400 | none | Create or update with a `locationId` whose sport differs from the session's. |
