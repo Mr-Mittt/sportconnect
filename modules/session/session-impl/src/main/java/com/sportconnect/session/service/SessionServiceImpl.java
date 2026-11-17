@@ -50,6 +50,7 @@ import com.sportconnect.session.repository.SessionRepository.SessionDateCountPro
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.SportResponse;
@@ -786,7 +787,7 @@ public class SessionServiceImpl implements SessionService {
                     .sessionId(sessionId)
                     .actorId(userId)
                     .build());
-            writeSystemComment(session, resolveParticipantName(userId) + " joined the session");
+            writeParticipantComment(session, userId, SystemCode.SESSION_JOINED, " joined the session");
         }
     }
 
@@ -828,7 +829,7 @@ public class SessionServiceImpl implements SessionService {
                     .sessionId(sessionId)
                     .actorId(userId)
                     .build());
-            writeSystemComment(session, resolveParticipantName(userId) + " left the session");
+            writeParticipantComment(session, userId, SystemCode.SESSION_LEFT, " left the session");
         }
     }
 
@@ -886,7 +887,7 @@ public class SessionServiceImpl implements SessionService {
                 .sessionId(sessionId)
                 .actorId(userId)
                 .build());
-        writeSystemComment(session, resolveParticipantName(userId) + " joined the session");
+        writeParticipantComment(session, userId, SystemCode.SESSION_JOINED, " joined the session");
     }
 
     @Override
@@ -1324,8 +1325,17 @@ public class SessionServiceImpl implements SessionService {
      * twice for one occurrence. This is a confirmed product decision, not an oversight — see
      * {@code modules/session/docs/MVP/SESSION-21_SYSTEM_COMMENTS_IN_SESSION_THREAD.md}.
      */
-    private void writeSystemComment(Session session, String content) {
-        commentService.createSystemSessionComment(session.getPostId(), session.getCreatedBy(), content);
+    private void writeSystemComment(Session session, String content, SystemCode systemCode, Map<String, String> params) {
+        commentService.createSystemSessionComment(session.getPostId(), session.getCreatedBy(), content, systemCode, params);
+    }
+
+    /**
+     * SESSION-GL-63: a participant entry ("Alex joined the session"): the name is resolved once, baked into both the
+     * English fallback {@code content} and the {@code name} param of the code the client localises.
+     */
+    private void writeParticipantComment(Session session, UUID userId, SystemCode systemCode, String englishSuffix) {
+        String name = resolveParticipantName(userId);
+        writeSystemComment(session, name + englishSuffix, systemCode, Map.of("name", name));
     }
 
     /**

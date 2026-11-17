@@ -2,11 +2,13 @@ package com.sportconnect.social.post.api.service;
 
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface CommentService {
@@ -75,9 +77,11 @@ public interface CommentService {
      *
      * <p>{@code authorUserId} is the session's {@code createdBy}, not the participant the entry is
      * about — see {@link SystemSessionCommentRequest}. {@code content} is server-templated; it must
-     * never carry caller-supplied text.
+     * never carry caller-supplied text. SESSION-GL-63: {@code systemCode} and {@code systemParams} are stored next to it
+     * so the client can show the entry in the user's language ({@code content} is the English fallback).
      */
-    void createSystemSessionComment(Long postId, UUID authorUserId, String content);
+    void createSystemSessionComment(Long postId, UUID authorUserId, String content, SystemCode systemCode,
+                                    Map<String, String> systemParams);
 
     /**
      * Batch form of {@link #createSystemSessionComment} — validates every {@code postId} in one

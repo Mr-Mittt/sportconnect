@@ -10,6 +10,7 @@ import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionOutboxEvent
 import com.sportconnect.session.repository.SessionOutboxEventRepository
 import com.sportconnect.session.repository.SessionRepository
+import com.sportconnect.social.post.api.dto.SystemCode
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest
 import com.sportconnect.social.post.api.service.CommentService
 import com.sportconnect.social.post.api.service.PostService
@@ -412,9 +413,10 @@ class SessionGenerationServiceSpec extends Specification {
         written*.postId == [100L, 101L, 102L]
         written*.authorUserId == creators
         written.every { it.content == "The session has started" }
+        written.every { it.systemCode == SystemCode.SESSION_STARTED && it.systemParams == null }
 
         and: "the started notification stays the outbox event's job"
-        0 * commentService.createSystemSessionComment(_, _, _)
+        0 * commentService.createSystemSessionComment(*_)
     }
 
     def "startOngoingSessions writes no system comments when nothing is ready to start"() {

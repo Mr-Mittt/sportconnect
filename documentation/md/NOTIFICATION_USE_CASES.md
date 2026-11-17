@@ -169,10 +169,12 @@ SESSION-46 makes `PREPARING` a fully editable draft that the host leaves with an
 
 ### NOTIF-11 · A result record is added, changed or deleted in a session
 **Date added:** 2026-11-12
-**Status:** `CANDIDATE`
+**Status:** `DECIDED` (2026-11-17, SESSION-GL-63)
 **Source:** `/feature` game logging scoping (SESSION-50) — surfaced, not resolved on the spot.
 
 SESSION-50 lets any joined participant (or any group member in a group session) add, change and delete result records in an ONGOING or COMPLETED session. Should the other players in a record be told when a record naming them is added, changed or deleted ("a game with you was logged")? Open: whether it is noise during a busy session (a digest or only after the session ends), whether a deletion or edit made by someone else should notify the players it names, and who counts as the actor. SESSION-50 sends nothing. Filed as SESSION-GL-63 on 2026-11-15 (system comment plus notification), because CLIENT-GL-39 commands leave no comment in the thread; the open points above are settled there at pickup.
+
+**Decision (2026-11-17, owner, SESSION-GL-63):** every participant (`JOINED`, `REQUESTED` and `INVITED`) except the actor is notified, once per change set (not per record), in any session status; the notification is the new `session.record.changed` event, and the system comment "{name} has updated the result" does not emit `session.comment.created`, so nobody is pinged twice. No cooldown of its own: the existing aggregation keeps one unread notification per recipient and session, and further changes only raise its actor count.
 
 ### NOTIF-12 · Someone is tagged in a session comment
 **Date added:** 2026-11-15

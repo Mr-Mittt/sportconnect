@@ -244,5 +244,7 @@
     <include file="db/changelog/changes/V089__session_records.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-GL-64: unaccent + pg_trgm, immutable_unaccent() and the user name-search indexes -->
     <include file="db/changelog/changes/V090__users_name_search_unaccent_trigram.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GL-63: system_code and system_params on comments and posts -->
+    <include file="db/changelog/changes/V091__system_entry_code_and_params.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

@@ -3,6 +3,7 @@ package com.sportconnect.social.post.api.service;
 import com.sportconnect.social.post.api.dto.CreatePostRequest;
 import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.dto.PostResponse;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -21,9 +22,11 @@ public interface PostService {
      * caller-supplied {@code postType == GROUP_SYSTEM} outright, since a self-authored "system"
      * post could otherwise be used to impersonate the system or fabricate a social-graph claim
      * (e.g. a fake "invited by" mention). Intended only for {@code GroupServiceImpl} to call when
-     * a new member joins a group (B9).
+     * a new member joins a group (B9). SESSION-GL-63: {@code systemCode} and {@code systemParams} are stored next to the
+     * English {@code content} so the client can show the post in the user's language.
      */
-    void createSystemPost(Long groupId, UUID authorUserId, String content);
+    void createSystemPost(Long groupId, UUID authorUserId, String content, SystemCode systemCode,
+                          Map<String, String> systemParams);
 
     /**
      * Creates a {@code SESSION_POST} directly, bypassing {@link #createPost}'s validation. Not

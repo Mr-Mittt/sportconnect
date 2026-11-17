@@ -8,7 +8,9 @@ import com.sportconnect.social.post.api.dto.CommentType;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.CreatePostRequest;
 import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.dto.UpdateBroadcastEndTimeRequest;
+import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.social.post.entity.Comment;
 import com.sportconnect.social.post.entity.Post;
 import com.sportconnect.social.post.repository.CommentLikeRepository;
@@ -25,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -48,6 +51,7 @@ class PostErrorCodesIntegrationTest extends RedisBaseIT {
     private static final Integer ROLE_MEMBER = 3;
 
     @Autowired private PostRepository postRepository;
+    @Autowired private PostService postService;
     @Autowired private PostLikeRepository postLikeRepository;
     @Autowired private CommentRepository commentRepository;
     @Autowired private CommentLikeRepository commentLikeRepository;
@@ -263,6 +267,22 @@ class PostErrorCodesIntegrationTest extends RedisBaseIT {
                         .content(toJson(body(PostType.USER_FEED).build())))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("POST_NOT_FOUND"));
+    }
+
+    /** SESSION-GL-63: the welcome post carries its code and params through the real group feed, other posts none. */
+    @Test
+    void groupFeed_returnsTheCodeAndParamsOfAGroupSystemPost() throws Exception {
+        postService.createSystemPost(groupId, ownerId, "Alice joined the group 👋",
+                SystemCode.GROUP_MEMBER_JOINED, Map.of("name", "Alice"));
+        seedPost(PostType.GROUP_POST, groupId, ownerId, "public", true);
+        authenticateAs(ownerId);
+
+        mockMvc.perform(get("/api/posts/group/{id}", groupId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[?(@.postType == 'GROUP_SYSTEM')].systemCode").value("GROUP_MEMBER_JOINED"))
+                .andExpect(jsonPath("$.data.content[?(@.postType == 'GROUP_SYSTEM')].systemParams.name").value("Alice"))
+                .andExpect(jsonPath("$.data.content[?(@.postType == 'GROUP_POST')].systemCode")
+                        .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.nullValue())));
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.sportconnect.social.post.entity;
 
 import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -17,12 +18,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 import org.locationtech.jts.geom.Point;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -48,6 +52,16 @@ public class Post {
     @Column(name = "post_type", nullable = false, length = 20)
     @Builder.Default
     private PostType postType = PostType.USER_FEED;
+
+    /** SESSION-GL-63: the stable code of a server-written entry, shown by the client in the user's language; null otherwise. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "system_code", length = 40)
+    private SystemCode systemCode;
+
+    /** SESSION-GL-63: the params of {@link #systemCode} (for example {@code name}); null when there is no code. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "system_params", columnDefinition = "jsonb")
+    private Map<String, String> systemParams;
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;

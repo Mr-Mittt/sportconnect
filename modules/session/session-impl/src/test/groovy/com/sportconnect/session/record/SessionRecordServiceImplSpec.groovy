@@ -12,11 +12,17 @@ import com.sportconnect.session.api.dto.RecordChangeSetRequest
 import com.sportconnect.session.api.dto.RecordOperationStatus
 import com.sportconnect.session.api.dto.RecordUpdateOperation
 import com.sportconnect.session.api.dto.SessionStatus
+import com.sportconnect.session.api.event.SessionRecordsChangedEvent
 import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionParticipant
 import com.sportconnect.session.repository.SessionParticipantRepository
 import com.sportconnect.session.repository.SessionRepository
+import com.sportconnect.session.service.SessionOutboxWriter
+import com.sportconnect.social.post.api.dto.SystemCode
+import com.sportconnect.social.post.api.service.CommentService
 import com.sportconnect.sport.api.service.SportService
+import com.sportconnect.user.api.dto.UserSummaryResponse
+import com.sportconnect.user.api.service.UserService
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -30,6 +36,7 @@ class SessionRecordServiceImplSpec extends Specification {
     static final Instant NOW = Instant.parse("2026-11-12T12:00:00Z")
     static final Long SESSION_ID = 7L
     static final Long SPORT_ID = 3L
+    static final UUID REF = UUID.randomUUID()
     UUID caller = UUID.randomUUID()
     UUID p1 = UUID.randomUUID()
     UUID p2 = UUID.randomUUID()
@@ -39,6 +46,12 @@ class SessionRecordServiceImplSpec extends Specification {
     SessionParticipantRepository participantRepository = Mock()
     SessionRecordGate gate = Mock()
     SportService sportService = Mock()
+    CommentService commentService = Mock()
+    UserService userService = Mock()
+    SessionOutboxWriter sessionOutboxWriter = Mock()
+    static final Long POST_ID = 70L
+    static final UUID CREATOR = UUID.randomUUID()
+    String callerName = 'Alex Tran'    // what the user lookup returns for the caller (null: not found)
 
     // What the stubs below return; a feature changes these instead of re-stubbing (Spock matches the
     // earliest-declared interaction, so a stub in a feature would never override one in setup()).
@@ -52,7 +65,7 @@ class SessionRecordServiceImplSpec extends Specification {
 
     @Subject
     SessionRecordServiceImpl service = new SessionRecordServiceImpl(sessionRepository, recordRepository,
-            participantRepository, gate, sportService, new ObjectMapper())
+            participantRepository, gate, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter)
 
     def setup() {
         service.clock = Clock.fixed(NOW, ZoneOffset.UTC)
@@ -60,6 +73,7 @@ class SessionRecordServiceImplSpec extends Specification {
         sessionRepository.findById(SESSION_ID) >> { Optional.of(current) }
         gate.require(_, _, _, _, _, _) >> { args -> args[0] }
         sportService.getResultSchema(SPORT_ID) >> { schema }
+        userService.getUserSummariesByIds([caller]) >> { callerName == null ? [:] : [(caller): UserSummaryResponse.builder().id(caller).fullName(callerName).build()] }
         participantRepository.findBySessionIdAndStatusAndUserIdIn(SESSION_ID, ParticipantStatus.JOINED, _) >> { args ->
             args[2].findAll { joined == null || joined.contains(it) }.collect { new SessionParticipant(userId: it, sessionId: SESSION_ID, status: ParticipantStatus.JOINED) }
         }
@@ -74,7 +88,7 @@ class SessionRecordServiceImplSpec extends Specification {
     }
 
     private static Session session(SessionStatus status, Instant end) {
-        Session.builder().id(SESSION_ID).sportId(SPORT_ID).status(status)
+        Session.builder().id(SESSION_ID).sportId(SPORT_ID).status(status).postId(POST_ID).createdBy(CREATOR)
                 .scheduledStart(end.minus(Duration.ofHours(2))).scheduledEndAt(end).build()
     }
 
@@ -97,7 +111,7 @@ class SessionRecordServiceImplSpec extends Specification {
         given:
         def failing = Mock(SessionRecordGate)
         def other = new SessionRecordServiceImpl(sessionRepository, recordRepository,
-                participantRepository, failing, sportService, new ObjectMapper())
+                participantRepository, failing, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter)
         failing.require(_, _, _, _, _, _) >> { throw new ForbiddenException("SESSION_RECORD_NOT_ALLOWED", "no", null) }
 
         when:
@@ -113,7 +127,7 @@ class SessionRecordServiceImplSpec extends Specification {
         given:
         def failing = Mock(SessionRecordGate)
         def other = new SessionRecordServiceImpl(sessionRepository, recordRepository,
-                participantRepository, failing, sportService, new ObjectMapper())
+                participantRepository, failing, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter)
         sessionRepository.findById(99L) >> Optional.empty()
         failing.require(_, _, _, _, _, _) >> { throw new NotFoundException("SESSION_NOT_FOUND", "no", null) }
 
@@ -537,6 +551,116 @@ class SessionRecordServiceImplSpec extends Specification {
     }
 
     // --- reads ---
+
+    // --- SESSION-GL-63: the system comment and the notification event ---
+
+    def "a change set with a saved record writes one system comment, naming the caller, and one event"() {
+        when:
+        service.applyChanges(SESSION_ID, caller, request(add: [add()]))
+
+        then: "authored by the session's creator, the name baked in, the code the client localises"
+        1 * commentService.createSystemSessionComment(POST_ID, CREATOR, "Alex Tran has updated the result",
+                SystemCode.SESSION_RECORDS_UPDATED, [name: "Alex Tran"])
+        1 * sessionOutboxWriter.record("session.record.changed", { SessionRecordsChangedEvent e ->
+            e.sessionId == SESSION_ID && e.actorId == caller
+        })
+
+        and: "the comment never emits session.comment.created (the event above is the notification)"
+        0 * sessionOutboxWriter.record("session.comment.created", _)
+    }
+
+    def "a change set of many operations still writes one comment and one event"() {
+        given:
+        def existing = row(10L)
+        def gone = row(11L)
+        locked = [existing, gone]
+
+        when:
+        service.applyChanges(SESSION_ID, caller, request(add: [add(), add(), add()],
+                update: [RecordUpdateOperation.builder().id(10L).playerIds([p1, p2]).data([winner: 2]).build()],
+                delete: [11L]))
+
+        then:
+        1 * commentService.createSystemSessionComment(*_)
+        1 * sessionOutboxWriter.record("session.record.changed", _)
+    }
+
+    def "a delete alone, an update alone and a restore each count as a saved change: #kind"() {
+        given:
+        def update = RecordUpdateOperation.builder().id(10L).playerIds([p1, p2]).data([winner: 2]).build()
+        locked = kind == "restore" ? [] : [row(10L)]
+
+        when:
+        service.applyChanges(SESSION_ID, caller, kind == "delete" ? request(delete: [10L]) : request(update: [update]))
+
+        then:
+        1 * commentService.createSystemSessionComment(*_)
+        1 * sessionOutboxWriter.record("session.record.changed", _)
+
+        where:
+        kind << ["delete", "update", "restore"]
+    }
+
+    def "a change set where nothing was saved writes no comment and no event: #kind"() {
+        given:
+        joined = kind == "every record rejected" ? [p1] as Set : null
+        locked = []
+        replays = kind == "a retried add (unchanged)" ?
+                [SessionRecord.builder().id(55L).clientRequestId(REF).build()] : []
+        def req = [
+                "every record rejected"    : request(add: [add()]),
+                "a retried add (unchanged)": request(add: [add(REF)]),
+                "a delete of a missing row": request(delete: [10L]),
+                "an empty change set"      : request([:]),
+        ][kind]
+
+        when:
+        service.applyChanges(SESSION_ID, caller, req)
+
+        then:
+        0 * commentService._
+        0 * sessionOutboxWriter._
+
+        where:
+        kind << ["every record rejected", "a retried add (unchanged)", "a delete of a missing row", "an empty change set"]
+    }
+
+    def "a record that does not fit under maxRecords is not announced"() {
+        given:
+        schema = [maxRecords: 3]
+        liveCount = 3L
+
+        when:
+        service.applyChanges(SESSION_ID, caller, request(add: [add()]))
+
+        then:
+        0 * commentService._
+        0 * sessionOutboxWriter._
+    }
+
+    def "a caller the user lookup cannot find is named 'A participant'"() {
+        given:
+        callerName = null
+
+        when:
+        service.applyChanges(SESSION_ID, caller, request(add: [add()]))
+
+        then:
+        1 * commentService.createSystemSessionComment(POST_ID, CREATOR, "A participant has updated the result",
+                SystemCode.SESSION_RECORDS_UPDATED, [name: "A participant"])
+    }
+
+    def "a failure writing the comment propagates, so the whole change set rolls back"() {
+        given:
+        commentService.createSystemSessionComment(*_) >> { throw new IllegalStateException("post unavailable") }
+
+        when:
+        service.applyChanges(SESSION_ID, caller, request(add: [add()]))
+
+        then:
+        thrown(IllegalStateException)
+        0 * sessionOutboxWriter.record(*_)
+    }
 
     def "records come back with the ids and content the client needs"() {
         given:

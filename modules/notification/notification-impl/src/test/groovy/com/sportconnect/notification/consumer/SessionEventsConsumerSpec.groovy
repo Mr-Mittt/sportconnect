@@ -5,6 +5,7 @@ import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
+import com.sportconnect.session.api.event.SessionRecordsChangedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
@@ -107,6 +108,24 @@ class SessionEventsConsumerSpec extends Specification {
                     // SESSION-24: PREPARING included alongside SCHEDULED/ONGOING — a PREPARING
                     // session is fully joinable, so this event fans out for it too.
                     e.fanOutSessionStatuses() == [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.ONGOING]
+        })
+    }
+
+    def "dispatches session.record.changed to every participant (joined, requested, invited) in any session status, minus the actor"() {
+        given: "SESSION-GL-63: records are logged in ONGOING and COMPLETED sessions, so no status is filtered out"
+        def actorId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(
+                SessionRecordsChangedEvent.builder().sessionId(1L).actorId(actorId).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.record.changed", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.record.changed" && e.sessionId() == 1L && e.actorId() == actorId &&
+                    e.singleRecipient() == null &&
+                    e.fanOutStatuses() == [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED] &&
+                    e.fanOutSessionStatuses() == SessionStatus.values().toList()
         })
     }
 

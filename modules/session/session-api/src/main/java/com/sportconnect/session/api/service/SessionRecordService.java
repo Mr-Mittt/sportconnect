@@ -40,6 +40,13 @@ public interface SessionRecordService {
      * the server never reads {@code data} for players); apply; return per-operation outcomes and the
      * records as they now are.
      *
+     * <p>SESSION-GL-63: when at least one operation was saved (a record added, updated, restored or deleted), the
+     * same transaction also writes one {@code SESSION_RECORDS_UPDATED} system comment in the session's thread (naming
+     * the caller, authored by the session's creator, without a {@code session.comment.created} event) and one
+     * {@code session.record.changed} outbox event, which notifies every {@code JOINED}, {@code REQUESTED} and
+     * {@code INVITED} participant except the caller. A change set where nothing was saved (everything rejected or
+     * unchanged) writes neither. If the comment cannot be written the whole change set rolls back.
+     *
      * @throws com.sportconnect.common.exception.NotFoundException   {@code SESSION_NOT_FOUND}
      * @throws com.sportconnect.common.exception.ForbiddenException  {@code SESSION_RECORD_NOT_ALLOWED}
      * @throws com.sportconnect.common.exception.ConflictException   {@code SESSION_RECORD_NOT_LOGGABLE},

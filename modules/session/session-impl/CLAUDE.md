@@ -284,3 +284,4 @@ ownership-only), so there's nothing this module needs to wrap.
   this function-call passthrough is not the way; either go native with a result-set mapping, or find
   another portable equivalent — don't re-attempt `function('timezone', ...)` expecting it to work on
   H2.
+- **System comments carry a code (SESSION-GL-63).** `writeSystemComment` takes a `SystemCode` and its params (`name`), written next to the English `content` (the fallback the client shows when it does not know the code). `SessionRecordServiceImpl.applyChanges` writes one `SESSION_RECORDS_UPDATED` comment and one `session.record.changed` outbox event per change set in which an operation was saved (not for a rejected or unchanged one), in the same transaction; that comment never emits `session.comment.created`. Consumed by `notification-impl`'s `SessionEventsConsumer` (every JOINED, REQUESTED and INVITED participant but the actor, any session status).

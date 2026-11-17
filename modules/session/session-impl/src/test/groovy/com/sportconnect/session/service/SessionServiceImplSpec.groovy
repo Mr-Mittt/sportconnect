@@ -39,6 +39,7 @@ import com.sportconnect.session.repository.SessionParticipantRepository
 import com.sportconnect.session.repository.SessionRepository
 import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
+import com.sportconnect.social.post.api.dto.SystemCode
 import com.sportconnect.social.post.api.service.CommentService
 import com.sportconnect.social.post.api.service.PostService
 import com.sportconnect.sport.api.dto.SportResponse
@@ -3092,7 +3093,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userService.getUserSummariesByIds([joinerId]) >> [(joinerId): joiner]
 
         and: "the entry is authored by the creator, not the joiner it is about"
-        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session")
+        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session", SystemCode.SESSION_JOINED, [name: "Alice Nguyen"])
 
         and: "no comment notification â€” participant.joined already covers this moment"
         0 * sessionOutboxWriter.record("session.comment.created", _)
@@ -3110,7 +3111,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
         1 * sessionParticipantRepository.save(_) >> { SessionParticipant p -> p }
-        0 * commentService.createSystemSessionComment(_, _, _)
+        0 * commentService.createSystemSessionComment(*_)
     }
 
     def "joinSession writes no system comment when the caller is already JOINED"() {
@@ -3126,7 +3127,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(existing)
-        0 * commentService.createSystemSessionComment(_, _, _)
+        0 * commentService.createSystemSessionComment(*_)
     }
 
     def "leaveSession writes a system comment on a genuine JOINED to LEFT transition"() {
@@ -3146,7 +3147,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, leaverId) >> Optional.of(participant)
         1 * sessionParticipantRepository.save(_) >> participant
         1 * userService.getUserSummariesByIds([leaverId]) >> [(leaverId): leaver]
-        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen left the session")
+        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen left the session", SystemCode.SESSION_LEFT, [name: "Alice Nguyen"])
         0 * sessionOutboxWriter.record("session.comment.created", _)
     }
 
@@ -3163,7 +3164,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(participant)
         1 * sessionParticipantRepository.save(_) >> participant
-        0 * commentService.createSystemSessionComment(_, _, _)
+        0 * commentService.createSystemSessionComment(*_)
 
         where:
         status << [ParticipantStatus.INVITED, ParticipantStatus.REQUESTED]
@@ -3187,7 +3188,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, requesterId) >> Optional.of(participant)
         1 * sessionParticipantRepository.save(_) >> participant
         1 * userService.getUserSummariesByIds([requesterId]) >> [(requesterId): requester]
-        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session")
+        1 * commentService.createSystemSessionComment(999L, creatorId, "Alice Nguyen joined the session", SystemCode.SESSION_JOINED, [name: "Alice Nguyen"])
         0 * sessionOutboxWriter.record("session.comment.created", _)
     }
 
@@ -3207,7 +3208,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, requesterId) >> Optional.of(participant)
         1 * sessionParticipantRepository.save(_) >> participant
-        0 * commentService.createSystemSessionComment(_, _, _)
+        0 * commentService.createSystemSessionComment(*_)
     }
 
     def "a system comment falls back to a neutral label when the participant cannot be resolved"() {
@@ -3226,7 +3227,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userService.getUserSummariesByIds([joinerId]) >> [:]
 
         and: "an unresolvable name never fails an otherwise valid join"
-        1 * commentService.createSystemSessionComment(999L, creatorId, "A participant joined the session")
+        1 * commentService.createSystemSessionComment(999L, creatorId, "A participant joined the session", SystemCode.SESSION_JOINED, [name: "A participant"])
     }
 
     def "createSessionComment still emits session.comment.created for a real user comment"() {
@@ -3244,7 +3245,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionGate.require(session, userId, _, _, _, _) >> session
         1 * commentService.createSessionComment(999L, userId, request) >> response
         1 * sessionOutboxWriter.record("session.comment.created", _)
-        0 * commentService.createSystemSessionComment(_, _, _)
+        0 * commentService.createSystemSessionComment(*_)
     }
 
     // -- SESSION-46: slots, game mood, fee note, optional title, PREPARING lifecycle ------------

@@ -11,6 +11,7 @@ import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionOutboxEvent;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.api.service.PostService;
@@ -220,6 +221,7 @@ public class SessionGenerationService {
                             .postId(s.getPostId())
                             .authorUserId(s.getCreatedBy())
                             .content("The session has started")
+                            .systemCode(SystemCode.SESSION_STARTED)
                             .build())
                     .collect(Collectors.toList());
             commentService.createSystemSessionComments(systemComments);

@@ -14,12 +14,18 @@ import com.sportconnect.session.api.dto.RecordOperationStatus;
 import com.sportconnect.session.api.dto.RecordUpdateOperation;
 import com.sportconnect.session.api.dto.SessionRecordDto;
 import com.sportconnect.session.api.dto.SessionStatus;
+import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
 import com.sportconnect.session.api.service.SessionRecordService;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.session.service.SessionOutboxWriter;
+import com.sportconnect.social.post.api.dto.SystemCode;
+import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.sport.api.service.SportService;
+import com.sportconnect.user.api.dto.UserSummaryResponse;
+import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -73,6 +79,9 @@ public class SessionRecordServiceImpl implements SessionRecordService {
     private final SessionRecordGate gate;
     private final SportService sportService;
     private final ObjectMapper objectMapper;
+    private final CommentService commentService;
+    private final UserService userService;
+    private final SessionOutboxWriter sessionOutboxWriter;
 
     /** Replaceable in tests; not a constructor dependency. */
     private Clock clock = Clock.systemUTC();
@@ -254,6 +263,14 @@ public class SessionRecordServiceImpl implements SessionRecordService {
             p.result().setId(record.getId());
         }
 
+        // SESSION-GL-63: one system comment and one notification event per change set, when at least one operation was
+        // saved, in this same transaction (a rollback takes both back).
+        boolean changedAny = results.stream().anyMatch(r -> r.getStatus() != RecordOperationStatus.REJECTED
+                && r.getStatus() != RecordOperationStatus.UNCHANGED);
+        if (changedAny) {
+            announceChange(session, callerId);
+        }
+
         long refused = results.stream().filter(r -> r.getStatus() == RecordOperationStatus.REJECTED).count();
         log.info("Session {} records changed by {}: {} adds, {} updates, {} deletes, {} rejected",
                 sessionId, callerId, adds.size(), updates.size(), deleteIds.size(), refused);
@@ -261,6 +278,24 @@ public class SessionRecordServiceImpl implements SessionRecordService {
                 .results(results)
                 .records(toDtos(recordRepository.findBySessionIdOrderByIdAsc(sessionId)))
                 .build();
+    }
+
+    /**
+     * SESSION-GL-63: tells the session's people that the results changed: a {@code SESSION_RECORDS_UPDATED} system
+     * comment in the thread (authored by the session's creator like every session system entry, naming the actor, the
+     * name baked in at write time) and a {@code session.record.changed} outbox event for the notification fan-out.
+     * Deliberately does not emit {@code session.comment.created}: the event below is the notification, a comment ping
+     * on top would notify everyone twice for one change (the SESSION-21 decision).
+     */
+    private void announceChange(Session session, UUID actorId) {
+        UserSummaryResponse actor = userService.getUserSummariesByIds(List.of(actorId)).get(actorId);
+        String name = actor != null ? actor.getFullName() : "A participant";
+        commentService.createSystemSessionComment(session.getPostId(), session.getCreatedBy(),
+                name + " has updated the result", SystemCode.SESSION_RECORDS_UPDATED, Map.of("name", name));
+        sessionOutboxWriter.record("session.record.changed", SessionRecordsChangedEvent.builder()
+                .sessionId(session.getId())
+                .actorId(actorId)
+                .build());
     }
 
     /** Availability (404 {@code SESSION_NOT_FOUND}) before visibility (403 {@code SESSION_RECORD_NOT_ALLOWED}). */

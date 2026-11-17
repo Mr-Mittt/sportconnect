@@ -12,6 +12,7 @@ import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CommentType;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.entity.Comment;
@@ -152,11 +153,14 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    public void createSystemSessionComment(Long postId, UUID authorUserId, String content) {
+    public void createSystemSessionComment(Long postId, UUID authorUserId, String content, SystemCode systemCode,
+                                           Map<String, String> systemParams) {
         createSystemSessionComments(List.of(SystemSessionCommentRequest.builder()
                 .postId(postId)
                 .authorUserId(authorUserId)
                 .content(content)
+                .systemCode(systemCode)
+                .systemParams(systemParams)
                 .build()));
     }
 
@@ -198,6 +202,8 @@ public class CommentServiceImpl implements CommentService {
                         .userId(request.getAuthorUserId())
                         .content(request.getContent())
                         .commentType(CommentType.SESSION_SYSTEM)
+                        .systemCode(request.getSystemCode())
+                        .systemParams(request.getSystemParams())
                         .build())
                 .collect(Collectors.toList());
         commentRepository.saveAll(comments);
@@ -419,6 +425,8 @@ public class CommentServiceImpl implements CommentService {
                 .userAvatarUrl(userAvatarUrl)
                 .content(comment.getContent())
                 .commentType(comment.getCommentType())
+                .systemCode(comment.getSystemCode())
+                .systemParams(comment.getSystemParams())
                 .parentCommentId(null)
                 .likeCount(likeCount)
                 .replyCount(0L)
@@ -464,6 +472,8 @@ public class CommentServiceImpl implements CommentService {
                 .userAvatarUrl(userAvatarUrl)
                 .content(comment.getContent())
                 .commentType(comment.getCommentType())
+                .systemCode(comment.getSystemCode())
+                .systemParams(comment.getSystemParams())
                 .parentCommentId(comment.getParentCommentId())
                 .likeCount(likeCount)
                 .replyCount(replyCount)
