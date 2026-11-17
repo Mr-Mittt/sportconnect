@@ -239,6 +239,12 @@ public interface SessionService {
      * a standalone session (groupId null) — cancelSession is their only way out; not enforced for
      * a group-linked session's creator, who isn't auto-joined and can leave like any other member
      * if they choose to join one.
+     *
+     * <p>SESSION-65: a {@code JOINED} participant may leave only while {@code now <= scheduledStart - 15 minutes}
+     * ({@code SessionServiceImpl.LEAVE_CUTOFF}), in every session status including {@code CANCELLED}, group
+     * sessions included. Later, ConflictException (409) {@code SESSION_LEAVE_TOO_LATE} with
+     * {@code errorParams.cutoffAt} (ISO-8601 instant), before anything is written. Declining an invitation
+     * ({@code INVITED}) and cancelling a request ({@code REQUESTED}) are not subject to it.
      */
     void leaveSession(Long sessionId, UUID userId);
 

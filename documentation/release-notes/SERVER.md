@@ -18,6 +18,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - Result changes tell the session (SESSION-GL-63): a records change set that saved at least one operation writes one system comment in the session thread ("{name} has updated the result") and notifies every `JOINED`, `REQUESTED` and `INVITED` participant except the actor (new routing key `session.record.changed`; unread ones fold into one notification per session, so a busy session does not flood anyone). A change set where nothing was saved writes neither.
 - System entries carry a code (SESSION-GL-63): `CommentResponse` and `PostResponse` gain `systemCode` and `systemParams` (both null for a user's comment or post and for every entry written before this release); codes `SESSION_JOINED`, `SESSION_LEFT`, `SESSION_STARTED`, `SESSION_RECORDS_UPDATED` (session thread) and `GROUP_MEMBER_JOINED`, `GROUP_MEMBER_JOINED_INVITED` (the group welcome post). `content` still carries the English text, so a client that does not read the code shows what it showed before. Old entries are not backfilled.
 - Sport result schema (SESSION-50): `GET /api/sports/{id}/result-schema` (members), `GET /api/sports/all/{id}/result-schema` and `PUT /api/sports/{id}/result-schema` (admin). The schema tells the client what a recorded result is and carries `maxRecords` (default 100, at most 500). Each record is capped at 4 KB. A sport with no schema has no result logging; no schema is seeded, so an admin must `PUT` one for a sport before its sessions can record results. Invalid limits are `400 SPORT_RESULT_SCHEMA_INVALID`.
+- A joined participant can leave a session only until 15 minutes before it starts (SESSION-65): `DELETE /api/sessions/{id}/leave` is `409 SESSION_LEAVE_TOO_LATE` (with `errorParams.cutoffAt`) after that, in every session status (a cancelled one included) and for group sessions, and changes nothing. Declining an invitation and cancelling a join request are unaffected.
 
 ### Applied automatically
 - `V088__sessions_title_not_null.sql` (SESSION-49) gives every existing session without a title the title `Session #<id>`, then makes `sessions.title` `NOT NULL`. It runs when the server starts and takes a short lock on `sessions`.
@@ -25,12 +26,14 @@ writes a fresh template and uses the section as the release PR description. Vers
 - `V089__session_records.sql` (SESSION-50) adds the nullable `sports.result_schema` column and creates `session_records` (a new table, no existing data touched). It runs when the server starts and is quick.
 - `V090__users_name_search_unaccent_trigram.sql` (SESSION-GL-64) creates the `unaccent` and `pg_trgm` extensions, the function `immutable_unaccent(text)` and two GIN indexes on `users` (first and last name). It runs when the server starts; building the two indexes takes a short write lock on `users` (a moment at the current size).
 - `V091__system_entry_code_and_params.sql` (SESSION-GL-63) adds the nullable `system_code` and `system_params` columns to `comments` and `posts`. Only columns are added (no data rewritten, no index), so it is quick; it runs when the server starts.
+- SESSION-65: nothing (no migration, no setting; the 15 minutes is a constant).
 
 ### Manual actions on the box
 - To switch game logging on for a sport, sign in as ADMIN and `PUT /api/sports/{sportId}/result-schema` for it (no schema is seeded). Badminton example and the fields: `modules/session/docs/SESSION_RECORDS_DESIGN.md`, section "Badminton result schema example". Without it the sport's sessions answer `409 SESSION_RECORD_NOT_LOGGABLE`.
 - B23: none.
 - SESSION-GL-63: none.
 - SESSION-GL-64: none expected. `V090` creates two trusted extensions as the app role (the database owner), and the production Postgres image (`postgres:16` plus PostGIS) ships both. If the server fails to start with `permission denied to create extension`, run `CREATE EXTENSION IF NOT EXISTS unaccent; CREATE EXTENSION IF NOT EXISTS pg_trgm;` once in the server database as the `postgres` superuser, then restart the server.
+- SESSION-65: none.
 
 ### Rollback
 - `V088` cannot be undone by Liquibase. After a rollback the column stays `NOT NULL`, so the previous server image fails to create a session that has no title (the old group auto-generation does exactly that): roll forward, or restore the pre-deploy dump (SESSION-49).
@@ -40,6 +43,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - B23 adds one read endpoint and no data; the previous server image simply does not have it (a client that calls it would get 404, and CLIENT-GL-50 part 2 is not shipped yet), so roll the image back as usual.
 - `V090` only adds extensions, a function and two indexes; the previous server image ignores them, so roll the image back as usual and no restore is needed. (The previous release's user search matches the middle of a word and the username again.)
 - `V091` only adds two nullable columns to each of two tables; the previous server image ignores them, so roll the image back as usual and no restore is needed. Entries written meanwhile keep their code and show their English text on the older server.
+- SESSION-65 adds one refusal and no data; roll the server image back as usual. The previous server lets a joined participant leave at any time again, while a newer client keeps hiding the button after the cutoff.
 
 ### Depends on
 - Client: CLIENT-SESSION-34 (form, Schedule button and en/vi copy for the new error codes). Ship the server and the client together.
@@ -47,6 +51,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - Client: CLIENT-GL-38 (the Result section and dialog, en/vi copy for the `SESSION_RECORD_*` codes) and SPORT-18 (admin screen; until it ships, the schema is set with the admin `PUT`). The endpoints work without the client. A client that ignores `results` would show a rejected record as saved, so the client must read each result's `status` after Save.
 - Client: CLIENT-GL-50 part 2 (tagging in group posts and their comments) calls the B23 endpoint; it needs the group module's `V090`-based name search, so SESSION-GL-64 must be deployed first (same release). The endpoint works without the client.
 - Client: CLIENT-GL-50 (tagging picker, the shared name matcher and the friend-invite filter) uses `thread-people`; the endpoint works without it. The Friends page and group invite search keep working unchanged against the new `users/search` rule.
+- Client: CLIENT-GL-51 (already merged) hides the Leave button after the cutoff and carries the en/vi text for `SESSION_LEAVE_TOO_LATE`. Deploy this server before that client: a client without it shows the code as a generic error.
 
 ## 0.2.0 — 2026-11-09
 
