@@ -6,6 +6,8 @@
 
 A group admin creates a season (name, start date, end date); a season view is the same games filtered by its dates, with nothing copied or locked. One active season at a time. The admin sets a target number of games per player for a season and each player sees progress. At the end of a season a recap shows most points, most games and who reached the target. Rewards are handled offline; no reward logic. Open question from the BA: which date a game belongs to (recommendation: the session's local date).
 
+**Group-only (owner, 2026-11-17):** this exists for group sessions only. The standalone-session chain is finished first (SESSION-65, 66, 67, NTF-8 and their client pairs), then the group chain; a standalone session keeps only its own scoreboard (CLIENT-GL-49).
+
 **Out of scope:** Fees in the recap (separate topic).
 
 **Tests:** Spock for the date filtering and the single-active-season rule; an IT for the admin-only endpoints.

@@ -19,6 +19,9 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 20 | [SESSION-65](MVP/SESSION-65_LEAVE_ONLY_UNTIL_15_MINUTES_BEFORE_START.md) | A joined participant can leave only until 15 minutes before the session starts (coded `SESSION_LEAVE_TOO_LATE`; invitation decline and request cancel unaffected); client side is CLIENT-GL-51 | `TODO` |
+| 22 | [SESSION-67](MVP/SESSION-67_SYSTEM_COMMENT_PER_CHANGED_FIELD_ON_PREPARING_EDIT.md) | A host edit of a `PREPARING` session writes one system comment per changed field (`systemCode` + old/new params, localised by CLIENT-SESSION-51), so participants can follow what changed; the generic notification stays (**standalone chain**) | `TODO` |
+| 21 | [SESSION-66](MVP/SESSION-66_SHARE_A_SESSION_WITH_FRIENDS.md) | A joined participant shares a `PREPARING`/`SCHEDULED` standalone session with friends: `POST /sessions/{id}/shares`, a notification per friend, no invitation row; the friend decides to join (**standalone chain**; client CLIENT-SESSION-49) | `TODO` |
 | 1 | [SESSION-8](MVP/SESSION-8_SESSION_DISCOVER_RANKING_ALGORITHM.md) | Session discover ranking algorithm | `TODO` |
 | 2 | [SESSION-22](MVP/SESSION-22_FLAKY_SESSION_EVENTS_CONSUMER_RABBITMQ_IT.md) | `SessionEventsConsumerIntegrationTest` fails intermittently on its RabbitMQ container — **~50% flake rate** (6 of 12 full runs), fails as a block on `AmqpIOException`, passes in isolation | `TODO` |
 | 3 | [SESSION-26](MVP/SESSION-26_DISCOVER_ATTRIBUTE_FILTER.md) | Session-attribute filtering on discover (deferred from SESSION-25) | `TODO` |
@@ -38,7 +41,6 @@
 | 17 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
 | 18 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
 | 19 | [SESSION-62](MVP/SESSION-62_REJECT_A_SESSION_START_IN_THE_PAST.md) | Reject a session start in the past (coded 400 `SESSION_START_IN_PAST`, 5-minute grace) on create and on a start change; the client already restricts it in CLIENT-GL-38 | `TODO` |
-| 20 | [SESSION-65](MVP/SESSION-65_LEAVE_ONLY_UNTIL_15_MINUTES_BEFORE_START.md) | A joined participant can leave only until 15 minutes before the session starts (coded `SESSION_LEAVE_TOO_LATE`; invitation decline and request cancel unaffected); client side is CLIENT-GL-51 | `TODO` |
 
 ---
 

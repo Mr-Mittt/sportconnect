@@ -24,6 +24,7 @@ module's own implementation work).
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 3 | [NTF-8](MVP/NTF-8_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | A notification can carry a short `message`; the join-request rejection puts the host's reason in it (**standalone chain**; client CLIENT-NOTIF-7) | `TODO` |
 | 1 | [NTF-6](MVP/NTF-6_DISCONNECT_OPEN_SOCKETS_ON_DEACTIVATION.md) | Low priority: close a user's already-open STOMP sockets when their account is deactivated (A28 added the CONNECT-time active check; an open socket stays until the client reconnects) | `TODO` |
 | 2 | [NTF-7](MVP/NTF-7_FLAKY_SESSION_EVENTS_CONSUMER_IT.md) | Find and fix the flaky `SessionEventsConsumerIntegrationTest` (failed in CI on the A29 PR, green on re-run; second occurrence) | `TODO` |
 

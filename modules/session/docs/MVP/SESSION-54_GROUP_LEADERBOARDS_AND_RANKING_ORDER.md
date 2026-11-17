@@ -6,6 +6,8 @@
 
 Per sport a group plays: a Single board and (where the template has two players per side) a Pair board, all stats as columns, default all-time with any season selectable. The group admin picks a primary sort and a tiebreaker from net points, win rate, wins, games played and head-to-head; entries still tied share a rank. Optional minimum games to appear (suggested none for Single, 5 for Pair). No tiers, promotion or demotion. Standalone sessions show only their own scoreboard. Ranking order and scoring rules come from stored games with no data migration (NF-4).
 
+**Group-only (owner, 2026-11-17):** this exists for group sessions only. The standalone-session chain is finished first (SESSION-65, 66, 67, NTF-8 and their client pairs), then the group chain; a standalone session keeps only its own scoreboard (CLIENT-GL-49).
+
 **Out of scope:** Seasons (SESSION-55), adjustments (SESSION-56).
 
 **Tests:** Spock for the sort and shared-rank rules; an IT for the admin-only configuration endpoints.
