@@ -259,4 +259,53 @@ describe('SessionStartTimePicker', () => {
       expect(screen.queryByLabelText('Hour')).not.toBeInTheDocument();
     });
   });
+
+  describe('followDate (CLIENT-SESSION-50: the "Ends at" date follows the start date)', () => {
+    const endPicker = (followDate: string | undefined, value = '', onChange = vi.fn()) => (
+      <SessionStartTimePicker field="Ends at" value={value} prefillWhenEmpty={false} onChange={onChange} now={now} followDate={followDate} />
+    );
+
+    it('opens on the followed date, with hour and minute empty, and reports nothing', () => {
+      const onChange = vi.fn();
+      render(endPicker('2026-08-05', '', onChange));
+      expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-05');
+      expect(screen.getByLabelText('Ends at: hour')).toHaveValue('');
+      expect(screen.getByLabelText('Ends at: minute')).toHaveValue('');
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it('follows a new date and keeps the hour that was picked', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(endPicker('2026-08-05'));
+      await user.selectOptions(screen.getByLabelText('Ends at: hour'), '14');
+      rerender(endPicker('2026-08-06'));
+      expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-06');
+      expect(screen.getByLabelText('Ends at: hour')).toHaveValue('14');
+    });
+
+    it('a date picked by hand stays until the followed date changes again', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(endPicker('2026-08-05'));
+      await user.selectOptions(screen.getByLabelText('Ends at: date'), '2026-08-07');
+      rerender(endPicker('2026-08-05'));
+      expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-07');
+      rerender(endPicker('2026-08-04'));
+      expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-04');
+    });
+
+    it('does not override a complete value the parent hands over', () => {
+      const { rerender } = render(endPicker('2026-08-05'));
+      rerender(endPicker('2026-08-09', '2026-08-06T10:00'));
+      expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-06');
+      expect(screen.getByLabelText('Ends at: hour')).toHaveValue('10');
+    });
+
+    it('stops following when no date is handed over (the duration is set)', () => {
+      const { rerender } = render(endPicker('2026-08-05'));
+      rerender(endPicker(undefined));
+      expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-05');
+      rerender(endPicker('2026-08-06'));
+      expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-06');
+    });
+  });
 });

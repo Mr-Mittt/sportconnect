@@ -47,7 +47,7 @@ export interface SessionTimeFields {
   start: string;
   duration: string;
   end: string;
-  /** Moving the start keeps the duration and moves the end. */
+  /** Moving the start keeps the duration and moves the end (no duration: the end keeps its time and takes the start's date). */
   setStart: (next: string) => void;
   /** Editing the duration derives the end. */
   setDuration: (next: string) => void;
@@ -62,7 +62,8 @@ export interface SessionTimeFields {
  * The When section's three linked fields (CLIENT-SESSION-34): whichever was edited last is the
  * source and the others follow. Edit the duration -> end = start + duration; edit the end ->
  * duration = end - start; edit the start -> the duration stays and the end moves. An end that is not
- * after the start flags `isEndInvalid` and clears the duration rather than guessing one.
+ * after the start flags `isEndInvalid` and clears the duration rather than guessing one. While the duration is
+ * missing, moving the start's date moves the end's date with it (CLIENT-SESSION-50).
  */
 export function useSessionTimeFields(initial: { start: string; duration: string }): SessionTimeFields {
   const [start, setStartState] = useState(initial.start);
@@ -73,8 +74,11 @@ export function useSessionTimeFields(initial: { start: string; duration: string 
     setStartState(next);
     if (duration !== '') {
       setEndState(endFromStartAndDuration(next, duration));
-    } else if (end !== '') {
-      const derived = durationFromStartAndEnd(next, end);
+    } else if (end !== '' && next !== '') {
+      // CLIENT-SESSION-50: no duration yet, so the end's date follows the start's date; its hour and minute stay.
+      const movedEnd = `${next.slice(0, 10)}${end.slice(10)}`;
+      setEndState(movedEnd);
+      const derived = durationFromStartAndEnd(next, movedEnd);
       setDurationState(derived === null ? '' : String(derived));
     }
   };

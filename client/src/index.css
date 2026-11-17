@@ -218,8 +218,9 @@ input[type='password']::-ms-clear {
   border: 2px solid var(--color-text-primary);
 }
 
-/* CLIENT-SESSION-34: a section's border flicks for 1s when it is un-collapsed — the header's own colour
-   (surface-1) as a ring, twice, so the eye finds the section that just opened. Off for reduced motion. */
+/* CLIENT-SESSION-34: a section's border flicks for 1s when it is un-collapsed, or when "Continue editing" lands on it
+   (CLIENT-SESSION-50), twice, so the eye finds it. The colours are a focused text input's (see `Input`): the accent
+   border and the 3px bg-accent ring. Every flick in the app is this one class. Off for reduced motion. */
 @keyframes section-flick {
   0%,
   100% {
@@ -227,7 +228,8 @@ input[type='password']::-ms-clear {
   }
   20%,
   70% {
-    box-shadow: 0 0 0 3px var(--color-surface-1);
+    border-color: var(--color-border-accent);
+    box-shadow: 0 0 0 3px var(--color-bg-accent);
   }
   45% {
     box-shadow: 0 0 0 0 transparent;

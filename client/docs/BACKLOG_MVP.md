@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-17 (CLIENT-GL-49 done)
+**Last updated:** 2026-11-17 (CLIENT-SESSION-50 done)
 
 ---
 
@@ -68,7 +68,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 26 | [CLIENT-SESSION-50](MVP/CLIENT-SESSION-50_FOCUS_THE_FIRST_MISSING_FIELD_ON_CONTINUE_EDITING.md) | "Continue editing" in the "Are you ready?" popup focuses the first missing field, top to bottom (**standalone chain**) | `TODO` |
 | 27 | [CLIENT-NOTIF-7](MVP/CLIENT-NOTIF-7_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | The rejected-join-request notification shows the host's reason (**standalone chain**; depends on NTF-8) | `TODO` |
 | 28 | [CLIENT-SESSION-51](MVP/CLIENT-SESSION-51_LOCALISED_FIELD_CHANGE_SYSTEM_COMMENTS.md) | Localised system comments for the fields a host changed (**standalone chain**; depends on SESSION-67) | `TODO` |
 | 29 | [CLIENT-SESSION-49](MVP/CLIENT-SESSION-49_INVITE_FRIENDS_DIALOG_IN_THE_PLAYERS_SECTION.md) | "Invite friends" dialog from the Players section header: friends not joined first with checkboxes, joined friends below, "Invite (x)" (**standalone chain**; depends on SESSION-66) | `TODO` |
@@ -145,6 +144,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 34 | [CLIENT-SESSION-50](MVP/CLIENT-SESSION-50_FOCUS_THE_FIRST_MISSING_FIELD_ON_CONTINUE_EDITING.md) | "Continue editing" in the "Are you ready?" popup focuses the first missing field, top to bottom; the red asterisk on Duration, Ends at, Location and Fee; the date select of Starts at / Ends at half as wide; the Ends at date follows the Starts at date while the duration is missing (**standalone chain**) | `DONE` (2026-11-17) |
 | 33 | [CLIENT-GL-49](MVP/CLIENT-GL-49_SESSION_RESULT_SCOREBOARD.md) | Session Result section: the client-computed scoreboard (split out of CLIENT-GL-38) | `DONE` (2026-11-17) |
 | 32 | [CLIENT-GL-51](MVP/CLIENT-GL-51_LOCALISED_SYSTEM_ENTRIES_AND_RECORD_NOTIFICATION.md) | Localised system comments and the group welcome post (by `systemCode`, en/vi, old rows keep their text) and the record-changed notification type (follow-up of SESSION-GL-63) | `DONE` (2026-11-17) |
 | 31 | [CLIENT-GL-50](MVP/CLIENT-GL-50_CHIP_COMPOSER_AND_TAGGING_IN_THE_SESSION_THREAD.md) | Chip composer and tagging (2026-11-16): the session thread's and, in part 2, the posts' comment, reply and post boxes are chip boxes (`@` tags friends or group members via server B23, stored as `@[Name](userId)`, drawn next to clickable hashtags, no self tag outside record commands, line breaks in posts); part 3: `(host)` and `(you)` labels, no `(x)` for same names, one generic invalid-command line with a failure count, the `@` list at the caret, Waiting for approval folded into Players; part 4: keyboard and bold for the command hints, whole-row highlight and a saved line in the record dialog, `Results (mine/all)` | `DONE` (2026-11-16) |

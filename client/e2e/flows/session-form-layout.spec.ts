@@ -14,6 +14,9 @@ import { expect, test } from '../mocks/test.ts';
 
 const widths = [320, 375] as const;
 
+// The browser's global, used inside `locator.evaluate` (this project's tsconfig has no DOM lib).
+declare function getComputedStyle(node: unknown): { borderTopColor: string };
+
 /**
  * True when the open dialog and its scrolling body are no wider than what is visible, and the page
  * itself does not scroll sideways. A string expression, like the other specs' `page.evaluate` calls:
@@ -149,6 +152,15 @@ test('session form — on a wide screen "Who can join" sits to the right of Open
   expect(Math.abs((durationBox?.y ?? 999) - (startDateBox?.y ?? 0))).toBeLessThan(12);
   expect((durationBox?.x ?? 0) > (startDateBox?.x ?? 999) + (startDateBox?.width ?? 0)).toBe(true);
   expect((endDateBox?.y ?? 0) > (startDateBox?.y ?? 999) + 20).toBe(true);
+  // CLIENT-SESSION-50: the date select is 11rem (176px: half of what it took at the widest dialog) for the start and the
+  // end picker alike, and Duration sits right after the minute select (a small gap, no empty cell between them).
+  for (const dateSelect of [createDialog.getByLabel('Date', { exact: true }), createDialog.getByLabel('Ends at: date')]) {
+    expect(Math.abs(((await dateSelect.boundingBox())?.width ?? 0) - 176)).toBeLessThan(2);
+  }
+  const startMinuteBox = await createDialog.getByLabel('Minute', { exact: true }).boundingBox();
+  const gapToDuration = (durationBox?.x ?? 0) - ((startMinuteBox?.x ?? 0) + (startMinuteBox?.width ?? 0));
+  expect(gapToDuration).toBeGreaterThan(0);
+  expect(gapToDuration).toBeLessThan(24);
 
   // The form is 70vh tall (630px of a 900px window), not the old 60vh.
   const dialogBox = await createDialog.boundingBox();
@@ -210,4 +222,48 @@ test('session form — closing the create form with unsent entries asks "Leave w
   await expect(leaveDialog).toBeVisible();
   await leaveDialog.getByRole('button', { name: 'Leave' }).click();
   await expect(createDialog).not.toBeVisible();
+});
+
+test('session form — "Continue editing" focuses the first missing field, and the end date follows the start date (CLIENT-SESSION-50)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await seedAuthenticatedSession(page, '/matches');
+  await page.getByRole('button', { name: 'Create session' }).click();
+  const createDialog = page.getByRole('dialog', { name: 'Create your session' });
+  await createDialog.getByLabel(/^Open slot/).fill('6');
+
+  // The end date is the start date while the duration is missing; hour and minute stay empty.
+  const startDate = await createDialog.getByLabel('Date', { exact: true }).inputValue();
+  await expect(createDialog.getByLabel('Ends at: date')).toHaveValue(startDate);
+  await expect(createDialog.getByLabel('Ends at: hour')).toHaveValue('');
+
+  // Duration, location and fee are all missing: the popup lists them and "Continue editing" lands on the duration
+  // (top of the form), not on the "Create session" button the popup opened from.
+  const readyDialog = page.getByRole('dialog', { name: 'Are you ready?' });
+  await createDialog.getByRole('button', { name: 'Create session' }).click();
+  await readyDialog.getByRole('button', { name: 'Continue editing' }).click();
+  await expect(createDialog.getByLabel(/^Duration \(min\)/)).toBeFocused();
+  // ...and the section that holds it flicks (the existing 1s ring), the others do not.
+  const sectionRoot = (name: RegExp) =>
+    createDialog.getByRole('button', { name }).locator('xpath=ancestor::div[contains(@class, "border-hairline")][1]');
+  await expect(sectionRoot(/^When/)).toHaveClass(/section-flick/);
+  // The flick is the focused input's colour: its border goes to the accent border (#378add) during the animation.
+  await expect
+    .poll(() => sectionRoot(/^When/).evaluate((node) => getComputedStyle(node).borderTopColor), { intervals: [50], timeout: 1500 })
+    .toBe('rgb(55, 138, 221)');
+  await expect(sectionRoot(/^Where/)).not.toHaveClass(/section-flick/);
+
+  // Duration filled: the next one down is the location, then the fee.
+  await createDialog.getByLabel(/^Duration \(min\)/).fill('90');
+  await createDialog.getByRole('button', { name: 'Create session' }).click();
+  await readyDialog.getByRole('button', { name: 'Continue editing' }).click();
+  await expect(createDialog.getByRole('button', { name: 'Choose location' })).toBeFocused();
+
+  // A collapsed section opens first: with the fee ticked only the location is missing; collapse its section (Where)
+  // and "Continue editing" opens it again before focusing the button.
+  await createDialog.getByRole('checkbox', { name: 'Free' }).check();
+  await createDialog.getByRole('button', { name: /^Where/ }).click();
+  await createDialog.getByRole('button', { name: 'Create session' }).click();
+  await readyDialog.getByRole('button', { name: 'Continue editing' }).click();
+  await expect(createDialog.getByRole('button', { name: /^Where/ })).toHaveAttribute('aria-expanded', 'true');
+  await expect(createDialog.getByRole('button', { name: 'Choose location' })).toBeFocused();
 });

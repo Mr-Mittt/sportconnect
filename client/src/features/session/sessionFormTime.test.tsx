@@ -95,6 +95,57 @@ describe('useSessionTimeFields', () => {
     expect(result.current.duration).toBe('60');
   });
 
+  describe('the end date follows the start date while the duration is missing (CLIENT-SESSION-50)', () => {
+    it('an end that is not after the start keeps its time and takes the new start date', () => {
+      const { result } = start();
+      act(() => result.current.setEnd('2026-08-01T18:00'));
+      expect(result.current.duration).toBe('');
+      act(() => result.current.setStart('2026-08-03T19:00'));
+      expect(result.current.end).toBe('2026-08-03T18:00');
+      expect(result.current.duration).toBe('');
+      expect(result.current.isEndInvalid).toBe(true);
+    });
+
+    it('a start moved to an earlier time of the same day repairs the end, as before', () => {
+      const { result } = start();
+      act(() => result.current.setEnd('2026-08-01T18:00'));
+      act(() => result.current.setStart('2026-08-01T17:00'));
+      expect(result.current.end).toBe('2026-08-01T18:00');
+      expect(result.current.duration).toBe('60');
+    });
+
+    it('an end that was valid keeps the duration it implied (a duration is set, so the old rule applies)', () => {
+      const { result } = start();
+      act(() => result.current.setEnd('2026-08-02T01:00'));
+      expect(result.current.duration).toBe('360');
+      act(() => result.current.setStart('2026-08-05T19:00'));
+      expect(result.current.end).toBe('2026-08-06T01:00');
+      expect(result.current.duration).toBe('360');
+    });
+
+    it('with a duration set the end is start + duration, not the start date with the old time', () => {
+      const { result } = renderHook(() => useSessionTimeFields({ start: '2026-08-01T23:00', duration: '120' }));
+      act(() => result.current.setStart('2026-08-05T23:00'));
+      expect(result.current.end).toBe('2026-08-06T01:00');
+    });
+
+    it('an emptied start changes nothing (duration set)', () => {
+      const { result } = start();
+      act(() => result.current.setEnd('2026-08-01T21:00'));
+      act(() => result.current.setStart(''));
+      expect(result.current.duration).toBe('120');
+    });
+
+    it('an emptied start leaves the end as it was when the duration is missing', () => {
+      const { result } = start();
+      act(() => result.current.setEnd('2026-08-01T18:00'));
+      expect(result.current.duration).toBe('');
+      act(() => result.current.setStart(''));
+      expect(result.current.end).toBe('2026-08-01T18:00');
+      expect(result.current.duration).toBe('');
+    });
+  });
+
   it('an end that is not after the start is invalid and clears the duration', () => {
     const { result } = renderHook(() => useSessionTimeFields({ start: '2026-08-01T19:00', duration: '60' }));
     act(() => result.current.setEnd('2026-08-01T18:00'));

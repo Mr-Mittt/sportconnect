@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { sportIdForKey } from '@/features/feed/sportIdMap';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
@@ -26,6 +26,7 @@ import { formatGameMood, GAME_MOOD_DEFAULT } from '@/shared/lib/gameMood';
 import { genderSplitText } from '@/shared/lib/sessionSlots';
 import { formatStartTime } from '@/shared/lib/startTime';
 import { buildAttributeSummary } from '../sessionAttributeSummary';
+import { firstMissingInFormOrder, focusFieldById, missingFieldId, missingFieldSection } from '../sessionFormFocus';
 import { missingForScheduling } from '../sessionReadiness';
 import { useSessionTimeFields } from '../sessionFormTime';
 import type { CreateSessionPayload } from '../types';
@@ -468,13 +469,23 @@ export function CreateSessionModal({
   // section the user collapsed) and the error lines have rendered. `n` makes a repeated click re-fire.
   const [focusRequest, setFocusRequest] = useState<{ id: string; n: number } | null>(null);
   useEffect(() => {
-    if (focusRequest === null) return;
-    const element = document.getElementById(focusRequest.id);
-    if (element !== null) {
-      if (typeof element.scrollIntoView === 'function') element.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      element.focus({ preventScroll: true });
-    }
+    if (focusRequest !== null) focusFieldById(focusRequest.id);
   }, [focusRequest]);
+
+  // CLIENT-SESSION-50: "Continue editing" in the readiness popup. The first missing field's id waits here until the
+  // popup has closed (`onCloseAutoFocus`): only then is its focus trap gone, so the field can take the focus.
+  const focusAfterReadinessRef = useRef<{ id: string; section: SectionKey } | null>(null);
+  // ...and the section that holds it flicks, once, to catch the eye (`n` makes a repeat re-fire).
+  const [flickRequest, setFlickRequest] = useState<{ section: SectionKey; n: number } | null>(null);
+  const flickFor = (section: SectionKey) => (flickRequest?.section === section ? flickRequest.n : 0);
+  const continueEditing = () => {
+    setIsReadinessOpen(false);
+    const first = firstMissingInFormOrder(missing);
+    if (first === undefined) return;
+    // The field may sit in a section the user collapsed.
+    setOpenSections(ALL_SECTIONS_OPEN);
+    focusAfterReadinessRef.current = { id: missingFieldId(first, 'create-session'), section: missingFieldSection(first) };
+  };
 
   const requestSubmit = () => {
     if (!isValid) {
@@ -598,6 +609,7 @@ export function CreateSessionModal({
                   summary={<SectionSummary items={summaries.when} />}
                   scrollIntoViewOnOpen
                   missing={missing.filter((field) => field === 'duration')}
+                  flickRequest={flickFor('when')}
                 >
                   <WhenFields
                     idPrefix="create-session"
@@ -615,6 +627,7 @@ export function CreateSessionModal({
                   summary={<SectionSummary items={summaries.where} />}
                   scrollIntoViewOnOpen
                   missing={missing.filter((field) => field === 'location')}
+                  flickRequest={flickFor('where')}
                 >
                   <WhereFields
                     idPrefix="create-session"
@@ -694,6 +707,7 @@ export function CreateSessionModal({
                   summary={<SectionSummary items={summaries.cost} />}
                   scrollIntoViewOnOpen
                   missing={missing.filter((field) => field === 'fee')}
+                  flickRequest={flickFor('cost')}
                 >
                   <CostFields
                     idPrefix="create-session"
@@ -774,8 +788,15 @@ export function CreateSessionModal({
         i18nOverridePrefix={i18nOverridePrefix}
         isOpen={isReadinessOpen}
         missing={missing}
-        onBack={() => setIsReadinessOpen(false)}
+        onBack={continueEditing}
         onConfirm={submit}
+        onCloseAutoFocus={() => {
+          const target = focusAfterReadinessRef.current;
+          focusAfterReadinessRef.current = null;
+          if (target === null) return;
+          focusFieldById(target.id);
+          setFlickRequest((current) => ({ section: target.section, n: (current?.n ?? 0) + 1 }));
+        }}
       />
     </>
   );

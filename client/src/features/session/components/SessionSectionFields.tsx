@@ -79,7 +79,9 @@ interface WhenFieldsProps extends CommonProps {
 /**
  * The When section: Starts at, Duration and Ends at. They are linked by `useSessionTimeFields` —
  * the one edited last is the source; the end may fall on the next day (its picker shows the date)
- * and must be after the start.
+ * and must be after the start. Duration and Ends at carry the red asterisk (needed to schedule, CLIENT-SESSION-50);
+ * while no end is set (the duration is missing) the end picker's date follows the start's date. With a duration the
+ * end is derived and complete, which the picker adopts as it is, so the date it was following no longer matters.
  */
 export function WhenFields({
   time,
@@ -92,10 +94,10 @@ export function WhenFields({
   const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <div className="flex flex-col gap-3.5">
-      {/* Wide: Starts at + Duration on the first line, Ends at on the second (they do not fit on one);
-          a phone stacks all three. */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
-        <div className="sm:col-span-8">
+      {/* Wide: Starts at and Duration on the first line, Duration right after the minute select; Ends at on the second
+          (they do not fit on one); a phone stacks all three. */}
+      <div className="flex flex-col gap-3.5 sm:flex-row sm:items-start">
+        <div className="sm:flex-none">
           <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
             {t('create.startsAt.label')}
             {startRequired && <RequiredMark />}
@@ -108,8 +110,11 @@ export function WhenFields({
             <p className="mt-1 text-2xs text-text-danger" role="alert">{t('create.validation.startInPast')}</p>
           )}
         </div>
-        <div className="sm:col-span-2">
-          <Label htmlFor={`${idPrefix}-duration`}>{t('create.duration.label')}</Label>
+        <div className="sm:w-32 sm:flex-none">
+          <Label htmlFor={`${idPrefix}-duration`}>
+            {t('create.duration.label')}
+            <RequiredMark />
+          </Label>
           <DigitsOnlyInput
             id={`${idPrefix}-duration`}
             min={1}
@@ -118,17 +123,19 @@ export function WhenFields({
             placeholder={t('create.duration.placeholder')}
           />
         </div>
-        <div className="sm:col-span-8">
-          <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
-            {t('create.endsAt.label')}
-          </span>
-          <SessionStartTimePicker
-            field={t('create.endsAt.label')}
-            prefillWhenEmpty={false}
-            value={time.end}
-            onChange={time.setEnd}
-          />
-        </div>
+      </div>
+      <div>
+        <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
+          {t('create.endsAt.label')}
+          <RequiredMark />
+        </span>
+        <SessionStartTimePicker
+          field={t('create.endsAt.label')}
+          prefillWhenEmpty={false}
+          value={time.end}
+          onChange={time.setEnd}
+          followDate={time.start !== '' ? time.start.slice(0, 10) : undefined}
+        />
       </div>
       {time.isEndInvalid && <p className="text-2xs text-text-danger">{t('create.validation.endAfterStart')}</p>}
     </div>
@@ -171,6 +178,7 @@ export function WhereFields({
       <div className="sm:col-span-7">
         <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
           {t('create.location.label')}
+          <RequiredMark />
         </span>
         <div className="flex items-center gap-2">
           {location !== null && (
@@ -183,6 +191,7 @@ export function WhereFields({
             disabled={pickerDisabled}
             onSelectFavorite={onSelectFavorite}
             onOpenLocationPicker={onOpenPicker}
+            triggerId={`${idPrefix}-location`}
           />
         </div>
         {pickSportFirst && <p className="mt-1 text-2xs text-text-muted">{t('create.location.pickSportFirst')}</p>}
@@ -435,6 +444,7 @@ export function CostFields({
         <div>
           <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
             {t('create.fee.label')}
+            <RequiredMark />
           </span>
           <FeeTypeFields
             value={feeType}

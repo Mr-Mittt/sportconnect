@@ -41,6 +41,11 @@ interface SessionFormSectionProps {
    * sections all mount open, and scrolling each into view on mount would leave it on the last one.
    */
   scrollIntoViewOnMount?: boolean;
+  /**
+   * CLIENT-SESSION-50: flicks the border once each time this changes to a number above 0 (a section that is already
+   * open gets no flick from un-collapsing); the value it has when the section mounts is not a request.
+   */
+  flickRequest?: number;
   children: ReactNode;
 }
 
@@ -68,6 +73,7 @@ export function SessionFormSection({
   isEditing = false,
   scrollIntoViewOnOpen = false,
   scrollIntoViewOnMount = false,
+  flickRequest = 0,
   children,
   i18nOverridePrefix,
 }: SessionFormSectionProps) {
@@ -92,6 +98,13 @@ export function SessionFormSection({
     }
     wasOpen.current = open;
   }, [open, scrollIntoViewOnOpen]);
+
+  // A new request flicks the border (render-phase adjustment, no effect); the value at mount is not one.
+  const [lastFlickRequest, setLastFlickRequest] = useState(flickRequest);
+  if (flickRequest !== lastFlickRequest) {
+    setLastFlickRequest(flickRequest);
+    if (flickRequest > 0) setIsFlicking(true);
+  }
 
   useEffect(() => {
     if (!isFlicking) return;
