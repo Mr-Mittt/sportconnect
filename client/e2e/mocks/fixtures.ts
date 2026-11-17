@@ -1278,6 +1278,17 @@ export const mockResultSchema: Record<string, unknown> = {
       score: { slot: [{ required: true, title: { vi: 'Điểm', en: 'Point' }, rule: '>0' }] },
     },
     UI: { id: 'horizontal', config: { winnerAlign: 'LEFT' } },
+    // CLIENT-GL-49: the sport's scoreboard (same as the badminton example).
+    scoreboard: {
+      enabled: true,
+      columns: ['games', 'wins', 'losses', 'winDiff'],
+      sort: [
+        { by: 'games', dir: 'DESC' },
+        { by: 'wins', dir: 'DESC' },
+        { by: 'winDiff', dir: 'ASC' },
+        { by: 'name', dir: 'ASC' },
+      ],
+    },
   },
 };
 

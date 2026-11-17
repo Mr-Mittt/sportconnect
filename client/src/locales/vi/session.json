@@ -466,6 +466,22 @@
     "teamWinner": "Bên thắng",
     "teamLoser": "Bên thua",
     "formerPlayer": "Người chơi cũ",
+    "scoreboard": {
+      "rank": "Thứ hạng",
+      "title": "Bảng điểm",
+      "player": "Người chơi",
+      "you": "Bạn",
+      "columns": {
+        "games": "Trận",
+        "wins": "Thắng",
+        "losses": "Thua",
+        "winRate": "Tỉ lệ thắng",
+        "winDiff": "Hiệu số thắng",
+        "scoreFor": "Điểm ghi",
+        "scoreAgainst": "Điểm mất",
+        "scoreDiff": "Hiệu số điểm"
+      }
+    },
     "dialog": {
       "title": "Cập nhật kết quả",
       "save": "Lưu",

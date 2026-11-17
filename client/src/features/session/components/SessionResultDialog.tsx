@@ -20,9 +20,11 @@ import type { RecordSchema } from '../recordSchema';
 import type { PlayerNames } from '../resultDisplay';
 import type { SessionRecord } from '../resultTypes';
 import { problemField } from '../recordFields';
+import { buildScoreboard } from '../scoreboard';
 import { teamDisplayOrder, TONE_CLASSES } from '../resultDisplay';
 import { showableRecords } from '../showableRecords';
 import { RecordEditorCells } from './RecordEditor';
+import { ResultScoreboard } from './ResultScoreboard';
 
 /** Heights of the session detail's title bar (title and status line) and its comment composer, kept clear by the dialog. */
 const DETAIL_TITLE_BAR = '4.75rem';
@@ -43,6 +45,8 @@ interface SessionResultDialogProps {
   playerIds: string[];
   names: PlayerNames;
   locale: 'en' | 'vi';
+  /** The caller: their scoreboard row is highlighted. */
+  currentUserId?: string;
 }
 
 /**
@@ -121,6 +125,7 @@ function ResultDialogBody({
   playerIds,
   names,
   locale,
+  currentUserId,
   onDirtyChange,
   confirmDiscard,
   onConfirmDiscardChange,
@@ -137,6 +142,38 @@ function ResultDialogBody({
   const initial = useMemo(() => showableRecords(schema, records), [schema, records]);
   const draft = useResultDraft(initial, options);
 
+  // CLIENT-GL-49: the scoreboard follows the rows as they are edited: every valid row that is not struck through,
+  // saved or new (a row still being typed is not valid yet and does not count), so the effect shows before Save.
+  const liveRecords = useMemo(
+    () =>
+      showableRecords(
+        schema,
+        draft.rows
+          .filter((row) => !row.deleted && !isPlaceholder(row, options))
+          .map((row) => ({
+            id: row.id ?? -row.number,
+            data: row.current,
+            createdBy: '',
+            createdAt: '',
+            updatedBy: null,
+            updatedAt: '',
+          })),
+      ),
+    [draft.rows, schema, options],
+  );
+  const scoreboardRows = useMemo(
+    () =>
+      buildScoreboard({
+        schema,
+        records: liveRecords,
+        joinedIds: playerIds,
+        names,
+        formerPlayerLabel: t('result.formerPlayer'),
+      }),
+    [schema, liveRecords, playerIds, names, t],
+  );
+
+  const [scoreboardOpen, setScoreboardOpen] = useState(true);
   const [touched, setTouched] = useState<Record<string, string[]>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
@@ -214,6 +251,19 @@ function ResultDialogBody({
           <p className="pt-1.5 text-2xs text-text-secondary">
             {t('result.dialog.limitReached', { max: schema.maxRecords })}
           </p>
+        )}
+        {schema.scoreboard.enabled && liveRecords.length > 0 && (
+          <div className="pt-1.5">
+            <ResultScoreboard
+              i18nOverridePrefix={i18nOverridePrefix}
+              schema={schema}
+              rows={scoreboardRows}
+              locale={locale}
+              currentUserId={currentUserId}
+              open={scoreboardOpen}
+              onOpenChange={setScoreboardOpen}
+            />
+          </div>
         )}
         {/* Six columns: index | team 1 | score 1 - score 2 | team 2 | action. The first row holds the two labels in its 2nd and 5th cells. */}
         <table

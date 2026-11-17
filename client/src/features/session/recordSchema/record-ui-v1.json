@@ -1,23 +1,98 @@
 {
   "version": 1,
-  "tones": ["success", "warning", "danger", "accent"],
+  "tones": [
+    "success",
+    "warning",
+    "danger",
+    "accent"
+  ],
   "COMPETITIVE": {
     "defaultStyle": "horizontal",
     "styles": {
       "horizontal": {
         "config": {
-          "winnerAlign": { "enum": ["LEFT", "RIGHT"], "default": "LEFT" },
-          "winnerTone": { "enum": "tones", "default": "success" },
-          "loserTone": { "enum": "tones", "default": "warning" }
+          "winnerAlign": {
+            "enum": [
+              "LEFT",
+              "RIGHT"
+            ],
+            "default": "LEFT"
+          },
+          "winnerTone": {
+            "enum": "tones",
+            "default": "success"
+          },
+          "loserTone": {
+            "enum": "tones",
+            "default": "warning"
+          }
         }
       },
       "vertical": {
         "config": {
-          "winnerAlign": { "enum": ["TOP", "BOTTOM"], "default": "TOP" },
-          "winnerTone": { "enum": "tones", "default": "success" },
-          "loserTone": { "enum": "tones", "default": "warning" }
+          "winnerAlign": {
+            "enum": [
+              "TOP",
+              "BOTTOM"
+            ],
+            "default": "TOP"
+          },
+          "winnerTone": {
+            "enum": "tones",
+            "default": "success"
+          },
+          "loserTone": {
+            "enum": "tones",
+            "default": "warning"
+          }
         }
       }
+    },
+    "scoreboard": {
+      "columns": [
+        "games",
+        "wins",
+        "losses",
+        "winRate",
+        "winDiff",
+        "scoreFor",
+        "scoreAgainst",
+        "scoreDiff"
+      ],
+      "defaultColumns": [
+        "games",
+        "wins",
+        "losses"
+      ],
+      "sortKeys": [
+        "games",
+        "wins",
+        "losses",
+        "winRate",
+        "winDiff",
+        "scoreFor",
+        "scoreAgainst",
+        "scoreDiff",
+        "name"
+      ],
+      "defaultSort": [
+        {
+          "by": "wins",
+          "dir": "DESC"
+        },
+        {
+          "by": "winDiff",
+          "dir": "DESC"
+        },
+        {
+          "by": "games",
+          "dir": "ASC"
+        },
+        {
+          "by": "name",
+          "dir": "ASC"
+        }
+      ]
     }
   }
 }

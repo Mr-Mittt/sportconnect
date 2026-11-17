@@ -466,6 +466,22 @@
     "teamWinner": "Winner",
     "teamLoser": "Loser",
     "formerPlayer": "Former player",
+    "scoreboard": {
+      "rank": "Rank",
+      "title": "Scoreboard",
+      "player": "Player",
+      "you": "You",
+      "columns": {
+        "games": "Games",
+        "wins": "Won",
+        "losses": "Lost",
+        "winRate": "Win rate",
+        "winDiff": "Win +/-",
+        "scoreFor": "Pts for",
+        "scoreAgainst": "Pts against",
+        "scoreDiff": "Pts +/-"
+      }
+    },
     "dialog": {
       "title": "Update results",
       "save": "Save",

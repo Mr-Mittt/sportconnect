@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import badminton from './recordSchema/badminton-record-schema-v1.json';
 import catalog from './recordSchema/record-ui-v1.json';
-import { parseRecordSchema, parseScoreRule, scoreSatisfies, slotTitle } from './recordSchema';
+import { parseRecordSchema, parseScoreRule, scoreboardTitle, scoreSatisfies, slotTitle } from './recordSchema';
 
 function schema(overrides: Record<string, unknown> = {}, data: Record<string, unknown> = {}, ui?: unknown) {
   return {
@@ -110,5 +110,112 @@ describe('slotTitle', () => {
     expect(slotTitle(slot, 0, 'vi')).toBe('Điểm');
     expect(slotTitle({ ...slot, title: { en: 'Point' } }, 0, 'vi')).toBe('Point');
     expect(slotTitle({ ...slot, title: {} }, 1, 'en')).toBe('#2');
+  });
+});
+
+describe('the scoreboard block (CLIENT-GL-49)', () => {
+  const withBoard = (scoreboard: unknown) => {
+    const raw = schema();
+    (raw.record as Record<string, unknown>).scoreboard = scoreboard;
+    return parseRecordSchema(raw)?.scoreboard;
+  };
+
+  it('is the default basic scoreboard when the schema has none', () => {
+    expect(parseRecordSchema(schema())?.scoreboard).toEqual({
+      enabled: true,
+      columns: ['games', 'wins', 'losses'],
+      titles: {},
+      sort: [
+        { by: 'wins', dir: 'DESC' },
+        { by: 'winDiff', dir: 'DESC' },
+        { by: 'games', dir: 'ASC' },
+        { by: 'name', dir: 'ASC' },
+      ],
+      scoreSlot: null,
+    });
+  });
+
+  it('reads the columns in the order given, dropping unknown and repeated ones', () => {
+    expect(withBoard({ columns: ['winDiff', 'bogus', 'games', 'winDiff', 7] })?.columns).toEqual(['winDiff', 'games']);
+  });
+
+  it('falls back to the default columns when none is usable', () => {
+    expect(withBoard({ columns: ['bogus'] })?.columns).toEqual(['games', 'wins', 'losses']);
+    expect(withBoard({ columns: 'games' })?.columns).toEqual(['games', 'wins', 'losses']);
+  });
+
+  it('reads titles per column and language, ignoring blanks and unknown columns', () => {
+    const titles = withBoard({
+      titles: { wins: { en: 'W', vi: 'T' }, losses: { en: '  ' }, games: { vi: 'Trận' }, bogus: { en: 'x' }, scoreDiff: 'no' },
+    })?.titles;
+    expect(titles).toEqual({ wins: { en: 'W', vi: 'T' }, games: { en: undefined, vi: 'Trận' } });
+  });
+
+  it('reads the sort keys, dropping an unknown key or direction, and falls back to the default order', () => {
+    expect(
+      withBoard({
+        sort: [
+          { by: 'scoreDiff', dir: 'DESC' },
+          { by: 'bogus', dir: 'ASC' },
+          { by: 'wins', dir: 'UP' },
+          { by: 'name', dir: 'ASC' },
+        ],
+      })?.sort,
+    ).toEqual([
+      { by: 'scoreDiff', dir: 'DESC' },
+      { by: 'name', dir: 'ASC' },
+    ]);
+    expect(withBoard({ sort: [{ by: 'bogus', dir: 'ASC' }] })?.sort[0]).toEqual({ by: 'wins', dir: 'DESC' });
+  });
+
+  it('can be switched off, and any other value leaves it on', () => {
+    expect(withBoard({ enabled: false })?.enabled).toBe(false);
+    expect(withBoard({ enabled: 'no' })?.enabled).toBe(true);
+    expect(withBoard('nonsense')?.enabled).toBe(true);
+  });
+
+  it('counts one score slot only when scoreSlot names an existing slot', () => {
+    const raw = schema({}, { score: { slot: [{ required: true, rule: '>=0' }, { required: false, rule: '>=0' }] } });
+    const read = (scoreSlot: unknown) => {
+      (raw.record as Record<string, unknown>).scoreboard = { scoreSlot };
+      return parseRecordSchema(raw)?.scoreboard.scoreSlot;
+    };
+    expect(read(1)).toBe(1);
+    expect(read(0)).toBe(0);
+    expect(read(2)).toBeNull();
+    expect(read(-1)).toBeNull();
+    expect(read('1')).toBeNull();
+    expect(withBoard({ scoreSlot: 0 })?.scoreSlot).toBeNull(); // this schema has no score slot at all
+  });
+
+  it('picks a column title: the sport title in the viewer language, else its other language, else the default', () => {
+    const board = withBoard({ titles: { wins: { en: 'W' }, losses: { vi: 'T' } } })!;
+    expect(scoreboardTitle(board, 'wins', 'en', 'Won')).toBe('W');
+    expect(scoreboardTitle(board, 'wins', 'vi', 'Thắng')).toBe('W');
+    expect(scoreboardTitle(board, 'losses', 'en', 'Lost')).toBe('T');
+    expect(scoreboardTitle(board, 'games', 'vi', 'Trận')).toBe('Trận');
+  });
+});
+
+describe('the badminton scoreboard (contract, CLIENT-GL-49)', () => {
+  it('reads as written: its columns and all four sort keys', () => {
+    const parsed = parseRecordSchema(badminton)?.scoreboard;
+    expect(parsed?.enabled).toBe(true);
+    expect(parsed?.columns).toEqual(['games', 'wins', 'losses', 'winDiff']);
+    expect(parsed?.sort).toEqual([
+      { by: 'games', dir: 'DESC' },
+      { by: 'wins', dir: 'DESC' },
+      { by: 'winDiff', dir: 'ASC' },
+      { by: 'name', dir: 'ASC' },
+    ]);
+  });
+
+  it('only uses columns and sort keys the UI catalog offers: a typo would be dropped silently by the parser', () => {
+    const raw = (badminton as { record: { scoreboard: { columns: string[]; sort: Array<{ by: string; dir: string }> } } }).record.scoreboard;
+    const parsed = parseRecordSchema(badminton)?.scoreboard;
+    expect(raw.columns.every((column) => catalog.COMPETITIVE.scoreboard.columns.includes(column))).toBe(true);
+    expect(raw.sort.every((entry) => catalog.COMPETITIVE.scoreboard.sortKeys.includes(entry.by))).toBe(true);
+    expect(parsed?.columns).toHaveLength(raw.columns.length);
+    expect(parsed?.sort).toHaveLength(raw.sort.length); // nothing dropped on the way in
   });
 });

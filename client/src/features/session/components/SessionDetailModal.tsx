@@ -974,6 +974,7 @@ export function SessionDetailModal({
                     canEdit={result.access.canEdit}
                     windowClosed={result.access.windowClosed}
                     currentUserId={currentUserId}
+                    playerIds={result.playerIds}
                     onUpdate={() => setIsResultDialogOpen(true)}
                   />
                 )}
@@ -1153,6 +1154,7 @@ export function SessionDetailModal({
             playerIds={result.playerIds}
             names={result.names}
             locale={result.locale}
+            currentUserId={currentUserId}
           />
         )}
       {session !== undefined && (

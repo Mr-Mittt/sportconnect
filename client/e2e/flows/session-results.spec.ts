@@ -24,6 +24,8 @@ test('Session results — log a record, see it in the Result section, then delet
     await expect(toggle).toBeVisible();
     await toggle.click();
     await expect(detail.getByText('No results logged yet.')).toBeVisible();
+    // CLIENT-GL-49: no valid record, no scoreboard
+    await expect(detail.getByTestId('result-scoreboard')).toHaveCount(0);
   });
 
   await test.step('2. Update opens the dialog with one empty placeholder row', async () => {
@@ -93,12 +95,40 @@ test('Session results — log a record, see it in the Result section, then delet
     await expect(card).toContainText('21');
     await expect(card).toContainText('18');
     await expect(card.getByText('Won')).toHaveCount(0);
+    // CLIENT-GL-49: the sport's scoreboard sits above the list: the columns its schema names,
+    // a row per joined player, one game each for the two who played, the caller's row marked.
+    const board = detail.getByTestId('result-scoreboard');
+    await expect(board).toBeVisible();
+    await expect(board.getByRole('columnheader')).toHaveText(['#', 'Player', 'Games', 'Won', 'Lost', 'Win +/-']);
+    await expect(board.getByTestId('scoreboard-row').first()).toBeVisible();
+    await expect(board.locator('[aria-current="true"]')).toHaveCount(1);
+    await expect(board.locator('[aria-current="true"]')).toContainText('(You)');
+    // the winner is first (games, then wins): one game, one win, no loss, +1 win difference
+    await expect(board.getByTestId('scoreboard-row').first().locator('td')).toHaveText(['1', '1', '1', '0', '+1']);
+    // it is below the record list, and the title bar folds it (open by default) and opens it again
+    expect((await board.boundingBox())!.y).toBeGreaterThan((await card.boundingBox())!.y);
+    const bar = board.getByRole('button', { name: /Scoreboard/ });
+    await expect(bar).toHaveAttribute('aria-expanded', 'true');
+    await bar.click();
+    await expect(board.getByRole('table')).toHaveCount(0);
+    await bar.click();
+    await expect(board.getByRole('table')).toBeVisible();
+    // the scoreboard fits a phone: no sideways scroll
+    await page.setViewportSize({ width: 320, height: 800 });
+    expect(
+      await page.evaluate(`(() => { const el = document.querySelector('[data-testid="result-scoreboard"]'); return el.scrollWidth <= el.clientWidth + 1; })()`),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 720 });
   });
 
   await test.step('5. delete it in the dialog (struck through, undo available) and save', async () => {
     await detail.getByRole('button', { name: 'Update' }).click();
     const dialog = page.getByRole('dialog', { name: 'Update results' });
+    // CLIENT-GL-49: the dialog has the scoreboard too, and it follows the rows: striking the only record out empties it
+    await expect(dialog.getByTestId('result-scoreboard')).toBeVisible();
+    await expect(dialog.getByTestId('scoreboard-row').first().locator('td').first()).toHaveText('1');
     await dialog.getByRole('button', { name: 'Delete result 1' }).click();
+    await expect(dialog.getByTestId('result-scoreboard')).toHaveCount(0);
     await expect(dialog.getByTestId('deleted-record')).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Undo changes to result 1' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Save' }).click();
@@ -109,6 +139,7 @@ test('Session results — log a record, see it in the Result section, then delet
     await expect(dialog).not.toBeVisible();
     await expect(detail.getByRole('button', { name: /Results \(0\)/ })).toBeVisible();
     await expect(detail.getByText('No results logged yet.')).toBeVisible();
+    await expect(detail.getByTestId('result-scoreboard')).toHaveCount(0);
   });
 });
 

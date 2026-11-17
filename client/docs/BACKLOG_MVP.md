@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-17 (CLIENT-GL-51 done)
+**Last updated:** 2026-11-17 (CLIENT-GL-49 done)
 
 ---
 
@@ -84,9 +84,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 18 | [CLIENT-SESSION-44](MVP/CLIENT-SESSION-44_POINT_ADJUSTMENT_SCREENS.md) | Point adjustment dialog and adjustment history | `TODO` |
 | 19 | [CLIENT-SESSION-45](MVP/CLIENT-SESSION-45_RECENT_PLAYERS_AND_PAIRINGS_SHORTCUTS.md) | Result dialog: recent players and previous pairings as shortcuts (BA GL-8) | `TODO` |
 | 20 | [CLIENT-SESSION-46](MVP/CLIENT-SESSION-46_OFFLINE_QUEUE_FOR_RESULT_CHANGES.md) | Keep a result change made offline and send it when the connection returns (BA GL-9) | `TODO` |
-| 21 | [CLIENT-SESSION-47](MVP/CLIENT-SESSION-47_DUPLICATE_RESULT_WARNING.md) | Warn when the same players and winner were logged moments ago (BA open question 3) | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
-| 24 | [CLIENT-GL-49](MVP/CLIENT-GL-49_SESSION_RESULT_SCOREBOARD.md) | Session Result section: the client-computed scoreboard (split out of CLIENT-GL-38) | `TODO` |
 | 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request` | `TODO` |
 
 #### Removed / Deferred
@@ -95,6 +93,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 |---|---|
 | [AUTH-11](MVP/AUTH-11_LOG_OUT_THIS_DEVICE_ONLY.md) · "Log out" signs out this device only, plus "Log out everywhere" | Superseded (2026-10-16, backend A28 closed A15): a session is a Keycloak SSO session, so plain logout already ends only this device's session and there is no per-user watermark to extend. A "log out everywhere" action would be a new ticket against Keycloak. |
 | [AUTH-12](MVP/AUTH-12_ACTIVE_SESSIONS_LIST.md) · Active sessions list with per-session sign-out | Superseded (2026-10-16, backend A28 closed A18): no session list or revoke endpoint exists any more; a sessions screen would read Keycloak's account API and be a new ticket. |
+| [CLIENT-SESSION-47](BACKLOG_V1.md) · Warn when the same players and winner were logged moments ago (BA open question 3) | Moved to the V1 backlog (2026-11-17, owner: no duplicate warning for now) |
 
 **`/profile` page design:** `client/docs/PROFILE_PAGE_DESIGN.md` — full scoping rationale for
 `PROFILE-0`..`PROFILE-9` and why `ACCOUNT-1` was split out, from a `/feature` session against
@@ -144,6 +143,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 33 | [CLIENT-GL-49](MVP/CLIENT-GL-49_SESSION_RESULT_SCOREBOARD.md) | Session Result section: the client-computed scoreboard (split out of CLIENT-GL-38) | `DONE` (2026-11-17) |
 | 32 | [CLIENT-GL-51](MVP/CLIENT-GL-51_LOCALISED_SYSTEM_ENTRIES_AND_RECORD_NOTIFICATION.md) | Localised system comments and the group welcome post (by `systemCode`, en/vi, old rows keep their text) and the record-changed notification type (follow-up of SESSION-GL-63) | `DONE` (2026-11-17) |
 | 31 | [CLIENT-GL-50](MVP/CLIENT-GL-50_CHIP_COMPOSER_AND_TAGGING_IN_THE_SESSION_THREAD.md) | Chip composer and tagging (2026-11-16): the session thread's and, in part 2, the posts' comment, reply and post boxes are chip boxes (`@` tags friends or group members via server B23, stored as `@[Name](userId)`, drawn next to clickable hashtags, no self tag outside record commands, line breaks in posts); part 3: `(host)` and `(you)` labels, no `(x)` for same names, one generic invalid-command line with a failure count, the `@` list at the caret, Waiting for approval folded into Players; part 4: keyboard and bold for the command hints, whole-row highlight and a saved line in the record dialog, `Results (mine/all)` | `DONE` (2026-11-16) |
 | 30 | [CLIENT-GL-39](MVP/CLIENT-GL-39_THREAD_COMMAND_HINTS_AND_REPLIES.md) | Session thread: record commands `:add`, `:upd`, `:del` typed in the comment box (client parses and validates with the record schema, sends the same change set as the dialog, nothing posted to the thread; errors are caller-only system-style lines), command hints and an `@` player list, a copy-record-id button and a "my results" switch in the Result section (no record numbers there any more). Client only; follow-up SESSION-GL-63 | `DONE` (2026-11-15) |
