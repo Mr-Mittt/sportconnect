@@ -60,6 +60,9 @@ interface SessionReadinessDialogProps {
   isSubmitting?: boolean;
   /** Inline error line under the text (a failed schedule, etc.). */
   errorText?: string;
+  /** Radix's `onCloseAutoFocus`: runs once the popup is gone and its focus trap released (CLIENT-SESSION-50 sets the
+   * focus on the first missing field there; Radix itself hands the focus to nothing, the popup has no trigger). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -77,13 +80,19 @@ export function SessionReadinessDialog({
   onConfirm,
   isSubmitting = false,
   errorText,
+  onCloseAutoFocus,
   i18nOverridePrefix,
 }: SessionReadinessDialogProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   const isComplete = missing.length === 0;
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && !isSubmitting && onBack()}>
-      <DialogContent centered className="p-4" onOpenAutoFocus={(event) => event.preventDefault()}>
+      <DialogContent
+        centered
+        className="p-4"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
         <DialogTitle className="mb-1 text-sm font-semibold text-text-primary">{t('readiness.title')}</DialogTitle>
         {isComplete ? (
           <p className="mb-3 text-2sm text-text-secondary">

@@ -24,6 +24,10 @@ interface SessionStartTimePickerProps {
   /** CLIENT-GL-38: the start picker never offers a time earlier than now: when the date is today, the hours before the
    * current one (and, in the current hour, the minutes before the current one) are disabled. */
   disallowPast?: boolean;
+  /** CLIENT-SESSION-50: `yyyy-MM-dd`. While `value` is empty the date part is set to it on mount and every time it
+   * changes (the "Ends at" picker follows the start's date while the duration is missing). A date picked by hand
+   * stays until this changes again; hour and minute are never touched. Unset: no following. */
+  followDate?: string;
 }
 
 const PICK_DATE_VALUE = 'pick-a-date';
@@ -67,6 +71,7 @@ export function SessionStartTimePicker({
   field,
   prefillWhenEmpty = true,
   disallowPast = false,
+  followDate,
   i18nOverridePrefix,
 }: SessionStartTimePickerProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -75,7 +80,9 @@ export function SessionStartTimePicker({
   const defaultStart = new Date(now);
   defaultStart.setHours(now.getHours() + 1, 0, 0, 0);
   const [datePart, setDatePart] = useState(() =>
-    value !== '' ? value.slice(0, 10) : prefillWhenEmpty ? format(startOfDay(defaultStart), 'yyyy-MM-dd') : '',
+    value !== ''
+      ? value.slice(0, 10)
+      : (followDate ?? (prefillWhenEmpty ? format(startOfDay(defaultStart), 'yyyy-MM-dd') : '')),
   );
   const [hourPart, setHourPart] = useState(() =>
     value !== ''
@@ -99,6 +106,14 @@ export function SessionStartTimePicker({
       setHourPart(value.slice(11, 13));
       setMinutePart(value.slice(14, 16));
     }
+  }
+
+  // CLIENT-SESSION-50: follow the date the parent hands over (render-phase adjustment, like the value above), only
+  // while nothing complete is reported: a complete `value` is adopted into the pieces by the block above instead.
+  const [followedDate, setFollowedDate] = useState(followDate);
+  if (followDate !== followedDate) {
+    setFollowedDate(followDate);
+    if (followDate !== undefined && value === '' && followDate !== datePart) setDatePart(followDate);
   }
 
   useEffect(() => {
@@ -156,7 +171,9 @@ export function SessionStartTimePicker({
     <div className="flex flex-col gap-1.5">
       <div className="flex gap-1.5">
         <Select
-          className="min-w-0 flex-1"
+          // Wide: 11rem, half of what the date had at the widest dialog (the row minus the hour and minute selects);
+          // fixed, so the Duration field can sit right after the minute select. A phone keeps it flexible.
+          className="min-w-0 flex-1 sm:w-44 sm:flex-none"
           aria-label={field === undefined ? t('time.date') : t('time.dateFor', { field })}
           value={showCalendar ? PICK_DATE_VALUE : isCustomDate ? CUSTOM_DATE_VALUE : datePart}
           onChange={(event) => handleDateSelect(event.target.value)}

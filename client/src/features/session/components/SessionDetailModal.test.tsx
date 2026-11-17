@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError, type AxiosResponse } from 'axios';
+import { addDays, format } from 'date-fns';
 import { describe, expect, it, vi } from 'vitest';
 import type { Comment } from '@/features/feed/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
@@ -1020,12 +1021,43 @@ describe('SessionDetailModal', () => {
       expect(onUpdateSession).toHaveBeenCalledWith({ title: 'Renamed' }, expect.any(Function));
     });
 
+    describe('CLIENT-SESSION-50: the editors carry the same red asterisks and end-date rule as the create form', () => {
+      it('When: Duration and Ends at are marked; the end date follows a changed start date while the duration is missing', async () => {
+        const user = userEvent.setup();
+        render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+        await user.click(screen.getAllByRole('button', { name: 'Edit' })[1]);
+        expect(within(screen.getByText(/^Duration \(min\)/)).getByText('*')).toBeInTheDocument();
+        expect(within(screen.getByText('Ends at', { selector: 'span' })).getByText('*')).toBeInTheDocument();
+
+        const day = format(addDays(new Date(), 2), 'yyyy-MM-dd');
+        await user.selectOptions(screen.getByLabelText('Date'), day);
+        expect(screen.getByLabelText('Ends at: date')).toHaveValue(day);
+        expect(screen.getByLabelText('Ends at: hour')).toHaveValue('');
+      });
+
+      it('Where: Location is marked', async () => {
+        const user = userEvent.setup();
+        render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+        await user.click(screen.getAllByRole('button', { name: 'Edit' })[2]);
+        expect(within(screen.getByText('Location', { selector: 'span' })).getByText('*')).toBeInTheDocument();
+        expect(within(screen.getByText('Location note')).queryByText('*')).not.toBeInTheDocument();
+      });
+
+      it('Cost: Fee is marked', async () => {
+        const user = userEvent.setup();
+        render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+        await user.click(screen.getAllByRole('button', { name: 'Edit' })[4]);
+        expect(within(screen.getByText('Fee', { selector: 'span' })).getByText('*')).toBeInTheDocument();
+        expect(within(screen.getByText('Fee note')).queryByText('*')).not.toBeInTheDocument();
+      });
+    });
+
     it('When: a new duration is saved as durationMinutes only', async () => {
       const user = userEvent.setup();
       const onUpdateSession = vi.fn();
       render(<SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />);
       await user.click(screen.getAllByRole('button', { name: 'Edit' })[1]);
-      await user.type(screen.getByLabelText('Duration (min)'), '90');
+      await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
       await user.click(screen.getByRole('button', { name: 'Save' }));
       expect(onUpdateSession).toHaveBeenCalledWith({ durationMinutes: 90 }, expect.any(Function));
     });

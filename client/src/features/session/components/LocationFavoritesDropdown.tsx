@@ -19,6 +19,8 @@ interface LocationFavoritesDropdownProps {
   disabled: boolean;
   onSelectFavorite: (location: Location) => void;
   onOpenLocationPicker: () => void;
+  /** Id of the trigger button, so the form can move the focus to it (CLIENT-SESSION-50). */
+  triggerId?: string;
 }
 
 /** CLIENT-SESSION-5's favorites-aware location selector — a real Radix `DropdownMenu`, not the
@@ -43,13 +45,14 @@ export function LocationFavoritesDropdown({
   disabled,
   onSelectFavorite,
   onOpenLocationPicker,
+  triggerId,
   i18nOverridePrefix,
 }: LocationFavoritesDropdownProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="shrink-0" disabled={disabled}>
+        <Button id={triggerId} type="button" variant="outline" size="sm" className="shrink-0" disabled={disabled}>
           {selectedLocation === null ? t('locationFavorites.choose') : t('locationFavorites.change')}
         </Button>
       </DropdownMenuTrigger>

@@ -36,3 +36,9 @@ export const CalendarOpen: Story = {
     await userEvent.selectOptions(canvas.getByLabelText('Date'), 'Pick a date…');
   },
 };
+
+/** CLIENT-SESSION-50: the "Ends at" picker while the duration is missing: the date is the start's date
+ * (`followDate`), hour and minute are empty. */
+export const FollowsTheStartDate: Story = {
+  args: { field: 'Ends at', prefillWhenEmpty: false, followDate: '2026-08-05' },
+};

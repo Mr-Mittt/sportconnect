@@ -222,6 +222,49 @@ describe('SessionFormSection border flick', () => {
     expect((container.firstChild as HTMLElement).className).not.toContain('section-flick');
   });
 
+  describe('flickRequest (CLIENT-SESSION-50: "Continue editing" lands on this section)', () => {
+    const open = (flickRequest: number) => (
+      <SessionFormSection title="A" open onOpenChange={() => {}} flickRequest={flickRequest}>
+        x
+      </SessionFormSection>
+    );
+
+    it('flicks an already open section when the request changes to a number above 0, then stops', () => {
+      vi.useFakeTimers();
+      const { container, rerender } = render(open(0));
+      const root = container.firstChild as HTMLElement;
+      expect(root.className).not.toContain('section-flick');
+      rerender(open(1));
+      expect(root.className).toContain('section-flick');
+      act(() => {
+        vi.advanceTimersByTime(1001);
+      });
+      expect(root.className).not.toContain('section-flick');
+    });
+
+    it('flicks again for the next request', () => {
+      vi.useFakeTimers();
+      const { container, rerender } = render(open(0));
+      const root = container.firstChild as HTMLElement;
+      rerender(open(1));
+      act(() => {
+        vi.advanceTimersByTime(1100);
+      });
+      expect(root.className).not.toContain('section-flick');
+      rerender(open(2));
+      expect(root.className).toContain('section-flick');
+    });
+
+    it('a request already there when the section mounts is not a flick, and going back to 0 is not one either', () => {
+      vi.useFakeTimers();
+      const { container, rerender } = render(open(3));
+      const root = container.firstChild as HTMLElement;
+      expect(root.className).not.toContain('section-flick');
+      rerender(open(0));
+      expect(root.className).not.toContain('section-flick');
+    });
+  });
+
   it('flicks for a section that mounts open on purpose (the detail modal when Edit starts)', () => {
     const { container } = render(
       <SessionFormSection title="A" open onOpenChange={() => {}} scrollIntoViewOnMount>

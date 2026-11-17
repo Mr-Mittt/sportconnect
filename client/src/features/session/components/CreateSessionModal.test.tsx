@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/app/authStore';
@@ -465,6 +465,185 @@ describe('CreateSessionModal', () => {
       await user.click(screen.getByRole('button', { name: 'Create preparing session' }));
       expect(onSubmit).toHaveBeenCalledTimes(1);
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ locationId: undefined, feeType: undefined }));
+    });
+
+    describe('CLIENT-SESSION-50: "Continue editing" focuses the first missing field, top to bottom', () => {
+      /** Fills what Create needs (start, open slot) and opens the popup, then clicks "Continue editing". */
+      async function continueEditing(user: ReturnType<typeof userEvent.setup>) {
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        await user.click(screen.getByRole('button', { name: 'Continue editing' }));
+      }
+
+      /** Radix hands the focus back to "Create session" a tick after the popup closes: wait it out, then check. */
+      async function expectFocusStays(element: HTMLElement) {
+        await waitFor(() => expect(element).toHaveFocus());
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        expect(element).toHaveFocus();
+      }
+
+      async function prepare(user: ReturnType<typeof userEvent.setup>, extra: Partial<typeof baseProps> = {}) {
+        render(<CreateSessionModal {...baseProps} activeSport="basketball" {...extra} />);
+        await pickAnyStartTime(user);
+        await user.type(screen.getByLabelText(/^Open slot/), '10');
+      }
+
+      it('duration first, when everything is missing', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await continueEditing(user);
+        await expectFocusStays(screen.getByLabelText(/^Duration \(min\)/));
+      });
+
+      it('then location, once the duration is filled', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+        await continueEditing(user);
+        await expectFocusStays(screen.getByRole('button', { name: 'Choose location' }));
+      });
+
+      it('then the fee, once duration and location are filled', async () => {
+        const user = userEvent.setup();
+        await prepare(user, { selectedLocation: location });
+        await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+        await continueEditing(user);
+        await expectFocusStays(screen.getByRole('checkbox', { name: 'Free' }));
+      });
+
+      it('the location when only the duration and the fee are filled', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+        await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+        await continueEditing(user);
+        await expectFocusStays(screen.getByRole('button', { name: 'Choose location' }));
+      });
+
+      it('opens a section the user collapsed, then focuses its field', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await user.click(screen.getByRole('button', { name: /^When/ }));
+        expect(screen.queryByLabelText(/^Duration \(min\)/)).not.toBeInTheDocument();
+        await continueEditing(user);
+        expect(screen.getByRole('button', { name: /^When/ })).toHaveAttribute('aria-expanded', 'true');
+        await expectFocusStays(screen.getByLabelText(/^Duration \(min\)/));
+      });
+
+      it('Escape on the popup does the same as "Continue editing"', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        await user.keyboard('{Escape}');
+        await expectFocusStays(screen.getByLabelText(/^Duration \(min\)/));
+      });
+
+      it('"Create preparing session" does not move the focus onto a field', async () => {
+        const user = userEvent.setup();
+        const onSubmit = vi.fn();
+        await prepare(user, { onSubmit });
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        await user.click(screen.getByRole('button', { name: 'Create preparing session' }));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(screen.getByLabelText(/^Duration \(min\)/)).not.toHaveFocus();
+      });
+
+      /** The border-flick class sits on the section's root, the nearest `shrink-0` ancestor of its header button. */
+      const sectionRoot = (name: RegExp) =>
+        screen.getByRole('button', { name }).closest('.shrink-0.overflow-hidden') as HTMLElement;
+
+      it('flicks the section that holds the field the focus went to, and only that one', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        await user.click(screen.getByRole('button', { name: 'Continue editing' }));
+        await waitFor(() => expect(sectionRoot(/^When/).className).toContain('section-flick'));
+        expect(sectionRoot(/^Where/).className).not.toContain('section-flick');
+        expect(sectionRoot(/^Cost/).className).not.toContain('section-flick');
+      });
+
+      it('flicks the Where section when the location is the first missing field', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        await user.click(screen.getByRole('button', { name: 'Continue editing' }));
+        await waitFor(() => expect(sectionRoot(/^Where/).className).toContain('section-flick'));
+        expect(sectionRoot(/^When/).className).not.toContain('section-flick');
+      });
+
+      it('nothing flicks for "Create preparing session"', async () => {
+        const user = userEvent.setup();
+        await prepare(user);
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        await user.click(screen.getByRole('button', { name: 'Create preparing session' }));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        for (const name of [/^When/, /^Where/, /^Cost/]) expect(sectionRoot(name).className).not.toContain('section-flick');
+      });
+
+      it('the complete popup ("Let me check again") focuses no field', async () => {
+        const user = userEvent.setup();
+        await prepare(user, { selectedLocation: location });
+        await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+        await user.click(screen.getByRole('checkbox', { name: 'Free' }));
+        await user.click(screen.getByRole('button', { name: 'Create session' }));
+        await user.click(screen.getByRole('button', { name: 'Let me check again' }));
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        expect(screen.getByLabelText(/^Duration \(min\)/)).not.toHaveFocus();
+        expect(screen.getByRole('checkbox', { name: 'Free' })).not.toHaveFocus();
+      });
+    });
+
+    describe('CLIENT-SESSION-50: the red asterisk and the end date', () => {
+      it('Duration, Ends at, Location and Fee carry the required mark', () => {
+        render(<CreateSessionModal {...baseProps} />);
+        const marked = [
+          screen.getByText(/^Duration \(min\)/),
+          screen.getByText('Ends at', { selector: 'span' }),
+          screen.getByText('Location', { selector: 'span' }),
+          screen.getByText('Fee', { selector: 'span' }),
+        ];
+        for (const label of marked) expect(within(label).getByText('*')).toBeInTheDocument();
+      });
+
+      it('Fee note and Location note stay unmarked', () => {
+        render(<CreateSessionModal {...baseProps} />);
+        expect(within(screen.getByText('Fee note')).queryByText('*')).not.toBeInTheDocument();
+        expect(within(screen.getByText('Location note')).queryByText('*')).not.toBeInTheDocument();
+      });
+
+      it('the end date is the start date while the duration is missing, and follows a changed start date', async () => {
+        const user = userEvent.setup();
+        render(<CreateSessionModal {...baseProps} />);
+        // The clock is pinned at 2026-08-03 06:00: the start defaults to today 07:00.
+        expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-03');
+        expect(screen.getByLabelText('Ends at: hour')).toHaveValue('');
+        expect(screen.getByLabelText('Ends at: minute')).toHaveValue('');
+
+        await user.selectOptions(screen.getByLabelText('Date'), '2026-08-05');
+        expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-05');
+        expect(screen.getByLabelText('Ends at: hour')).toHaveValue('');
+      });
+
+      it('keeps following after a duration was typed and cleared again', async () => {
+        const user = userEvent.setup();
+        render(<CreateSessionModal {...baseProps} />);
+        await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+        expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-03');
+        await user.clear(screen.getByLabelText(/^Duration \(min\)/));
+        await user.selectOptions(screen.getByLabelText('Date'), '2026-08-06');
+        expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-06');
+      });
+
+      it('with a duration set the end is start + duration (the end date moves with the start as before)', async () => {
+        const user = userEvent.setup();
+        render(<CreateSessionModal {...baseProps} />);
+        await user.type(screen.getByLabelText(/^Duration \(min\)/), '90');
+        await user.selectOptions(screen.getByLabelText('Date'), '2026-08-05');
+        expect(screen.getByLabelText('Ends at: date')).toHaveValue('2026-08-05');
+        expect(screen.getByLabelText('Ends at: hour')).toHaveValue('08');
+        expect(screen.getByLabelText('Ends at: minute')).toHaveValue('30');
+      });
     });
 
     it('names only what is still missing', async () => {

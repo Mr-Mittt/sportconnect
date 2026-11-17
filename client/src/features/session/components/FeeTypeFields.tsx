@@ -103,6 +103,7 @@ export function FeeTypeFields({
     <div className="flex flex-col gap-1.5">
       <label className="flex cursor-pointer items-center gap-2 text-2sm text-text-primary select-none">
         <input
+          id={`${idPrefix}-fee-free`}
           type="checkbox"
           checked={value === 'FREE'}
           onChange={() => {
