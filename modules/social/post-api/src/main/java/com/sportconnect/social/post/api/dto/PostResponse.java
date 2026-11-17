@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -34,6 +35,10 @@ public class PostResponse {
     private Long commentCount;
     private Long shareCount;
     private Boolean isLikedByCurrentUser;
+    /** SESSION-GL-63: the code of a {@code GROUP_SYSTEM} post (null for every other post and for a welcome post written before codes). */
+    private SystemCode systemCode;
+    /** SESSION-GL-63: the params of {@link #systemCode} (for example {@code name}); null when there is no code. */
+    private Map<String, String> systemParams;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime broadcastEndTime;

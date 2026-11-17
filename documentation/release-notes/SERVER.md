@@ -15,6 +15,8 @@ writes a fresh template and uses the section as the release PR description. Vers
 - People search for the session thread (SESSION-GL-64): `GET /api/sessions/{id}/thread-people?q=&size=` returns the people who can see the thread (`JOINED`, `REQUESTED` and `INVITED` participants, then, for a group session, the group's other members) as `userId`, `fullName`, `avatarUrl`; same access as the thread (404 `SESSION_NOT_FOUND`, 403 `SESSION_FORBIDDEN`). `size` defaults to 5 and is cut to 20. No new error code.
 - One name search for the whole app (SESSION-GL-64): a user is found by first and last name only, from the start of a name or of a later word of it, ignoring case and accents ("tuan" finds "Tuấn", "dang" finds "Đặng"); every typed word must match. `GET /api/users/search` follows the same rule, so it **no longer matches the username and no longer matches the middle of a word**; its response shape is unchanged. A user with neither a first nor a last name is not found by name.
 - Group member search for tagging (B23): `GET /api/groups/{groupId}/members/search?q=&size=` returns the group's members whose first or last name matches (the same rule as `thread-people`: word-start, ignoring case and accents, every typed word must match) as `userId`, `fullName`, `avatarUrl`. Members only, any role: 404 `GROUP_NOT_FOUND` for a missing or deleted group, 403 `GROUP_MEMBER_REQUIRED` for anyone else, public or private. `size` defaults to 5 and is cut to 20. The caller can appear; a deactivated member never does. No new error code, no migration.
+- Result changes tell the session (SESSION-GL-63): a records change set that saved at least one operation writes one system comment in the session thread ("{name} has updated the result") and notifies every `JOINED`, `REQUESTED` and `INVITED` participant except the actor (new routing key `session.record.changed`; unread ones fold into one notification per session, so a busy session does not flood anyone). A change set where nothing was saved writes neither.
+- System entries carry a code (SESSION-GL-63): `CommentResponse` and `PostResponse` gain `systemCode` and `systemParams` (both null for a user's comment or post and for every entry written before this release); codes `SESSION_JOINED`, `SESSION_LEFT`, `SESSION_STARTED`, `SESSION_RECORDS_UPDATED` (session thread) and `GROUP_MEMBER_JOINED`, `GROUP_MEMBER_JOINED_INVITED` (the group welcome post). `content` still carries the English text, so a client that does not read the code shows what it showed before. Old entries are not backfilled.
 - Sport result schema (SESSION-50): `GET /api/sports/{id}/result-schema` (members), `GET /api/sports/all/{id}/result-schema` and `PUT /api/sports/{id}/result-schema` (admin). The schema tells the client what a recorded result is and carries `maxRecords` (default 100, at most 500). Each record is capped at 4 KB. A sport with no schema has no result logging; no schema is seeded, so an admin must `PUT` one for a sport before its sessions can record results. Invalid limits are `400 SPORT_RESULT_SCHEMA_INVALID`.
 
 ### Applied automatically
@@ -22,10 +24,12 @@ writes a fresh template and uses the section as the release PR description. Vers
 - `V085` (`male_slots`, `female_slots`, both with a `>= 0` check), `V086` (`game_mood INTEGER NOT NULL DEFAULT 5` with a 1-10 check; existing rows become 5) and `V087` (`fee_note VARCHAR(300)`) run when the server starts. Each only adds a column, so they are quick on the current table size.
 - `V089__session_records.sql` (SESSION-50) adds the nullable `sports.result_schema` column and creates `session_records` (a new table, no existing data touched). It runs when the server starts and is quick.
 - `V090__users_name_search_unaccent_trigram.sql` (SESSION-GL-64) creates the `unaccent` and `pg_trgm` extensions, the function `immutable_unaccent(text)` and two GIN indexes on `users` (first and last name). It runs when the server starts; building the two indexes takes a short write lock on `users` (a moment at the current size).
+- `V091__system_entry_code_and_params.sql` (SESSION-GL-63) adds the nullable `system_code` and `system_params` columns to `comments` and `posts`. Only columns are added (no data rewritten, no index), so it is quick; it runs when the server starts.
 
 ### Manual actions on the box
 - To switch game logging on for a sport, sign in as ADMIN and `PUT /api/sports/{sportId}/result-schema` for it (no schema is seeded). Badminton example and the fields: `modules/session/docs/SESSION_RECORDS_DESIGN.md`, section "Badminton result schema example". Without it the sport's sessions answer `409 SESSION_RECORD_NOT_LOGGABLE`.
 - B23: none.
+- SESSION-GL-63: none.
 - SESSION-GL-64: none expected. `V090` creates two trusted extensions as the app role (the database owner), and the production Postgres image (`postgres:16` plus PostGIS) ships both. If the server fails to start with `permission denied to create extension`, run `CREATE EXTENSION IF NOT EXISTS unaccent; CREATE EXTENSION IF NOT EXISTS pg_trgm;` once in the server database as the `postgres` superuser, then restart the server.
 
 ### Rollback
@@ -35,6 +39,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - `V089` only adds a column and one table; the previous server image ignores them, so roll the image back as usual and no restore is needed. Records already written stay in the tables and are not visible to the older server.
 - B23 adds one read endpoint and no data; the previous server image simply does not have it (a client that calls it would get 404, and CLIENT-GL-50 part 2 is not shipped yet), so roll the image back as usual.
 - `V090` only adds extensions, a function and two indexes; the previous server image ignores them, so roll the image back as usual and no restore is needed. (The previous release's user search matches the middle of a word and the username again.)
+- `V091` only adds two nullable columns to each of two tables; the previous server image ignores them, so roll the image back as usual and no restore is needed. Entries written meanwhile keep their code and show their English text on the older server.
 
 ### Depends on
 - Client: CLIENT-SESSION-34 (form, Schedule button and en/vi copy for the new error codes). Ship the server and the client together.
@@ -85,4 +90,4 @@ writes a fresh template and uses the section as the release PR description. Vers
 ### Changes
 
 - Released before release notes existed; see `git log server-v0.1.0`.
-
+- SESSION-GL-63: none to deploy first. The client (CLIENT-GL-51) shows system entries and the new notification in en and vi; until it ships, the thread shows the English `content` and the new notification type shows the client's generic text. Deploy the server first.

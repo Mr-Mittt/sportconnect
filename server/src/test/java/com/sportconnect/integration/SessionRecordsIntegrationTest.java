@@ -12,8 +12,15 @@ import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.record.SessionRecordRepository;
+import com.sportconnect.session.entity.SessionOutboxEvent;
+import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.entity.Comment;
+import com.sportconnect.social.post.entity.Post;
+import com.sportconnect.social.post.repository.CommentRepository;
+import com.sportconnect.social.post.repository.PostRepository;
 import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.repository.SportRepository;
 import com.sportconnect.user.entity.User;
@@ -38,7 +45,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -55,7 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * parallel change sets. Note: this suite runs on H2, so the parallel tests prove the portable JPA
  * logic and not PostgreSQL's row-lock behaviour.
  */
-class SessionRecordsIntegrationTest extends BaseIT {
+class SessionRecordsIntegrationTest extends RedisBaseIT {
 
     private static final Integer ROLE_OWNER = 1;
     private static final Integer ROLE_MEMBER = 3;
@@ -68,8 +74,9 @@ class SessionRecordsIntegrationTest extends BaseIT {
     @Autowired private UserRepository userRepository;
     @Autowired private SportRepository sportRepository;
     @Autowired private CacheManager cacheManager;
-
-    private final AtomicLong postIdSeq = new AtomicLong(1);
+    @Autowired private PostRepository postRepository;
+    @Autowired private CommentRepository commentRepository;
+    @Autowired private SessionOutboxEventRepository outboxRepository;
 
     private UUID hostId;
     private UUID aliceId;      // JOINED in both sessions, group member
@@ -107,11 +114,14 @@ class SessionRecordsIntegrationTest extends BaseIT {
     }
 
     private void clearAll() {
+        outboxRepository.deleteAll();
+        commentRepository.deleteAll();
         recordRepository.deleteAll();
         participantRepository.deleteAll();
         sessionRepository.deleteAll();
         groupMemberRepository.deleteAll();
         groupRepository.deleteAll();
+        postRepository.deleteAll();
         userRepository.deleteAll();
         sportRepository.deleteAll();
     }
@@ -141,13 +151,28 @@ class SessionRecordsIntegrationTest extends BaseIT {
         participantRepository.save(SessionParticipant.builder().sessionId(sessionId).userId(userId).status(status).build());
     }
 
+    /** The session's real {@code SESSION_POST} anchor: the records change set writes a system comment into its thread. */
+    private Long sessionPostAnchor() {
+        return postRepository.save(Post.builder().userId(hostId).groupId(null).postType(PostType.SESSION_POST)
+                .content("Session: fixture").visibility("private").isActive(true).build()).getId();
+    }
+
+    private List<Comment> thread(Long sessionId) {
+        Long postId = sessionRepository.findById(sessionId).orElseThrow().getPostId();
+        return commentRepository.findAll().stream().filter(c -> postId.equals(c.getPostId())).toList();
+    }
+
+    private List<SessionOutboxEvent> events(String type) {
+        return outboxRepository.findAll().stream().filter(e -> type.equals(e.getEventType())).toList();
+    }
+
     /** A session whose end is {@code endsInSeconds} from now (negative: it ended that long ago). */
     private Long seedSession(Long sessionGroupId, SessionStatus status, long endsInSeconds) {
         Instant end = Instant.now().plusSeconds(endsInSeconds);
         Long id = sessionRepository.save(Session.builder().title("Records session")
                 .groupId(sessionGroupId)
                 .isPublic(sessionGroupId == null)
-                .postId(postIdSeq.getAndIncrement())
+                .postId(sessionPostAnchor())
                 .sessionType(sessionGroupId == null ? SessionType.STANDALONE : SessionType.GROUP_RECURRING)
                 .createdBy(hostId)
                 .sportId(sportId)
@@ -199,6 +224,100 @@ class SessionRecordsIntegrationTest extends BaseIT {
 
     private JsonNode json(MvcResult result) throws Exception {
         return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    // -- SESSION-GL-63: the system comment and the notification event ---------------------------
+
+    @Test
+    void aSavedChangeSet_writesOneLocalisableSystemCommentAndOneRecordChangedEvent() throws Exception {
+        Long sessionId = ongoingStandalone();
+        authenticateAs(aliceId);
+
+        send(sessionId, addChange(aliceId, bobId)).andExpect(status().isOk());
+
+        List<Comment> comments = thread(sessionId);
+        assertThat(comments).hasSize(1);
+        Comment comment = comments.get(0);
+        assertThat(comment.getCommentType().name()).isEqualTo("SESSION_SYSTEM");
+        assertThat(comment.getUserId()).isEqualTo(hostId);   // authored by the session's creator, like every system entry
+        assertThat(comment.getContent()).isEqualTo("alice User has updated the result");
+        assertThat(comment.getSystemCode().name()).isEqualTo("SESSION_RECORDS_UPDATED");
+        assertThat(comment.getSystemParams()).containsEntry("name", "alice User");
+
+        List<SessionOutboxEvent> recordEvents = events("session.record.changed");
+        assertThat(recordEvents).hasSize(1);
+        JsonNode payload = objectMapper.readTree(recordEvents.get(0).getPayload());
+        assertThat(payload.get("sessionId").asLong()).isEqualTo(sessionId);
+        assertThat(payload.get("actorId").asText()).isEqualTo(aliceId.toString());
+
+        // The comment must not also ping everyone as "a new comment".
+        assertThat(events("session.comment.created")).isEmpty();
+    }
+
+    @Test
+    void theThreadEndpoint_returnsTheCodeAndParamsOfTheSystemComment() throws Exception {
+        Long sessionId = ongoingStandalone();
+        authenticateAs(aliceId);
+        send(sessionId, addChange(aliceId, bobId)).andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/sessions/{id}/comments", sessionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].commentType").value("SESSION_SYSTEM"))
+                .andExpect(jsonPath("$.data.content[0].systemCode").value("SESSION_RECORDS_UPDATED"))
+                .andExpect(jsonPath("$.data.content[0].systemParams.name").value("alice User"))
+                .andExpect(jsonPath("$.data.content[0].content").value("alice User has updated the result"));
+    }
+
+    @Test
+    void twoChangeSets_writeTwoComments_andManyOperationsInOneWriteJustOne() throws Exception {
+        Long sessionId = ongoingStandalone();
+        authenticateAs(aliceId);
+
+        send(sessionId, changes(List.of(add(List.of(aliceId)), add(List.of(bobId)), add(List.of(aliceId, bobId))),
+                List.of(), List.of())).andExpect(status().isOk());
+        assertThat(thread(sessionId)).hasSize(1);
+
+        send(sessionId, addChange(aliceId)).andExpect(status().isOk());
+        assertThat(thread(sessionId)).hasSize(2);
+        assertThat(events("session.record.changed")).hasSize(2);
+    }
+
+    @Test
+    void aChangeSetWhereNothingWasSaved_writesNoCommentAndNoEvent() throws Exception {
+        Long sessionId = ongoingStandalone();
+        authenticateAs(aliceId);
+        UUID ref = UUID.randomUUID();
+        String once = changes(List.of(add(ref, List.of(aliceId, bobId), Map.of("winner", 1))), List.of(), List.of());
+        send(sessionId, once).andExpect(status().isOk());
+        assertThat(thread(sessionId)).hasSize(1);
+
+        // the same request again (a retry): UNCHANGED
+        send(sessionId, once).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.results[0].status").value("UNCHANGED"));
+        // a player who never joined: the one record is REJECTED
+        send(sessionId, addChange(aliceId, carolId)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.results[0].status").value("REJECTED"));
+        // a delete of a record that does not exist: UNCHANGED
+        send(sessionId, changes(List.of(), List.of(), List.of(999999L))).andExpect(status().isOk());
+
+        assertThat(thread(sessionId)).hasSize(1);
+        assertThat(events("session.record.changed")).hasSize(1);
+    }
+
+    @Test
+    void aRefusedChangeSet_writesNothing() throws Exception {
+        Long sessionId = ongoingStandalone();
+        authenticateAs(aliceId);
+        UUID ref = UUID.randomUUID();
+
+        // a repeated clientRef refuses the whole request
+        send(sessionId, changes(List.of(add(ref, List.of(aliceId), Map.of("winner", 1)),
+                add(ref, List.of(bobId), Map.of("winner", 1))), List.of(), List.of()))
+                .andExpect(status().isBadRequest());
+
+        assertThat(thread(sessionId)).isEmpty();
+        assertThat(events("session.record.changed")).isEmpty();
+        assertThat(recordRepository.count()).isZero();
     }
 
     // -- access boundary ------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import com.sportconnect.location.api.service.LocationService
 import com.sportconnect.session.api.service.SessionService
 import com.sportconnect.social.post.api.dto.PostResponse
 import com.sportconnect.social.post.api.dto.PostType
+import com.sportconnect.social.post.api.dto.SystemCode
 import com.sportconnect.social.post.api.service.PostService
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.service.SportService
@@ -692,7 +693,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.save({ it.userId == userId && it.roleId == memberRole.id })
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
-        1 * postService.createSystemPost(testGroup.id, approverId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, approverId, _ as String, _ as SystemCode, _ as Map)
 
         and: "invitation is accepted and the join request is recorded as accepted, crediting the invitation's approver"
         1 * invitationRepository.save({ it.status == "accepted" })
@@ -751,7 +752,8 @@ class GroupServiceImplSpec extends Specification {
         and: "welcome post is created, authored by the owner"
         1 * userService.getUserSummariesByIds([otherUserId]) >> [(otherUserId): testUser]
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
-        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, userId, { it.endsWith("joined the group 👋") && !it.contains("invited by") },
+                SystemCode.GROUP_MEMBER_JOINED, { it.keySet() == ["name"] as Set && it.name == testUser.fullName })
     }
 
     def "acceptJoinRequest should throw BadRequestException when group is at its member cap"() {
@@ -2594,7 +2596,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save({ it.userId == otherUserId && it.roleId == memberRole.id })
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [adminMember]
-        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String, _ as SystemCode, _ as Map)
         1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
 
         and:
@@ -2746,7 +2748,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.save({ it.userId == otherUserId && it.roleId == memberRole.id })
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
-        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String, _ as SystemCode, _ as Map)
 
         and: "the pre-existing join request is closed out as accepted, not left dangling"
         1 * joinRequestRepository.save({ it.status == "accepted" && it.reviewedBy == userId })
@@ -2839,7 +2841,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.save({ it.userId == inviteeId && it.roleId == memberRole.id })
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
-        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String, _ as SystemCode, _ as Map)
         1 * userService.getUserSummariesByIds([inviteeId, otherUserId]) >> [(inviteeId): testUser, (otherUserId): testUser]
 
         and: "the pre-existing join request is closed out as accepted by the approving owner, not left dangling"
@@ -2872,7 +2874,9 @@ class GroupServiceImplSpec extends Specification {
         1 * userService.getUserSummariesByIds([inviteeId, otherUserId]) >> [(inviteeId): testUser, (otherUserId): testUser]
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
-        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, userId, { it.contains("invited by") },
+                SystemCode.GROUP_MEMBER_JOINED_INVITED,
+                { it.keySet() == ["name", "inviter"] as Set && it.name == testUser.fullName && it.inviter == testUser.fullName })
     }
 
     def "acceptInvitation should throw BadRequestException when group is at its member cap"() {
@@ -3505,7 +3509,7 @@ class GroupServiceImplSpec extends Specification {
         1 * joinRequestRepository.save({ GroupJoinRequest req -> req.status == "accepted" })
         1 * userService.getUserSummariesByIds([otherUserId]) >> [(otherUserId): testUser]
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [ownerMember]
-        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String, _ as SystemCode, _ as Map)
 
         and: "a group.member_added event is published for the new member, not the admin who approved it"
         1 * stringRedisTemplate.opsForStream() >> streamOps
@@ -3741,7 +3745,7 @@ class GroupServiceImplSpec extends Specification {
         1 * groupMemberRepository.save({ it.userId == otherUserId && it.roleId == memberRole.id })
         1 * groupRoleRepository.findByRoleName("group_member") >> Optional.of(memberRole)
         1 * groupMemberRepository.findByGroupIdAndRoleId(testGroup.id, ownerRole.id) >> [adminMember]
-        1 * postService.createSystemPost(testGroup.id, userId, _ as String)
+        1 * postService.createSystemPost(testGroup.id, userId, _ as String, _ as SystemCode, _ as Map)
         1 * userService.getUserSummariesByIds([otherUserId, userId]) >> [(userId): testUser, (otherUserId): testUser]
 
         and: "the pre-existing join request is closed out as accepted, not left dangling"

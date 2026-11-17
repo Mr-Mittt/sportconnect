@@ -48,6 +48,7 @@ import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
@@ -2092,11 +2093,23 @@ public class GroupServiceImpl implements GroupService {
         Map<UUID, UserSummaryResponse> usersById = userService.getUserSummariesByIds(idsToResolve);
         String newMemberName = usersById.get(newMemberId).getFullName();
 
-        String content = inviterId != null
-                ? newMemberName + " joined the group — invited by " + usersById.get(inviterId).getFullName() + " 👋"
-                : newMemberName + " joined the group 👋";
+        // SESSION-GL-63: the English text stays as the fallback; the code and the baked-in names let the client show
+        // the post in the user's language.
+        String content;
+        SystemCode systemCode;
+        Map<String, String> systemParams;
+        if (inviterId != null) {
+            String inviterName = usersById.get(inviterId).getFullName();
+            content = newMemberName + " joined the group — invited by " + inviterName + " 👋";
+            systemCode = SystemCode.GROUP_MEMBER_JOINED_INVITED;
+            systemParams = Map.of("name", newMemberName, "inviter", inviterName);
+        } else {
+            content = newMemberName + " joined the group 👋";
+            systemCode = SystemCode.GROUP_MEMBER_JOINED;
+            systemParams = Map.of("name", newMemberName);
+        }
 
-        postService.createSystemPost(groupId, resolveGroupOwnerId(groupId), content);
+        postService.createSystemPost(groupId, resolveGroupOwnerId(groupId), content, systemCode, systemParams);
     }
 
     /**

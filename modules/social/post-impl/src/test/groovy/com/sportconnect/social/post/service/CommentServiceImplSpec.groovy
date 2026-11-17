@@ -10,6 +10,7 @@ import com.sportconnect.social.post.api.dto.CommentResponse
 import com.sportconnect.social.post.api.dto.CommentType
 import com.sportconnect.social.post.api.dto.CreateCommentRequest
 import com.sportconnect.social.post.api.dto.PostType
+import com.sportconnect.social.post.api.dto.SystemCode
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest
 import com.sportconnect.social.post.entity.Comment
 import com.sportconnect.social.post.entity.CommentLike
@@ -779,7 +780,8 @@ class CommentServiceImplSpec extends Specification {
         Comment saved = null
 
         when:
-        commentService.createSystemSessionComment(postId, sessionCreatorId, "Alice Nguyen joined the session")
+        commentService.createSystemSessionComment(postId, sessionCreatorId, "Alice Nguyen joined the session",
+                SystemCode.SESSION_JOINED, [name: "Alice Nguyen"])
 
         then: "the SESSION_POST precheck runs batched, PostGate is never consulted"
         1 * postRepository.findByIdInAndIsActiveTrue([postId]) >> [post]
@@ -791,6 +793,10 @@ class CommentServiceImplSpec extends Specification {
         saved.userId == sessionCreatorId
         saved.commentType == CommentType.SESSION_SYSTEM
         saved.content == "Alice Nguyen joined the session"
+
+        and: "SESSION-GL-63: the code and its params are stored next to the English fallback"
+        saved.systemCode == SystemCode.SESSION_JOINED
+        saved.systemParams == [name: "Alice Nguyen"]
 
         and: "no preview-cache write and no last-interaction bump — both deliberate, see the method's Javadoc"
         0 * zSetOps._
@@ -819,6 +825,56 @@ class CommentServiceImplSpec extends Specification {
         saved.every { it.commentType == CommentType.SESSION_SYSTEM }
         saved*.postId == postIds
         saved*.userId == creators
+    }
+
+    def "createSystemSessionComments stores each request's own code and params (SESSION-GL-63)"() {
+        given:
+        def post = Post.builder().id(10L).postType(PostType.SESSION_POST).isActive(true).build()
+        def author = UUID.randomUUID()
+        def requests = [
+                SystemSessionCommentRequest.builder().postId(10L).authorUserId(author).content("Alex has updated the result")
+                        .systemCode(SystemCode.SESSION_RECORDS_UPDATED).systemParams([name: "Alex"]).build(),
+                SystemSessionCommentRequest.builder().postId(10L).authorUserId(author).content("The session has started")
+                        .systemCode(SystemCode.SESSION_STARTED).build(),
+                SystemSessionCommentRequest.builder().postId(10L).authorUserId(author).content("Old style entry").build(),
+        ]
+        List<Comment> saved = null
+
+        when:
+        commentService.createSystemSessionComments(requests)
+
+        then:
+        1 * postRepository.findByIdInAndIsActiveTrue([10L]) >> [post]
+        1 * commentRepository.saveAll(_ as List) >> { List args -> saved = args[0]; args[0] }
+        saved*.systemCode == [SystemCode.SESSION_RECORDS_UPDATED, SystemCode.SESSION_STARTED, null]
+        saved[0].systemParams == [name: "Alex"]
+        saved[1].systemParams == null
+        saved[2].systemParams == null
+    }
+
+    def "a system comment comes back with its code and params, a user's comment with none (SESSION-GL-63)"() {
+        given:
+        def pageable = PageRequest.of(0, 20)
+        def post = Post.builder().id(postId).isActive(true).build()
+        def system = Comment.builder().id(commentId).postId(postId).userId(userId).content("Alex has updated the result")
+                .commentType(CommentType.SESSION_SYSTEM).systemCode(SystemCode.SESSION_RECORDS_UPDATED).systemParams([name: "Alex"])
+                .isActive(true).createdAt(LocalDateTime.now()).build()
+        def user = Comment.builder().id(commentId + 1).postId(postId).userId(userId).content("hello")
+                .isActive(true).createdAt(LocalDateTime.now()).build()
+
+        when:
+        def result = commentService.getPostComments(postId, userId, pageable)
+
+        then:
+        1 * postRepository.findById(postId) >> Optional.of(post)
+        1 * postGate.require(post, userId, _, _, _, _) >> post
+        1 * commentRepository.findByPostIdAndIsActiveTrueAndParentCommentIdIsNullOrderByCreatedAtDesc(postId, pageable) >> new PageImpl<>([system, user])
+        _ * commentRepository.findByParentCommentIdInAndIsActiveTrueOrderByCreatedAtAsc(_) >> []
+        _ * userService.getUserSummariesByIds(_) >> [(userId): UserSummaryResponse.builder().id(userId).fullName("U").build()]
+        result.content[0].systemCode == SystemCode.SESSION_RECORDS_UPDATED
+        result.content[0].systemParams == [name: "Alex"]
+        result.content[1].systemCode == null
+        result.content[1].systemParams == null
     }
 
     def "createSystemSessionComments is a no-op on an empty batch"() {

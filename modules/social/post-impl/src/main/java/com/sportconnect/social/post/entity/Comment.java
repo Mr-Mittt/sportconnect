@@ -1,6 +1,7 @@
 package com.sportconnect.social.post.entity;
 
 import com.sportconnect.social.post.api.dto.CommentType;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,9 +16,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -53,6 +57,16 @@ public class Comment {
     @Column(name = "comment_type", nullable = false)
     @Builder.Default
     private CommentType commentType = CommentType.USER;
+
+    /** SESSION-GL-63: the stable code of a system entry, shown by the client in the user's language; null otherwise. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "system_code", length = 40)
+    private SystemCode systemCode;
+
+    /** SESSION-GL-63: the params of {@link #systemCode} (for example {@code name}); null when there is no code. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "system_params", columnDefinition = "jsonb")
+    private Map<String, String> systemParams;
 
     @Column(name = "is_active")
     @Builder.Default

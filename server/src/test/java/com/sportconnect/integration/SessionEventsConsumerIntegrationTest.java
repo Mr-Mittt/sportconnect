@@ -10,6 +10,7 @@ import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
+import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
@@ -281,5 +282,73 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
         assertThat(notificationRepository
                 .findByRecipientUserIdOrderByUpdatedAtDesc(commenterId, PageRequest.of(0, 10))
                 .getContent()).isEmpty();
+    }
+    /**
+     * SESSION-GL-63 - the only place {@code session.record.changed}'s full path is exercised for real: the exchange
+     * binding for the new routing key, recipient resolution through the real {@code getParticipantIdsByStatuses} for
+     * JOINED, REQUESTED and INVITED participants (in a COMPLETED session, where records are also logged), and a real
+     * {@code Notification} row. Someone who left, and the actor, are told nothing.
+     */
+    @Test
+    void sessionRecordChangedEvent_consumedOverRealRabbitMq_notifiesJoinedRequestedAndInvitedButNotTheActorOrWhoLeft()
+            throws Exception {
+        UUID actorId = UUID.randomUUID();
+        UUID joinedId = UUID.randomUUID();
+        UUID requestedId = UUID.randomUUID();
+        UUID invitedId = UUID.randomUUID();
+        UUID leftId = UUID.randomUUID();
+        Long sessionId = createSessionWithJoinedParticipant(actorId, joinedId, SessionStatus.COMPLETED);
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId).userId(actorId).status(ParticipantStatus.JOINED).build());
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId).userId(requestedId).status(ParticipantStatus.REQUESTED).build());
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId).userId(invitedId).status(ParticipantStatus.INVITED).build());
+        sessionParticipantRepository.save(SessionParticipant.builder()
+                .sessionId(sessionId).userId(leftId).status(ParticipantStatus.LEFT).build());
+        SessionRecordsChangedEvent payload = SessionRecordsChangedEvent.builder()
+                .sessionId(sessionId).actorId(actorId).build();
+
+        publish("session.record.changed", "it-test:" + UUID.randomUUID(), payload);
+
+        for (UUID recipientId : List.of(joinedId, requestedId, invitedId)) {
+            await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+                List<Notification> notifications = notificationRepository
+                        .findByRecipientUserIdOrderByUpdatedAtDesc(recipientId, PageRequest.of(0, 10))
+                        .getContent();
+                assertThat(notifications).hasSize(1);
+                Notification notification = notifications.get(0);
+                assertThat(notification.getType()).isEqualTo("session.record.changed");
+                assertThat(notification.getEntityType()).isEqualTo("SESSION");
+                assertThat(notification.getEntityId()).isEqualTo(String.valueOf(sessionId));
+                assertThat(notification.getActorIds()).containsExactly(actorId);
+            });
+        }
+        for (UUID silentId : List.of(actorId, leftId)) {
+            assertThat(notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(silentId, PageRequest.of(0, 10))
+                    .getContent()).isEmpty();
+        }
+    }
+
+    /** A second change before the first notification was read adds to the same unread row: no flood. */
+    @Test
+    void twoRecordChangedEvents_foldIntoOneUnreadNotificationPerRecipient() throws Exception {
+        UUID actorId = UUID.randomUUID();
+        UUID participantId = UUID.randomUUID();
+        Long sessionId = createSessionWithJoinedParticipant(actorId, participantId, SessionStatus.ONGOING);
+        SessionRecordsChangedEvent payload = SessionRecordsChangedEvent.builder()
+                .sessionId(sessionId).actorId(actorId).build();
+
+        publish("session.record.changed", "it-test:" + UUID.randomUUID(), payload);
+        publish("session.record.changed", "it-test:" + UUID.randomUUID(), payload);
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(participantId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).hasSize(1);
+            assertThat(notifications.get(0).getActorCount()).isEqualTo(2);
+        });
     }
 }

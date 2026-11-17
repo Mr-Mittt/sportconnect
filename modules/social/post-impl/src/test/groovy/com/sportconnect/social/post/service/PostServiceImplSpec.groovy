@@ -8,6 +8,7 @@ import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.social.post.access.PostGate
 import com.sportconnect.social.post.api.dto.CreatePostRequest
+import com.sportconnect.social.post.api.dto.SystemCode
 import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.entity.Post
 import com.sportconnect.social.post.entity.PostLike
@@ -213,12 +214,14 @@ class PostServiceImplSpec extends Specification {
 
     def "createSystemPost creates a GROUP_SYSTEM post authored by the given user"() {
         when:
-        postService.createSystemPost(groupId, userId, "Alice joined the group 👋")
+        postService.createSystemPost(groupId, userId, "Alice joined the group 👋",
+                SystemCode.GROUP_MEMBER_JOINED, [name: "Alice"])
 
         then:
         1 * postRepository.save({
             Post p -> p.postType == PostType.GROUP_SYSTEM && p.groupId == groupId &&
-                    p.userId == userId && p.content == "Alice joined the group 👋"
+                    p.userId == userId && p.content == "Alice joined the group 👋" &&
+                    p.systemCode == SystemCode.GROUP_MEMBER_JOINED && p.systemParams == [name: "Alice"]
         })
     }
 
@@ -464,6 +467,26 @@ class PostServiceImplSpec extends Specification {
     }
 
     // ── getPostById ───────────────────────────────────────────────────────────
+
+    def "getPostById returns the code and params of a GROUP_SYSTEM post, and none for an ordinary post (SESSION-GL-63)"() {
+        given:
+        def welcome = Post.builder().id(postId).userId(userId).postType(PostType.GROUP_SYSTEM).content("Alice joined the group 👋")
+                .visibility("public").isActive(true).createdAt(java.time.LocalDateTime.now())
+                .systemCode(SystemCode.GROUP_MEMBER_JOINED).systemParams([name: "Alice"]).build()
+        def plain = savedPost()
+
+        when:
+        def coded = postService.getPostById(postId, userId)
+        def ordinary = postService.getPostById(postId, userId)
+
+        then:
+        2 * postRepository.findById(postId) >>> [Optional.of(welcome), Optional.of(plain)]
+        2 * postGate.require(_, userId, _, _, _, _) >>> [welcome, plain]
+        coded.systemCode == SystemCode.GROUP_MEMBER_JOINED
+        coded.systemParams == [name: "Alice"]
+        ordinary.systemCode == null
+        ordinary.systemParams == null
+    }
 
     def "getPostById returns likeCount and commentCount from DB on cache miss"() {
         given:

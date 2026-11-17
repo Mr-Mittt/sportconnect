@@ -11,6 +11,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
+import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import com.sportconnect.session.api.event.SessionUpdatedEvent;
 import java.nio.charset.StandardCharsets;
@@ -101,6 +102,13 @@ public class SessionEventsConsumer {
                 SessionParticipantLeftEvent e = objectMapper.readValue(body, SessionParticipantLeftEvent.class);
                 yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(),
                         PARTICIPANT_JOINED_RECIPIENT_STATUSES, ACTIVE_SESSION_STATUSES);
+            }
+            case "session.record.changed" -> {
+                // SESSION-GL-63: everyone in the session (joined, requested, invited) but the actor; records are
+                // logged in ONGOING and COMPLETED sessions, so any session status fans out.
+                SessionRecordsChangedEvent e = objectMapper.readValue(body, SessionRecordsChangedEvent.class);
+                yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(),
+                        COMMENT_RECIPIENT_STATUSES, ANY_SESSION_STATUS);
             }
             case "session.details.updated" -> {
                 SessionUpdatedEvent e = objectMapper.readValue(body, SessionUpdatedEvent.class);

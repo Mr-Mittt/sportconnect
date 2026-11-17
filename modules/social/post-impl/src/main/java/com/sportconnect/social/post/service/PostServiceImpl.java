@@ -14,6 +14,7 @@ import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.dto.PostMediaResponse;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.service.HashtagService;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.social.post.entity.Comment;
@@ -164,12 +165,15 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
-    public void createSystemPost(Long groupId, UUID authorUserId, String content) {
+    public void createSystemPost(Long groupId, UUID authorUserId, String content, SystemCode systemCode,
+                                 Map<String, String> systemParams) {
         Post post = Post.builder()
                 .userId(authorUserId)
                 .groupId(groupId)
                 .postType(PostType.GROUP_SYSTEM)
                 .content(content)
+                .systemCode(systemCode)
+                .systemParams(systemParams)
                 .visibility("public")
                 .build();
         postRepository.save(post);
@@ -589,6 +593,8 @@ public class PostServiceImpl implements PostService {
                 .commentCount(commentCount)
                 .shareCount(0L)
                 .isLikedByCurrentUser(isLiked)
+                .systemCode(post.getSystemCode())
+                .systemParams(post.getSystemParams())
                 .createdAt(post.getCreatedAt())
                 .updatedAt(post.getUpdatedAt())
                 .broadcastEndTime(post.getBroadcastEndTime())

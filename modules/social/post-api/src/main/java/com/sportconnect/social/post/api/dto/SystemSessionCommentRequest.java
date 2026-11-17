@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -29,4 +30,10 @@ public class SystemSessionCommentRequest {
     private UUID authorUserId;
 
     private String content;
+
+    /** SESSION-GL-63: the code the client localises; {@code content} stays as the English fallback. */
+    private SystemCode systemCode;
+
+    /** SESSION-GL-63: the params of {@code systemCode} (for example {@code name}); may be null. */
+    private Map<String, String> systemParams;
 }

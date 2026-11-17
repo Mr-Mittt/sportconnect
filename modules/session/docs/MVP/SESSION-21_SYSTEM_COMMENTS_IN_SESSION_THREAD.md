@@ -194,3 +194,7 @@ isn't obvious from the diff.
 ---
 
 **Filed:** 2026-08-19, user request while closing out SESSION-19. **Delivered:** 2026-08-19.
+
+---
+
+**Update (SESSION-GL-63, 2026-11-17):** a system comment now also carries a `systemCode` and `systemParams` (`SESSION_JOINED`, `SESSION_LEFT`, `SESSION_STARTED`, `SESSION_RECORDS_UPDATED`) next to the English `content`, so the client shows its own en/vi sentence; `content` stays the fallback. See `SESSION-GL-63_SYSTEM_COMMENT_AND_NOTIFICATION_WHEN_A_RECORD_CHANGES.md`.
