@@ -1,9 +1,5 @@
 package com.sportconnect.session.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sportconnect.common.attributes.AttributeSchema;
-import com.sportconnect.common.attributes.value.AttributeValueFilter;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
@@ -133,11 +129,8 @@ public class SessionServiceImpl implements SessionService {
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
     private final SessionGenerationService sessionGenerationService;
-    private final ObjectMapper objectMapper;
-
-    /** SESSION-23 — same serialized-size ceiling profile attributes use
-     * ({@code UserSportProfileServiceImpl.MAX_ATTRIBUTES_BYTES}); checked against the filtered map. */
-    private static final int MAX_ATTRIBUTES_BYTES = 4096;
+    // SESSION-23, extracted by SESSION-GROUP-4: the session attribute filter, shared with the group recurrence configurations.
+    private final SessionAttributeResolver attributeResolver;
 
     /** SESSION-65 — a {@code JOINED} participant may leave only until this long before {@code scheduledStart}.
      * The client mirrors the number ({@code LEAVE_CUTOFF_MINUTES} in {@code leaveCutoff.ts}); this is the authority. */
@@ -261,7 +254,7 @@ public class SessionServiceImpl implements SessionService {
         // SESSION-23: filter the submitted attributes against the sport's session schema (replace
         // semantics — the filtered map is the whole stored value). Null when none were supplied,
         // which also short-circuits the schema fetch for a session whose sport carries no schema.
-        Map<String, Object> attributes = resolveAttributes(request.getAttributes(), sportId);
+        Map<String, Object> attributes = attributeResolver.resolve(request.getAttributes(), sportId);
 
         // SESSION-10/A17: the companion SESSION_POST is created first, inline in this same
         // @Transactional method, so a failure here rolls back the whole session creation instead
@@ -644,7 +637,7 @@ public class SessionServiceImpl implements SessionService {
         // never fetches the schema (and so never 404s on a since-deactivated sport). An explicit
         // empty map filters to empty and clears them.
         if (request.getAttributes() != null) {
-            session.setAttributes(resolveAttributes(request.getAttributes(), session.getSportId()));
+            session.setAttributes(attributeResolver.resolve(request.getAttributes(), session.getSportId()));
         }
         // Re-resolved unconditionally so the FIXED/feeAmountVnd invariant holds regardless of
         // which fee field (if either) this request touched - catches "switched to FIXED without
@@ -693,52 +686,6 @@ public class SessionServiceImpl implements SessionService {
                         .systemParams(change.params())
                         .build())
                 .collect(Collectors.toList()));
-    }
-
-    /**
-     * SESSION-23 — turns a caller-supplied session attribute map into the map to persist.
-     *
-     * <p>Flow: {@code null} request → {@code null} (nothing supplied; the caller stores that as-is,
-     * and the sport's session schema is never fetched). Otherwise fetch the sport's
-     * {@code #ref}-expanded session schema via {@link SportService#getSessionAttributeSchemaRaw},
-     * run the submitted map through common {@link AttributeValueFilter} (unknown / wrong-typed /
-     * switched-off entries dropped silently), then enforce the 4KB serialized cap on what survives.
-     *
-     * <p><b>Deactivated sport:</b> {@code getSessionAttributeSchemaRaw} is active-only and throws
-     * {@code ResourceNotFoundException} for an inactive sport. That propagates here by design — a
-     * caller only reaches this method by actively supplying attributes, and submitting structured
-     * attributes against a dead sport's schema has no meaning, the same stance {@code createSession}
-     * already takes on a caller-supplied inactive {@code sportId}. A create/update that supplies no
-     * attributes never calls this and is unaffected.
-     *
-     * @return the filtered map to store (possibly empty — an explicit clear), or {@code null} when
-     *         nothing was supplied
-     */
-    private Map<String, Object> resolveAttributes(Map<String, Object> requested, Long sportId) {
-        if (requested == null) {
-            return null;
-        }
-        AttributeSchema schema = sportService.getSessionAttributeSchemaRaw(sportId);
-        Map<String, Object> filtered = AttributeValueFilter.filter(requested, schema);
-        validateAttributesSize(filtered);
-        return filtered;
-    }
-
-    /** Rejects a session-attributes map whose JSON serialization exceeds {@link #MAX_ATTRIBUTES_BYTES};
-     * mirrors {@code UserSportProfileServiceImpl.validateAttributesSize}. Checked against the already
-     * filtered map, so an oversized payload that is mostly junk still fails rather than being
-     * silently trimmed to fit. */
-    private void validateAttributesSize(Map<String, Object> attributes) {
-        try {
-            byte[] json = objectMapper.writeValueAsBytes(attributes);
-            if (json.length > MAX_ATTRIBUTES_BYTES) {
-                log.warn("Rejected session attributes: {} bytes exceeds the {}-byte limit", json.length, MAX_ATTRIBUTES_BYTES);
-                throw new BadRequestException("Session attributes exceed the maximum allowed size (4KB)");
-            }
-        } catch (JsonProcessingException e) {
-            log.warn("Rejected session attributes: could not serialize to JSON", e);
-            throw new BadRequestException("Invalid session attributes");
-        }
     }
 
     /** Enforces "feeAmountVnd is meaningful only when feeType is FIXED": returns candidateAmount
@@ -1592,24 +1539,9 @@ public class SessionServiceImpl implements SessionService {
         }
     }
 
-    /**
-     * SESSION-GROUP-1 — the validated members of a {@code SPECIFIC} audience: distinct, without the creator, at least one,
-     * and every one a member of the group (one {@code getMemberUserIds} call, never a per-id check). No upper limit.
-     */
+    /** SESSION-GROUP-1 — the validated members of a {@code SPECIFIC} audience (the rule lives in {@link GroupAudiences}). */
     private List<UUID> resolveSpecificAudience(Long groupId, UUID creatorId, List<UUID> requested) {
-        List<UUID> ids = requested == null ? List.of()
-                : requested.stream().filter(Objects::nonNull).filter(id -> !id.equals(creatorId)).distinct().toList();
-        if (ids.isEmpty()) {
-            throw new BadRequestException("SESSION_AUDIENCE_REQUIRED",
-                    "Choose at least one group member to notify, or notify all members", null);
-        }
-        Set<UUID> members = new HashSet<>(groupService.getMemberUserIds(groupId));
-        long notMembers = ids.stream().filter(id -> !members.contains(id)).count();
-        if (notMembers > 0) {
-            throw new BadRequestException("SESSION_AUDIENCE_NOT_MEMBER",
-                    "Every person to notify must be a member of the group", Map.of("count", notMembers));
-        }
-        return ids;
+        return GroupAudiences.validateSpecific(requested, creatorId, new HashSet<>(groupService.getMemberUserIds(groupId)));
     }
 
     /**

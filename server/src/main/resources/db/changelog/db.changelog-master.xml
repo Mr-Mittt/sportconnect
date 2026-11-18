@@ -252,5 +252,7 @@
     <include file="db/changelog/changes/V093__users_active_partial_index.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-GROUP-1: sessions.group_audience + session_audience_members; the unique (group_id, scheduled_start) key is dropped for a plain index -->
     <include file="db/changelog/changes/V094__group_session_audience_and_drop_unique_start.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-4: group_session_settings, group_session_recurrences, group_session_recurrence_members -->
+    <include file="db/changelog/changes/V095__group_session_settings_and_recurrences.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

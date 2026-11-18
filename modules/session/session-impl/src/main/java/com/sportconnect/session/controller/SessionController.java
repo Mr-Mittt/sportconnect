@@ -381,12 +381,12 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Joined session successfully", null));
     }
 
-    @Operation(summary = "Share a session with friends", description = "SESSION-66 (CLIENT-SESSION-49): any user shares a standalone session, in any status, with up to 50 of their friends. A share is not an invitation: no participant row is written, each friend decides for themself whether to ask to join. Anyone who is not a friend, friends already JOINED, REQUESTED or INVITED, deactivated friends and the caller's own id are silently skipped and counted.")
+    @Operation(summary = "Share a session with friends", description = "SESSION-66 (CLIENT-SESSION-49): any user shares a public standalone session, in any status, with up to 50 of their friends; SESSION-GROUP-3: a member of the group shares a group session with up to 50 other members of the group instead. A share is not an invitation: no participant row is written, each friend decides for themself whether to ask to join. Anyone who is not a friend, friends already JOINED, REQUESTED or INVITED, deactivated friends and the caller's own id are silently skipped and counted.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Shared; the body says how many friends were notified and how many skipped"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "The list is empty, over 50 or holds a null"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "A group session or a private one (SESSION_SHARE_NOT_ALLOWED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "A private session (SESSION_SHARE_NOT_ALLOWED), or a group session by a non-member (SESSION_GROUP_MEMBER_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found (SESSION_NOT_FOUND)")
     })
     @PostMapping("/{sessionId}/shares")

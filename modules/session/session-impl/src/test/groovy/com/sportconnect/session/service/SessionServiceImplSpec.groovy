@@ -100,7 +100,8 @@ class SessionServiceImplSpec extends Specification {
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, sessionAudienceMemberRepository, groupService, locationService, userService,
             userFriendService, sportService, userSportProfileService, postService, commentService, sessionGate,
-            sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService, objectMapper)
+            sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService,
+            new SessionAttributeResolver(sportService, objectMapper))
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()

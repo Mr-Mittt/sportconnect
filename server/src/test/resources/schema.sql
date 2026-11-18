@@ -423,6 +423,42 @@ CREATE TABLE IF NOT EXISTS session_audience_members (
     CONSTRAINT unique_session_audience_member UNIQUE (session_id, user_id)
 );
 
+-- SESSION-GROUP-4 (V095): a group's regular-session settings and recurrence configurations. H2 JSON stands in for JSONB.
+CREATE TABLE IF NOT EXISTS group_session_settings (
+    group_id BIGINT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    mode VARCHAR(10) NOT NULL DEFAULT 'WEEKLY',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS group_session_recurrences (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    mode VARCHAR(10) NOT NULL,
+    day_key INTEGER NOT NULL,
+    start_time TIME NOT NULL,
+    duration_minutes INTEGER,
+    location_id BIGINT,
+    location_note VARCHAR(500),
+    audience VARCHAR(20) NOT NULL DEFAULT 'ALL_MEMBERS',
+    fee_type VARCHAR(10),
+    fee_amount_vnd BIGINT,
+    fee_note VARCHAR(300),
+    game_mood INTEGER NOT NULL DEFAULT 5,
+    attributes JSON,
+    is_draft BOOLEAN NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS group_session_recurrence_members (
+    id BIGSERIAL PRIMARY KEY,
+    recurrence_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    FOREIGN KEY (recurrence_id) REFERENCES group_session_recurrences(id) ON DELETE CASCADE,
+    CONSTRAINT unique_group_session_recurrence_member UNIQUE (recurrence_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS session_participants (
     id BIGSERIAL PRIMARY KEY,
     session_id BIGINT NOT NULL,

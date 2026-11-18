@@ -217,6 +217,14 @@ public interface GroupService {
      */
     List<UUID> getMemberUserIds(Long groupId);
 
+    /**
+     * SESSION-GROUP-4 — the group's current owner: who a server-written group post is authored as (the B9 welcome post's
+     * rule: the current owner, not {@code createdBy}, and no system-user account) and who a generated session is created by.
+     * Throws {@code NotFoundException} for a group with no owner row. No access check of its own: the caller must already have
+     * authorized the request.
+     */
+    UUID getGroupOwnerId(Long groupId);
+
     boolean canManageMembers(Long groupId, UUID userId);
     
     boolean canManagePosts(Long groupId, UUID userId);

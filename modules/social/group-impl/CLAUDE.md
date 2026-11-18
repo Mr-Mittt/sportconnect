@@ -153,6 +153,7 @@ GET    /api/groups/{groupId}/permissions/user-role
   machine-readable rule the session generation job reads. Don't try to derive one from the other.
   `recurrenceLocationNote` (e.g. "always Court 3") is copied verbatim into each generated
   `Session.locationNote` — it's a default, not itself validated against the `Location`.
+- `getGroupOwnerId(groupId)` (SESSION-GROUP-4) is the public form of `resolveGroupOwnerId`: the group's *current* owner, for another domain that must author a server-written group post as the owner or create a session as the owner; no access check of its own. The new group-session configuration (settings, recurrences, `modules/session`) does not live in this module; the single `recurrence*` rule described here is replaced by it and removed by GROUP-1.
 - `getGroupsWithAutoGenerateSessionsEnabled()` is on the `GroupService` interface but is only
   ever meant to be called by `modules/session`'s scheduled job — it's not wired to any controller
   endpoint. It skips a `GroupSettings` row silently (no error) if the corresponding `Group` or its

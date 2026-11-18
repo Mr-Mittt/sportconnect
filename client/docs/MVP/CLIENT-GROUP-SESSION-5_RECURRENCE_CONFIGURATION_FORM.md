@@ -15,4 +15,7 @@ A modal built on `SessionFormSection` and the shared section components, in this
 
 **Consumer census:** `WhenFields`/`useSessionTimeFields`, `WhereFields` and the location picker, `useSessionWhoFields` (not reused: this form has its own state), the shared member picker, `GRP-12` ticket (mark superseded), `errors.json`, I18N-4 rows.
 
+
+**Server contract (SESSION-GROUP-4, built 2026-11-19).** `POST /api/sessions/group/{groupId}/recurrences` (create, takes the group's current mode) and `PUT .../recurrences/{id}` (full replace) with `{ dayKey, startTime, durationMinutes?, locationId?, locationNote?, audience?, audienceUserIds?, feeType?, feeAmountVnd?, feeNote?, gameMood?, attributes? }`. `dayKey` and `startTime` are the only required fields: a missing location, duration or fixed-fee amount is saved as a draft (the response says `draft: true` and `missing`), so the "missing information" warning is the client's (Keep editing / Save as draft) and the save itself never fails for it. Fee defaults to free, game mood to 5. A `SPECIFIC` audience needs at least one member id (no cap). Errors: see CLIENT-GROUP-SESSION-4's contract note.
+
 ---

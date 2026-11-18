@@ -1251,6 +1251,12 @@ public class GroupServiceImpl implements GroupService {
 
     @Override
     @Transactional(readOnly = true)
+    public UUID getGroupOwnerId(Long groupId) {
+        return resolveGroupOwnerId(groupId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean canManageMembers(Long groupId, UUID userId) {
         return hasManagerRole(groupId, userId);
     }
