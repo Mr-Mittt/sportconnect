@@ -410,7 +410,17 @@ CREATE TABLE IF NOT EXISTS sessions (
     attributes JSON,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
-    CONSTRAINT unique_group_session_start UNIQUE (group_id, scheduled_start)
+    -- SESSION-GROUP-1 (V094): who a group session was made for; the unique (group_id, scheduled_start) key is gone.
+    group_audience VARCHAR(20)
+);
+
+-- SESSION-GROUP-1 (V094): the chosen members of a SPECIFIC audience (they decide only who is notified).
+CREATE TABLE IF NOT EXISTS session_audience_members (
+    id BIGSERIAL PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES sessions(id),
+    CONSTRAINT unique_session_audience_member UNIQUE (session_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS session_participants (

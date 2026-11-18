@@ -8,8 +8,8 @@ import org.springframework.stereotype.Component;
 /**
  * Cadence is intentionally coarse — closing past sessions is status-only cosmetics (nothing
  * downstream depends on sub-hour accuracy yet). No distributed lock — fine for the current
- * single-instance deployment; {@code sessions.unique_group_session_start} is the idempotency
- * backstop if this ever runs on multiple instances.
+ * single-instance deployment; the unique (group_id, scheduled_start) key that was the idempotency
+ * backstop was dropped by SESSION-GROUP-1 (SESSION-GROUP-5 adds a new one).
  *
  * <p><b>SESSION-38:</b> the hourly {@code generateUpcomingSessions()} sweep (re-scanning every
  * group with auto-generate enabled, regardless of whether its next occurrence already existed) is

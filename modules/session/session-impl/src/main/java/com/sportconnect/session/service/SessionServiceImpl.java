@@ -19,6 +19,7 @@ import com.sportconnect.session.access.SessionShareGate;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
+import com.sportconnect.session.api.dto.GroupAudience;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionDiscoverDateCount;
@@ -35,6 +36,8 @@ import com.sportconnect.session.api.dto.ShareSessionRequest;
 import com.sportconnect.session.api.dto.StartTimeFilter;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
+import com.sportconnect.session.api.event.SessionGroupCancelledEvent;
+import com.sportconnect.session.api.event.SessionGroupCreatedEvent;
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
@@ -45,8 +48,10 @@ import com.sportconnect.session.api.event.SessionShareCreatedEvent;
 import com.sportconnect.session.api.event.SessionUpdatedEvent;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.entity.SessionAudienceMember;
 import com.sportconnect.session.entity.SessionOutboxEvent;
 import com.sportconnect.session.entity.SessionParticipant;
+import com.sportconnect.session.repository.SessionAudienceMemberRepository;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
@@ -85,6 +90,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -101,6 +107,7 @@ public class SessionServiceImpl implements SessionService {
 
     private final SessionRepository sessionRepository;
     private final SessionParticipantRepository sessionParticipantRepository;
+    private final SessionAudienceMemberRepository sessionAudienceMemberRepository;
     // SESSION-38: as of GroupServiceImpl's new (@Lazy) sessionService field, this IS one side of a
     // real bidirectional dependency (GroupServiceImpl -> SessionService -> SessionServiceImpl ->
     // GroupService -> GroupServiceImpl) — same shape as postService below. @Lazy isn't needed on
@@ -183,13 +190,24 @@ public class SessionServiceImpl implements SessionService {
         Long groupId = request.getGroupId();
         Long sportId;
         SessionType sessionType;
+        // Whether the sport came from the request (and so still has to be an active one): always for a standalone session,
+        // for a group session only when the group has no sport of its own.
+        boolean sportFromRequest = true;
 
         if (groupId != null) {
-            if (!groupService.canManageMembers(groupId, userId)) {
-                throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED", "Only group owners and admins can create sessions for this group", null);
+            // SESSION-GROUP-1: any member of the group may create a (custom) session in it, not only an owner or admin.
+            // isGroupMember is false for a missing, deleted or inactive group too, so those answer 403 as before.
+            if (!groupService.isGroupMember(groupId, userId)) {
+                throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can create sessions for this group", null);
             }
             GroupResponse group = groupService.getGroup(groupId, userId);
-            sportId = request.getSportId() != null ? request.getSportId() : group.getSportId();
+            // The sport is the group's (the create form hides the field); the request's sportId only fills a group that
+            // has none of its own (a group created before that was required).
+            sportFromRequest = group.getSportId() == null;
+            sportId = sportFromRequest ? request.getSportId() : group.getSportId();
+            if (sportId == null) {
+                throw new BadRequestException("SESSION_SPORT_REQUIRED", "sportId is required: this group has no sport", null);
+            }
             sessionType = SessionType.GROUP_RECURRING;
         } else {
             if (request.getSportId() == null) {
@@ -199,16 +217,11 @@ public class SessionServiceImpl implements SessionService {
             sessionType = SessionType.STANDALONE;
         }
 
-        // A7: reject a caller-supplied sportId naming a deactivated sport. Gated on the request
-        // field being non-null rather than on the standalone/group branch, because the group
-        // branch also honours request.getSportId() when present and only falls back to the
-        // group's own sportId when it is absent - branching on sessionType would let a
-        // caller-supplied inactive sport through on a group session. The inherited
-        // group.getSportId() case needs no check here: GroupServiceImpl.createGroup now rejects
-        // inactive sports, so no new group can carry one. A group created before A7 against a
-        // since-deactivated sport is pre-existing data and keeps working, same read-path policy
-        // as A6.
-        if (request.getSportId() != null) {
+        // A7: reject a caller-supplied sportId naming a deactivated sport. A group's own sport needs no check here:
+        // GroupServiceImpl.createGroup rejects inactive sports, so no new group can carry one (SESSION-GROUP-1: the request's
+        // sportId is ignored for a group session that has a sport). A group created before A7 against a since-deactivated
+        // sport is pre-existing data and keeps working, same read-path policy as A6.
+        if (sportFromRequest) {
             sportService.requireActiveSportById(sportId);
         }
 
@@ -231,7 +244,16 @@ public class SessionServiceImpl implements SessionService {
                 feeAmountVnd, scheduledEndAt).isEmpty()
                 ? SessionStatus.SCHEDULED
                 : SessionStatus.PREPARING;
-        boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
+        // SESSION-GROUP-1: a group session auto-approves by default (a member joins at once); a standalone one does not.
+        boolean autoApprove = request.getAutoApprove() != null ? request.getAutoApprove() : groupId != null;
+        GroupAudience audience = null;
+        List<UUID> specificAudience = List.of();
+        if (groupId != null) {
+            audience = request.getAudience() != null ? request.getAudience() : GroupAudience.ALL_MEMBERS;
+            if (audience == GroupAudience.SPECIFIC) {
+                specificAudience = resolveSpecificAudience(groupId, userId, request.getAudienceUserIds());
+            }
+        }
         int initialSlot = request.getInitialSlot() != null ? request.getInitialSlot() : 0;
         validateGenderSlots(request.getMaleSlots(), request.getFemaleSlots(), request.getCapacity(), initialSlot);
         String title = requireTitle(request.getTitle());
@@ -265,6 +287,7 @@ public class SessionServiceImpl implements SessionService {
                 .feeType(request.getFeeType())
                 .feeAmountVnd(feeAmountVnd)
                 .autoApprove(autoApprove)
+                .groupAudience(audience)
                 .initialSlot(initialSlot)
                 .maleSlots(request.getMaleSlots())
                 .femaleSlots(request.getFemaleSlots())
@@ -276,15 +299,13 @@ public class SessionServiceImpl implements SessionService {
         Session saved = sessionRepository.save(session);
 
         List<SessionParticipant> seedParticipants = new ArrayList<>();
-        if (groupId == null) {
-            // Standalone only — a group-linked session's creator is already implicitly the
-            // group's owner/admin, not auto-added as a participant.
-            seedParticipants.add(SessionParticipant.builder()
-                    .sessionId(saved.getId())
-                    .userId(userId)
-                    .status(ParticipantStatus.JOINED)
-                    .build());
-        }
+        // The creator is JOINED, standalone or group (SESSION-GROUP-1: a group session's creator is a member who plays in
+        // it, no longer always an owner or admin who only manages it).
+        seedParticipants.add(SessionParticipant.builder()
+                .sessionId(saved.getId())
+                .userId(userId)
+                .status(ParticipantStatus.JOINED)
+                .build());
         List<SessionOutboxEvent> inviteOutboxEvents = new ArrayList<>();
         if (request.getInviteeIds() != null) {
             request.getInviteeIds().stream()
@@ -309,6 +330,28 @@ public class SessionServiceImpl implements SessionService {
         }
         if (!inviteOutboxEvents.isEmpty()) {
             sessionOutboxEventRepository.saveAll(inviteOutboxEvents);
+        }
+        if (groupId != null) {
+            // SESSION-GROUP-1: tell the audience. A SPECIFIC audience is stored (it is read again at a cancel); the
+            // notification is session.group.created, one row per member, in this transaction (a failure rolls back the
+            // session too). No INVITED row: every member can see and join, the audience only decides who is notified.
+            if (!specificAudience.isEmpty()) {
+                sessionAudienceMemberRepository.saveAll(specificAudience.stream()
+                        .map(memberId -> SessionAudienceMember.builder().sessionId(saved.getId()).userId(memberId).build())
+                        .toList());
+            }
+            List<UUID> recipients = groupSessionRecipients(saved, userId, false);
+            if (!recipients.isEmpty()) {
+                sessionOutboxEventRepository.saveAll(recipients.stream()
+                        .map(recipientId -> sessionOutboxWriter.build("session.group.created",
+                                SessionGroupCreatedEvent.builder()
+                                        .sessionId(saved.getId())
+                                        .actorId(userId)
+                                        .recipientUserId(recipientId)
+                                        .groupId(groupId)
+                                        .build()))
+                        .toList());
+            }
         }
 
         log.info("Created session {} (type={}, group={})", saved.getId(), saved.getSessionType(), saved.getGroupId());
@@ -789,8 +832,24 @@ public class SessionServiceImpl implements SessionService {
         session.setCancelReason(request != null ? request.getReason() : null);
         session.setCancelledBy(userId);
         session.setCancelledAt(LocalDateTime.now());
+        Session saved = sessionRepository.save(session);
 
-        return toResponse(sessionRepository.save(session), userId);
+        if (saved.getGroupId() != null) {
+            // SESSION-GROUP-1: tell the audience and the players (a cancel told nobody before). Standalone is unchanged.
+            List<UUID> recipients = groupSessionRecipients(saved, userId, true);
+            if (!recipients.isEmpty()) {
+                sessionOutboxEventRepository.saveAll(recipients.stream()
+                        .map(recipientId -> sessionOutboxWriter.build("session.group.cancelled",
+                                SessionGroupCancelledEvent.builder()
+                                        .sessionId(saved.getId())
+                                        .actorId(userId)
+                                        .recipientUserId(recipientId)
+                                        .groupId(saved.getGroupId())
+                                        .build()))
+                        .toList());
+            }
+        }
+        return toResponse(saved, userId);
     }
 
     @Override
@@ -1502,9 +1561,64 @@ public class SessionServiceImpl implements SessionService {
             if (!session.getCreatedBy().equals(userId)) {
                 throw new ForbiddenException("SESSION_CREATOR_REQUIRED", "Only the creator can modify this session", null);
             }
-        } else if (!groupService.canManageMembers(session.getGroupId(), userId)) {
-            throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED", "Only group owners and admins can modify this session", null);
+        } else {
+            // SESSION-GROUP-1: a group session is managed by its creator, for as long as they are still a member of the
+            // group (a creator who left loses the right), and by the group's owner and admins.
+            boolean creatorWhileMember = session.getCreatedBy().equals(userId)
+                    && groupService.isGroupMember(session.getGroupId(), userId);
+            if (!creatorWhileMember && !groupService.canManageMembers(session.getGroupId(), userId)) {
+                throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED",
+                        "Only the creator or a group owner or admin can modify this session", null);
+            }
         }
+    }
+
+    /**
+     * SESSION-GROUP-1 — the validated members of a {@code SPECIFIC} audience: distinct, without the creator, at least one,
+     * and every one a member of the group (one {@code getMemberUserIds} call, never a per-id check). No upper limit.
+     */
+    private List<UUID> resolveSpecificAudience(Long groupId, UUID creatorId, List<UUID> requested) {
+        List<UUID> ids = requested == null ? List.of()
+                : requested.stream().filter(Objects::nonNull).filter(id -> !id.equals(creatorId)).distinct().toList();
+        if (ids.isEmpty()) {
+            throw new BadRequestException("SESSION_AUDIENCE_REQUIRED",
+                    "Choose at least one group member to notify, or notify all members", null);
+        }
+        Set<UUID> members = new HashSet<>(groupService.getMemberUserIds(groupId));
+        long notMembers = ids.stream().filter(id -> !members.contains(id)).count();
+        if (notMembers > 0) {
+            throw new BadRequestException("SESSION_AUDIENCE_NOT_MEMBER",
+                    "Every person to notify must be a member of the group", Map.of("count", notMembers));
+        }
+        return ids;
+    }
+
+    /**
+     * SESSION-GROUP-1 — who to tell about a group session: its audience (every current member, or, for a {@code SPECIFIC}
+     * audience, the chosen ones who are still members; a session with no stored audience reads as all members), plus,
+     * with {@code includeJoined}, anyone still {@code JOINED}. Never the actor; active accounts only (the new-interaction
+     * rule: one ids-only query, never a user row per person). Group size is capped (500), so the lists are bounded.
+     */
+    private List<UUID> groupSessionRecipients(Session session, UUID actorId, boolean includeJoined) {
+        Set<UUID> members = new HashSet<>(groupService.getMemberUserIds(session.getGroupId()));
+        Set<UUID> ids = new LinkedHashSet<>();
+        if (session.getGroupAudience() == GroupAudience.SPECIFIC) {
+            sessionAudienceMemberRepository.findUserIdsBySessionId(session.getId()).stream()
+                    .filter(members::contains)
+                    .forEach(ids::add);
+        } else {
+            ids.addAll(members);
+        }
+        if (includeJoined) {
+            sessionParticipantRepository.findBySessionIdAndStatusIn(session.getId(), List.of(ParticipantStatus.JOINED))
+                    .forEach(participant -> ids.add(participant.getUserId()));
+        }
+        ids.remove(actorId);
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> active = userService.getActiveUserIds(new ArrayList<>(ids));
+        return ids.stream().filter(active::contains).toList();
     }
 
     private SessionResponse toResponse(Session session, UUID callerId) {

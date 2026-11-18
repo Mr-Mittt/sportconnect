@@ -74,11 +74,11 @@ public class SessionController {
         return new BadRequestException(message);
     }
 
-    @Operation(summary = "Create a session", description = "groupId omitted → standalone (any user). groupId set → owner/admin of that group only.")
+    @Operation(summary = "Create a session", description = "groupId omitted → standalone (any user). groupId set → any member of that group (SESSION-GROUP-1); the sport is the group's, audience decides who is notified.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Session created"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed (SESSION_SPORT_REQUIRED, SESSION_LOCATION_SPORT_MISMATCH, SESSION_FEE_AMOUNT_REQUIRED)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not owner/admin of the group (SESSION_GROUP_ADMIN_REQUIRED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a member of the group (SESSION_GROUP_MEMBER_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated")
     })
     @PostMapping
@@ -300,7 +300,7 @@ public class SessionController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Session updated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Validation failed, or maleSlots + femaleSlots over the open slots (SESSION_GENDER_SLOTS_EXCEED_OPEN)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "The session is not PREPARING (SESSION_NOT_PREPARING)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator / not a group owner or admin (SESSION_CREATOR_REQUIRED, SESSION_GROUP_ADMIN_REQUIRED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the creator (standalone) / not the creator while a member, nor a group owner or admin (SESSION_CREATOR_REQUIRED, SESSION_GROUP_ADMIN_REQUIRED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found")
     })

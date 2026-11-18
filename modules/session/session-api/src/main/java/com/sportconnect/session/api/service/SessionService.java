@@ -51,6 +51,12 @@ public interface SessionService {
      * <p>SESSION-33: {@code request.scheduledStart} is a client-supplied offset-aware instant,
      * stored exactly as the UTC instant it implies — never reinterpreted through {@code
      * locationId}'s own timezone.
+     *
+     * <p>SESSION-GROUP-1: with a {@code groupId}, any active member of the group may create the session (403
+     * {@code SESSION_GROUP_MEMBER_REQUIRED} otherwise); the sport is the group's (a sent {@code sportId} is ignored when the
+     * group has one), the session is never public, {@code autoApprove} defaults to true and the creator is {@code JOINED}.
+     * {@code audience} ({@code ALL_MEMBERS} default, or {@code SPECIFIC} with {@code audienceUserIds}) decides only who is
+     * notified with {@code session.group.created}; every member can still see and join, and no {@code INVITED} row is made.
      */
     SessionResponse createSession(UUID userId, CreateSessionRequest request);
 

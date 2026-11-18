@@ -250,5 +250,7 @@
     <include file="db/changelog/changes/V092__notifications_message.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-66: partial index of the active users (id WHERE is_active = true) for the "active accounts only" lookups -->
     <include file="db/changelog/changes/V093__users_active_partial_index.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-1: sessions.group_audience + session_audience_members; the unique (group_id, scheduled_start) key is dropped for a plain index -->
+    <include file="db/changelog/changes/V094__group_session_audience_and_drop_unique_start.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

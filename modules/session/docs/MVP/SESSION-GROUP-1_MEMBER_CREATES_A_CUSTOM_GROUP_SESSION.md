@@ -1,6 +1,6 @@
 # SESSION-GROUP-1 · A group member creates a custom group session, with an audience and notifications
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-19)
 **Type:** New Feature · **Depends on:** none (client pairs: CLIENT-GROUP-SESSION-1 and -3)
 **Filed:** 2026-11-19, from the owner's `modules/session/docs/GROUP_SESSION_SPECIFICATION.md` ("Custom session"); decisions of 2026-11-19 recorded below. First of the group-session chain (SESSION-GROUP-1 to 6, GROUP-1, CLIENT-GROUP-SESSION-1 to 6).
 
@@ -22,3 +22,22 @@ A **custom** group session is one a group member creates by hand (a **regular** 
 **Tests:** Spock for every rule; ITs through the real pipeline: a member creates, a non-member and a member of another group are refused, a deactivated caller is refused, the sport is forced, `isPublic` stays false, creator edit/cancel allowed, a creator who left refused, an unrelated member refused, audience ALL and SPECIFIC reach the right users (real RabbitMQ consumer case), a non-member audience id is a 400, two sessions may now share a start time, a cancel notifies the audience. Mutation check each requirement.
 
 ---
+
+## Implementation summary (2026-11-19)
+
+**Built as filed**, with the points below.
+- **Create:** `createSession` with a `groupId` needs `isGroupMember` (403 `SESSION_GROUP_MEMBER_REQUIRED`; it was `canManageMembers`, 403 `SESSION_GROUP_ADMIN_REQUIRED`). The sport is the group's; the request's `sportId` is used (and checked active) only for a group that has none, and is 400 `SESSION_SPORT_REQUIRED` when there is neither. `isPublic` stays false, `autoApprove` is nullable and defaults to `true` for a group session (standalone still `false`), and the creator is `JOINED` for every session (group sessions too).
+- **Audience:** `GroupAudience` (`ALL_MEMBERS` default, `SPECIFIC`), `CreateSessionRequest.audience` and `audienceUserIds`. `SPECIFIC`: distinct, without the creator, at least one (400 `SESSION_AUDIENCE_REQUIRED`), every id a member of the group (one `getMemberUserIds` call, 400 `SESSION_AUDIENCE_NOT_MEMBER` with `{count}`), no cap. Stored in `sessions.group_audience` and `session_audience_members` (V094). It decides only who is notified: no `INVITED` row, every member can still see and join.
+- **Notifications:** `session.group.created` (audience minus the creator) at creation and `session.group.cancelled` (audience plus every `JOINED` player, minus the actor) at cancel, one outbox row per person in the same transaction, via one private `groupSessionRecipients`: current members only, active accounts only (`getActiveUserIds`, one ids-only query), a `SPECIFIC` member who left the group is dropped when the event is written. A session with no stored audience reads as all members. `SessionEventsConsumer` has both cases; a standalone cancel and the automatic cancels are unchanged (silent).
+- **Who may change it:** `requireCanModify` for a group session = its creator while still a member, or owner/admin (403 `SESSION_GROUP_ADMIN_REQUIRED` otherwise); it covers edit, schedule, cancel, approve and reject.
+- **Unique key:** `unique_group_session_start` dropped in V094 and replaced by the plain index `idx_sessions_group_scheduled_start` (the same columns, kept for the group listing and Discover plans); the entity annotation is gone. The old generator keeps its `existsByGroupIdAndScheduledStart` check as its only guard until SESSION-GROUP-5 (owner: accepted).
+- **Large group:** a `SPECIFIC` audience of 120 created and notified in 287 ms in `SessionGroupCustomSessionIntegrationTest` (H2, one outbox row per person), so no batching now; a 500-member `ALL_MEMBERS` group is the bound and was not measured.
+
+**Assumptions made at pickup (not asked, confirm if wrong).**
+- The creator of a group session is `JOINED`, as for a standalone one. This also changes a group session created by an owner or admin, who was never a participant before.
+- The cancel notification applies to every group session, not only the regular ones (the generator does not set an audience yet, so a generated session cancelled by an owner or admin tells all members, plus its players).
+- A creator who left the group loses edit and cancel rights (an owner or admin keeps theirs through the role).
+
+**Consumer census (done before editing).** `requireCanModify` callers (`updateSession`, `scheduleSession`, `cancelSession`, approve, reject: all through the one method, updated); `createSession` and `CreateSessionRequest` (additive fields; the client `CreateSessionPayload` and the new error codes are CLIENT-GROUP-SESSION-1); `SessionEventsConsumer` (two cases; the client texts and `NotificationType` members are CLIENT-GROUP-SESSION-3, until then the generic notification text shows); the unique key's only code consumer, the `DataIntegrityViolationException` catch in `SessionGenerationService` (kept, now unreachable for that key; comments updated); `SessionErrorCodesIntegrationTest` (its "plain member is refused on create" case now asserts the non-member code); the H2 `schema.sql` mirror (column, table, constraint removed). Client `errors.json` still has `SESSION_GROUP_ADMIN_REQUIRED`, which is still returned for modify.
+
+**Tests.** `SessionServiceImplSpec` 284 (20 new: sport, auto approve, audience all/specific/none/cap/ignored, recipients, creator rights, cancel recipients) and the whole session-impl suite 457, notification-impl 74 (two new consumer cases); `SessionGroupCustomSessionIntegrationTest` (15: member creates, non-member and deactivated refused, same start twice, notified set, specific audience, 400s, no cap, leaver dropped, creator and admin rights, cancel recipients), the real-RabbitMQ consumer case, and the other session ITs (109 server tests in the final run). Mutation check against `SessionServiceImplSpec`: 15 of 15 killed against a passing baseline. **Not run:** the V094 Liquibase script against a real Postgres (the ITs use the H2 mirror; the SQL is standard `DROP CONSTRAINT IF EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`), the full `:server:test`, a live server.

@@ -1,6 +1,7 @@
 package com.sportconnect.session.entity;
 
 import com.sportconnect.session.api.dto.FeeType;
+import com.sportconnect.session.api.dto.GroupAudience;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import jakarta.persistence.Column;
@@ -11,7 +12,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -28,9 +28,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Entity
-@Table(name = "sessions", uniqueConstraints = {
-        @UniqueConstraint(name = "unique_group_session_start", columnNames = {"group_id", "scheduled_start"})
-})
+@Table(name = "sessions")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -160,6 +158,13 @@ public class Session {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "attributes", columnDefinition = "jsonb")
     private Map<String, Object> attributes;
+
+    /** SESSION-GROUP-1 — who a group session was made for (it decides only who is notified, never who can see or join).
+     * Null for a standalone session and for a group session created before this column; read as ALL_MEMBERS. The members
+     * of a SPECIFIC audience are the {@code session_audience_members} rows. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "group_audience", length = 20)
+    private GroupAudience groupAudience;
 
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;

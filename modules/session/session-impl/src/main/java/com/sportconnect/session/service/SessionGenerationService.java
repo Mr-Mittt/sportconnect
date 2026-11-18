@@ -166,8 +166,9 @@ public class SessionGenerationService {
                 sessionRepository.save(session);
                 log.info("Auto-generated session for group {} at {}", config.getGroupId(), nextOccurrence);
             } catch (DataIntegrityViolationException e) {
-                // The unique (group_id, scheduled_start) constraint is the idempotency backstop
-                // for a race between two job runs/instances — not a real error.
+                // Historical: the unique (group_id, scheduled_start) constraint was the idempotency backstop here;
+                // SESSION-GROUP-1 dropped it, so only the existsByGroupIdAndScheduledStart check above guards this path
+                // until SESSION-GROUP-5 replaces the generator with a (recurrence_id, occurrence_date) key.
                 log.debug("Session for group {} at {} already exists (race), skipping", config.getGroupId(), nextOccurrence);
             }
         }
