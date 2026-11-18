@@ -4622,6 +4622,107 @@ class SessionServiceImplSpec extends Specification {
         status << SessionStatus.values().toList()
     }
 
+    // ---------- SESSION-GROUP-3: sharing a group session with the group's members ----------
+
+    private Session shareableGroupSession(UUID creatorId, SessionStatus status = SessionStatus.SCHEDULED) {
+        Session.builder().id(1L).groupId(5L).sessionType(SessionType.GROUP_RECURRING).createdBy(creatorId).sportId(1L)
+                .status(status).isPublic(false).build()
+    }
+
+    def "shareSession on a group session reaches the group's members, not the caller's friends, with the same share event"() {
+        given:
+        def caller = UUID.randomUUID()
+        def memberA = UUID.randomUUID()
+        def memberB = UUID.randomUUID()
+        def friendNotInGroup = UUID.randomUUID()
+        def session = shareableGroupSession(UUID.randomUUID())
+
+        when:
+        def result = sessionService.shareSession(1L, caller,
+                ShareSessionRequest.builder().userIds([memberA, memberB, friendNotInGroup]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, "SESSION_NOT_FOUND", _, "SESSION_GROUP_MEMBER_REQUIRED", _) >> session
+        1 * groupService.getMemberUserIds(5L) >> [caller, memberA, memberB]
+        0 * userFriendService._
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, [memberA, memberB]) >> []
+        1 * userService.getActiveUserIds([memberA, memberB]) >> activeIds([memberA, memberB])
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
+            e.sessionId == 1L && e.actorId == caller && e.recipientUserId == memberA }) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
+            e.recipientUserId == memberB }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
+        0 * sessionParticipantRepository.save(_)
+        0 * sessionParticipantRepository.saveAll(_)
+        result.sent == 2
+        result.skipped == 1
+    }
+
+    def "shareSession on a group session skips the caller, a deactivated member and a member already in the session"() {
+        given:
+        def caller = UUID.randomUUID()
+        def fresh = UUID.randomUUID()
+        def alreadyIn = UUID.randomUUID()
+        def deactivated = UUID.randomUUID()
+        def session = shareableGroupSession(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller,
+                ShareSessionRequest.builder().userIds([caller, fresh, alreadyIn, deactivated, fresh]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * groupService.getMemberUserIds(5L) >> [caller, fresh, alreadyIn, deactivated]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, [fresh, alreadyIn, deactivated]) >> [
+                participantRow(alreadyIn, ParticipantStatus.JOINED)]
+        1 * userService.getActiveUserIds([fresh, deactivated]) >> activeIds([fresh])
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e -> e.recipientUserId == fresh }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
+        result.sent == 1
+        result.skipped == 3
+    }
+
+    def "shareSession on a group session is refused with the member code for a non-member, before anything is read or written"() {
+        given:
+        def caller = UUID.randomUUID()
+        def session = shareableGroupSession(UUID.randomUUID())
+
+        when:
+        sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([UUID.randomUUID()]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, "SESSION_NOT_FOUND", _, "SESSION_GROUP_MEMBER_REQUIRED", _) >> {
+            throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can share this session", null) }
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
+        0 * groupService.getMemberUserIds(*_)
+        0 * userFriendService._
+        0 * sessionOutboxEventRepository.saveAll(_)
+    }
+
+    def "shareSession on a standalone session never asks the group for members and passes the private-session code to the gate"() {
+        given:
+        def caller = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([a]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, "SESSION_NOT_FOUND", _, "SESSION_SHARE_NOT_ALLOWED", _) >> session
+        0 * groupService.getMemberUserIds(*_)
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [a]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
+        1 * userService.getActiveUserIds([a]) >> activeIds([a])
+        1 * sessionOutboxWriter.build("session.share.created", _ as SessionShareCreatedEvent) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll(_)
+    }
+
     def "shareSession refuses a caller the gate refuses (missing session, group session) and does nothing else"() {
         given:
         def caller = UUID.randomUUID()

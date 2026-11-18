@@ -247,18 +247,118 @@ class SessionShareIntegrationTest extends RedisBaseIT {
         }
     }
 
-    @Test
-    void aGroupSession_isRefused_evenForItsOwnerAndAJoinedParticipant() throws Exception {
+    /** A private group with {@code hostId} as owner (SESSION-GROUP-3: a group session is shareable by its members). */
+    private Long groupWithHost(boolean active) {
         Long groupId = groupRepository.save(Group.builder().groupName("Share " + UUID.randomUUID())
-                .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
+                .createdBy(hostId).isPrivate(true).isActive(active).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(1).build());
-        Long sessionId = seed(groupId, SessionStatus.SCHEDULED, hostId);
-        join(sessionId, hostId, ParticipantStatus.JOINED);
-        UUID friend = friendOf(hostId);
+        return groupId;
+    }
 
-        share(sessionId, hostId, List.of(friend))
+    private UUID memberOf(Long groupId) {
+        UUID member = createUserWithRoles(true, "USER");
+        groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(member).roleId(3).build());
+        return member;
+    }
+
+    @Test
+    void aMember_sharesAGroupSession_withOtherMembersOnly_notWithFriendsOutsideTheGroup() throws Exception {
+        Long groupId = groupWithHost(true);
+        Long sessionId = seed(groupId, SessionStatus.SCHEDULED, hostId);
+        UUID memberA = memberOf(groupId);
+        UUID memberB = memberOf(groupId);
+        UUID friendNotInGroup = friendOf(hostId);
+        UUID strangerNotInGroup = createUserWithRoles(true, "USER");
+
+        share(sessionId, memberA, List.of(hostId, memberB, friendNotInGroup, strangerNotInGroup))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sent").value(2))
+                .andExpect(jsonPath("$.data.skipped").value(2));
+
+        // The owner and the other member are told; the friend and the stranger are outside the group and are not.
+        List<String> recipients = new ArrayList<>();
+        for (SessionOutboxEvent event : shareEvents()) {
+            JsonNode payload = objectMapper.readTree(event.getPayload());
+            assertThat(payload.get("sessionId").asLong()).isEqualTo(sessionId);
+            assertThat(payload.get("actorId").asText()).isEqualTo(memberA.toString());
+            recipients.add(payload.get("recipientUserId").asText());
+        }
+        assertThat(recipients).containsExactlyInAnyOrder(hostId.toString(), memberB.toString());
+        // A share is a notification: no participant row, no invitation.
+        assertThat(participantRepository.findBySessionIdAndUserId(sessionId, memberB)).isEmpty();
+        assertThat(participantRepository.findBySessionIdAndUserId(sessionId, hostId)).isEmpty();
+        assertNoInvitationEvent();
+    }
+
+    @Test
+    void aGroupSession_isShareableInAnyStatus() throws Exception {
+        Long groupId = groupWithHost(true);
+        UUID other = memberOf(groupId);
+        int shared = 0;
+        for (SessionStatus sessionStatus : SessionStatus.values()) {
+            Long sessionId = seed(groupId, sessionStatus, hostId);
+            share(sessionId, hostId, List.of(other)).andExpect(status().isOk()).andExpect(jsonPath("$.data.sent").value(1));
+            shared++;
+            assertThat(shareEvents()).hasSize(shared);
+        }
+    }
+
+    @Test
+    void aNonMember_cannotShareAGroupSession_403_andNothingIsWritten() throws Exception {
+        Long groupId = groupWithHost(true);
+        Long sessionId = seed(groupId, SessionStatus.SCHEDULED, hostId);
+        UUID member = memberOf(groupId);
+        UUID outsider = createUserWithRoles(true, "USER");
+
+        share(sessionId, outsider, List.of(member))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("SESSION_SHARE_NOT_ALLOWED"));
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_MEMBER_REQUIRED"));
+
+        assertThat(shareEvents()).isEmpty();
+    }
+
+    @Test
+    void aGroupSession_skipsADeactivatedMemberAndAMemberAlreadyInIt() throws Exception {
+        Long groupId = groupWithHost(true);
+        Long sessionId = seed(groupId, SessionStatus.SCHEDULED, hostId);
+        UUID fresh = memberOf(groupId);
+        UUID alreadyIn = memberOf(groupId);
+        join(sessionId, alreadyIn, ParticipantStatus.JOINED);
+        UUID deactivated = createUserWithRoles(false, "USER");
+        groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(deactivated).roleId(3).build());
+
+        share(sessionId, hostId, List.of(fresh, alreadyIn, deactivated))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sent").value(1))
+                .andExpect(jsonPath("$.data.skipped").value(2));
+
+        assertThat(shareEvents()).hasSize(1);
+        assertThat(objectMapper.readTree(shareEvents().get(0).getPayload()).get("recipientUserId").asText())
+                .isEqualTo(fresh.toString());
+    }
+
+    @Test
+    void aGroupSessionOfAnInactiveGroup_is404() throws Exception {
+        Long groupId = groupWithHost(false);
+        Long sessionId = seed(groupId, SessionStatus.SCHEDULED, hostId);
+
+        share(sessionId, hostId, List.of(createUserWithRoles(true, "USER")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_NOT_FOUND"));
+
+        assertThat(shareEvents()).isEmpty();
+    }
+
+    @Test
+    void theFiftyLimit_stillAppliesToAGroupShare() throws Exception {
+        Long groupId = groupWithHost(true);
+        Long sessionId = seed(groupId, SessionStatus.SCHEDULED, hostId);
+        List<UUID> tooMany = new ArrayList<>();
+        for (int i = 0; i < 51; i++) {
+            tooMany.add(UUID.randomUUID());
+        }
+
+        share(sessionId, hostId, tooMany).andExpect(status().isBadRequest());
 
         assertThat(shareEvents()).isEmpty();
     }

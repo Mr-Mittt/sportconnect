@@ -938,21 +938,28 @@ public class SessionServiceImpl implements SessionService {
     @Transactional
     public SessionShareResponse shareSession(Long sessionId, UUID callerId, ShareSessionRequest request) {
         // Availability (404) before visibility (403): every refusal comes before any read of recipients' state and
-        // before any write, so a refused call leaves nothing behind. Any caller may share a standalone session in any
-        // status; only a group session is refused.
+        // before any write, so a refused call leaves nothing behind. Any caller may share a public standalone session in
+        // any status; a private one is refused (SESSION_SHARE_NOT_ALLOWED); a group session is shareable by its members
+        // only (SESSION-GROUP-3: a non-member gets SESSION_GROUP_MEMBER_REQUIRED, as on join, because they could not open it).
         Session session = sessionRepository.findById(sessionId).orElse(null);
+        boolean groupSession = session != null && session.getGroupId() != null;
         sessionShareGate.require(session, callerId,
                 "SESSION_NOT_FOUND", "Session not found",
-                "SESSION_SHARE_NOT_ALLOWED", "A group or private session cannot be shared");
+                groupSession ? "SESSION_GROUP_MEMBER_REQUIRED" : "SESSION_SHARE_NOT_ALLOWED",
+                groupSession ? "Only group members can share this session" : "A private session cannot be shared");
 
         List<UUID> requested = request.getUserIds().stream().distinct().toList();
 
-        // One query for the caller's friends, never areFriends per recipient. Anyone who is not a friend is silently
-        // ignored (owner, 2026-11-18): counted in skipped, never notified, so a share cannot reach a stranger and the
-        // answer does not tell friends from strangers. The caller is not in their own friend list, so their own id
-        // falls out here too.
-        Set<UUID> friendIds = new HashSet<>(userFriendService.getAcceptedFriendIds(callerId));
-        List<UUID> friends = requested.stream().filter(friendIds::contains).toList();
+        // Who the caller may reach: their friends for a standalone session (one query, never areFriends per recipient),
+        // the other members of the group for a group session (one query, SESSION-GROUP-3: friends are not the audience
+        // there). Anyone outside that set is silently ignored (owner, 2026-11-18): counted in skipped, never notified, so a
+        // share cannot reach a stranger and the answer does not tell them from the allowed. The caller's own id falls out
+        // of the friend list by itself and is removed from the member list.
+        Set<UUID> reachable = groupSession
+                ? new HashSet<>(groupService.getMemberUserIds(session.getGroupId()))
+                : new HashSet<>(userFriendService.getAcceptedFriendIds(callerId));
+        reachable.remove(callerId);
+        List<UUID> friends = requested.stream().filter(reachable::contains).toList();
 
         List<UUID> recipients = List.of();
         if (!friends.isEmpty()) {
