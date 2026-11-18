@@ -1,0 +1,24 @@
+# SESSION-GROUP-1 · A group member creates a custom group session, with an audience and notifications
+
+**Status:** `TODO`
+**Type:** New Feature · **Depends on:** none (client pairs: CLIENT-GROUP-SESSION-1 and -3)
+**Filed:** 2026-11-19, from the owner's `modules/session/docs/GROUP_SESSION_SPECIFICATION.md` ("Custom session"); decisions of 2026-11-19 recorded below. First of the group-session chain (SESSION-GROUP-1 to 6, GROUP-1, CLIENT-GROUP-SESSION-1 to 6).
+
+A **custom** group session is one a group member creates by hand (a **regular** one is generated, SESSION-GROUP-5). Today only an owner or admin can create a group session (`SESSION_GROUP_ADMIN_REQUIRED`) and only they can edit, schedule or cancel it (`requireCanModify`); nobody is notified.
+
+**Rules (owner, 2026-11-19).**
+- **Who may create:** any active member of an active group. The sport is the group's (`sportId` in the request is ignored). `isPublic` stays `false`. `autoApprove` defaults to `true` for a group session (`CreateSessionRequest.autoApprove` becomes nullable; standalone keeps `false`). The creator is `JOINED` automatically, like a standalone creator (assumption, confirm at pickup).
+- **Who may change it:** the creator **while still a member**, and owner/admin, for edit (PREPARING), schedule and cancel. A creator who left the group loses the right. `requireCanModify` changes for a group session only.
+- **Audience:** `CreateSessionRequest` gains `audience` (`ALL_MEMBERS` default, or `SPECIFIC`) and `audienceUserIds`. `SPECIFIC` needs at least one id; **no size cap** (owner). Every id must be an active member of the group (new batch method on `group-api`, no per-item loop); a non-member id is a coded 400. The audience is **stored on the session** (`sessions.group_audience` plus a `session_audience_members` table), because the cancel notification and the generator need it later. "Specific" decides only who is notified: every member can see and join the session, and **no `INVITED` row is created** (same as sharing a standalone session).
+- **Notification on create:** a new outbox event `session.group.created` (three words, so it matches the `session.*.*` binding), one per recipient: all members or the specific ones, minus the creator, minus deactivated accounts (`UserService.getActiveUserIds`, the new-interaction rule), minus anyone no longer a member. Payload: sessionId, actorId, recipientUserId, groupId. The `SessionEventsConsumer` case writes "{name} created {session} in {group}" (text and enum labels are client-owned, CLIENT-GROUP-SESSION-3).
+- **Notification on cancel:** cancelling a group session (by the creator or owner/admin) emits `session.group.cancelled` to the same audience (same filters, plus anyone `JOINED` who is not in it). A cancel today notifies nobody; a standalone session is not changed by this ticket.
+- **Unique key:** `unique_group_session_start (group_id, scheduled_start)` is dropped (migration, entity annotation, any `DataIntegrityViolationException` catch that assumed it). The old generator keeps its application-level `existsByGroupIdAndScheduledStart` check until SESSION-GROUP-5 replaces it (owner: the small interim race is accepted).
+- **Large groups:** one outbox event per recipient, as share and invitation do. Measure a 500-member group in the IT and note the number; batch only if it is a problem.
+
+**Consumer census (before any edit):** `createSession`, `requireCanModify` and every caller (`updateSession`, `scheduleSession`, `cancelSession`, approve/reject), `CreateSessionRequest`/`SessionResponse` and the client mirrors, the unique key and its catches in `SessionGenerationService`, `SessionEventsConsumer`, `GroupService` (new batch membership method) and its mocks, the SESSION-38 ITs. **Client-visible:** two new routing keys (CLIENT-GROUP-SESSION-3 owns the texts), new error codes in `errors.json` (CLIENT-GROUP-SESSION-1). **Account lifecycle:** no new endpoint; the JWT filter refuses a deactivated caller; recipients exclude deactivated accounts. **Notification use case:** add both events to `NOTIFICATION_USE_CASES.md`.
+
+**Out of scope:** the generator (SESSION-GROUP-5), the Sessions tab list (SESSION-GROUP-2), sharing a group session (SESSION-GROUP-3), notifying a standalone cancel, editing the audience after creation.
+
+**Tests:** Spock for every rule; ITs through the real pipeline: a member creates, a non-member and a member of another group are refused, a deactivated caller is refused, the sport is forced, `isPublic` stays false, creator edit/cancel allowed, a creator who left refused, an unrelated member refused, audience ALL and SPECIFIC reach the right users (real RabbitMQ consumer case), a non-member audience id is a 400, two sessions may now share a start time, a cancel notifies the audience. Mutation check each requirement.
+
+---

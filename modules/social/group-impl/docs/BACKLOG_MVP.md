@@ -20,8 +20,9 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [B21](MVP/B21_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — join requests, invites | `TODO` |
-| 2 | [B22](MVP/B22_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence config carries a game mood for the sessions it generates (deferred from SESSION-46) | `TODO` |
+| 2 | [B22](MVP/B22_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence config carries a game mood for the sessions it generates (deferred from SESSION-46); **to be superseded by the game mood of the new recurrence config, SESSION-GROUP-4 / GROUP-1 (2026-11-19)** | `TODO` |
 | 3 | [B24](MVP/B24_GROUP_INVITE_AND_ADD_MUST_REFUSE_DEACTIVATED_ACCOUNTS.md) | Group `createInvitation` and `addMember` check only a friendship row, so a deactivated friend can be invited or added: refuse a deactivated target (coded, proposal `404 USER_NOT_FOUND` like `sendFriendRequest`); also decide the accept/approve paths (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
+| 4 | [GROUP-1](MVP/GROUP-1_REMOVE_THE_OLD_SINGLE_RECURRENCE_RULE.md) | Remove the old single weekly recurrence rule (five `groups.recurrence_*` columns, `auto_generate_sessions`, `GET/PUT /groups/{id}/recurrence`, DTOs); replaced, not migrated; after SESSION-GROUP-5 and the client settings UI (`modules/session/docs/BACKLOG_MVP.md`) | `TODO` |
 
 ---
 
