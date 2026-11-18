@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMarkAllNotificationsRead } from './useMarkAllNotificationsRead';
+import { useClearReadNotifications } from './useClearReadNotifications';
 import { useMarkNotificationRead } from './useMarkNotificationRead';
 import { useNotifications } from './useNotifications';
 import { useUnreadNotificationCount } from './useUnreadNotificationCount';
@@ -53,6 +54,7 @@ export function useNotificationBellData(
   const notifications = useNotifications(isOpen);
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+  const clearRead = useClearReadNotifications();
 
   const rows = notifications.data?.pages.flatMap((page) => page.content) ?? [];
 
@@ -83,5 +85,8 @@ export function useNotificationBellData(
     hasUnreadLoaded: rows.some((n) => !n.isRead),
     onMarkAllRead: () => markAllRead.mutate(),
     isMarkingAllRead: markAllRead.isPending,
+    hasReadLoaded: rows.some((n) => n.isRead),
+    onClearRead: () => clearRead.mutate(),
+    isClearingRead: clearRead.isPending,
   };
 }

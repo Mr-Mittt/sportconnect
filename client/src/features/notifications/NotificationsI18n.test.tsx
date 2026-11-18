@@ -38,6 +38,9 @@ function bellProps(overrides = {}) {
     hasUnreadLoaded: false,
     onMarkAllRead: vi.fn(),
     isMarkingAllRead: false,
+    hasReadLoaded: false,
+    onClearRead: vi.fn(),
+    isClearingRead: false,
     ...overrides,
   };
 }
@@ -72,6 +75,12 @@ describe('Notifications feature i18n', () => {
     expect(screen.getByText('Chưa đọc')).toBeInTheDocument();
   });
 
+  it('NotificationBell translates "Clear read" (vi)', async () => {
+    await i18n.changeLanguage('vi');
+    render(<NotificationBell {...bellProps({ hasReadLoaded: true, notifications: [{ ...unreadNotification, isRead: true }] })} />);
+    expect(screen.getByRole('button', { name: 'Xóa đã đọc' })).toBeInTheDocument();
+  });
+
   it('NotificationBell shows the Vietnamese load error', async () => {
     await i18n.changeLanguage('vi');
     render(<NotificationBell {...bellProps({ isError: true })} />);
@@ -95,6 +104,17 @@ describe('Notifications feature i18n', () => {
     expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument(); // un-overridden key falls back
+  });
+
+  it('NotificationRow labels the host\'s reason in Vietnamese and shows the text as written', async () => {
+    await i18n.changeLanguage('vi');
+    render(
+      <NotificationRow
+        notification={{ ...unreadNotification, type: 'session.join_request.rejected', message: 'Buổi chơi đã đủ người <3' }}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Lý do: Buổi chơi đã đủ người <3')).toBeInTheDocument();
   });
 
   it('NotificationRow renders the Vietnamese unread marker', async () => {

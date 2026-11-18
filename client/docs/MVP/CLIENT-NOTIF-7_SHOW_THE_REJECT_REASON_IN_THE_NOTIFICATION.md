@@ -1,6 +1,6 @@
 # CLIENT-NOTIF-7 · The notification for a rejected join request shows the host's reason, and a control clears the read notifications (pair of NTF-8)
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-18)
 **Type:** Enhancement · **Depends on:** NTF-8
 **Filed:** 2026-11-17, owner decision (the standalone-session list: finish the standalone session first, then group and group sessions), checked against the existing backlogs and filed in the same planning pass.
 
@@ -13,6 +13,7 @@ NTF-8 adds a nullable `message` to the notification. For `session.join_request.r
 - **Control.** A **"Clear read"** text button in the bell popover header, to the right of the heading and next to "Mark all read" (same `text-2xs font-medium text-text-accent` style, a `flex-wrap gap-x-3` group so the Vietnamese labels wrap rather than overflow the 20rem popover). It shows only while at least one **loaded** notification is read (`hasReadLoaded`), and is disabled while the request runs (`isClearingRead`). Both buttons can show at once (some read, some unread); neither shows on an empty list. No confirmation dialog: only read items go, and the owner asked for no extra step; the deletion is permanent and has no undo. (Say so at review if a confirmation is wanted.)
 - **Component API (controlled, presentational).** `NotificationBell` gains `hasReadLoaded: boolean`, `onClearRead: () => void`, `isClearingRead: boolean`; `useNotificationBellData` owns the mutation and derives `hasReadLoaded` from the loaded pages, and `AppShell` passes them through, exactly as it does for `onMarkAllRead`.
 - **Hook `useClearReadNotifications`** (`src/features/notifications/`): `apiClient.delete('/notifications/read')`, `meta: { errorDisplay: 'silent' }` like the other two notification mutations. Optimistic: `onMutate` cancels the list query, snapshots the cache and removes every read notification from every loaded page (new helper `removeReadNotificationsFromCache`, which returns how many it removed); the **unread count cache is not touched** (only read rows go, so the badge cannot change). `onError` restores the snapshot. `onSettled` invalidates `notificationKeys.list()`, because the server also deletes read notifications beyond the loaded pages and the pagination shifts once rows disappear; the refetch is the truth.
+- **Refetch after Clear read (owner, 2026-11-17, confirmed at pickup).** The list is always refetched once the call settles (success or error), so the screen ends on the server's truth: rows beyond the loaded pages are gone, the pagination is re-based, and a failed call shows the real list. Stated as an acceptance criterion with its own test (a `GET /notifications` follows the `DELETE`, in both outcomes).
 - **Focus and states.** The button unmounts once nothing read is left, so after a successful clear the focus moves to the first remaining row, or to the popover content when the list is empty ("You're all caught up" shows as today, `bell.caughtUp`). A failed call restores the list and leaves the button enabled; no toast (silent, same as mark-all), the list simply comes back.
 - **en/vi.** One new key in the `notifications` namespace: `bell.clearRead` ("Clear read" / "Xóa đã đọc"). The empty state reuses `bell.caughtUp`. **No new server error code**, so no `errors:codes` entry. **I18N-4:** the bell's mutations are silent, so the census row only gets a line stating that the new mutation is silent too.
 - **MSW and fixtures.** `e2e/mocks/handlers/notifications.ts` gains `http.delete('/api/notifications/read')`: `requireAuth`, removes the read fixtures from the stored list, returns the count. The default fixtures already hold read items (ids 3 to 7 are seeded read, ids 1 and 2 unread), so no new fixture is needed for the clear; the rejected-with-reason fixtures above are separate.
@@ -24,3 +25,38 @@ NTF-8 adds a nullable `message` to the notification. For `session.join_request.r
 **Out of scope:** The server side (NTF-8), the group invitation reject reason, deleting one notification, an undo, a confirmation dialog, clearing the read notifications that are not loaded other than through the server call itself.
 
 **Tests:** Vitest for the item (with, without, long text), Storybook state; the changed surface goes into `BASELINE-UPDATE-1`.
+
+
+## Implementation summary (2026-11-18)
+
+**Design as approved** ("go ahead", 2026-11-17); no divergence. The one addition at pickup, recorded above: the list is refetched when the clear settles (success or error), stated as an acceptance criterion with its own test.
+
+**Built.**
+- **Types and cache.** `Notification.message?: string | null`. `removeReadNotificationsFromCache` (in `optimisticNotificationUpdates.ts`) removes the read rows from every loaded page, keeps each page's `numberOfElements` and `empty` in step, returns the count, and never touches the unread-count cache.
+- **Hook.** `useClearReadNotifications`: `apiClient.delete('/notifications/read')` (`ApiResponse<number>`), `errorDisplay: 'silent'`; `onMutate` cancels the list query, snapshots and removes the read rows; `onError` restores the snapshot; `onSettled` invalidates `notificationKeys.list()`. `useNotificationBellData` returns `hasReadLoaded`, `onClearRead`, `isClearingRead`; `AppShell` needed no change (it spreads the hook result).
+- **Bell.** A "Clear read" text button next to "Mark all read" in a `flex-wrap justify-end gap-x-3` group, shown while a loaded notification is read, disabled while clearing. The button unmounts once nothing read is left, so a click arms a ref and an effect on `hasReadLoaded` moves the focus to the first remaining row (`data-notification-row`), or to the list container (`tabIndex=-1`, `outline-none`) when it is empty; a rollback or a plain read flip never moves the focus.
+- **Row.** For `session.join_request.rejected` only, a non-blank `message` (trimmed) shows as `Reason: ...` between the text and the time: `line-clamp-2`, `break-words`, `title` = the full text, and it is part of the row button's accessible name. Another type, `null`, absent or blank: no line.
+- **i18n.** `notifications:bell.clearRead` ("Clear read" / "Xóa đã đọc") and `notifications:row.reason` ("Reason: {{message}}" / "Lý do: {{message}}"). No error code, no `errors:codes` entry; the I18N-4 census gets a row stating the mutation is silent and the reason is user content.
+- **MSW and e2e mocks.** `http.delete('/api/notifications/read')` (auth required, removes the session's read fixtures, answers with the count); a `seed-rejected-join-request-notifications` mock-server action and `seedRejectedJoinRequestNotifications` fixture helper (two unread declines, one with a reason, one without). Decision: the reason fixtures are a per-test seed, not in the default list, so the default populated list and its baselines change only by the new button.
+
+**Consumer census.** `Notification` gains an optional field (compatible as-is). `NotificationBell` gains three required props: `AppShell` (spread, no change), the stories, `NotificationBell.test.tsx` and `NotificationsI18n.test.tsx` updated here. No other component imports the bell. The server contract (`NotificationResponse.message`, `DELETE /api/notifications/read` returning `ApiResponse<Long>`) is NTF-8's, verified against its code on the parent branch.
+
+**Tests.**
+- **Vitest** (new and extended, all green): `optimisticNotificationUpdates.test.ts` (5), `useClearReadNotifications.test.tsx` (the DELETE and the count; read rows leave at once with the unread count unchanged; rollback on error; the list is refetched after a success and after a failure), `NotificationBell.test.tsx` (button only with a read row loaded, wired, disabled while clearing, both buttons with a mix, neither on an empty list, focus on the first remaining row, focus on the list when empty, no focus move without a click), `NotificationRow.test.tsx` (the reason, hover title and clamp, accessible name, trimmed, no line for null / undefined / empty / blank, none for another type), `useNotificationBellData.test.tsx` (`hasReadLoaded`, `onClearRead`, `isClearingRead`), `NotificationsI18n.test.tsx` (Vietnamese).
+- **Storybook:** bell with read and unread (both buttons), only read, clearing; row with a reason, a long reason, no reason.
+- **Mutation check:** 15 mutants, all killed in the end: the cache filter flipped, the hook touching the unread count, no rollback, no refetch on settle, refetch only on success, button always visible, never disabled, not wired, focus moving without a click, focus always on the list, reason shown for any type, reason not trimmed, no hover title, `hasReadLoaded` always false, `isClearingRead` always false. The last one first survived (nothing asserted `isClearingRead`); a test was added and the mutant re-run and killed.
+
+**Verification.**
+- **Typecheck and lint:** `tsc -b` and ESLint on the touched folders are clean.
+- **Vitest:** `src/features/notifications`, `src/shared` and `src/app`: 140 files, 1293 tests passed.
+- **E2E:** `e2e` project, `notification-bell.spec.ts` 7 passed (5 existing plus the two new: "Clear read" and the reason); `locale.spec.ts`, `a11y.spec.ts` and `smoke.spec.ts` (27 tests, which include the bell opened in Vietnamese) passed. No other spec opens the bell. The full e2e suite was not run (scoped, per the standing rule).
+- **Not done:**
+  - Storybook was not opened.
+  - There was no manual browser walk-through beyond the Playwright journeys, which drive the same path through MSW.
+  - The real endpoint was not called against a running server (NTF-8's MockMvc integration tests cover it server-side).
+
+**E2E.** `e2e` project: `notification-bell.spec.ts` 7 passed, `locale.spec.ts` + `a11y.spec.ts` + `smoke.spec.ts` 27 passed; no failures, no flakes seen.
+
+**Visual-regression expectation.** Baselines `notification-bell-populated-*` and `notification-bell-with-load-more-*` at 375, 768, 1280 (6 files) change (the "Clear read" button in the popover header; the paginated fixture holds read rows), recorded in `BASELINE-UPDATE-1`; `notification-bell-empty-*` and every other baseline must come back byte-identical. The reason line is drawn in no baseline (no visual spec seeds a decline). Visual regression was not run here, so nothing is claimed about it passing or failing.
+
+**Release notes.** `documentation/release-notes/CLIENT.md` Unreleased: the Changes line (reason, "Clear read", permanent, no confirmation) and Depends on SERVER NTF-8 (ship the server first). E2E catalog (`E2E_OVERVIEW.md`), I18N-4 census and `PROGRESS.md` updated.

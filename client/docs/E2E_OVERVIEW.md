@@ -232,7 +232,7 @@ e2e/
     session-results.spec.ts   # CLIENT-GL-38, CLIENT-GL-39
     session-thread-tags.spec.ts # CLIENT-GL-50
     post-tags.spec.ts           # CLIENT-GL-50 part 2
-    notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5
+    notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5, CLIENT-NOTIF-7
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
     profile-journey.spec.ts   # PROFILE-8
@@ -286,7 +286,7 @@ e2e/
       chat.ts                   # CHAT-10 — a separate backend (services/chat), bare paths, no ApiResponse<T> envelope
       locations.ts               # CLIENT-SESSION-1
       sessions.ts                # CLIENT-SESSION-1
-      notifications.ts           # CLIENT-NOTIF-1, CLIENT-NOTIF-5
+      notifications.ts           # CLIENT-NOTIF-1, CLIENT-NOTIF-5, CLIENT-NOTIF-7
       preferences.ts              # CLIENT-I18N-1 — GET /users/me/preferences, language: null
       reference.ts                # CLIENT-REF-1 — languages/countries/regions/resolve (missed in this listing at the time, added retroactively by CLIENT-REF-2)
 ```
@@ -790,7 +790,7 @@ blocks clicks behind it — a spec that joins/accepts must dismiss it ("Got it",
 |---|---|---|
 | Matches — Session detail `#ref` attributes render, and land in the create payload | Open Create session → pick **Badminton** (Pickleball has no session schema) → expand "Session detail" → the `LIST` `#ref` ("Racket models you might bring") renders one checkbox per profile entry (`gear/racketModels` = 2; check `Yonex Astrox 99`) → the `SINGLE` `#ref` ("Racket brand") has nothing on the profile so shows only a dropdown ending in "Other…" + a hint → click the LIST `#ref`'s "Other…" → nested `Add — …` `Dialog` → type "Victor Thruster" → **Add** → it's a checked, selectable draft → fill title / a Badminton location (`mockBadmintonLocation`) / duration / open slot → **Create** → intercepted `POST /api/sessions` body's `attributes` **==** `{ 'match/racketModel': ['Yonex Astrox 99', 'Victor Thruster'], 'match/format': 'Doubles' }` | CLIENT-SESSION-17 Part B. Its own `test()` (own page + 30s budget). Proves the whole path: `RefField` (choices from `profile.attributes` at `prefillKey`) → nested Radix "Other…" `Dialog` → `useCreateSessionModalData.refDraftOptions` (session-local) → `submitCreate`'s `pickPaths(sessionAttributes, collectSchemaPaths(schema))` → the POST payload. Also the regression guard for the CLIENT-SESSION-16 `useMatchesPageData` `sessionAttributeSchema` spread-shadowing bug this ticket fixed (no RTL test renders `MatchesPage`). Needs `mockBadmintonLocation` — `/api/locations/search` filters by `sportId` |
 
-### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5 + FRIEND-2, five `test()`s — a 4-step journey + four regression/navigation cases)
+### `e2e/flows/notification-bell.spec.ts` (CLIENT-NOTIF-1 + CLIENT-NOTIF-5 + FRIEND-2 + CLIENT-NOTIF-7, seven `test()`s — a 4-step journey + four regression/navigation cases + two for "Clear read" and the reject reason)
 
 The `TopBar` bell + dropdown — unread badge, list-on-open, mark-read-on-click + shell-level
 in-place modal, and "Mark all read". Fixtures: `mocks/handlers/notifications.ts`'s
@@ -866,6 +866,23 @@ row whose `entityId` matches nobody — the person accepted then unfriended sinc
 "Sam Rivera is now your friend", asserts the URL becomes `/friends` and the "Select a friend…"
 placeholder shows with **no** "Friend request unavailable" dialog. `focusReason: 'accepted'`
 (carried on `location.state` from the notification type) suppresses `focusUnavailable`.
+
+`Notification bell journey — "Clear read" removes the read notifications and keeps the unread ones`
+(CLIENT-NOTIF-7, NTF-8) — opens the bell on the default fixtures (ids 1-2 unread, ids 3-7 read),
+clicks "Clear read" and waits for the `GET /api/notifications?` that follows the `DELETE` (the list is
+refetched once the call settles). Then asserts the approval, the two friend-request and the other read
+rows are gone, the two unread rows are still there, the "Clear read" button has left (nothing read
+loaded), "Mark all read" is still showing and the badge still reads "2 unread notifications" (only
+read rows are deleted, so the count cannot change). The MSW handler
+`http.delete('/api/notifications/read')` removes the session's read fixtures and answers with the count.
+
+`Notification bell journey — a declined join request shows the reason the host gave` (CLIENT-NOTIF-7,
+NTF-8) — seeds `seedRejectedJoinRequestNotifications` (mockServer action
+`seed-rejected-join-request-notifications`, ids 9101 and 9102: two unread
+`session.join_request.rejected`, "Sunday pickup run" with the message "The session is full, try the
+next one" and "Tuesday night hoops" with `message: null`). Opens the bell and asserts both
+"Your request to join ... was declined" lines, the "Reason: The session is full, try the next one"
+line, and that exactly one "Reason:" line exists (the decline without a reason shows none).
 
 ### `e2e/flows/admin-route-guard.spec.ts` (ADMIN-1, ADMIN-4, 4 `test()`s)
 

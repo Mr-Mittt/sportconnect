@@ -73,6 +73,33 @@ export function markAllLoadedNotificationsReadInCache(queryClient: QueryClient):
   return flippedCount;
 }
 
+/**
+ * CLIENT-NOTIF-7: removes every read notification from every loaded page (the optimistic half of
+ * `DELETE /api/notifications/read`) and returns how many went. Unread rows are kept. The unread-count
+ * cache is deliberately not touched by this helper or its caller: only read rows go, so the badge
+ * cannot change.
+ */
+export function removeReadNotificationsFromCache(queryClient: QueryClient): number {
+  let removedCount = 0;
+  queryClient.setQueryData<NotificationsInfiniteData>(notificationKeys.list(), (data) => {
+    if (!data) return data;
+    return {
+      ...data,
+      pages: data.pages.map((page) => {
+        const content = page.content.filter((notification) => {
+          if (notification.isRead) {
+            removedCount += 1;
+            return false;
+          }
+          return true;
+        });
+        return { ...page, content, numberOfElements: content.length, empty: content.length === 0 };
+      }),
+    };
+  });
+  return removedCount;
+}
+
 /** Every currently-loaded unread notification id — the set `useMarkAllNotificationsRead` fires one PUT per. */
 export function unreadNotificationIdsInCache(queryClient: QueryClient): number[] {
   const data = snapshotNotificationsCache(queryClient);

@@ -4,12 +4,14 @@
     "unreadBadge": "{{count}} thông báo chưa đọc",
     "heading": "Thông báo",
     "markAllRead": "Đánh dấu tất cả đã đọc",
+    "clearRead": "Xóa đã đọc",
     "loading": "Đang tải…",
     "loadError": "Không thể tải thông báo.",
     "caughtUp": "Bạn đã xem hết thông báo.",
     "loadMore": "Tải thêm"
   },
   "row": {
-    "unread": "Chưa đọc"
+    "unread": "Chưa đọc",
+    "reason": "Lý do: {{message}}"
   }
 }

@@ -284,6 +284,43 @@ async function handleAdminRoute(
     return;
   }
 
+  // CLIENT-NOTIF-7: a declined join request with the host's reason and one without any (NTF-8), so
+  // the reason line and its absence both render.
+  if (action === 'seed-rejected-join-request-notifications' && req.method === 'POST') {
+    seedNotificationsState(sessionId, [
+      {
+        id: 9101,
+        type: 'session.join_request.rejected',
+        entityType: 'SESSION',
+        entityId: '1',
+        actorIds: [],
+        actorCount: 1,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        actors: [],
+        entityTitle: 'Sunday pickup run',
+        message: 'The session is full, try the next one',
+      },
+      {
+        id: 9102,
+        type: 'session.join_request.rejected',
+        entityType: 'SESSION',
+        entityId: '1',
+        actorIds: [],
+        actorCount: 1,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        actors: [],
+        entityTitle: 'Tuesday night hoops',
+        message: null,
+      },
+    ]);
+    sendJson(res, 200, { seeded: true });
+    return;
+  }
+
   const overrideMatch = action.match(/^override\/(.+)$/);
   if (overrideMatch && req.method === 'POST') {
     const name = overrideMatch[1];

@@ -1194,6 +1194,15 @@ export async function seedStaleAcceptedFriendNotification(sessionId: string): Pr
 }
 
 /**
+ * CLIENT-NOTIF-7 (NTF-8): replaces this session's notification list with two unread declined
+ * join requests: "Sunday pickup run" with the host's reason ("The session is full, try the next one")
+ * and "Tuesday night hoops" with no reason.
+ */
+export async function seedRejectedJoinRequestNotifications(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'seed-rejected-join-request-notifications');
+}
+
+/**
  * FEED-8 error-simulation helpers — one per real-data surface FEED-8
  * hardened. Call before `page.goto()`; the next matching request for this
  * session returns a 500, so the real query's `isError` (or, for the feed's

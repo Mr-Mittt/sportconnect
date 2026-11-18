@@ -19,7 +19,8 @@ interface NotificationRowProps {
  * primitives separate). Text segments come entirely from `getNotificationText`
  * — no name/title resolution happens here, it's already server-enriched
  * (NTF-4); only the actor name(s) and the entity title render bold, per
- * `NotificationTextSegment.bold`.
+ * `NotificationTextSegment.bold`. A declined join request also shows the host's reason (the
+ * notification's `message`) under the text, clamped to two lines, full text on hover.
  *
  * Unread: light-blue bullet (`border-accent`), black content (`text-primary`)
  * — bigger than the read bullet, so an unread row reads as visually heavier
@@ -30,10 +31,15 @@ interface NotificationRowProps {
 export function NotificationRow({ notification, onSelect, i18nOverridePrefix }: NotificationRowProps) {
   const t = useOverridableText('notifications', i18nOverridePrefix);
   const segments = getNotificationText(notification);
+  // CLIENT-NOTIF-7: the host's reason for declining. Only that type shows a message line, whatever
+  // `message` another type may carry later; a blank text is no text.
+  const reason =
+    notification.type === 'session.join_request.rejected' ? notification.message?.trim() || undefined : undefined;
 
   return (
     <button
       type="button"
+      data-notification-row
       onClick={() => onSelect(notification)}
       className="flex w-full cursor-pointer items-start gap-2 rounded-[7px] px-2 py-2 text-left outline-none hover:bg-surface-1 focus-visible:bg-surface-1"
     >
@@ -49,6 +55,11 @@ export function NotificationRow({ notification, onSelect, i18nOverridePrefix }: 
             </span>
           ))}
         </span>
+        {reason && (
+          <span title={reason} className="mt-0.5 line-clamp-2 text-2xs break-words text-text-muted">
+            {t('row.reason', { message: reason })}
+          </span>
+        )}
         <span className="mt-0.5 block text-right text-2xs text-text-muted">
           {formatRelativeTime(notification.updatedAt)}
         </span>

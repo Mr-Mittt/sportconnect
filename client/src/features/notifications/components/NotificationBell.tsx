@@ -1,4 +1,5 @@
 import { IconBell } from '@tabler/icons-react';
+import { useEffect, useRef } from 'react';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover';
 import type { Notification } from '../types';
@@ -18,6 +19,10 @@ interface NotificationBellProps {
   hasUnreadLoaded: boolean;
   onMarkAllRead: () => void;
   isMarkingAllRead: boolean;
+  /** CLIENT-NOTIF-7: at least one *loaded* notification is read, so "Clear read" has something to remove. */
+  hasReadLoaded: boolean;
+  onClearRead: () => void;
+  isClearingRead: boolean;
   /** CLIENT-I18N-9: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -50,9 +55,32 @@ export function NotificationBell({
   hasUnreadLoaded,
   onMarkAllRead,
   isMarkingAllRead,
+  hasReadLoaded,
+  onClearRead,
+  isClearingRead,
   i18nOverridePrefix,
 }: NotificationBellProps) {
   const t = useOverridableText('notifications', i18nOverridePrefix);
+  const listRef = useRef<HTMLDivElement>(null);
+  const clearRequestedRef = useRef(false);
+
+  // "Clear read" unmounts itself once nothing read is left, which would drop the keyboard focus
+  // onto the page. After a clear the focus goes to the first remaining row, or to the list itself
+  // when it is empty. Only a click on the button arms this, so a rollback (the rows come back and
+  // the button returns) and a plain "read" flip never move the focus.
+  useEffect(() => {
+    if (hasReadLoaded || !clearRequestedRef.current) return;
+    clearRequestedRef.current = false;
+    const list = listRef.current;
+    if (!list) return;
+    (list.querySelector<HTMLElement>('[data-notification-row]') ?? list).focus();
+  }, [hasReadLoaded]);
+
+  const handleClearRead = () => {
+    clearRequestedRef.current = true;
+    onClearRead();
+  };
+
   return (
     <Popover open={isOpen} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
@@ -73,21 +101,33 @@ export function NotificationBell({
         </button>
       </PopoverTrigger>
       <PopoverContent className="flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-1 p-0">
-        <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
+        <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1">
           <span className="text-2sm font-medium text-text-primary">{t('bell.heading')}</span>
-          {hasUnreadLoaded && (
-            <button
-              type="button"
-              onClick={onMarkAllRead}
-              disabled={isMarkingAllRead}
-              className="cursor-pointer text-2xs font-medium text-text-accent hover:underline disabled:cursor-default disabled:opacity-60"
-            >
-              {t('bell.markAllRead')}
-            </button>
-          )}
+          <div className="flex flex-wrap justify-end gap-x-3">
+            {hasUnreadLoaded && (
+              <button
+                type="button"
+                onClick={onMarkAllRead}
+                disabled={isMarkingAllRead}
+                className="cursor-pointer text-2xs font-medium text-text-accent hover:underline disabled:cursor-default disabled:opacity-60"
+              >
+                {t('bell.markAllRead')}
+              </button>
+            )}
+            {hasReadLoaded && (
+              <button
+                type="button"
+                onClick={handleClearRead}
+                disabled={isClearingRead}
+                className="cursor-pointer text-2xs font-medium text-text-accent hover:underline disabled:cursor-default disabled:opacity-60"
+              >
+                {t('bell.clearRead')}
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="max-h-96 overflow-y-auto px-1.5 pb-1.5">
+        <div ref={listRef} tabIndex={-1} className="max-h-96 overflow-y-auto px-1.5 pb-1.5 outline-none">
           {isLoading && <p className="px-1.5 py-3 text-2xs text-text-muted">{t('bell.loading')}</p>}
           {isError && (
             <p role="alert" className="px-1.5 py-3 text-2xs text-text-danger">

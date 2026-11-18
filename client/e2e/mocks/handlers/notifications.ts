@@ -200,6 +200,21 @@ export const notificationHandlers: HttpHandler[] = [
     notification.isRead = true;
     return HttpResponse.json(apiResponse(null, 'Notification marked read'));
   }),
+
+  // NTF-8 / CLIENT-NOTIF-7: hard-deletes every read notification of the caller and answers with how
+  // many it removed (0 when none is read). Unread rows stay. Registered after the `/:notificationId/read`
+  // PUT on purpose: it is a different method, so the two never compete for `/notifications/read`.
+  http.delete('/api/notifications/read', ({ request }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = sessionIdFromRequest(request);
+    const all = notificationSessions.get(sessionId);
+    const unread = all.filter((n) => !n.isRead);
+    const removed = all.length - unread.length;
+    all.length = 0;
+    all.push(...unread);
+    return HttpResponse.json(apiResponse(removed, 'Read notifications deleted'));
+  }),
 ];
 
 /**

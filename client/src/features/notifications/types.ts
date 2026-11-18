@@ -51,4 +51,8 @@ export interface Notification {
   updatedAt: string;
   actors: NotificationActorSummary[];
   entityTitle: string | null;
+  // NTF-8 / CLIENT-NOTIF-7: a short text some notifications carry (<= 500 characters, user content,
+  // shown as written). Today only `session.join_request.rejected` has one: the host's reason for
+  // declining. Null (or absent from an older server) means no text.
+  message?: string | null;
 }
