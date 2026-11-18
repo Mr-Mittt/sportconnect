@@ -13,12 +13,20 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 public interface SessionRepository extends JpaRepository<Session, Long> {
 
     Page<Session> findByGroupId(Long groupId, Pageable pageable);
+
+    /** SESSION-GROUP-2 — a group's sessions in the given statuses, soonest start first (the ordering is part of the name, so
+     * the caller's own Pageable sort must be stripped). Served by {@code idx_sessions_group_scheduled_start}. */
+    Page<Session> findByGroupIdAndStatusInOrderByScheduledStartAsc(Long groupId, Collection<SessionStatus> statuses, Pageable pageable);
+
+    /** SESSION-GROUP-2 — the same, newest start first (the History bucket). */
+    Page<Session> findByGroupIdAndStatusInOrderByScheduledStartDesc(Long groupId, Collection<SessionStatus> statuses, Pageable pageable);
 
     boolean existsByGroupIdAndScheduledStart(Long groupId, Instant scheduledStart);
 

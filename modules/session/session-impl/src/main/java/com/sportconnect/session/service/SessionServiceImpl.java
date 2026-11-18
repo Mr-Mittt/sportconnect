@@ -20,6 +20,7 @@ import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.GroupAudience;
+import com.sportconnect.session.api.dto.GroupSessionBucket;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionDiscoverDateCount;
@@ -384,14 +385,25 @@ public class SessionServiceImpl implements SessionService {
      * check already uses in this class, rather than distinguishing "doesn't exist" from "exists
      * but you can't see it" the way {@code getGroup} does (arguably the safer choice — it doesn't
      * leak group existence to a non-member either).
+     *
+     * <p>SESSION-GROUP-2: with a {@code bucket} the page holds only that bucket's statuses, in a fixed order (soonest start
+     * first, newest first for {@code HISTORY}); the caller's own {@code Pageable} sort is ignored, as in {@code /upcoming}.
+     * Without one it is every status, as before.
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable) {
+    public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, GroupSessionBucket bucket, Pageable pageable) {
         if (!groupService.isGroupMember(groupId, currentUserId)) {
             throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can view this group's sessions", null);
         }
-        return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
+        if (bucket == null) {
+            return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
+        }
+        Pageable fixedOrder = unsorted(pageable);
+        Page<Session> page = bucket.newestFirst()
+                ? sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(groupId, bucket.statuses(), fixedOrder)
+                : sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(groupId, bucket.statuses(), fixedOrder);
+        return toResponsePage(page, currentUserId);
     }
 
     /**

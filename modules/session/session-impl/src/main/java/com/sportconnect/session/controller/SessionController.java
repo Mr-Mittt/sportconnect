@@ -5,6 +5,7 @@ import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.GroupSessionBucket;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
@@ -107,19 +108,29 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Session retrieved successfully", response));
     }
 
-    @Operation(summary = "List a group's sessions", description = "SESSION-40: member-only regardless of the group's own public/private flag (widened 2026-09-22 from the previous private-group-only gate, which left a public group's sessions listable by any authenticated user).")
+    @Operation(summary = "List a group's sessions", description = "SESSION-40: member-only regardless of the group's own public/private flag (widened 2026-09-22 from the previous private-group-only gate, which left a public group's sessions listable by any authenticated user). SESSION-GROUP-2: optional bucket = ONGOING | SCHEDULED | PREPARING | HISTORY (COMPLETED and CANCELLED, newest first) narrows to that bucket's statuses in a fixed order (soonest start first); the caller's own sort is ignored when a bucket is given. Omitted = every status, as before.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "bucket is not one of the four values"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not a member of this group (SESSION_GROUP_MEMBER_REQUIRED)")
     })
     @GetMapping("/group/{groupId}")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getGroupSessions(
             @PathVariable Long groupId,
+            @RequestParam(required = false) String bucket,
             Authentication authentication,
             Pageable pageable) {
+        GroupSessionBucket parsedBucket = null;
+        if (bucket != null) {
+            try {
+                parsedBucket = GroupSessionBucket.valueOf(bucket.trim().toUpperCase(java.util.Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                throw invalidRequest("bucket must be one of ONGOING, SCHEDULED, PREPARING, HISTORY");
+            }
+        }
         Page<SessionResponse> response = sessionService.getGroupSessions(
-                groupId, SecurityUtils.extractUserId(authentication), pageable);
+                groupId, SecurityUtils.extractUserId(authentication), parsedBucket, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 

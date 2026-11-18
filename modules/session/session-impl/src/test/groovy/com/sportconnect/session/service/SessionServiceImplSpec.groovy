@@ -19,6 +19,7 @@ import com.sportconnect.session.access.SessionShareGate
 import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
 import com.sportconnect.session.api.dto.FeeType
+import com.sportconnect.session.api.dto.GroupSessionBucket
 import com.sportconnect.session.api.dto.GroupAudience
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.RejectParticipantRequest
@@ -920,7 +921,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.getGroupSessions(5L, userId, pageable)
+        sessionService.getGroupSessions(5L, userId, null, pageable)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> true
@@ -933,13 +934,68 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.getGroupSessions(5L, userId, pageable)
+        sessionService.getGroupSessions(5L, userId, null, pageable)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> false
         def e = thrown(ForbiddenException)
         e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
         0 * sessionRepository.findByGroupId(*_)
+    }
+
+    // -- SESSION-GROUP-2: a group's sessions by bucket ---------------------------------------------------------------
+
+    def "getGroupSessions with a bucket asks only for that bucket's statuses, in the fixed order, ignoring the caller's own sort"() {
+        given:
+        def userId = UUID.randomUUID()
+        def callerPage = PageRequest.of(2, 10, Sort.by("title").descending())
+
+        when:
+        sessionService.getGroupSessions(5L, userId, bucket, callerPage)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        (newestFirst ? 0 : 1) * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(5L, statuses,
+                { Pageable p -> p.pageNumber == 2 && p.pageSize == 10 && p.sort.unsorted }) >> new PageImpl([])
+        (newestFirst ? 1 : 0) * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(5L, statuses,
+                { Pageable p -> p.pageNumber == 2 && p.pageSize == 10 && p.sort.unsorted }) >> new PageImpl([])
+        0 * sessionRepository.findByGroupId(*_)
+
+        where:
+        bucket                        | statuses                                          | newestFirst
+        GroupSessionBucket.ONGOING    | [SessionStatus.ONGOING]                           | false
+        GroupSessionBucket.SCHEDULED  | [SessionStatus.SCHEDULED]                         | false
+        GroupSessionBucket.PREPARING  | [SessionStatus.PREPARING]                         | false
+        GroupSessionBucket.HISTORY    | [SessionStatus.COMPLETED, SessionStatus.CANCELLED] | true
+    }
+
+    def "getGroupSessions without a bucket keeps every status and the caller's own paging and sort"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10, Sort.by("title"))
+
+        when:
+        sessionService.getGroupSessions(5L, userId, null, pageable)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.findByGroupId(5L, pageable) >> new PageImpl([])
+        0 * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(*_)
+        0 * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(*_)
+    }
+
+    def "getGroupSessions with a bucket still refuses a non-member before any query"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getGroupSessions(5L, userId, GroupSessionBucket.HISTORY, PageRequest.of(0, 10))
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> false
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
+        0 * sessionRepository._
     }
 
     def "updateSession allows the creator of a standalone session"() {

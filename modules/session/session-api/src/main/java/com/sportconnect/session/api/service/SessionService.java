@@ -2,6 +2,7 @@ package com.sportconnect.session.api.service;
 
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.GroupSessionBucket;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
@@ -81,8 +82,11 @@ public interface SessionService {
      * non-member, whether the group is public, private, non-existent, or inactive —
      * {@code GroupService.isGroupMember} returns false uniformly for all of those, and this
      * deliberately doesn't distinguish them (doesn't leak group existence to a non-member).
+     *
+     * <p>SESSION-GROUP-2: {@code bucket} (nullable) narrows to ONGOING, SCHEDULED, PREPARING (its own bucket) or HISTORY
+     * (COMPLETED and CANCELLED, newest first), in a fixed order that ignores the caller's own sort; null = every status.
      */
-    Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable);
+    Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, GroupSessionBucket bucket, Pageable pageable);
 
     /**
      * SESSION-27 — every session (standalone or group-linked) where the caller currently has a
