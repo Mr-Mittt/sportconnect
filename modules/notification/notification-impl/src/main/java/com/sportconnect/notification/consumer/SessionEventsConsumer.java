@@ -12,6 +12,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
+import com.sportconnect.session.api.event.SessionShareCreatedEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import com.sportconnect.session.api.event.SessionUpdatedEvent;
 import java.nio.charset.StandardCharsets;
@@ -134,6 +135,11 @@ public class SessionEventsConsumer {
                 // NTF-8: the host's reason travels with the notification (the one event type that carries a message).
                 yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId(),
                         e.getReason());
+            }
+            case "session.share.created" -> {
+                // SESSION-66 / CLIENT-SESSION-49: a friend shared a session with the recipient (single recipient).
+                SessionShareCreatedEvent e = objectMapper.readValue(body, SessionShareCreatedEvent.class);
+                yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId());
             }
             case "session.invitation.created" -> {
                 SessionInvitationCreatedEvent e = objectMapper.readValue(body, SessionInvitationCreatedEvent.class);

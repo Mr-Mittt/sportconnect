@@ -500,14 +500,14 @@ public interface SessionService {
     void generateNextOccurrenceForGroup(Long groupId);
 
     /**
-     * SESSION-66 — a {@code JOINED} participant of a standalone session shares it with friends. A share is a
-     * notification, not an invitation: one {@code session.invitation.created} outbox row per recipient (actor = the
-     * caller), no participant row, no system comment; each friend opens the session from the notification and decides
-     * for themself whether to ask to join, under the normal join rules.
+     * SESSION-66 — any user shares a standalone session with friends, whatever the session's status and whatever their
+     * own participation (CLIENT-SESSION-49 relaxed the first rules). A share is a notification, not an invitation: one
+     * {@code session.share.created} outbox row per recipient (actor = the caller), no participant row, no system
+     * comment; each friend opens the session from the notification and decides for themself whether to ask to join,
+     * under the normal join rules.
      *
      * <p>Refusals, checked in this order and before any write: {@code SESSION_NOT_FOUND} (404, missing or its group is
-     * gone), {@code SESSION_SHARE_NOT_ALLOWED} (403, the caller is not a {@code JOINED} participant, or it is a group
-     * session), {@code SESSION_NOT_SHAREABLE} (409, status other than {@code PREPARING}/{@code SCHEDULED}).
+     * gone), {@code SESSION_SHARE_NOT_ALLOWED} (403, a group session: shareable by nobody for now).
      *
      * <p>Skipped without error, and counted in {@code skipped}: anyone who is not a friend of the caller (the caller's
      * own id included), a friend already {@code JOINED}, {@code REQUESTED} or {@code INVITED}, and a deactivated

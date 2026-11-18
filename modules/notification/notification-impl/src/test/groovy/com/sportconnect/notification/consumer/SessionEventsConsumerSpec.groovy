@@ -6,6 +6,7 @@ import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent
+import com.sportconnect.session.api.event.SessionShareCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
@@ -238,6 +239,23 @@ class SessionEventsConsumerSpec extends Specification {
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.invitation.created" && e.singleRecipient() == recipientId
+        })
+    }
+
+    def "dispatches session.share.created as a single-recipient event (SESSION-66, CLIENT-SESSION-49)"() {
+        given:
+        def actorId = UUID.randomUUID()
+        def recipientId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(SessionShareCreatedEvent.builder()
+                .sessionId(7L).actorId(actorId).recipientUserId(recipientId).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.share.created", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.share.created" && e.sessionId() == 7L && e.actorId() == actorId &&
+                    e.singleRecipient() == recipientId && e.message() == null
         })
     }
 

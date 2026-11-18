@@ -54,6 +54,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class SessionShareIntegrationTest extends RedisBaseIT {
 
+    private static final String SHARE_CREATED = "session.share.created";
     private static final String INVITATION = "session.invitation.created";
 
     @Autowired private SessionRepository sessionRepository;
@@ -145,12 +146,17 @@ class SessionShareIntegrationTest extends RedisBaseIT {
                 .content(toJson(Map.of("userIds", userIds.stream().map(UUID::toString).toList()))));
     }
 
-    private List<SessionOutboxEvent> invitations() {
-        return outboxRepository.findAll().stream().filter(e -> INVITATION.equals(e.getEventType())).toList();
+    private List<SessionOutboxEvent> shareEvents() {
+        return outboxRepository.findAll().stream().filter(e -> SHARE_CREATED.equals(e.getEventType())).toList();
+    }
+
+    /** A share is not an invitation: the invitation event type must never be written by it. */
+    private void assertNoInvitationEvent() {
+        assertThat(outboxRepository.findAll().stream().filter(e -> INVITATION.equals(e.getEventType()))).isEmpty();
     }
 
     private void assertNothingWritten(Long sessionId, int participantRows) {
-        assertThat(invitations()).isEmpty();
+        assertThat(shareEvents()).isEmpty();
         assertThat(participantRepository.findAll().stream().filter(p -> sessionId.equals(p.getSessionId())).count())
                 .isEqualTo(participantRows);
         assertThat(commentRepository.count()).isZero();
@@ -159,7 +165,7 @@ class SessionShareIntegrationTest extends RedisBaseIT {
     // ---- the happy path ----------------------------------------------------------------------------------------
 
     @Test
-    void theHost_sharesWithFriends_oneInvitationEventEach_noParticipantRow_noComment() throws Exception {
+    void theHost_sharesWithFriends_oneShareEventEach_noParticipantRow_noComment() throws Exception {
         Long sessionId = standalone(SessionStatus.SCHEDULED);
         UUID a = friendOf(hostId);
         UUID b = friendOf(hostId);
@@ -169,7 +175,7 @@ class SessionShareIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.data.sent").value(2))
                 .andExpect(jsonPath("$.data.skipped").value(0));
 
-        List<SessionOutboxEvent> events = invitations();
+        List<SessionOutboxEvent> events = shareEvents();
         assertThat(events).hasSize(2);
         Set<UUID> recipients = new java.util.HashSet<>();
         for (SessionOutboxEvent event : events) {
@@ -179,8 +185,10 @@ class SessionShareIntegrationTest extends RedisBaseIT {
             recipients.add(UUID.fromString(payload.get("recipientUserId").asText()));
         }
         assertThat(recipients).containsExactlyInAnyOrder(a, b);
-        // A share is not an invitation: the host's own row is the only participant row, and nothing is said in the thread.
+        // A share is not an invitation: the host's own row is the only participant row, nothing is said in the
+        // thread, and the invitation event type is not used.
         assertThat(participantRepository.findAll()).hasSize(1);
+        assertNoInvitationEvent();
         assertThat(commentRepository.count()).isZero();
     }
 
@@ -195,8 +203,8 @@ class SessionShareIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.sent").value(1));
 
-        assertThat(invitations()).hasSize(1);
-        JsonNode payload = objectMapper.readTree(invitations().get(0).getPayload());
+        assertThat(shareEvents()).hasSize(1);
+        JsonNode payload = objectMapper.readTree(shareEvents().get(0).getPayload());
         assertThat(UUID.fromString(payload.get("actorId").asText())).isEqualTo(joiner);
     }
 
@@ -219,8 +227,10 @@ class SessionShareIntegrationTest extends RedisBaseIT {
     // ---- who may share (access boundary) -----------------------------------------------------------------------
 
     @Test
-    void aCallerWhoIsNotJoined_isRefused_whateverTheirRelationToTheSession() throws Exception {
+    void anyCaller_mayShare_whateverTheirRelationToTheSession() throws Exception {
         Long sessionId = standalone(SessionStatus.SCHEDULED);
+        int shared = 0;
+        // CLIENT-SESSION-49: requested, invited, left and not in the session at all may share it too.
         for (ParticipantStatus held : new ParticipantStatus[] {
                 ParticipantStatus.REQUESTED, ParticipantStatus.INVITED, ParticipantStatus.LEFT, null}) {
             UUID caller = createUserWithRoles(true, "USER");
@@ -230,10 +240,11 @@ class SessionShareIntegrationTest extends RedisBaseIT {
             UUID friend = friendOf(caller);
 
             share(sessionId, caller, List.of(friend))
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.errorCode").value("SESSION_SHARE_NOT_ALLOWED"));
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.sent").value(1));
+            shared++;
+            assertThat(shareEvents()).hasSize(shared);
         }
-        assertThat(invitations()).isEmpty();
     }
 
     @Test
@@ -249,7 +260,7 @@ class SessionShareIntegrationTest extends RedisBaseIT {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_SHARE_NOT_ALLOWED"));
 
-        assertThat(invitations()).isEmpty();
+        assertThat(shareEvents()).isEmpty();
     }
 
     @Test
@@ -267,7 +278,7 @@ class SessionShareIntegrationTest extends RedisBaseIT {
 
         share(sessionId, inactiveHost, List.of(friend)).andExpect(status().isUnauthorized());
 
-        assertThat(invitations()).isEmpty();
+        assertThat(shareEvents()).isEmpty();
     }
 
     @Test
@@ -282,18 +293,19 @@ class SessionShareIntegrationTest extends RedisBaseIT {
     // ---- the session's status -----------------------------------------------------------------------------------
 
     @Test
-    void aSessionThatIsNotPreparingOrScheduled_isRefused_andNothingIsWritten() throws Exception {
+    void aSessionInAnyStatus_canBeShared() throws Exception {
+        // CLIENT-SESSION-49 removed the status rule (SESSION_NOT_SHAREABLE): every status shares, one event each.
         UUID friend = friendOf(hostId);
-        for (SessionStatus status : new SessionStatus[] {
-                SessionStatus.ONGOING, SessionStatus.COMPLETED, SessionStatus.CANCELLED}) {
+        int shared = 0;
+        for (SessionStatus status : SessionStatus.values()) {
             Long sessionId = standalone(status);
 
             share(sessionId, hostId, List.of(friend))
-                    .andExpect(status().isConflict())
-                    .andExpect(jsonPath("$.errorCode").value("SESSION_NOT_SHAREABLE"))
-                    .andExpect(jsonPath("$.errorParams.status").value(status.name()));
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.sent").value(1));
+            shared++;
+            assertThat(shareEvents()).hasSize(shared);
         }
-        assertThat(invitations()).isEmpty();
     }
 
     // ---- who may be shared with ---------------------------------------------------------------------------------
@@ -312,7 +324,7 @@ class SessionShareIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.data.sent").value(1))
                 .andExpect(jsonPath("$.data.skipped").value(2));
 
-        List<SessionOutboxEvent> events = invitations();
+        List<SessionOutboxEvent> events = shareEvents();
         assertThat(events).hasSize(1);
         assertThat(UUID.fromString(objectMapper.readTree(events.get(0).getPayload()).get("recipientUserId").asText()))
                 .isEqualTo(friend);
@@ -354,7 +366,7 @@ class SessionShareIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.data.sent").value(2))
                 .andExpect(jsonPath("$.data.skipped").value(6));
 
-        Set<UUID> notified = invitations().stream().map(e -> {
+        Set<UUID> notified = shareEvents().stream().map(e -> {
             try {
                 return UUID.fromString(objectMapper.readTree(e.getPayload()).get("recipientUserId").asText());
             } catch (Exception ex) {
@@ -387,6 +399,6 @@ class SessionShareIntegrationTest extends RedisBaseIT {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
         }
-        assertThat(invitations()).isEmpty();
+        assertThat(shareEvents()).isEmpty();
     }
 }

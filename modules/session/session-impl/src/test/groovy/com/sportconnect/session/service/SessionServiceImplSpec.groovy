@@ -28,6 +28,7 @@ import com.sportconnect.session.api.dto.StartTimeFilter
 import com.sportconnect.session.api.dto.UpdateSessionRequest
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
+import com.sportconnect.session.api.event.SessionShareCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent
@@ -3907,7 +3908,7 @@ class SessionServiceImplSpec extends Specification {
         ids as Set
     }
 
-    def "shareSession notifies each friend with one session.invitation.created event and writes no participant row"() {
+    def "shareSession notifies each friend with one session.share.created event and writes no participant row"() {
         given:
         def caller = UUID.randomUUID()
         def a = UUID.randomUUID()
@@ -3923,9 +3924,9 @@ class SessionServiceImplSpec extends Specification {
         1 * userFriendService.getAcceptedFriendIds(caller) >> [a, b, UUID.randomUUID()]
         1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
         1 * userService.getActiveUserIds([a, b]) >> activeIds([a, b])
-        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
             e.sessionId == 1L && e.actorId == caller && e.recipientUserId == a }) >> new SessionOutboxEvent()
-        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
             e.sessionId == 1L && e.actorId == caller && e.recipientUserId == b }) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
         0 * sessionParticipantRepository.save(_)
@@ -3935,7 +3936,7 @@ class SessionServiceImplSpec extends Specification {
         result.skipped == 0
     }
 
-    def "shareSession allows a PREPARING and a SCHEDULED session"() {
+    def "shareSession allows a session in any status (CLIENT-SESSION-49): #status"() {
         given:
         def caller = UUID.randomUUID()
         def a = UUID.randomUUID()
@@ -3950,36 +3951,15 @@ class SessionServiceImplSpec extends Specification {
         1 * userFriendService.getAcceptedFriendIds(caller) >> [a]
         1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
         1 * userService.getActiveUserIds([a]) >> activeIds([a])
-        1 * sessionOutboxWriter.build("session.invitation.created", _ as SessionInvitationCreatedEvent) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.share.created", _ as SessionShareCreatedEvent) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll(_)
         result.sent == 1
 
         where:
-        status << [SessionStatus.PREPARING, SessionStatus.SCHEDULED]
+        status << SessionStatus.values().toList()
     }
 
-    def "shareSession is refused for a session that is not PREPARING or SCHEDULED, before the friends are read"() {
-        given:
-        def caller = UUID.randomUUID()
-        def session = shareable(caller, status)
-
-        when:
-        sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([UUID.randomUUID()]).build())
-
-        then:
-        1 * sessionRepository.findById(1L) >> Optional.of(session)
-        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
-        def e = thrown(ConflictException)
-        e.errorCode == 'SESSION_NOT_SHAREABLE'
-        e.errorParams == [status: status.name()]
-        0 * userFriendService._
-        0 * sessionOutboxEventRepository.saveAll(_)
-
-        where:
-        status << [SessionStatus.ONGOING, SessionStatus.COMPLETED, SessionStatus.CANCELLED]
-    }
-
-    def "shareSession refuses a caller the gate refuses (missing session, not joined, group session) and does nothing else"() {
+    def "shareSession refuses a caller the gate refuses (missing session, group session) and does nothing else"() {
         given:
         def caller = UUID.randomUUID()
         def session = shareable(caller)
@@ -4020,7 +4000,7 @@ class SessionServiceImplSpec extends Specification {
         // only the friend goes on to the participant and user lookups: the stranger is dropped before them
         1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, [friend]) >> []
         1 * userService.getActiveUserIds([friend]) >> activeIds([friend])
-        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
             e.recipientUserId == friend }) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
         noExceptionThrown()
@@ -4074,7 +4054,7 @@ class SessionServiceImplSpec extends Specification {
                 participantRow(invited, ParticipantStatus.INVITED)]
         // the user module answers with the active ones only: the deactivated friend is not in it
         1 * userService.getActiveUserIds([fresh, deactivated]) >> ([fresh] as Set)
-        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
             e.recipientUserId == fresh }) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
         result.sent == 1
@@ -4098,7 +4078,7 @@ class SessionServiceImplSpec extends Specification {
         1 * userFriendService.getAcceptedFriendIds(caller) >> [known, missing]
         1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
         1 * userService.getActiveUserIds([known, missing]) >> activeIds([known])
-        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
             e.recipientUserId == known }) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
         result.sent == 1
@@ -4121,7 +4101,7 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, { Collection c ->
             c as Set == [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED] as Set }, [left]) >> []
         1 * userService.getActiveUserIds([left]) >> activeIds([left])
-        1 * sessionOutboxWriter.build("session.invitation.created", _ as SessionInvitationCreatedEvent) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.share.created", _ as SessionShareCreatedEvent) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll(_)
         result.sent == 1
     }

@@ -41,6 +41,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
+import com.sportconnect.session.api.event.SessionShareCreatedEvent;
 import com.sportconnect.session.api.event.SessionUpdatedEvent;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.session.entity.Session;
@@ -852,17 +853,13 @@ public class SessionServiceImpl implements SessionService {
     @Override
     @Transactional
     public SessionShareResponse shareSession(Long sessionId, UUID callerId, ShareSessionRequest request) {
-        // Availability (404) before visibility (403), then the status: every refusal comes before any read of
-        // recipients' state and before any write, so a refused call leaves nothing behind.
+        // Availability (404) before visibility (403): every refusal comes before any read of recipients' state and
+        // before any write, so a refused call leaves nothing behind. Any caller may share a standalone session in any
+        // status; only a group session is refused.
         Session session = sessionRepository.findById(sessionId).orElse(null);
         sessionShareGate.require(session, callerId,
                 "SESSION_NOT_FOUND", "Session not found",
-                "SESSION_SHARE_NOT_ALLOWED", "Only a joined participant can share a standalone session");
-        if (session.getStatus() != SessionStatus.PREPARING && session.getStatus() != SessionStatus.SCHEDULED) {
-            throw new ConflictException("SESSION_NOT_SHAREABLE",
-                    "A session can be shared only while it is preparing or scheduled",
-                    Map.of("status", session.getStatus().name()));
-        }
+                "SESSION_SHARE_NOT_ALLOWED", "A group session cannot be shared");
 
         List<UUID> requested = request.getUserIds().stream().distinct().toList();
 
@@ -891,11 +888,11 @@ public class SessionServiceImpl implements SessionService {
         }
 
         if (!recipients.isEmpty()) {
-            // The existing invitation event, so the notification text and click-to-open-session already work; the
-            // outbox rows ride this transaction, so a failure rolls the whole share back.
+            // Its own event (session.share.created), not the invitation one: the friend reads "shared ... with you";
+            // the outbox rows ride this transaction, so a failure rolls the whole share back.
             sessionOutboxEventRepository.saveAll(recipients.stream()
-                    .map(recipientId -> sessionOutboxWriter.build("session.invitation.created",
-                            SessionInvitationCreatedEvent.builder()
+                    .map(recipientId -> sessionOutboxWriter.build("session.share.created",
+                            SessionShareCreatedEvent.builder()
                                     .sessionId(sessionId)
                                     .actorId(callerId)
                                     .recipientUserId(recipientId)

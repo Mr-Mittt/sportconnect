@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * SESSION-66 — the friends a joined participant shares a session with. A share is a notification, not an invitation:
+ * SESSION-66 — the friends a user shares a standalone session with. A share is a notification, not an invitation:
  * no participant row is written, the friend decides for themself whether to ask to join. Duplicate ids count once.
  */
 @Data
