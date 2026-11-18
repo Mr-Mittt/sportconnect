@@ -183,6 +183,8 @@ codes inline. Wrap errors with `%w` (via `fmt.Errorf`) when adding context on th
 
 ## Known gaps (documented, not silently missing)
 
+- **A deactivated friend as the target of a direct conversation (CHAT-23).** `OpenDirect` authorizes from the friendship cache only and the monolith publishes no event when an account is deactivated, so the service cannot tell the target is deactivated. The rule is root `CLAUDE.md` § Account lifecycle (a new interaction excludes deactivated accounts); the fix needs a sync event and a cache column, not a live call.
+
 - **Role sync:** `group_members_cache.role` is stored but not kept in sync on role change
   (`transferOwnership`/`updateMemberRole` on the Java side don't publish an event) — chat
   authorization only ever needs "member or not," not role. Revisit if a feature needs role-aware

@@ -21,9 +21,13 @@ name: chat-image
 on:
   push:
     branches: [master]
+    # '!services/chat/**/docs/**' and '!services/chat/**/*.md' skip docs-only changes (the same filter as
+    # chat-ci): markdown, in a docs/ folder or not (CLAUDE.md, README.md), is not part of the image.
     paths:
       - 'services/chat/**'
       - '!services/chat/**/docs/**'
+      - '!services/chat/*.md'
+      - '!services/chat/**/*.md'
       - 'infra/scripts/chat-image-plan.sh'
       - 'infra/scripts/chat-version.sh'
       - '.github/workflows/chat-image.yml'
@@ -31,6 +35,8 @@ on:
     paths:
       - 'services/chat/**'
       - '!services/chat/**/docs/**'
+      - '!services/chat/*.md'
+      - '!services/chat/**/*.md'
       - 'infra/scripts/chat-image-plan.sh'
       - 'infra/scripts/chat-version.sh'
       - '.github/workflows/chat-image.yml'

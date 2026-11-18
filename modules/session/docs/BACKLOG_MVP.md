@@ -39,6 +39,7 @@
 | 17 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
 | 18 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
 | 19 | [SESSION-62](MVP/SESSION-62_REJECT_A_SESSION_START_IN_THE_PAST.md) | Reject a session start in the past (coded 400 `SESSION_START_IN_PAST`, 5-minute grace) on create and on a start change; the client already restricts it in CLIENT-GL-38 | `TODO` |
+| 20 | [SESSION-68](MVP/SESSION-68_CREATE_SESSION_INVITEES_MUST_BE_FRIENDS_AND_ACTIVE.md) | `createSession` invitees must be friends and active: `inviteeIds` are checked for neither today, so a stranger or a deactivated account becomes an `INVITED` row and gets a notification; skip silently (default) or refuse, decided at pickup (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
 
 ---
 

@@ -34,14 +34,20 @@ on:
     # markdown). Path filters evaluate in order and the *last* matching pattern wins per changed
     # file, so a PR touching both a doc and real chat-service code still runs — the code file
     # only matches the 'services/chat/**' positive pattern, never the docs negation.
+    # '!services/chat/**/*.md' does the same for markdown outside a docs/ folder (CLAUDE.md,
+    # README.md): nothing in the build or the image reads it (the only go:embed is *.sql).
     paths:
       - 'services/chat/**'
       - '!services/chat/**/docs/**'
+      - '!services/chat/*.md'
+      - '!services/chat/**/*.md'
       - '.github/workflows/chat-ci.yml'
   pull_request:
     paths:
       - 'services/chat/**'
       - '!services/chat/**/docs/**'
+      - '!services/chat/*.md'
+      - '!services/chat/**/*.md'
       - '.github/workflows/chat-ci.yml'
   workflow_dispatch:
 
