@@ -256,5 +256,7 @@
     <include file="db/changelog/changes/V095__group_session_settings_and_recurrences.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-GROUP-5: sessions.recurrence_id / occurrence_date (+ unique index), group_session_generation_queue -->
     <include file="db/changelog/changes/V096__group_session_generation_queue.sql" relativeToChangelogFile="false"/>
+    <!-- GROUP-1: drops groups.recurrence_* and group_settings.auto_generate_sessions (the old single weekly rule; DESTRUCTIVE) -->
+    <include file="db/changelog/changes/V097__drop_old_group_recurrence_rule.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

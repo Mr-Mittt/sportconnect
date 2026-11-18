@@ -167,7 +167,7 @@ A11 also moved statuses: owner/admin/member/invitee permission failures went 400
 | `GROUP_MEMBER_CAPACITY_REACHED` | 400 | `{max}` | A join, invite acceptance or add-member that would exceed the group type's member cap. |
 | `GROUP_PIN_LIMIT_REACHED` | 400 | `{max: 10}` | Pinning an eleventh post. |
 | `GROUP_POST_NOT_PINNABLE` | 400 | none | Pinning a post from another group, or one that is not a `GROUP_POST`. |
-| `GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH` | 400 | none | Setting a recurrence location whose sport differs from the group's. |
+| `GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH` | 400 | none | Saving a group session recurrence configuration (`POST`/`PUT /api/sessions/group/{id}/recurrences`, SESSION-GROUP-4) whose location's sport differs from the group's. (Until GROUP-1 it was also returned by the removed `PUT /api/groups/{id}/recurrence`.) |
 
 Not coded by A11: the internal seed or data lookups (group owner role, member role, admin role, default group type, group type, group settings, group owner, current-owner membership), which use the category copy, and `Group has no sport set — cannot validate a sport-specific location` (defensive, effectively unreachable). `getGroup` of a missing group, and all other group lookups by id, use `GROUP_NOT_FOUND`.
 

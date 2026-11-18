@@ -9,8 +9,6 @@ import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.dto.*
 import com.sportconnect.group.entity.*
 import com.sportconnect.group.repository.*
-import com.sportconnect.location.api.dto.LocationResponse
-import com.sportconnect.location.api.service.LocationService
 import com.sportconnect.social.post.api.dto.PostResponse
 import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.api.dto.SystemCode
@@ -51,7 +49,6 @@ class GroupServiceImplSpec extends Specification {
     // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
     // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
     ObjectMapper objectMapper = new ObjectMapper()
-    LocationService locationService = Mock()
 
     @Subject
     GroupServiceImpl groupService = new GroupServiceImpl(
@@ -70,8 +67,7 @@ class GroupServiceImplSpec extends Specification {
             invitationRepository,
             invitationInviterRepository,
             stringRedisTemplate,
-            objectMapper,
-            locationService)
+            objectMapper)
 
     // A7: createGroup now resolves the sport before the profile gate, so every createGroup
     // test has to stub SportService. Two fixtures cover the only distinction that matters.
@@ -3988,170 +3984,6 @@ class GroupServiceImplSpec extends Specification {
         def ex = thrown(ForbiddenException)
         ex.errorCode == 'GROUP_MEMBER_REQUIRED'
     }
-
-    // ─── getGroupRecurrence / updateGroupRecurrence / getGroupsWithAutoGenerateSessionsEnabled ──
-
-    def "getGroupRecurrence should return the schedule when caller is a member"() {
-        given:
-        testGroup.recurrenceDayOfWeek = java.time.DayOfWeek.TUESDAY
-        testGroup.recurrenceTime = java.time.LocalTime.of(19, 0)
-        testGroup.recurrenceLocationId = 5L
-        def group = testGroup
-
-        when:
-        def result = groupService.getGroupRecurrence(testGroup.id, userId)
-
-        then:
-        1 * groupRepository.findById(testGroup.id) >> Optional.of(group)
-        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, userId) >> true
-        result.recurrenceDayOfWeek == java.time.DayOfWeek.TUESDAY
-        result.recurrenceLocationId == 5L
-    }
-
-    def "getGroupRecurrence should throw BadRequestException when caller is not a member"() {
-        when:
-        groupService.getGroupRecurrence(testGroup.id, otherUserId)
-
-        then:
-        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * groupMemberRepository.existsByGroupIdAndUserId(testGroup.id, otherUserId) >> false
-        def ex = thrown(ForbiddenException)
-        ex.errorCode == 'GROUP_MEMBER_REQUIRED'
-    }
-
-    def "updateGroupRecurrence should require owner"() {
-        when:
-        groupService.updateGroupRecurrence(testGroup.id, otherUserId, UpdateGroupRecurrenceRequest.builder().build())
-
-        then:
-        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, otherUserId) >> Optional.empty()
-        def ex = thrown(ForbiddenException)
-        ex.errorCode == 'GROUP_OWNER_REQUIRED'
-        0 * groupRepository.save(_)
-    }
-
-    def "updateGroupRecurrence should reject a recurrenceLocationId whose sport doesn't match the group"() {
-        given:
-        def request = UpdateGroupRecurrenceRequest.builder().recurrenceLocationId(5L).build()
-        def mismatchedLocation = LocationResponse.builder().id(5L).sportId(99L).build()
-
-        when:
-        groupService.updateGroupRecurrence(testGroup.id, userId, request)
-
-        then:
-        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
-                Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
-        1 * locationService.getLocation(5L) >> mismatchedLocation
-        def ex = thrown(BadRequestException)
-        ex.errorCode == 'GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH'
-        0 * groupRepository.save(_)
-    }
-
-    def "updateGroupRecurrence should update fields when the location's sport matches"() {
-        given:
-        def request = UpdateGroupRecurrenceRequest.builder()
-                .recurrenceDayOfWeek(java.time.DayOfWeek.TUESDAY)
-                .recurrenceTime(java.time.LocalTime.of(19, 0))
-                .recurrenceDurationMinutes(90)
-                .recurrenceLocationId(5L)
-                .recurrenceLocationNote("Court 3")
-                .build()
-        def matchingLocation = LocationResponse.builder().id(5L).sportId(testGroup.sportId).build()
-
-        when:
-        def result = groupService.updateGroupRecurrence(testGroup.id, userId, request)
-
-        then:
-        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
-                Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
-        1 * locationService.getLocation(5L) >> matchingLocation
-        1 * groupRepository.save({ Group g ->
-            g.recurrenceDayOfWeek == java.time.DayOfWeek.TUESDAY &&
-            g.recurrenceDurationMinutes == 90 &&
-            g.recurrenceLocationId == 5L &&
-            g.recurrenceLocationNote == "Court 3"
-        }) >> { Group g -> g }
-        result.recurrenceLocationId == 5L
-        result.recurrenceLocationNote == "Court 3"
-    }
-
-    // ── SESSION-38: event-driven generation trigger ─────────────────────────
-
-    def "getGroupsWithAutoGenerateSessionsEnabled returns only groups with a resolvable owner"() {
-        given:
-        def enabledSettings = GroupSettings.builder().id(1L).groupId(testGroup.id)
-                .groupTypeId(defaultGroupType.id).autoGenerateSessions(true).build()
-
-        when:
-        def result = groupService.getGroupsWithAutoGenerateSessionsEnabled()
-
-        then:
-        1 * groupSettingsRepository.findByAutoGenerateSessionsTrue() >> [enabledSettings]
-        1 * groupRepository.findAllById([testGroup.id]) >> [testGroup]
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupMemberRepository.findByGroupIdInAndRoleId([testGroup.id], ownerRole.id) >>
-                [GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()]
-        result.size() == 1
-        result[0].groupId == testGroup.id
-        result[0].ownerId == userId
-        result[0].groupName == testGroup.groupName
-    }
-
-    def "getGroupsWithAutoGenerateSessionsEnabled returns an empty list when nothing is enabled"() {
-        when:
-        def result = groupService.getGroupsWithAutoGenerateSessionsEnabled()
-
-        then:
-        1 * groupSettingsRepository.findByAutoGenerateSessionsTrue() >> []
-        0 * groupRepository.findAllById(_)
-        result.isEmpty()
-    }
-
-    def "getGroupRecurrenceConfigsByGroupIds returns only groups with a resolvable owner, scoped to the given ids"() {
-        given:
-        def enabledSettings = GroupSettings.builder().id(1L).groupId(testGroup.id)
-                .groupTypeId(defaultGroupType.id).autoGenerateSessions(true).build()
-
-        when:
-        def result = groupService.getGroupRecurrenceConfigsByGroupIds([testGroup.id])
-
-        then:
-        1 * groupSettingsRepository.findByGroupIdInAndAutoGenerateSessionsTrue([testGroup.id]) >> [enabledSettings]
-        1 * groupRepository.findAllById([testGroup.id]) >> [testGroup]
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupMemberRepository.findByGroupIdInAndRoleId([testGroup.id], ownerRole.id) >>
-                [GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()]
-        result.size() == 1
-        result[0].groupId == testGroup.id
-        result[0].ownerId == userId
-    }
-
-    def "getGroupRecurrenceConfigsByGroupIds returns an empty list without querying when given no ids"() {
-        when:
-        def result = groupService.getGroupRecurrenceConfigsByGroupIds([])
-
-        then:
-        0 * groupSettingsRepository._
-        result.isEmpty()
-    }
-
-    def "getGroupRecurrenceConfigsByGroupIds returns an empty list when none of the given groups are enabled"() {
-        when:
-        def result = groupService.getGroupRecurrenceConfigsByGroupIds([testGroup.id])
-
-        then:
-        1 * groupSettingsRepository.findByGroupIdInAndAutoGenerateSessionsTrue([testGroup.id]) >> []
-        0 * groupRepository.findAllById(_)
-        result.isEmpty()
-    }
-
-    // ─── getUserJoinRequests ──────────────────────────────────────────────────
 
     def "getUserJoinRequests should return pending requests for the caller"() {
         given: "a pending join request with no reviewedBy"

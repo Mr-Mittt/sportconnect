@@ -10,7 +10,7 @@ join request workflow, and per-group settings.
 | `modules/social/group-api` | GroupService interface + all DTOs |
 | `modules/common` | ApiResponse<T>, shared exceptions |
 | Spring Security | `@PreAuthorize` on write endpoints |
-| `modules/location/location-api` | Narrow — only used by `updateGroupRecurrence` to validate `recurrenceLocationId`'s sport matches the group's `sportId`. Display-time enrichment stays client-side (`GET /api/locations/{id}`), not a dependency here. |
+| ~~`modules/location/location-api`~~ | **Removed by GROUP-1**: it was only used by the removed `updateGroupRecurrence`. Display-time enrichment stays client-side (`GET /api/locations/{id}`), not a dependency here. |
 
 ## Role Hierarchy
 
@@ -67,9 +67,7 @@ PUT    /api/groups/{groupId}/generalData                   owner or admin — gr
 GET    /api/groups/{groupId}/settings
 PUT    /api/groups/{groupId}/settings
 
-// Recurring Session Schedule (GROUP-RECUR-1) — SESSION-GROUP-5: nothing reads it any more (the session domain generates from its own configurations); removed by GROUP-1
-GET    /api/groups/{groupId}/recurrence         member-only
-PUT    /api/groups/{groupId}/recurrence         owner-only
+// GROUP-1: `GET/PUT /api/groups/{groupId}/recurrence` (GROUP-RECUR-1) is removed; a group's regular sessions are configured in the session domain (`/api/sessions/group/{groupId}/settings|recurrences`, SESSION-GROUP-4)
 
 // Permission checks
 GET    /api/groups/{groupId}/permissions/is-owner
@@ -147,16 +145,8 @@ GET    /api/groups/{groupId}/permissions/user-role
 
 ## Gotchas
 
-- `Group.schedule` (free-text) and the structured `recurrence*` fields are deliberately separate
-  and both live — `schedule` is owner-editable prose, `recurrenceDayOfWeek`/`recurrenceTime`/
-  `recurrenceDurationMinutes`/`recurrenceLocationId`/`recurrenceLocationNote` are the
-  machine-readable rule the session generation job reads. Don't try to derive one from the other.
-  `recurrenceLocationNote` (e.g. "always Court 3") is copied verbatim into each generated
-  `Session.locationNote` — it's a default, not itself validated against the `Location`.
-- `getGroupOwnerId(groupId)` (SESSION-GROUP-4) is the public form of `resolveGroupOwnerId`: the group's *current* owner, for another domain that must author a server-written group post as the owner or create a session as the owner; no access check of its own. The new group-session configuration (settings, recurrences, `modules/session`) does not live in this module; the single `recurrence*` rule described here is replaced by it and removed by GROUP-1.
-- `getGroupsWithAutoGenerateSessionsEnabled()` is on the `GroupService` interface and, since SESSION-GROUP-5, called by nobody (the session domain no longer reads the old rule; GROUP-1 removes it) — it's not wired to any controller
-  endpoint. It skips a `GroupSettings` row silently (no error) if the corresponding `Group` or its
-  owner can't be resolved, rather than failing the whole batch.
+- `Group.schedule` is free-text, owner-editable prose. The structured `recurrence*` rule that used to sit beside it (and `GroupSettings.autoGenerateSessions`) was removed by GROUP-1 (V097, destructive); nothing in this module knows about session generation any more.
+- `getGroupOwnerId(groupId)` (SESSION-GROUP-4) is the public form of `resolveGroupOwnerId`: the group's *current* owner, for another domain that must author a server-written group post as the owner or create a session as the owner; no access check of its own. The group-session configuration (settings, recurrences, generation; `modules/session`) does not live in this module.
 - Role names are plain strings — always use the exact values `"group_owner"`, `"group_admin"`, `"group_member"` when querying or comparing.
 - `canManagePosts()` is defined in `GroupServiceImpl` but not called anywhere — placeholder for the future post-approval flow.
 - `GroupMember.joinedAt` is set by `@PrePersist` — do not set it manually.

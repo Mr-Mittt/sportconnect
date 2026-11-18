@@ -20,9 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [B21](MVP/B21_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — join requests, invites | `TODO` |
-| 2 | [B22](MVP/B22_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence config carries a game mood for the sessions it generates (deferred from SESSION-46); **to be superseded by the game mood of the new recurrence config, SESSION-GROUP-4 / GROUP-1 (2026-11-19)** | `TODO` |
-| 3 | [B24](MVP/B24_GROUP_INVITE_AND_ADD_MUST_REFUSE_DEACTIVATED_ACCOUNTS.md) | Group `createInvitation` and `addMember` check only a friendship row, so a deactivated friend can be invited or added: refuse a deactivated target (coded, proposal `404 USER_NOT_FOUND` like `sendFriendRequest`); also decide the accept/approve paths (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
-| 4 | [GROUP-1](MVP/GROUP-1_REMOVE_THE_OLD_SINGLE_RECURRENCE_RULE.md) | Remove the old single weekly recurrence rule (five `groups.recurrence_*` columns, `auto_generate_sessions`, `GET/PUT /groups/{id}/recurrence`, DTOs); replaced, not migrated; after SESSION-GROUP-5 and the client settings UI (`modules/session/docs/BACKLOG_MVP.md`) | `TODO` |
+| 2 | [B24](MVP/B24_GROUP_INVITE_AND_ADD_MUST_REFUSE_DEACTIVATED_ACCOUNTS.md) | Group `createInvitation` and `addMember` check only a friendship row, so a deactivated friend can be invited or added: refuse a deactivated target (coded, proposal `404 USER_NOT_FOUND` like `sendFriendRequest`); also decide the accept/approve paths (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
 
 ---
 
@@ -30,36 +28,38 @@
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [B23](MVP/B23_GROUP_MEMBER_NAME_SEARCH_FOR_TAGGING.md) | Group member name search for tagging: `GET /api/groups/{id}/members/search` (SESSION-GL-64's rule, default 5, ceiling 20, members only); unblocks CLIENT-GL-50 part 2 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 2 | [A11](MVP/A11_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the group module — 29 `GROUP_*` codes; permission failures 400 → 403, state conflicts 400 → 409. Pairs with CLIENT-ERR-5 | `DONE` |
-| 3 | [B20](MVP/B20_CAN_MANAGE_SELF_CONTAINED_QUERY.md) | Make `canManageMembers`/`canManagePosts` self-contained instead of composing `isGroupOwner`/`isGroupAdmin` | `DONE` |
-| 4 | [B17](MVP/B17_DROP_GROUP_TABLES_CROSS_DOMAIN_FKS.md) | Drop DB-level FKs on group-impl tables' cross-domain columns | `DONE` |
-| 5 | [B18](MVP/B18_GROUP_ACTIVE_PERMISSION_GATE.md) | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `DONE` |
-| 6 | [B19](MVP/B19_GROUP_GENERAL_DATA_ENDPOINT.md) | Dedicated `PUT /{groupId}/generalData` endpoint — unblocks client GRP-9 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 7 | [B16](MVP/B16_GROUPS_SPORT_ID_PARTIAL_INDEX.md) | Partial index on `groups.sport_id` for public-group search | `DONE` |
-| 8 | [B14](MVP/B14_INVITATION_CO_INVITER_TRACKING.md) | Track every co-inviter on a single group invitation — unblocks client GRP-8 | `DONE` |
-| 9 | [B15](MVP/B15_INVITATION_SPORT_ID.md) | Add sportId to GroupInvitationResponse — unblocks client GRP-8 | `DONE` |
-| 10 | [B12](MVP/B12_CANCEL_A_SENT_INVITATION_WHILE_STILL_PENDING_OWNER.md) | Cancel a sent invitation while still `pending_owner` — unblocks a client GRP-7 addendum (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 11 | [B13](MVP/B13_INVITATION_REJECT_REASON.md) | Persist a rejection reason on invitee-declined invitations — unblocks client GRP-8 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 12 | [B11](MVP/B11_JOIN_INVITATION_RACE_CONDITIONS.md) | Reconcile join-request/invitation race conditions — blocks client GRP-7 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 13 | [B9](MVP/B9_GROUP_WELCOME_SYSTEM_POST.md) | Group system posts — welcome post on member join | `DONE` |
-| 14 | [A10](MVP/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md) | Add multi-value `sportIds` filter to `GET /api/groups/public` — unblocks client GRP-6 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
-| 15 | [B8](MVP/B8_INVITATION_STATUS_FILTER.md) | Extend member-sent invitations to include owner-approved status | `DONE` |
-| 16 | [B7](MVP/B7_GROUP_TYPE_TIERS.md) | Settings data set audit → group-type membership-cap tiers | `DONE` |
-| 17 | [A9](MVP/A9_PRIVACY_MEMBERSHIP_CHECK_GETGROUP.md) | Add privacy/membership check to `getGroup` | `DONE` |
-| 18 | [A6](MVP/A6_FIX_CROSS_DOMAIN_VIOLATION.md) | Fix cross-domain violation (UserRepository/User → UserService/UserFriendService) | `DONE` |
-| 19 | [A7](MVP/A7_FIX_N1_QUERIES.md) | Fix N+1 queries in paginated list mappers | `DONE` |
-| 20 | [A8](MVP/A8_FIX_N1_GETUSERGROUPS.md) | Fix N+1 in getUserGroups | `DONE` |
-| 21 | [B1](MVP/B1_MEMBER_INVITATION_FLOW.md) | Member invitation flow | `DONE` |
-| 22 | [A5](MVP/A5_TEST_COVERAGE_GAPS.md) | Test coverage gaps | `DONE` |
-| 23 | [A1](MVP/A1_JWT_BASED_IDENTITY.md) | JWT-based identity | `DONE` |
-| 24 | [A3](MVP/A3_CANCEL_JOIN_REQUEST.md) | Cancel join request | `DONE` |
-| 25 | [B6b](MVP/B6b_GROUP_INFO_FIELDS.md) | Group info fields | `DONE` |
-| 26 | [B2](MVP/B2_Group_Sport_Association_UserSpace.md) | Group–Sport association + UserSpace | `DONE` |
-| 27 | [B5](MVP/B5_Group_Search_And_Discovery.md) | Group search & discovery | `DONE` |
-| 28 | [B3](MVP/B3_THREE_POST_TYPES.md) | Three post types | `DONE` |
-| 29 | [B6a](MVP/B6a_PINNED_POSTS.md) | Pinned posts | `DONE` |
-| 30 | [GROUP-RECUR-1](MVP/GROUP-RECUR-1_RECURRING_SESSION_SCHEDULE_CONFIG.md) | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
+| 1 | [GROUP-1](MVP/GROUP-1_REMOVE_THE_OLD_SINGLE_RECURRENCE_RULE.md) | Removed the old single weekly recurrence rule: V097 drops `groups.recurrence_*` and `group_settings.auto_generate_sessions` (destructive, backup first), `GET/PUT /api/groups/{id}/recurrence`, three DTOs, four `GroupService` methods, the settings flag and group-impl's location dependency; replaced by the session domain's configurations (`modules/session/docs/BACKLOG_MVP.md`, SESSION-GROUP-4/5). `GroupOldRecurrenceRuleRemovedIntegrationTest` 3 | `DONE` (2026-11-19) |
+| 2 | [B22](MVP/B22_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence config carries a game mood: **closed as superseded by GROUP-1** (the game mood is a field of the new recurrence configuration, SESSION-GROUP-4) | `DONE` (2026-11-19) |
+| 3 | [B23](MVP/B23_GROUP_MEMBER_NAME_SEARCH_FOR_TAGGING.md) | Group member name search for tagging: `GET /api/groups/{id}/members/search` (SESSION-GL-64's rule, default 5, ceiling 20, members only); unblocks CLIENT-GL-50 part 2 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 4 | [A11](MVP/A11_ERROR_CODE_AUDIT.md) | **[Error handling · Phase B]** Error code audit for the group module — 29 `GROUP_*` codes; permission failures 400 → 403, state conflicts 400 → 409. Pairs with CLIENT-ERR-5 | `DONE` |
+| 5 | [B20](MVP/B20_CAN_MANAGE_SELF_CONTAINED_QUERY.md) | Make `canManageMembers`/`canManagePosts` self-contained instead of composing `isGroupOwner`/`isGroupAdmin` | `DONE` |
+| 6 | [B17](MVP/B17_DROP_GROUP_TABLES_CROSS_DOMAIN_FKS.md) | Drop DB-level FKs on group-impl tables' cross-domain columns | `DONE` |
+| 7 | [B18](MVP/B18_GROUP_ACTIVE_PERMISSION_GATE.md) | Require `group.isActive` in `isGroupMember`/`isGroupOwner`/`isGroupAdmin`; add `isGroupActive()` | `DONE` |
+| 8 | [B19](MVP/B19_GROUP_GENERAL_DATA_ENDPOINT.md) | Dedicated `PUT /{groupId}/generalData` endpoint — unblocks client GRP-9 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 9 | [B16](MVP/B16_GROUPS_SPORT_ID_PARTIAL_INDEX.md) | Partial index on `groups.sport_id` for public-group search | `DONE` |
+| 10 | [B14](MVP/B14_INVITATION_CO_INVITER_TRACKING.md) | Track every co-inviter on a single group invitation — unblocks client GRP-8 | `DONE` |
+| 11 | [B15](MVP/B15_INVITATION_SPORT_ID.md) | Add sportId to GroupInvitationResponse — unblocks client GRP-8 | `DONE` |
+| 12 | [B12](MVP/B12_CANCEL_A_SENT_INVITATION_WHILE_STILL_PENDING_OWNER.md) | Cancel a sent invitation while still `pending_owner` — unblocks a client GRP-7 addendum (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 13 | [B13](MVP/B13_INVITATION_REJECT_REASON.md) | Persist a rejection reason on invitee-declined invitations — unblocks client GRP-8 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 14 | [B11](MVP/B11_JOIN_INVITATION_RACE_CONDITIONS.md) | Reconcile join-request/invitation race conditions — blocks client GRP-7 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 15 | [B9](MVP/B9_GROUP_WELCOME_SYSTEM_POST.md) | Group system posts — welcome post on member join | `DONE` |
+| 16 | [A10](MVP/A10_MULTI_SPORT_FILTER_PUBLIC_GROUPS.md) | Add multi-value `sportIds` filter to `GET /api/groups/public` — unblocks client GRP-6 (`client/docs/BACKLOG_MVP.md`) | `DONE` |
+| 17 | [B8](MVP/B8_INVITATION_STATUS_FILTER.md) | Extend member-sent invitations to include owner-approved status | `DONE` |
+| 18 | [B7](MVP/B7_GROUP_TYPE_TIERS.md) | Settings data set audit → group-type membership-cap tiers | `DONE` |
+| 19 | [A9](MVP/A9_PRIVACY_MEMBERSHIP_CHECK_GETGROUP.md) | Add privacy/membership check to `getGroup` | `DONE` |
+| 20 | [A6](MVP/A6_FIX_CROSS_DOMAIN_VIOLATION.md) | Fix cross-domain violation (UserRepository/User → UserService/UserFriendService) | `DONE` |
+| 21 | [A7](MVP/A7_FIX_N1_QUERIES.md) | Fix N+1 queries in paginated list mappers | `DONE` |
+| 22 | [A8](MVP/A8_FIX_N1_GETUSERGROUPS.md) | Fix N+1 in getUserGroups | `DONE` |
+| 23 | [B1](MVP/B1_MEMBER_INVITATION_FLOW.md) | Member invitation flow | `DONE` |
+| 24 | [A5](MVP/A5_TEST_COVERAGE_GAPS.md) | Test coverage gaps | `DONE` |
+| 25 | [A1](MVP/A1_JWT_BASED_IDENTITY.md) | JWT-based identity | `DONE` |
+| 26 | [A3](MVP/A3_CANCEL_JOIN_REQUEST.md) | Cancel join request | `DONE` |
+| 27 | [B6b](MVP/B6b_GROUP_INFO_FIELDS.md) | Group info fields | `DONE` |
+| 28 | [B2](MVP/B2_Group_Sport_Association_UserSpace.md) | Group–Sport association + UserSpace | `DONE` |
+| 29 | [B5](MVP/B5_Group_Search_And_Discovery.md) | Group search & discovery | `DONE` |
+| 30 | [B3](MVP/B3_THREE_POST_TYPES.md) | Three post types | `DONE` |
+| 31 | [B6a](MVP/B6a_PINNED_POSTS.md) | Pinned posts | `DONE` |
+| 32 | [GROUP-RECUR-1](MVP/GROUP-RECUR-1_RECURRING_SESSION_SCHEDULE_CONFIG.md) | Recurring-session schedule config, alongside `modules/session` and `modules/location` | `DONE` |
 
 ---
 

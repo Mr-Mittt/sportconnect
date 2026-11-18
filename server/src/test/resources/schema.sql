@@ -109,7 +109,6 @@ CREATE TABLE IF NOT EXISTS group_settings (
     allow_member_posts BOOLEAN DEFAULT TRUE,
     require_post_approval BOOLEAN DEFAULT FALSE,
     allow_member_invites BOOLEAN DEFAULT FALSE,
-    auto_generate_sessions BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -146,13 +145,6 @@ CREATE TABLE IF NOT EXISTS groups (
     is_active BOOLEAN DEFAULT TRUE,
     rules VARCHAR(2000) NOT NULL DEFAULT '',
     schedule VARCHAR(2000) NOT NULL DEFAULT '',
-    -- GROUP-RECUR-1 (V033/V036) — needed for a real @SpringBootTest to persist a Group entity,
-    -- which has mapped these fields since that ticket shipped.
-    recurrence_day_of_week VARCHAR(10),
-    recurrence_time TIME,
-    recurrence_duration_minutes INTEGER,
-    recurrence_location_id BIGINT,
-    recurrence_location_note VARCHAR(500),
     sport_id BIGINT,
     created_by UUID NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -10,7 +10,6 @@ import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
 import com.sportconnect.group.api.dto.GroupMemberSearchResultResponse;
-import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
@@ -19,7 +18,6 @@ import com.sportconnect.group.api.dto.PinPostRequest;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
 import com.sportconnect.group.api.dto.RejectInvitationRequest;
 import com.sportconnect.group.api.dto.UpdateGroupGeneralDataRequest;
-import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
@@ -487,42 +485,6 @@ public class GroupController {
             @Valid @RequestBody UpdateGroupSettingsRequest request) {
         GroupSettingsResponse response = groupService.updateGroupSettings(groupId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Settings updated successfully", response));
-    }
-
-    // Recurring Session Schedule
-
-    @Operation(summary = "Get a group's recurring session schedule", description = "Member only. recurrenceLocationId is a bare id — resolve display details via GET /api/locations/{id}.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recurrence schedule (fields may be null if not configured)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a member"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
-    })
-    @GetMapping("/{groupId}/recurrence")
-    @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ApiResponse<GroupRecurrenceResponse>> getGroupRecurrence(
-            @PathVariable Long groupId,
-            Authentication authentication) {
-        GroupRecurrenceResponse response = groupService.getGroupRecurrence(groupId, SecurityUtils.extractUserId(authentication));
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    @Operation(summary = "Update a group's recurring session schedule", description = "Owner only. Partial update. recurrenceLocationId must resolve to a Location for this group's sport.")
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Recurrence schedule updated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Group has no sport set, or recurrenceLocationId's sport doesn't match"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not the owner"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found")
-    })
-    @PutMapping("/{groupId}/recurrence")
-    @PreAuthorize("hasRole('USER')")
-    public ResponseEntity<ApiResponse<GroupRecurrenceResponse>> updateGroupRecurrence(
-            @PathVariable Long groupId,
-            Authentication authentication,
-            @Valid @RequestBody UpdateGroupRecurrenceRequest request) {
-        GroupRecurrenceResponse response = groupService.updateGroupRecurrence(groupId, SecurityUtils.extractUserId(authentication), request);
-        return ResponseEntity.ok(ApiResponse.success("Recurrence schedule updated successfully", response));
     }
 
     // Pinned Posts
