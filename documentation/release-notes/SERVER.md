@@ -21,6 +21,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - A joined participant can leave a session only until 15 minutes before it starts (SESSION-65): `DELETE /api/sessions/{id}/leave` is `409 SESSION_LEAVE_TOO_LATE` (with `errorParams.cutoffAt`) after that, in every session status (a cancelled one included) and for group sessions, and changes nothing. Declining an invitation and cancelling a join request are unaffected.
 - A notification can carry a short text (NTF-8): `NotificationResponse` gains a nullable `message` (at most 500 characters). A `session.join_request.rejected` notification carries the host's reason for declining (it used to be dropped); a blank reason is no message, and a later rejection of the same session that merges into the unread notification replaces the text, or clears it when it has none. Every other notification type has `message: null`.
 - Delete the read notifications (NTF-8): `DELETE /api/notifications/read` hard-deletes every read notification of the caller in one call and returns how many it removed (`0` when there is nothing read, so a repeat call is harmless). Unread notifications and other users' notifications are never touched, the unread count does not change, and there is no soft delete: a deleted notification is gone. There is no error code of its own (it only acts on the caller's own rows).
+- A host edit of a `PREPARING` session tells the discussion thread what changed (SESSION-67): `PUT /api/sessions/{id}` writes one system comment per field whose value really changed (title, location, location note, start, duration, capacity, fee, fee note, auto approval, initial slots, male and female slots, game mood, and one comment without values for the sport attributes), in the same transaction, each with a `systemCode` (`SESSION_TITLE_CHANGED`, `SESSION_LOCATION_CHANGED`, ... `SESSION_ATTRIBUTES_CHANGED`) and string params `name` (the editor), `old` and `new` (empty = no value; the fee carries `oldFeeType`, `oldFeeAmountVnd`, `newFeeType`, `newFeeAmountVnd`). A request that re-sends the stored values writes nothing. The English `content` stays as the fallback. The comments are authored by the session's creator and do not send a comment notification; the existing `session.details.updated` notification is unchanged. No new endpoint, no error code, no migration.
 
 ### Applied automatically
 - `V088__sessions_title_not_null.sql` (SESSION-49) gives every existing session without a title the title `Session #<id>`, then makes `sessions.title` `NOT NULL`. It runs when the server starts and takes a short lock on `sessions`.
@@ -30,6 +31,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - `V091__system_entry_code_and_params.sql` (SESSION-GL-63) adds the nullable `system_code` and `system_params` columns to `comments` and `posts`. Only columns are added (no data rewritten, no index), so it is quick; it runs when the server starts.
 - SESSION-65: nothing (no migration, no setting; the 15 minutes is a constant).
 - `V092__notifications_message.sql` (NTF-8) adds the nullable `notifications.message VARCHAR(500)` column. Only a column is added (no data rewritten, no default, no index); it runs when the server starts and takes a moment on any table size.
+- SESSION-67: nothing (no migration, no setting).
 
 ### Manual actions on the box
 - To switch game logging on for a sport, sign in as ADMIN and `PUT /api/sports/{sportId}/result-schema` for it (no schema is seeded). Badminton example and the fields: `modules/session/docs/SESSION_RECORDS_DESIGN.md`, section "Badminton result schema example". Without it the sport's sessions answer `409 SESSION_RECORD_NOT_LOGGABLE`.
@@ -38,6 +40,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - SESSION-GL-64: none expected. `V090` creates two trusted extensions as the app role (the database owner), and the production Postgres image (`postgres:16` plus PostGIS) ships both. If the server fails to start with `permission denied to create extension`, run `CREATE EXTENSION IF NOT EXISTS unaccent; CREATE EXTENSION IF NOT EXISTS pg_trgm;` once in the server database as the `postgres` superuser, then restart the server.
 - SESSION-65: none.
 - NTF-8: none.
+- SESSION-67: none.
 
 ### Rollback
 - `V088` cannot be undone by Liquibase. After a rollback the column stays `NOT NULL`, so the previous server image fails to create a session that has no title (the old group auto-generation does exactly that): roll forward, or restore the pre-deploy dump (SESSION-49).
@@ -49,6 +52,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - `V091` only adds two nullable columns to each of two tables; the previous server image ignores them, so roll the image back as usual and no restore is needed. Entries written meanwhile keep their code and show their English text on the older server.
 - SESSION-65 adds one refusal and no data; roll the server image back as usual. The previous server lets a joined participant leave at any time again, while a newer client keeps hiding the button after the cutoff.
 - NTF-8: roll the server image back as usual; the previous server ignores the new nullable column, which can stay. The delete cannot be undone: read notifications removed by `DELETE /api/notifications/read` do not come back with a rollback.
+- SESSION-67 adds comment rows and no schema; roll the server image back as usual. The comments already written stay in the thread (they show their English text on the older server, which does not read their code) and the older server writes no new ones.
 
 ### Depends on
 - Client: CLIENT-SESSION-34 (form, Schedule button and en/vi copy for the new error codes). Ship the server and the client together.
@@ -58,6 +62,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 - Client: CLIENT-GL-50 (tagging picker, the shared name matcher and the friend-invite filter) uses `thread-people`; the endpoint works without it. The Friends page and group invite search keep working unchanged against the new `users/search` rule.
 - Client: CLIENT-GL-51 (already merged) hides the Leave button after the cutoff and carries the en/vi text for `SESSION_LEAVE_TOO_LATE`. Deploy this server before that client: a client without it shows the code as a generic error.
 - Client: CLIENT-NOTIF-7 shows the reason under a rejected-request notification and adds the "Clear read" control that calls the delete. The server change is additive, so ship the server first: until that client is released the reason is returned but not shown and nothing calls the endpoint.
+- Client: CLIENT-SESSION-51 shows the SESSION-67 comments in en and vi. Ship either order: until it is released every comment shows its stored English text.
 
 ## 0.2.0 — 2026-11-09
 
