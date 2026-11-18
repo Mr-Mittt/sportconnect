@@ -34,7 +34,29 @@
     "SESSION_STARTED": "The session has started",
     "SESSION_RECORDS_UPDATED": "{{name}} has updated the result",
     "GROUP_MEMBER_JOINED": "{{name}} joined the group 👋",
-    "GROUP_MEMBER_JOINED_INVITED": "{{name}} joined the group — invited by {{inviter}} 👋"
+    "GROUP_MEMBER_JOINED_INVITED": "{{name}} joined the group — invited by {{inviter}} 👋",
+    "SESSION_ATTRIBUTES_CHANGED": "{{name}} updated the sport details",
+    "fieldChange": {
+      "added": "{{name}} added the {{field}} \"{{value}}\"",
+      "updated": "{{name}} updated the {{field}} \"{{value}}\"",
+      "changed": "{{name}} changed the {{field}} from \"{{old}}\" to \"{{new}}\"",
+      "removed": "{{name}} removed the {{field}}"
+    },
+    "fieldLabel": {
+      "SESSION_TITLE_CHANGED": "title",
+      "SESSION_LOCATION_CHANGED": "location",
+      "SESSION_LOCATION_NOTE_CHANGED": "location note",
+      "SESSION_START_CHANGED": "start time",
+      "SESSION_DURATION_CHANGED": "duration",
+      "SESSION_CAPACITY_CHANGED": "capacity",
+      "SESSION_FEE_CHANGED": "fee",
+      "SESSION_FEE_NOTE_CHANGED": "fee note",
+      "SESSION_AUTO_APPROVE_CHANGED": "approval",
+      "SESSION_INITIAL_SLOT_CHANGED": "taken slots",
+      "SESSION_MALE_SLOTS_CHANGED": "male slots",
+      "SESSION_FEMALE_SLOTS_CHANGED": "female slots",
+      "SESSION_GAME_MOOD_CHANGED": "game mood"
+    }
   },
   "notifications": {
     "someone": "Someone",

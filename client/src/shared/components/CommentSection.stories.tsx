@@ -102,6 +102,26 @@ export const WithComments: Story = {
   },
 };
 
+/**
+ * CLIENT-SESSION-51 — the system lines a host's edit of a `PREPARING` session writes (SESSION-67), one per changed
+ * field, in the four shapes: added, updated, changed, removed. The stored `content` is only the fallback, so it differs
+ * from what is shown on purpose. The last line has an unreadable value and shows the stored text.
+ */
+export const WithFieldChanges: Story = {
+  args: {
+    comments: [
+      makeComment({ id: 10, content: 'Marcus Lee added the start time', systemCode: 'SESSION_START_CHANGED', systemParams: { name: 'Marcus Lee', old: '', new: new Date(2026, 10, 20, 18, 0).toISOString() } }),
+      makeComment({ id: 11, content: 'Marcus Lee changed the fee', systemCode: 'SESSION_FEE_CHANGED', systemParams: { name: 'Marcus Lee', oldFeeType: 'FREE', oldFeeAmountVnd: '', newFeeType: 'FIXED', newFeeAmountVnd: '50000' } }),
+      makeComment({ id: 12, content: 'Marcus Lee updated the fee note', systemCode: 'SESSION_FEE_NOTE_CHANGED', systemParams: { name: 'Marcus Lee', old: 'Cash', new: 'Bring cash, no change' } }),
+      makeComment({ id: 13, content: 'Marcus Lee changed the location', systemCode: 'SESSION_LOCATION_CHANGED', systemParams: { name: 'Marcus Lee', old: 'Court A', new: 'Court B' } }),
+      makeComment({ id: 14, content: 'Marcus Lee changed the duration', systemCode: 'SESSION_DURATION_CHANGED', systemParams: { name: 'Marcus Lee', old: '60', new: '90' } }),
+      makeComment({ id: 15, content: 'Marcus Lee removed the male slots', systemCode: 'SESSION_MALE_SLOTS_CHANGED', systemParams: { name: 'Marcus Lee', old: '3', new: '' } }),
+      makeComment({ id: 16, content: 'Marcus Lee updated the sport details', systemCode: 'SESSION_ATTRIBUTES_CHANGED', systemParams: { name: 'Marcus Lee' } }),
+      makeComment({ id: 17, content: 'Marcus Lee changed the start time (stored text)', systemCode: 'SESSION_START_CHANGED', systemParams: { name: 'Marcus Lee', old: 'soon', new: 'later' } }),
+    ].map((comment) => ({ ...comment, commentType: 'SESSION_SYSTEM' as const, likeCount: 0 })),
+  },
+};
+
 export const NoSportBadge: Story = {
   args: { comments: [makeComment()], sport: null },
 };

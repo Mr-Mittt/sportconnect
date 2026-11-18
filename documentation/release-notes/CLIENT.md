@@ -8,6 +8,8 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Changes
 
+- CLIENT-SESSION-51: when a host edits a session that is still Preparing, the session thread now tells everyone what changed, in their own language: one line per field, such as `Alex added the start time "Fri, Nov 20 · 18:00"`, `Alex changed the fee from "Free" to "Split cost"`, `Alex updated the fee note "Bring cash"` or `Alex removed the duration` (and "Alex updated the sport details" for the sport-specific fields). Times show in the viewer's time zone, money as VND, and an older line or one the client cannot read keeps the server's English text. Vietnamese copy included.
+
 - CLIENT-NOTIF-7: a declined join request in the notification bell shows the host's reason under its line ("Reason: ...", "Lý do: ..."; two lines at most, the full text on hover; no reason, no line). The bell header has a "Clear read" button ("Xóa đã đọc") beside "Mark all read" while a read notification is loaded: it permanently deletes all your read notifications, with no confirmation and no undo; the unread ones and the badge stay, the list is refreshed from the server afterwards, and a failed call restores the list.
 
 - CLIENT-SESSION-50: in the create-session form, "Continue editing" in the "Are you ready?" popup now moves you to the first missing field, top to bottom (duration, location, fee), opening its section first if you had collapsed it. Duration, Ends at, Location and Fee carry the red asterisk (in the create form and in the detail editors; creating without them still works). The date picker of Starts at and Ends at is half as wide, with Duration right next to the minute select, and while the duration is empty the Ends at date is the Starts at date and follows it when it changes. The section that holds the field "Continue editing" lands on flicks once, and every section flick (also when you open a collapsed section) now has the colours of a focused text field, the blue border and the pale blue ring, instead of grey.
@@ -65,6 +67,7 @@ writes a fresh template and uses the section as the release PR description. Vers
 
 ### Depends on
 
+- SERVER SESSION-67 (one system comment per changed field of a Preparing edit, codes `SESSION_*_CHANGED`). Ship either order: against an older server there are simply no such lines, and a newer server with an older client shows each line's English text.
 - SERVER NTF-8 (`NotificationResponse.message`, `DELETE /api/notifications/read`, migration V092). Ship the server first or together: against an older server the reason is simply never sent and "Clear read" calls an endpoint that does not exist (it fails silently and the list comes back).
 - SERVER B23 (`GET /api/groups/{id}/members/search`, part 2 of CLIENT-GL-50, merged 2026-11-16 in the same server release as SESSION-GL-64). Without it a group post's `@` list stays empty (the box still works); a post on your own feed uses the friends list and needs nothing new.
 - SERVER SESSION-GL-64 (`GET /api/sessions/{id}/thread-people`, the one user name search rule, migration V090 with the `unaccent` and `pg_trgm` extensions). Without it the `@` list in a normal comment stays empty (the box still works); a record command needs only SESSION-50.
