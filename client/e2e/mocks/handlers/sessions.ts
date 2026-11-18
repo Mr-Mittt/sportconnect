@@ -594,7 +594,7 @@ function discoverableSessions(session: SessionsSession, sessionId: string, url: 
     ? [...session.sessionsState, ...syntheticDiscoverable()]
     : session.sessionsState;
   return pool.filter((candidate) => {
-    if (candidate.groupId !== null || candidate.status !== 'SCHEDULED') return false;
+    if (candidate.groupId !== null || !candidate.isPublic || candidate.status !== 'SCHEDULED') return false;
     if (candidate.createdBy === mockUser.id) return false;
     if (sportId !== null && candidate.sportId !== sportId) return false;
     if (title !== null && !(candidate.title ?? '').toLowerCase().includes(title.toLowerCase())) return false;
@@ -638,6 +638,8 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd?: number;
       initialSlot?: number;
       autoApprove?: boolean;
+      // SESSION-69: omitted = public; ignored for a group session
+      isPublic?: boolean;
       // SESSION-46
       maleSlots?: number;
       femaleSlots?: number;
@@ -701,6 +703,7 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
       initialSlot,
       autoApprove: body.autoApprove ?? false,
+      isPublic: body.groupId === undefined && body.isPublic !== false,
       // SESSION-46: 0 is stored as 0 on create (the real server only clears on update).
       maleSlots: body.maleSlots ?? null,
       femaleSlots: body.femaleSlots ?? null,
@@ -981,6 +984,7 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd?: number;
       initialSlot?: number;
       autoApprove?: boolean;
+      isPublic?: boolean;
       maleSlots?: number;
       femaleSlots?: number;
       gameMood?: number;
@@ -1041,6 +1045,8 @@ export const sessionHandlers: HttpHandler[] = [
       feeAmountVnd: resolvedFeeType === 'FIXED' ? (body.feeAmountVnd ?? existing.feeAmountVnd) : null,
       ...(body.initialSlot !== undefined && { initialSlot: body.initialSlot }),
       ...(body.autoApprove !== undefined && { autoApprove: body.autoApprove }),
+      // SESSION-69: only a standalone session can change visibility; ignored for a group one
+      ...(body.isPublic !== undefined && existing.groupId === null && { isPublic: body.isPublic }),
       maleSlots: nextMale,
       femaleSlots: nextFemale,
       ...(body.gameMood !== undefined && { gameMood: body.gameMood }),
@@ -1205,8 +1211,8 @@ export const sessionHandlers: HttpHandler[] = [
     if (!existing) {
       return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
-    if (existing.groupId !== null) {
-      return HttpResponse.json(apiError('A group session cannot be shared', 'SESSION_SHARE_NOT_ALLOWED'), { status: 403 });
+    if (existing.groupId !== null || !existing.isPublic) {
+      return HttpResponse.json(apiError('A group or private session cannot be shared', 'SESSION_SHARE_NOT_ALLOWED'), { status: 403 });
     }
     const body = (await request.json()) as { userIds?: string[] };
     const userIds = [...new Set(body.userIds ?? [])];

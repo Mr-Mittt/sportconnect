@@ -10,6 +10,8 @@ export interface WhoInitialValues {
   femaleSlots: number | null;
   gameMood: number;
   autoApprove: boolean;
+  /** CLIENT-SESSION-52: the session's visibility when the draft starts (`true` = public, the create form's default). */
+  isPublic: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export function useSessionWhoFields(initial: WhoInitialValues) {
   const [female, setFemale] = useState((initial.femaleSlots ?? 0) > 0 ? String(initial.femaleSlots) : '');
   const [gameMood, setGameMood] = useState(initial.gameMood);
   const [autoApprove, setAutoApprove] = useState(initial.autoApprove);
+  const [isPublic, setIsPublic] = useState(initial.isPublic);
 
   const setWhoCanJoin = (next: WhoCanJoin) => {
     setWhoCanJoinState(next);
@@ -66,6 +69,8 @@ export function useSessionWhoFields(initial: WhoInitialValues) {
     femaleSlots,
     gameMood,
     autoApprove,
+    // CLIENT-SESSION-52: only when it changed, so a save that leaves the switch alone never touches the visibility.
+    ...(isPublic !== initial.isPublic ? { isPublic } : {}),
   });
 
   return {
@@ -87,6 +92,8 @@ export function useSessionWhoFields(initial: WhoInitialValues) {
     setGameMood,
     autoApprove,
     setAutoApprove,
+    isPublic,
+    setIsPublic,
     effectiveTaken,
     openCount,
     capacity,

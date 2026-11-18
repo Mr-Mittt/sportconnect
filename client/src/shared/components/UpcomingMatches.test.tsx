@@ -69,6 +69,7 @@ const makeMatch = (
   gameMood: 5,
   feeNote: null,
   autoApprove: false,
+  isPublic: true,
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null,

@@ -83,7 +83,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 17 | [CLIENT-SESSION-43](MVP/CLIENT-SESSION-43_SEASON_KPI_AND_RECAP_SCREENS.md) | Season management, KPI progress and the season recap | `TODO` |
 | 18 | [CLIENT-SESSION-44](MVP/CLIENT-SESSION-44_POINT_ADJUSTMENT_SCREENS.md) | Point adjustment dialog and adjustment history | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
-| 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request` | `TODO` |
+| 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request`; **2026-11-18: also `matches-journey` step 8c (Discover filters, failed in two large runs, passes alone) and 7 `home-feed-journey` sign-in timeouts under load, folded in** | `TODO` |
 
 #### Removed / Deferred
 
@@ -141,6 +141,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 38 | [CLIENT-SESSION-52](MVP/CLIENT-SESSION-52_PUBLIC_PRIVATE_SWITCH_IN_THE_SESSION_FORMS.md) | The public / private switch in the create form footer (left, on by default, hint and warning) and the Who section (PREPARING host), `Visibility` in the summaries, no Share button for a private session, the thread text; 14 of 14 mutants killed (pair of SESSION-69) | `DONE` (2026-11-18) |
 | 37 | [CLIENT-SESSION-49](MVP/CLIENT-SESSION-49_SHARE_DIALOG_IN_THE_PLAYERS_SECTION.md) | "Share" dialog from the Players section header: friends not joined first with checkboxes, joined friends below, "Share (x)", warning at the 50-friend limit (**standalone chain**; depends on SESSION-66) | `DONE` (2026-11-18) |
 | 36 | [CLIENT-SESSION-51](MVP/CLIENT-SESSION-51_LOCALISED_FIELD_CHANGE_SYSTEM_COMMENTS.md) | Localised system comments for the fields a host changed (pair of SESSION-67): one sentence per shape (added, updated, changed, removed) from the `old`/`new` params, values in the viewer's language and zone (start, duration, fee, mood, approval), the stored English text as the fallback; 4 templates and 13 labels in en and vi; 23 of 23 mutants killed | `DONE` (2026-11-18) |
 | 35 | [CLIENT-NOTIF-7](MVP/CLIENT-NOTIF-7_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | The rejected-join-request notification shows the host's reason, and a "Clear read notifications" control (**standalone chain**; depends on NTF-8) | `DONE` (2026-11-18) |

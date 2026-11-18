@@ -31,6 +31,7 @@ export const FIELD_CHANGE_CODES = [
   'SESSION_MALE_SLOTS_CHANGED',
   'SESSION_FEMALE_SLOTS_CHANGED',
   'SESSION_GAME_MOOD_CHANGED',
+  'SESSION_VISIBILITY_CHANGED',
 ] as const;
 
 export type FieldChangeCode = (typeof FIELD_CHANGE_CODES)[number];
@@ -63,6 +64,13 @@ const asApproval: Format = (raw) => {
   return null;
 };
 
+/** SESSION-69: the server writes `public` or `private`. */
+const asVisibility: Format = (raw) => {
+  if (raw === 'public') return i18next.t('enums:sessionVisibility.public');
+  if (raw === 'private') return i18next.t('enums:sessionVisibility.private');
+  return null;
+};
+
 const FIELDS: Record<FieldChangeCode, { kind: Kind; format: Format }> = {
   SESSION_TITLE_CHANGED: { kind: 'text', format: asIs },
   SESSION_LOCATION_CHANGED: { kind: 'value', format: asIs },
@@ -77,6 +85,7 @@ const FIELDS: Record<FieldChangeCode, { kind: Kind; format: Format }> = {
   SESSION_MALE_SLOTS_CHANGED: { kind: 'value', format: asIs },
   SESSION_FEMALE_SLOTS_CHANGED: { kind: 'value', format: asIs },
   SESSION_GAME_MOOD_CHANGED: { kind: 'value', format: asMood },
+  SESSION_VISIBILITY_CHANGED: { kind: 'value', format: asVisibility },
 };
 
 const FEE_TYPES: readonly string[] = ['FREE', 'SPLIT', 'FIXED'];

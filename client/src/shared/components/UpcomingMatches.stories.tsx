@@ -64,6 +64,7 @@ function makeSession(overrides: Partial<Session> & Pick<Session, 'id' | 'sportId
     gameMood: 5,
     feeNote: null,
     autoApprove: false,
+    isPublic: true,
     likeCount: 0,
     isLikedByCurrentUser: false,
     callerParticipation: null,

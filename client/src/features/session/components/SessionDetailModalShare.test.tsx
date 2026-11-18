@@ -182,6 +182,11 @@ describe('the Share button: who sees it', () => {
     expect(shareButton()).toBeNull();
   });
 
+  it('is hidden for a private session (SESSION-69): a friend it was shared with could not open it', () => {
+    render(<SessionDetailModal {...propsFor({ session: makeSession({ id: 1, isPublic: false }) })} />);
+    expect(shareButton()).toBeNull();
+  });
+
   it('is hidden when the host page passes no share slice', () => {
     render(<SessionDetailModal {...propsFor({ share: undefined })} />);
     expect(shareButton()).toBeNull();

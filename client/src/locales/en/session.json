@@ -314,6 +314,9 @@
       "anyone": "anyone",
       "mood": "Mood",
       "autoApprove": "Auto approve",
+      "visibility": "Visibility",
+      "public": "Public",
+      "private": "Private",
       "yes": "Yes",
       "no": "No",
       "fee": "Fee",
@@ -386,6 +389,12 @@
     },
     "autoApprove": {
       "label": "Auto approve join request"
+    },
+    "visibility": {
+      "switchLabel": "Public session",
+      "hintPublic": "Everyone can see and ask to join your session",
+      "hintPrivate": "Except for your invitee, everyone cannot find and ask to join your session",
+      "warning": "Only you and invited friends can see this session; everyone else won't be able to find it and join."
     },
     "endsAt": {
       "label": "Ends at"

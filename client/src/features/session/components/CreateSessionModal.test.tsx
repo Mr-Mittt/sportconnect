@@ -828,6 +828,8 @@ describe('CreateSessionModal', () => {
       feeNote: undefined,
       initialSlot: 0,
       autoApprove: false,
+      // CLIENT-SESSION-52: public unless the host switches it off.
+      isPublic: true,
       // CLIENT-SESSION-34: nothing reserved by gender; the mood slider's untouched default is sent.
       maleSlots: undefined,
       femaleSlots: undefined,
@@ -1640,6 +1642,111 @@ describe('CreateSessionModal', () => {
         expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
         expect(onClose).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('CLIENT-SESSION-52: the public / private switch', () => {
+    const toggle = () => screen.getByRole('switch', { name: 'Public session' });
+    const publicHint = 'Everyone can see and ask to join your session';
+    const privateHint = 'Except for your invitee, everyone cannot find and ask to join your session';
+
+    it('is on by default, in the footer left of "Create session", with the public hint and no warning', () => {
+      render(<CreateSessionModal {...baseProps} />);
+      expect(toggle()).toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByText(publicHint)).toBeInTheDocument();
+      expect(screen.queryByText(/Only you and invited friends/)).not.toBeInTheDocument();
+
+      const create = screen.getByRole('button', { name: 'Create session' });
+      const footer = create.closest('[class*="border-hairline-t"]');
+      expect(footer).not.toBeNull();
+      expect(footer).toContainElement(toggle());
+      // Left of the button in the same row.
+      expect(Boolean(toggle().compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    });
+
+    it('switching it off changes the hint and shows the warning in the footer', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+
+      await user.click(toggle());
+
+      expect(toggle()).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByText(privateHint)).toBeInTheDocument();
+      expect(screen.queryByText(publicHint)).not.toBeInTheDocument();
+      const warning = screen.getByText(
+        "Only you and invited friends can see this session; everyone else won't be able to find it and join.",
+      );
+      expect(screen.getByRole('button', { name: 'Create session' }).closest('[class*="border-hairline-t"]')).toContainElement(warning);
+
+      await user.click(toggle());
+      expect(screen.queryByText(/Only you and invited friends/)).not.toBeInTheDocument();
+      expect(screen.getByText(publicHint)).toBeInTheDocument();
+    });
+
+    it('the payload carries isPublic: true by default', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" onSubmit={onSubmit} />,
+      );
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await createAndConfirm(user);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ isPublic: true }));
+    });
+
+    it('the payload carries isPublic: false once the switch is off', async () => {
+      const user = userEvent.setup();
+      const onSubmit = vi.fn();
+      render(
+        <CreateSessionModal {...baseProps} selectedLocation={location} activeSport="basketball" onSubmit={onSubmit} />,
+      );
+      await user.click(toggle());
+      await pickAnyStartTime(user);
+      await user.type(screen.getByLabelText(/^Open slot/), '10');
+      await createAndConfirm(user);
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ isPublic: false }));
+    });
+
+    it('flipping it counts as an entry: closing asks "Leave without saving?"', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<CreateSessionModal {...baseProps} onClose={onClose} />);
+
+      await user.click(toggle());
+      await user.keyboard('{Escape}');
+
+      expect(screen.getByText('Leave without saving?')).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('changing the sport resets the whole form, the switch included: it is public again', async () => {
+      const user = userEvent.setup();
+      render(<CreateSessionModal {...baseProps} />);
+      await user.click(toggle());
+      expect(toggle()).toHaveAttribute('aria-checked', 'false');
+
+      await user.selectOptions(screen.getByLabelText(/^Sport/), 'tennis');
+
+      expect(toggle()).toHaveAttribute('aria-checked', 'true');
+      expect(screen.queryByText(/Only you and invited friends/)).not.toBeInTheDocument();
+    });
+
+    it('left alone, it does not stop the form from closing straight away', async () => {
+      const user = userEvent.setup();
+      const onClose = vi.fn();
+      render(<CreateSessionModal {...baseProps} onClose={onClose} />);
+
+      await user.keyboard('{Escape}');
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('is not part of the Who section (it lives in the footer)', () => {
+      render(<CreateSessionModal {...baseProps} />);
+      const who = screen.getByRole('button', { name: /^Who/ }).closest('[data-slot="collapsible"]');
+      expect(who).not.toBeNull();
+      expect(who).not.toContainElement(toggle());
     });
   });
 });

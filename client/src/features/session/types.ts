@@ -39,6 +39,8 @@ export interface CreateSessionPayload {
   initialSlot?: number;
   /** Omitted -> backend defaults to false (non-invited joiners land in REQUESTED). */
   autoApprove?: boolean;
+  /** SESSION-69: omitted -> public. `false` makes a private session, seen only by its creator and its invitees. */
+  isPublic?: boolean;
   /** SESSION-46: seats for men / women among the open ones; omitted or 0 = not specified. */
   maleSlots?: number;
   femaleSlots?: number;
@@ -71,6 +73,8 @@ export interface UpdateSessionPayload {
   feeAmountVnd?: number;
   initialSlot?: number;
   autoApprove?: boolean;
+  /** SESSION-69: switches a standalone session public / private (PREPARING only); sent only when it changed. */
+  isPublic?: boolean;
   /** SESSION-46: a non-null value replaces, `0` clears the slots. */
   maleSlots?: number;
   femaleSlots?: number;
