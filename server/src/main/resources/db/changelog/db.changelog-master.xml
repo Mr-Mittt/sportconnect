@@ -248,5 +248,7 @@
     <include file="db/changelog/changes/V091__system_entry_code_and_params.sql" relativeToChangelogFile="false"/>
     <!-- NTF-8: notifications.message, the host's reason on a rejected join request -->
     <include file="db/changelog/changes/V092__notifications_message.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-66: partial index of the active users (id WHERE is_active = true) for the "active accounts only" lookups -->
+    <include file="db/changelog/changes/V093__users_active_partial_index.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

@@ -308,6 +308,11 @@ the state before that change.
 
 **Update (A28, 2026-10-16):** deactivation makes no auth call any more (the legacy refresh-token store is gone; the gate and a refresh do the work). The STOMP `CONNECT` in notification runs the same gate as REST, so a deactivated or unprovisioned user cannot open a socket (an already-open one stays until it reconnects: NTF-6). The chat service keeps its accepted 5-minute window (CHAT-17, A20).
 
+**Rule (owner, 2026-11-18, SESSION-66): a lookup to *show* a user includes deactivated accounts, a lookup for a *new interaction* excludes them.**
+- *Display* (an author, the actor of a notification such as "{userA} invited you to ...", a participant's name): include deactivated accounts, so the name is the real one and never "Unknown user". Use `UserService.getUserSummariesByIds` / `getUsersByIds`, which have no active filter by design.
+- *New interaction* (inviting, sharing, tagging, adding to a group, messaging, anything that reaches or acts on that person): exclude deactivated accounts. Use `UserService.getActiveUserIds` (one ids-only query, backed by the partial index `idx_users_active_id`, V093), then either refuse with a coded error or skip silently and count it, whichever the use case wants. SESSION-66 (sharing a session) skips silently.
+- Never use a display lookup as an active check, and never an active-only lookup to resolve a name to show.
+
 ### Resource access: availability vs. visibility
 
 Any domain with per-item read/write rules on a resource (a `Post`, a `Session`, a `SessionComment`)

@@ -59,7 +59,9 @@ public interface UserService {
 
     /**
      * U18 — the same batch-by-id contract as {@link #getUsersByIds} (one query, unknown ids simply absent, no
-     * exception, deactivated accounts included), narrowed to {@link UserSummaryResponse} ({@code id}/{@code fullName}/{@code avatarUrl}).
+     * exception, deactivated accounts included: this is the lookup for *showing* a user, so a deactivated author or
+     * actor still has a real name; for a new interaction use {@link #getActiveUserIds}, see CLAUDE.md § Account
+     * lifecycle), narrowed to {@link UserSummaryResponse} ({@code id}/{@code fullName}/{@code avatarUrl}).
      * Prefer this over {@link #getUsersByIds} at any call site that only resolves a display name and avatar —
      * which is every current cross-domain caller (post/comment authors, group members, session
      * creators/participants, notification actors). No reference-domain or other cross-domain call is added by
@@ -71,7 +73,10 @@ public interface UserService {
      * SESSION-66 — which of the given ids belong to an <em>active</em> account. One query that selects only the ids
      * ({@code WHERE id IN (...) AND is_active = true}), so no user row is loaded or mapped: the cheap way to drop
      * deactivated accounts from a list of ids. Ids with no account and deactivated ids are simply absent from the
-     * result; no exception is thrown. An empty (or null) input returns an empty set without querying.
+     * result; no exception is thrown. An empty (or null) input returns an empty set without querying. This is the
+     * lookup for a <em>new interaction</em> (inviting, sharing, tagging, adding): never use it to resolve a name to
+     * show, a deactivated user's name must still display (see {@link #getUserSummariesByIds} and CLAUDE.md § Account
+     * lifecycle). Backed by the partial index {@code idx_users_active_id} (V093).
      */
     Set<UUID> getActiveUserIds(Collection<UUID> userIds);
 
