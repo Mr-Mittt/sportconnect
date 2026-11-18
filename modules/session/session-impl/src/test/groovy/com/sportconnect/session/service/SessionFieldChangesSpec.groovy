@@ -19,9 +19,9 @@ class SessionFieldChangesSpec extends Specification {
     static SessionFieldChanges.Snapshot snap(Map o = [:]) {
         def d = [title: 'Friday run', locationId: 1L, locationNote: null, start: START, end: START.plusSeconds(3600),
                  capacity: 10, feeType: FeeType.FREE, feeAmountVnd: null, feeNote: null, autoApprove: false,
-                 initialSlot: 0, maleSlots: null, femaleSlots: null, gameMood: 5, attributes: [:]] + o
+                 isPublic: true, initialSlot: 0, maleSlots: null, femaleSlots: null, gameMood: 5, attributes: [:]] + o
         new SessionFieldChanges.Snapshot(d.title, d.locationId, d.locationNote, d.start, d.end, d.capacity,
-                d.feeType, d.feeAmountVnd, d.feeNote, d.autoApprove, d.initialSlot, d.maleSlots, d.femaleSlots,
+                d.feeType, d.feeAmountVnd, d.feeNote, d.autoApprove, d.isPublic, d.initialSlot, d.maleSlots, d.femaleSlots,
                 d.gameMood, MAPPER.valueToTree(d.attributes))
     }
 
@@ -96,6 +96,34 @@ class SessionFieldChangesSpec extends Specification {
         changes[0].code == SystemCode.SESSION_AUTO_APPROVE_CHANGED
         changes[0].params == [name: 'Alex', old: 'false', new: 'true']
         changes[0].content == 'Alex changed the auto approval from "off" to "on"'
+    }
+
+    def "visibility is written as public or private on both sides, and a missing value counts as public"() {
+        when:
+        def changes = diff([isPublic: before], [isPublic: after])
+
+        then:
+        changes.size() == 1
+        changes[0].code == SystemCode.SESSION_VISIBILITY_CHANGED
+        changes[0].params == [name: 'Alex', old: oldText, new: newText]
+        changes[0].content == "Alex changed the visibility from \"${oldText}\" to \"${newText}\""
+
+        where:
+        before | after | oldText   | newText
+        true   | false | 'public'  | 'private'
+        false  | true  | 'private' | 'public'
+        null   | false | 'public'  | 'private'
+    }
+
+    def "an unchanged visibility, or none against public, writes nothing"() {
+        expect:
+        diff([isPublic: before], [isPublic: after]).isEmpty()
+
+        where:
+        before | after
+        true   | true
+        false  | false
+        null   | true
     }
 
     def "the fee carries the type and the amount on each side, in one comment"() {

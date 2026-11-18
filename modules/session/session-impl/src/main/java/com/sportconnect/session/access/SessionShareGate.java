@@ -14,7 +14,8 @@ import java.util.UUID;
  * share a <b>standalone</b> session, whatever the session's status and whatever the caller's own participation (joined,
  * requested, invited, left, or not in it at all; corrected by CLIENT-SESSION-49, which first asked for a {@code JOINED}
  * participant of a {@code PREPARING}/{@code SCHEDULED} session). A group session is not shareable here at all (the group
- * and group-session chain comes after the standalone one), so it is not visible to anyone for this action.
+ * and group-session chain comes after the standalone one), and neither is a <b>private</b> standalone session (SESSION-69,
+ * owner): a friend it was shared with could not open it. Both are not visible to anyone for this action.
  */
 @Component
 @RequiredArgsConstructor
@@ -31,9 +32,9 @@ public class SessionShareGate implements ResourceGate<Session> {
         return session.getGroupId() == null || groupService.isGroupActive(session.getGroupId());
     }
 
-    /** Any identified viewer of a standalone session; nobody for a group session. */
+    /** Any identified viewer of a public standalone session; nobody for a group session or a private one (SESSION-69). */
     @Override
     public boolean isVisibleTo(Session session, UUID viewerId) {
-        return viewerId != null && session.getGroupId() == null;
+        return viewerId != null && session.getGroupId() == null && Boolean.TRUE.equals(session.getIsPublic());
     }
 }

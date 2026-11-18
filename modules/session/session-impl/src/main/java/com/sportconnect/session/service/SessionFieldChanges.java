@@ -44,7 +44,7 @@ final class SessionFieldChanges {
 
     /** The editable fields of a session at one moment. {@code attributes} is never null (null counts as empty). */
     record Snapshot(String title, Long locationId, String locationNote, Instant start, Instant end, Integer capacity,
-                    FeeType feeType, Long feeAmountVnd, String feeNote, Boolean autoApprove, Integer initialSlot,
+                    FeeType feeType, Long feeAmountVnd, String feeNote, Boolean autoApprove, Boolean isPublic, Integer initialSlot,
                     Integer maleSlots, Integer femaleSlots, Integer gameMood, JsonNode attributes) {}
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -66,7 +66,8 @@ final class SessionFieldChanges {
                 ? MAPPER.createObjectNode() : MAPPER.valueToTree(s.getAttributes());
         return new Snapshot(s.getTitle(), s.getLocationId(), s.getLocationNote(), s.getScheduledStart(),
                 s.getScheduledEndAt(), s.getCapacity(), s.getFeeType(), s.getFeeAmountVnd(), s.getFeeNote(),
-                s.getAutoApprove(), s.getInitialSlot(), s.getMaleSlots(), s.getFemaleSlots(), s.getGameMood(), attributes);
+                s.getAutoApprove(), s.getIsPublic(), s.getInitialSlot(), s.getMaleSlots(), s.getFemaleSlots(), s.getGameMood(),
+                attributes);
     }
 
     /**
@@ -97,6 +98,9 @@ final class SessionFieldChanges {
         value(drafts, SystemCode.SESSION_AUTO_APPROVE_CHANGED, "auto approval",
                 String.valueOf(before.autoApprove()), String.valueOf(after.autoApprove()),
                 null, null, true);
+        // SESSION-69: a standalone session going public or private; a null (a group session) counts as public here.
+        value(drafts, SystemCode.SESSION_VISIBILITY_CHANGED, "visibility",
+                visibility(before.isPublic()), visibility(after.isPublic()));
         value(drafts, SystemCode.SESSION_INITIAL_SLOT_CHANGED, "initial slots",
                 positive(before.initialSlot()), positive(after.initialSlot()));
         value(drafts, SystemCode.SESSION_MALE_SLOTS_CHANGED, "male slots",
@@ -200,6 +204,10 @@ final class SessionFieldChanges {
 
     private static Long minutes(Snapshot s) {
         return s.end() == null ? null : Duration.between(s.start(), s.end()).toMinutes();
+    }
+
+    private static String visibility(Boolean isPublic) {
+        return Boolean.FALSE.equals(isPublic) ? "private" : "public";
     }
 
     private static String instant(Instant i) {

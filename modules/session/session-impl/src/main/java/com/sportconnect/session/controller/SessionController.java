@@ -375,7 +375,7 @@ public class SessionController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Shared; the body says how many friends were notified and how many skipped"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "The list is empty, over 50 or holds a null"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "A group session (SESSION_SHARE_NOT_ALLOWED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "A group session or a private one (SESSION_SHARE_NOT_ALLOWED)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found (SESSION_NOT_FOUND)")
     })
     @PostMapping("/{sessionId}/shares")
@@ -407,7 +407,9 @@ public class SessionController {
     @Operation(summary = "List a session's participants", description = "status omitted defaults to JOINED and stays public. Any other status (e.g. REQUESTED, the approval queue) requires creator/owner-admin gating.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Participants (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted to view a non-JOINED status")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Not permitted to view a non-JOINED status"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "The caller may not open this session, e.g. a private one (SESSION_FORBIDDEN, SESSION-69)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found (SESSION_NOT_FOUND)")
     })
     @GetMapping("/{sessionId}/participants")
     @PreAuthorize("hasRole('USER')")

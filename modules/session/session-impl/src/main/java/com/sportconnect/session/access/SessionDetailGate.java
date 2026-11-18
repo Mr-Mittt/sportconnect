@@ -4,6 +4,7 @@ import com.sportconnect.common.access.ResourceGate;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -58,15 +59,22 @@ public class SessionDetailGate implements ResourceGate<Session> {
      * {@code getGroupSessions}' own list-level gate, which grants any member visibility into the
      * group's sessions regardless of whether they've personally joined each one).
      *
-     * <p>Today every standalone session has {@code isPublic = true} and every group-linked
-     * session has {@code isPublic = false} (set at creation from {@code groupId == null} —
-     * {@code Session.isPublic}'s own Javadoc), so this formula currently collapses to "standalone
-     * stays fully open" (no regression from {@code getSession}'s prior, ungated behavior) and
-     * "group-linked requires membership" (the actual fix this ticket exists for). The
-     * {@code isPublic} branch and the standalone participant-status clause are both currently
-     * dormant on real data — they start doing real work only once a private standalone session or
-     * a public group-linked session can actually exist, without needing this rule rewritten again.
+     * <p>A group-linked session always has {@code isPublic = false} (set at creation), so it needs membership. A standalone
+     * session is public by default and open to everyone; since SESSION-69 its host can make it private, and then only the
+     * participant-status clause lets anyone but the creator in (an invitee, or someone who asked to join before it went
+     * private). That clause was dormant until then; this rule did not need rewriting.
      */
+    /**
+     * SESSION-69: does this participant row keep its holder inside a private standalone session? {@code JOINED},
+     * {@code REQUESTED} and {@code INVITED} do ({@code LEFT} does not, which also covers a rejected request). The one
+     * definition, shared with {@code joinSession}.
+     */
+    public static boolean grantsAccess(SessionParticipant participant) {
+        return participant.getStatus() == ParticipantStatus.JOINED
+                || participant.getStatus() == ParticipantStatus.REQUESTED
+                || participant.getStatus() == ParticipantStatus.INVITED;
+    }
+
     @Override
     public boolean isVisibleTo(Session session, UUID viewerId) {
         if (viewerId == null) {
@@ -77,9 +85,7 @@ public class SessionDetailGate implements ResourceGate<Session> {
         }
         if (session.getGroupId() == null) {
             return sessionParticipantRepository.findBySessionIdAndUserId(session.getId(), viewerId)
-                    .filter(p -> p.getStatus() == ParticipantStatus.JOINED
-                            || p.getStatus() == ParticipantStatus.REQUESTED
-                            || p.getStatus() == ParticipantStatus.INVITED)
+                    .filter(SessionDetailGate::grantsAccess)
                     .isPresent();
         }
         return groupService.isGroupMember(session.getGroupId(), viewerId);

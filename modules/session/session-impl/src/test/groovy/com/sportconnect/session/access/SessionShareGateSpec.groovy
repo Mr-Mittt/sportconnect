@@ -10,7 +10,7 @@ import spock.lang.Subject
 
 /**
  * SESSION-66 / CLIENT-SESSION-49: any identified caller may share a standalone session, in any status and whatever their
- * own participation; a group session is shareable by nobody.
+ * own participation; a group session is shareable by nobody, and neither is a private standalone session (SESSION-69).
  */
 class SessionShareGateSpec extends Specification {
 
@@ -21,8 +21,8 @@ class SessionShareGateSpec extends Specification {
 
     UUID viewerId = UUID.randomUUID()
 
-    private Session session(Long groupId = null, SessionStatus status = SessionStatus.SCHEDULED) {
-        Session.builder().id(1L).postId(999L).groupId(groupId).status(status).build()
+    private Session session(Long groupId = null, SessionStatus status = SessionStatus.SCHEDULED, Boolean isPublic = true) {
+        Session.builder().id(1L).postId(999L).groupId(groupId).status(status).isPublic(isPublic).build()
     }
 
     def "isAvailable is false for null"() {
@@ -62,6 +62,28 @@ class SessionShareGateSpec extends Specification {
 
         where:
         status << SessionStatus.values().toList()
+    }
+
+    def "a private standalone session is not shareable, by anyone, in any status (SESSION-69)"() {
+        expect:
+        !gate.isVisibleTo(session(null, status, false), viewerId)
+
+        where:
+        status << SessionStatus.values().toList()
+    }
+
+    def "a session with no isPublic value is not shareable either (only an explicit public one is)"() {
+        expect:
+        !gate.isVisibleTo(session(null, SessionStatus.SCHEDULED, null), viewerId)
+    }
+
+    def "require answers 403 SESSION_SHARE_NOT_ALLOWED for a private session"() {
+        when:
+        gate.require(session(null, SessionStatus.SCHEDULED, false), viewerId, "SESSION_NOT_FOUND", "nf", "SESSION_SHARE_NOT_ALLOWED", "no")
+
+        then:
+        def fb = thrown(ForbiddenException)
+        fb.errorCode == "SESSION_SHARE_NOT_ALLOWED"
     }
 
     def "a group session is not shareable, by anyone, in any status, with no group lookup"() {

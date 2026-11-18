@@ -155,6 +155,64 @@ class SessionServiceImplSpec extends Specification {
         result.locationNote == "Court 3"
     }
 
+    def "createSession lets the creator make a standalone session private"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder().title("Test session").sportId(1L).locationId(1L)
+                .scheduledStart(Instant.now().plusSeconds(86400)).isPublic(false).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId).sportId(1L)
+                .locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).isPublic(false).build()
+
+        when:
+        def result = sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.groupId == null && s.isPublic == false }) >> saved
+        interaction { stubBatchEnrichment() }
+        result.isPublic == false
+    }
+
+    def "createSession keeps a standalone session public when isPublic is omitted or true"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder().title("Test session").sportId(1L).locationId(1L)
+                .scheduledStart(Instant.now().plusSeconds(86400)).isPublic(sent).build()
+        def saved = Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(userId).sportId(1L)
+                .locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).isPublic(true).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.isPublic == true }) >> saved
+        interaction { stubBatchEnrichment() }
+
+        where:
+        sent << [null, true]
+    }
+
+    def "createSession ignores isPublic for a group-linked session: it is never public"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = CreateSessionRequest.builder().title("Test session").groupId(5L).locationId(1L)
+                .scheduledStart(Instant.now().plusSeconds(86400)).isPublic(true).build()
+        def group = GroupResponse.builder().id(5L).sportId(1L).build()
+        def saved = Session.builder().id(2L).groupId(5L).sessionType(SessionType.GROUP_RECURRING).createdBy(userId)
+                .sportId(1L).locationId(1L).scheduledStart(request.scheduledStart).status(SessionStatus.SCHEDULED).isPublic(false).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> group
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.groupId == 5L && s.isPublic == false }) >> saved
+        interaction { stubBatchEnrichment() }
+    }
+
     def "createSession rejects a standalone session without a sportId"() {
         given:
         def request = CreateSessionRequest.builder().title("Test session").locationId(1L).scheduledStart(Instant.now()).build()
@@ -534,6 +592,72 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
     }
 
+    def "updateSession switches a PREPARING standalone session to private, and tells the thread"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [isPublic: true, postId: 77L])
+        def request = UpdateSessionRequest.builder().isPublic(false).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        userService.getUserSummariesByIds([userId]) >> [(userId): summaryOf(userId, "Alex")]
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.isPublic == false }) >> session
+        1 * commentService.createSystemSessionComments({ List l ->
+            l.size() == 1 && l[0].systemCode == SystemCode.SESSION_VISIBILITY_CHANGED &&
+                    l[0].systemParams == [name: "Alex", old: "public", new: "private"] })
+        interaction { stubBatchEnrichment() }
+        1 * sessionOutboxWriter.record("session.details.updated", _)
+    }
+
+    def "updateSession leaves visibility alone when isPublic is not sent"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [isPublic: false])
+        def request = UpdateSessionRequest.builder().title("New title").build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save({ Session s -> s.isPublic == false && s.title == "New title" }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession ignores isPublic for a group-linked session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [groupId: 5L, isPublic: false])
+        def request = UpdateSessionRequest.builder().isPublic(true).title("New title").build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * sessionRepository.save({ Session s -> s.isPublic == false }) >> session
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession rejects a visibility change once the session is no longer PREPARING"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = preparingSession(userId, [status: SessionStatus.SCHEDULED, isPublic: true])
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().isPublic(false).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_PREPARING'
+        0 * sessionRepository.save(_)
+    }
+
     def "updateSession rejects a non-creator for a standalone session"() {
         given:
         def session = Session.builder().id(1L).createdBy(UUID.randomUUID()).status(SessionStatus.SCHEDULED).build()
@@ -740,6 +864,89 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
         0 * groupService._
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.JOINED }) >> { SessionParticipant p -> p }
+    }
+
+    // ---- SESSION-69: a private standalone session
+
+    def "joinSession refuses a stranger on a private standalone session, before anything is written"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).isPublic(false).autoApprove(true).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_FORBIDDEN'
+        0 * sessionParticipantRepository.save(_)
+        0 * sessionOutboxWriter.record(*_)
+        0 * commentService._
+    }
+
+    def "joinSession on a private session tells a stranger nothing else: not even that it is cancelled"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).isPublic(false).status(SessionStatus.CANCELLED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_FORBIDDEN'
+    }
+
+    def "joinSession refuses someone who LEFT (or was rejected) a private session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).isPublic(false).autoApprove(true).build()
+        def left = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.LEFT).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(left)
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_FORBIDDEN'
+        0 * sessionParticipantRepository.save(_)
+    }
+
+    def "joinSession lets an invitee accept a private session (INVITED resolves straight to JOINED)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).isPublic(false).autoApprove(false).build()
+        def invited = SessionParticipant.builder().id(9L).sessionId(1L).userId(userId).status(ParticipantStatus.INVITED).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        // read twice: the visibility check, then the join itself
+        2 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.of(invited)
+        1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.JOINED }) >> invited
+        noExceptionThrown()
+    }
+
+    def "joinSession does not look at visibility for a public standalone session: no extra participant read"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).isPublic(true).autoApprove(true).build()
+
+        when:
+        sessionService.joinSession(1L, userId)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
         1 * sessionParticipantRepository.findBySessionIdAndUserId(1L, userId) >> Optional.empty()
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.JOINED }) >> { SessionParticipant p -> p }
     }
@@ -1098,17 +1305,49 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionParticipantRepository.save({ SessionParticipant p -> p.status == ParticipantStatus.LEFT }) >> existing
     }
 
-    def "getSessionParticipants defaults to JOINED and stays public when status is omitted"() {
+    def "getSessionParticipants defaults to JOINED, after the detail gate, when status is omitted"() {
         given:
         def callerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(UUID.randomUUID()).status(SessionStatus.SCHEDULED).build()
         def pageable = PageRequest.of(0, 10)
 
         when:
         sessionService.getSessionParticipants(1L, callerId, null, pageable)
 
         then:
-        0 * sessionRepository.findById(_)
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, callerId, "SESSION_NOT_FOUND", _, "SESSION_FORBIDDEN", _) >> session
         1 * sessionParticipantRepository.findBySessionIdAndStatus(1L, ParticipantStatus.JOINED, pageable) >> new PageImpl([])
+    }
+
+    def "getSessionParticipants reads nothing when the detail gate refuses (a private session, a stranger)"() {
+        given:
+        def callerId = UUID.randomUUID()
+        def session = Session.builder().id(1L).isPublic(false).build()
+
+        when:
+        sessionService.getSessionParticipants(1L, callerId, null, PageRequest.of(0, 10))
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, callerId, _, _, _, _) >> {
+            throw new ForbiddenException("SESSION_FORBIDDEN", "You don't have access to this session", null) }
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_FORBIDDEN'
+        0 * sessionParticipantRepository.findBySessionIdAndStatus(*_)
+        0 * userService._
+    }
+
+    def "getSessionParticipants is 404 for a missing session"() {
+        when:
+        sessionService.getSessionParticipants(1L, UUID.randomUUID(), null, PageRequest.of(0, 10))
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.empty()
+        1 * sessionDetailGate.require(null, _, _, _, _, _) >> {
+            throw new NotFoundException("SESSION_NOT_FOUND", "Session not found", null) }
+        thrown(NotFoundException)
+        0 * sessionParticipantRepository.findBySessionIdAndStatus(*_)
     }
 
     def "getSessionParticipants gates a non-JOINED status the same as cancelSession/updateSession"() {
@@ -1122,6 +1361,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, callerId, _, _, _, _) >> session
         def e = thrown(ForbiddenException)
         e.errorCode == 'SESSION_CREATOR_REQUIRED'
         0 * sessionParticipantRepository.findBySessionIdAndStatus(*_)
@@ -1138,6 +1378,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionDetailGate.require(session, callerId, _, _, _, _) >> session
         1 * sessionParticipantRepository.findBySessionIdAndStatus(1L, ParticipantStatus.REQUESTED, pageable) >> new PageImpl([])
     }
 
