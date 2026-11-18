@@ -3,6 +3,7 @@
 // feature's own imports read naturally. Write-only payloads (typed 1:1 against
 // modules/session/session-api/.../dto/{CreateSessionRequest,UpdateSessionRequest,
 // CancelSessionRequest}) stay local — no other feature needs them.
+import type { FriendUser } from '@/features/friends/types';
 import type { FeeType, Session } from '@/shared/types/session';
 
 export type {
@@ -141,4 +142,31 @@ export interface ThreadPerson {
   userId: string;
   fullName: string;
   avatarUrl: string | null;
+}
+
+/** CLIENT-SESSION-49 — `data` of `POST /sessions/{id}/shares`, typed 1:1 against `SessionShareResponse` (SESSION-66). */
+export interface ShareSessionResponse {
+  /** How many friends were notified; lower than the number chosen when some were skipped. */
+  sent: number;
+  /** Everyone not notified (not a friend, already in the session, deactivated, repeated), never told apart. */
+  skipped: number;
+}
+
+/**
+ * CLIENT-SESSION-49 — what the session modal's "Share" button and dialog need, owned by `useSessionDetailModalData`
+ * (the query boundary). Optional on the modal: absent = no Share button (stories and tests that do not exercise it).
+ */
+export interface SessionShareData {
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  /** The caller's whole friend list, fetched only while the dialog is open. */
+  friends: FriendUser[];
+  isFriendsLoading: boolean;
+  isFriendsError: boolean;
+  /** Sends the session to these friends; `onDone` runs once the server accepted it. */
+  onShare: (userIds: string[], onDone: () => void) => void;
+  isSharing: boolean;
+  /** A failure the dialog shows inline (a coded 404 / 403 opens the app-wide error dialog instead). */
+  isShareError: boolean;
 }

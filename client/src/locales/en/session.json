@@ -227,6 +227,22 @@
       "heading": "Players ({{value}})",
       "error": "Couldn't load participants."
     },
+    "share": {
+      "open": "Share this session",
+      "title": "Share with friends",
+      "searchLabel": "Search your friends",
+      "searchPlaceholder": "Search friends",
+      "select": "Select {{name}}",
+      "joined": "Joined",
+      "action": "Share ({{count}})",
+      "sharing": "Sharing…",
+      "sent": "Session shared.",
+      "limit": "You reached the limit of one sharing turn.",
+      "noFriends": "You have no friends to share with yet.",
+      "noResults": "No friends found.",
+      "friendsError": "Couldn't load your friends.",
+      "error": "Couldn't share this session. Try again."
+    },
     "qualifier": {
       "hostAndYou": "(host, you)",
       "host": "(host)",

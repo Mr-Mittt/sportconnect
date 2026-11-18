@@ -74,6 +74,8 @@
     "sessionJoinRequestRejectedPrefix": "Yêu cầu tham gia ",
     "sessionJoinRequestRejectedSuffix": " của bạn đã bị từ chối",
     "sessionInvitationCreated": " đã mời bạn tham gia ",
+    "sessionShareCreatedPrefix": " đã chia sẻ ",
+    "sessionShareCreatedSuffix": " với bạn",
     "sessionDetailsUpdated": " đã cập nhật ",
     "sessionRecordChanged": " đã cập nhật kết quả của ",
     "friendRequestCreated": " muốn kết bạn với bạn",

@@ -1192,6 +1192,36 @@ export const sessionHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(null, 'Left session successfully'));
   }),
 
+  // CLIENT-SESSION-49 (SESSION-66): share a standalone session with friends. Mirrors the server's rules: 404 for an unknown
+  // session, 403 `SESSION_SHARE_NOT_ALLOWED` for a group session, 400 for an empty or over-50 list; anyone already JOINED,
+  // REQUESTED or INVITED (and the caller) is skipped and counted. Friendship and deactivation are not simulated: every other
+  // id counts as sent. Nothing in the session changes (no participant row), like the real endpoint.
+  http.post('/api/sessions/:sessionId/shares', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const sessionId = Number(params.sessionId);
+    const session = sessionsSessions.get(sessionIdFromRequest(request));
+    const existing = session.sessionsState.find((candidate) => candidate.id === sessionId);
+    if (!existing) {
+      return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
+    }
+    if (existing.groupId !== null) {
+      return HttpResponse.json(apiError('A group session cannot be shared', 'SESSION_SHARE_NOT_ALLOWED'), { status: 403 });
+    }
+    const body = (await request.json()) as { userIds?: string[] };
+    const userIds = [...new Set(body.userIds ?? [])];
+    if (userIds.length === 0 || userIds.length > 50) {
+      return HttpResponse.json(apiError('Validation failed', 'VALIDATION_FAILED'), { status: 400 });
+    }
+    const alreadyIn = new Set(
+      (session.participantsState[sessionId] ?? [])
+        .filter((p) => p.status === 'JOINED' || p.status === 'REQUESTED' || p.status === 'INVITED')
+        .map((p) => p.userId),
+    );
+    const sent = userIds.filter((id) => id !== mockUser.id && !alreadyIn.has(id)).length;
+    return HttpResponse.json(apiResponse({ sent, skipped: userIds.length - sent }, 'Session shared successfully'));
+  }),
+
   http.get('/api/sessions/:sessionId/participants', ({ request, params }) => {
     const sessionId = Number(params.sessionId);
     // SESSION-6: status omitted defaults to JOINED (the public default); any other status (in

@@ -74,6 +74,8 @@
     "sessionJoinRequestRejectedPrefix": "Your request to join ",
     "sessionJoinRequestRejectedSuffix": " was declined",
     "sessionInvitationCreated": " invited you to join ",
+    "sessionShareCreatedPrefix": " shared ",
+    "sessionShareCreatedSuffix": " with you",
     "sessionDetailsUpdated": " updated ",
     "sessionRecordChanged": " updated the result of ",
     "friendRequestCreated": " wants to be your friend",

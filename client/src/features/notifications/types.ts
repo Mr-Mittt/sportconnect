@@ -31,6 +31,8 @@ export type NotificationType =
   | 'session.join_request.approved'
   | 'session.join_request.rejected'
   | 'session.invitation.created'
+  // SESSION-66 / CLIENT-SESSION-49: a friend shared a session with the user.
+  | 'session.share.created'
   // SESSION-24 / CLIENT-SESSION-21: fired on every successful updateSession call, regardless of
   // which field changed — field-agnostic by design, hence the generic text below.
   | 'session.details.updated'
