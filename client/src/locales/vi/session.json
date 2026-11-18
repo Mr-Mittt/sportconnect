@@ -227,6 +227,22 @@
       "heading": "Người chơi ({{value}})",
       "error": "Không thể tải danh sách người tham gia."
     },
+    "share": {
+      "open": "Chia sẻ buổi chơi này",
+      "title": "Chia sẻ với bạn bè",
+      "searchLabel": "Tìm trong danh sách bạn bè",
+      "searchPlaceholder": "Tìm bạn bè",
+      "select": "Chọn {{name}}",
+      "joined": "Đã tham gia",
+      "action": "Chia sẻ ({{count}})",
+      "sharing": "Đang chia sẻ…",
+      "sent": "Đã chia sẻ buổi chơi.",
+      "limit": "Bạn đã đạt giới hạn của một lượt chia sẻ.",
+      "noFriends": "Bạn chưa có người bạn nào để chia sẻ.",
+      "noResults": "Không tìm thấy người bạn nào.",
+      "friendsError": "Không thể tải danh sách bạn bè.",
+      "error": "Không thể chia sẻ buổi chơi này. Hãy thử lại."
+    },
     "qualifier": {
       "hostAndYou": "(chủ trì, bạn)",
       "host": "(chủ trì)",

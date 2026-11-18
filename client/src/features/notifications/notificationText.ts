@@ -72,6 +72,14 @@ export function getNotificationText(notification: Notification): NotificationTex
       ];
     case 'session.invitation.created':
       return [actor, plain(i18next.t('enums:notifications.sessionInvitationCreated')), entity];
+    // SESSION-66 / CLIENT-SESSION-49: '{name} shared {session} with you'; a share is not an invitation, so it never says invited.
+    case 'session.share.created':
+      return [
+        actor,
+        plain(i18next.t('enums:notifications.sessionShareCreatedPrefix')),
+        entity,
+        plain(i18next.t('enums:notifications.sessionShareCreatedSuffix')),
+      ];
     // SESSION-24: deliberately field-agnostic — fires on any successful updateSession call.
     case 'session.record.changed':
       return [actor, plain(i18next.t('enums:notifications.sessionRecordChanged')), entity];

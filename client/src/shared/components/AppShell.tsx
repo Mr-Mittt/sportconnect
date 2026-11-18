@@ -350,6 +350,7 @@ export function AppShell() {
         isParticipantsError={sessionDetailData.isParticipantsError}
         result={sessionDetailData.result}
         recordCommands={sessionDetailData.recordCommands}
+        share={sessionDetailData.share}
         mentionSource={sessionDetailData.mentionSource}
         currentUserId={sessionDetailData.currentUserId}
         canManage={sessionDetailData.canManage}

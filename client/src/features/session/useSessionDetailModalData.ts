@@ -10,12 +10,14 @@ import { useRawMySportProfiles } from '@/shared/hooks/useRawMySportProfiles';
 import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
 import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import type { Location } from '@/shared/types/location';
+import { useFriends } from '@/features/friends/hooks/useFriends';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useLikeSession } from './hooks/useLikeSession';
 import { useRejectParticipant } from './hooks/useRejectParticipant';
 import { useRequestedParticipants } from './hooks/useRequestedParticipants';
 import { useScheduleSession } from './hooks/useScheduleSession';
+import { useShareSession } from './hooks/useShareSession';
 import { useSession } from './hooks/useSession';
 import { useSessionParticipants } from './hooks/useSessionParticipants';
 import { useSessionParticipationAction } from './hooks/useSessionParticipationAction';
@@ -24,11 +26,12 @@ import { useSessionResultData } from './hooks/useSessionResultData';
 import { useUnlikeSession } from './hooks/useUnlikeSession';
 import { useUpdateSession } from './hooks/useUpdateSession';
 import { missingForSession } from './sessionReadiness';
-import { isSessionDialogError, useSessionErrorGuard } from './sessionErrors';
-import type { UpdateSessionPayload } from './types';
+import { isSessionDialogError, useCloseOnSessionErrorDismissal, useSessionErrorGuard } from './sessionErrors';
+import type { SessionShareData, UpdateSessionPayload } from './types';
 import { useSessionCommentsData } from './useSessionCommentsData';
 
 const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
+const NO_FRIENDS: never[] = [];
 
 /**
  * The full `SessionDetailModal` data slice for one selected session — session/participants
@@ -82,6 +85,39 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
   );
   const approveParticipantMutation = useApproveParticipant();
   const rejectParticipantMutation = useRejectParticipant();
+
+  // CLIENT-SESSION-49: the Share dialog of a standalone session. The friend list is fetched only while it is open. A coded
+  // failure (404 / 403) opens the app-wide error dialog and, once that is dismissed, closes this dialog too.
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const shareMutation = useShareSession();
+  const friendsQuery = useFriends(isDetailOpen && isShareOpen);
+  const armCloseOnShareErrorDismissal = useCloseOnSessionErrorDismissal(() => setIsShareOpen(false));
+  const onShare = (userIds: string[], onDone: () => void) => {
+    if (sessionId === null) return;
+    shareMutation.mutate(
+      { sessionId, userIds },
+      {
+        onSuccess: () => onDone(),
+        onError: (error) => {
+          if (isSessionDialogError(error)) armCloseOnShareErrorDismissal();
+        },
+      },
+    );
+  };
+  const share: SessionShareData = {
+    isOpen: isShareOpen,
+    onOpen: () => setIsShareOpen(true),
+    onClose: () => {
+      setIsShareOpen(false);
+      shareMutation.reset();
+    },
+    friends: friendsQuery.data ?? NO_FRIENDS,
+    isFriendsLoading: friendsQuery.isLoading,
+    isFriendsError: friendsQuery.isError,
+    onShare,
+    isSharing: shareMutation.isPending,
+    isShareError: shareMutation.isError && !isSessionDialogError(shareMutation.error),
+  };
 
   // CLIENT-SESSION-8: the detail dialog's Discussion section.
   const sessionCommentsData = useSessionCommentsData(sessionId ?? undefined, isDetailOpen);
@@ -210,8 +246,13 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
       updateSessionMutation.reset();
       scheduleMutation.reset();
       setIsScheduleConfirmOpen(false);
+      // CLIENT-SESSION-49: the Share dialog belongs to the session being closed.
+      shareMutation.reset();
+      setIsShareOpen(false);
       setSelectedCompletionLocation(null);
     },
+    /** CLIENT-SESSION-49: the Share button and dialog's slice. */
+    share,
     selectedSession: sessionQuery.data,
     isSessionLoading: sessionQuery.isLoading,
     isSessionError: sessionQuery.isError,

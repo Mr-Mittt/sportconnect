@@ -12,6 +12,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
+import com.sportconnect.session.api.event.SessionShareCreatedEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
@@ -351,6 +352,37 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
             assertThat(notifications).hasSize(1);
             assertThat(notifications.get(0).getActorCount()).isEqualTo(2);
         });
+    }
+
+    /**
+     * SESSION-66 / CLIENT-SESSION-49 - the only place {@code session.share.created}'s full path is exercised for real:
+     * the three-word key must match the queue's {@code session.*.*} binding (a two-word key would never arrive), then
+     * the consumer turns it into one notification for the friend, naming the sharer and the session.
+     */
+    @Test
+    void sessionShareCreatedEvent_consumedOverRealRabbitMq_notifiesTheFriendWithTheShareType() throws Exception {
+        UUID sharerId = UUID.randomUUID();
+        UUID friendId = UUID.randomUUID();
+        SessionShareCreatedEvent payload = SessionShareCreatedEvent.builder()
+                .sessionId(994L).actorId(sharerId).recipientUserId(friendId).build();
+
+        publish("session.share.created", "it-test:" + UUID.randomUUID(), payload);
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(friendId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).hasSize(1);
+            Notification notification = notifications.get(0);
+            assertThat(notification.getType()).isEqualTo("session.share.created");
+            assertThat(notification.getEntityType()).isEqualTo("SESSION");
+            assertThat(notification.getEntityId()).isEqualTo("994");
+            assertThat(notification.getActorIds()).containsExactly(sharerId);
+            assertThat(notification.getMessage()).isNull();
+        });
+        assertThat(notificationRepository
+                .findByRecipientUserIdOrderByUpdatedAtDesc(sharerId, PageRequest.of(0, 10))
+                .getContent()).isEmpty();
     }
 
     /**

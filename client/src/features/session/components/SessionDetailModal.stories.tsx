@@ -156,6 +156,26 @@ const sportsByKey: Record<SportKey, SportProfile> = {
   basketball: { key: 'basketball', label: 'Basketball', iconUrl: '/images/sports/basketball.png', colorRamp: 'coral' },
 };
 
+// CLIENT-SESSION-49: the Share button's slice. Every story of a standalone session shows the button (any status, any
+// participation); the group-linked one does not.
+const shareFriends = [
+  { id: 'f-1', fullName: 'Alice Nguyen', avatarUrl: null, coverUrl: null, bio: null },
+  { id: 'user-2', fullName: 'Priya Shah', avatarUrl: null, coverUrl: null, bio: null },
+  { id: 'f-3', fullName: 'Chi Pham', avatarUrl: null, coverUrl: null, bio: null },
+];
+
+const share = {
+  isOpen: false,
+  onOpen: () => {},
+  onClose: () => {},
+  friends: shareFriends,
+  isFriendsLoading: false,
+  isFriendsError: false,
+  onShare: (_userIds: string[], onDone: () => void) => onDone(),
+  isSharing: false,
+  isShareError: false,
+};
+
 const meta = {
   title: 'Session/SessionDetailModal',
   component: SessionDetailModal,
@@ -216,6 +236,7 @@ const meta = {
     isPostingComment: false,
     onDeleteComment: () => {},
     onToggleCommentLike: () => {},
+    share,
   },
 } satisfies Meta<typeof SessionDetailModal>;
 
@@ -430,4 +451,9 @@ export const WithDiscussion: Story = {
 /** CLIENT-SESSION-8: a 403 on the comments fetch hides the whole Discussion section. */
 export const DiscussionForbidden: Story = {
   args: { isCommentsForbidden: true },
+};
+
+/** CLIENT-SESSION-49: the Share dialog over the modal. Priya has a JOINED row (user-2), so she is labelled "Joined". */
+export const ShareDialogOpen: Story = {
+  args: { share: { ...share, isOpen: true } },
 };

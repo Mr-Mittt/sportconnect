@@ -41,7 +41,7 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dia
 import { Input } from '@/shared/ui/input';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
-import type { Session, SessionParticipant, UpdateSessionPayload } from '../types';
+import type { Session, SessionParticipant, SessionShareData, UpdateSessionPayload } from '../types';
 import type { MentionSource } from '@/shared/components/MentionInput';
 import { SessionCommentSection } from './SessionCommentSection';
 import {
@@ -53,6 +53,8 @@ import { SessionDetailSections, type CompletionFavorites } from './SessionDetail
 import { SessionFormSection } from './SessionFormSection';
 import { SessionResultDialog } from './SessionResultDialog';
 import { SessionResultSection } from './SessionResultSection';
+import { ShareSessionButton } from './ShareSessionButton';
+import { ShareSessionDialog } from './ShareSessionDialog';
 import type { RecordCommandsData } from '../hooks/useRecordCommands';
 import type { SessionResultData } from '../hooks/useSessionResultData';
 import { missingForSession } from '../sessionReadiness';
@@ -173,6 +175,9 @@ interface SessionDetailModalProps {
   onToggleCommentLike: (comment: Comment) => void;
   /** CLIENT-GL-50: the people an `@` in a comment or reply offers. */
   mentionSource?: MentionSource;
+
+  /** CLIENT-SESSION-49: the Share button and dialog of a standalone session; absent = no Share button. */
+  share?: SessionShareData;
 }
 
 function initialsFor(fullName: string): string {
@@ -474,6 +479,7 @@ export function SessionDetailModal({
   onDeleteComment,
   onToggleCommentLike,
   mentionSource,
+  share,
   i18nOverridePrefix,
 }: SessionDetailModalProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
@@ -534,6 +540,14 @@ export function SessionDetailModal({
   // CLIENT-SESSION-37: everyone who cannot edit the session (a viewer, or the host once it is no longer
   // PREPARING) gets the read-only mode: Session information and Players, both collapsed.
   const readOnly = session !== undefined && !(canManage && session.status === 'PREPARING');
+  // CLIENT-SESSION-49: every viewer of a standalone session may share it, in any status and whatever their own
+  // participation; a group session is not shareable (SESSION-66), so no button.
+  const canShare = share !== undefined && session !== undefined && session.groupId === null;
+  const shareButton = canShare ? (
+    <ShareSessionButton i18nOverridePrefix={i18nOverridePrefix} onClick={share.onOpen} />
+  ) : undefined;
+  // `participants` holds the JOINED rows only (the first page, 20): which friends the Share dialog labels "Joined".
+  const joinedIds = useMemo(() => new Set(participants.map((participant) => participant.userId)), [participants]);
   const playersHeading =
     session === undefined
       ? ''
@@ -876,6 +890,7 @@ export function SessionDetailModal({
                       onOpenChange={setIsPlayersOpen}
                       scrollIntoViewOnOpen
                       pinned={approvalQueue ?? undefined}
+                      actions={shareButton}
                       // Collapsed: the avatars sit in the header itself, no "Players:" label under it (owner, 2026-11-13).
                       collapsedHeader={
                         !isParticipantsLoading && !isParticipantsError ? (
@@ -912,35 +927,36 @@ export function SessionDetailModal({
                   </section>
                 ) : (
                   <section aria-label={t('detail.players.label')} className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsPlayersCollapsed((collapsed) => !collapsed)}
-                      aria-expanded={!isPlayersCollapsed}
-                      className="flex w-full cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-                    >
-                      <IconUsers className="size-4 shrink-0" aria-hidden="true" />
-                      {t('detail.players.heading', {
-                        value:
-                          session.capacity === UNCAPPED_CAPACITY
-                            ? session.participantCount
-                            : `${session.participantCount}/${session.capacity}`,
-                      })}
-                      {/* Collapsed: the avatars sit in the header, left of the chevron. */}
-                      {isPlayersCollapsed && !isParticipantsLoading && !isParticipantsError && (
-                        <span className="ml-auto">
-                          <PlayersAvatarStack participants={participants} />
-                        </span>
-                      )}
-                      <IconChevronDown
-                        className={cn(
-                          'size-4 shrink-0 text-text-muted transition-transform',
-                          !(isPlayersCollapsed && !isParticipantsLoading && !isParticipantsError) &&
-                            'ml-auto',
-                          !isPlayersCollapsed && 'rotate-180',
+                    {/* The header is a row: the toggle, the Share button (CLIENT-SESSION-49) and the chevron, the buttons left of
+                        the chevron like every section. The toggle's ::after stretches over the whole row so a click anywhere on it
+                        (the chevron included) still toggles; the Share button sits above it (`relative z-10`). */}
+                    <div className="relative flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsPlayersCollapsed((collapsed) => !collapsed)}
+                        aria-expanded={!isPlayersCollapsed}
+                        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-2sm font-medium text-text-primary after:absolute after:inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+                      >
+                        <IconUsers className="size-4 shrink-0" aria-hidden="true" />
+                        {t('detail.players.heading', {
+                          value:
+                            session.capacity === UNCAPPED_CAPACITY
+                              ? session.participantCount
+                              : `${session.participantCount}/${session.capacity}`,
+                        })}
+                        {/* Collapsed: the avatars sit in the header, left of the buttons and the chevron. */}
+                        {isPlayersCollapsed && !isParticipantsLoading && !isParticipantsError && (
+                          <span className="ml-auto">
+                            <PlayersAvatarStack participants={participants} />
+                          </span>
                         )}
+                      </button>
+                      {shareButton}
+                      <IconChevronDown
+                        className={cn('size-4 shrink-0 text-text-muted transition-transform', !isPlayersCollapsed && 'rotate-180')}
                         aria-hidden="true"
                       />
-                    </button>
+                    </div>
 
                     {approvalQueue}
                     <PlayersMeter session={session} rampColor={sport?.colorRamp} />
@@ -1132,6 +1148,20 @@ export function SessionDetailModal({
             }}
           />
         </>
+      )}
+      {canShare && (
+        <ShareSessionDialog
+          i18nOverridePrefix={i18nOverridePrefix}
+          isOpen={share.isOpen}
+          onClose={share.onClose}
+          friends={share.friends}
+          isFriendsLoading={share.isFriendsLoading}
+          isFriendsError={share.isFriendsError}
+          joinedIds={joinedIds}
+          onShare={share.onShare}
+          isSharing={share.isSharing}
+          isShareError={share.isShareError}
+        />
       )}
       <UnsavedPostConfirmDialog
         isOpen={closeGuard.isAsking}

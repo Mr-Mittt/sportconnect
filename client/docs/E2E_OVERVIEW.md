@@ -231,6 +231,7 @@ e2e/
     session-form-layout.spec.ts # CLIENT-SESSION-34
     session-results.spec.ts   # CLIENT-GL-38, CLIENT-GL-39
     session-thread-tags.spec.ts # CLIENT-GL-50
+    session-share.spec.ts     # CLIENT-SESSION-49
     post-tags.spec.ts           # CLIENT-GL-50 part 2
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5, CLIENT-NOTIF-7
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
@@ -1278,6 +1279,17 @@ Tagging in normal posts. The first test runs on Home Feed (a user post: the fixt
 | Draft 1. open a post | A half-written post in the box, View comments → no "Leave without posting?", the comment box has the caret (part 5, own test) | Opening a post moves `/` to `/posts/:id` on the same page; the draft is not lost, so nothing is asked. |
 | Draft 2. Keep editing | Type a comment, Esc → "Leave without posting?" → Keep editing → the comment box has the caret and its text | The question is about the unsent comment; staying returns to it. |
 | Draft 3. Leave | Esc, Leave → the post closes, nothing more is asked, the half-written post is still in the box | Leaving the modal keeps the page's own draft. |
+
+### `e2e/flows/session-share.spec.ts` (CLIENT-SESSION-49, 4 `test()`s)
+
+Sharing a standalone session with friends from the Players section header (SESSION-66's `POST /api/sessions/{id}/shares`). The default mock has one friend, so each test routes its own friend list on top of MSW with `page.route` (the first also routes the participants, so one friend is JOINED); the share endpoint is the MSW handler in `e2e/mocks/handlers/sessions.ts` (404 unknown session, 403 group session, 400 empty or over 50, friends already in the session skipped and counted). The session opened is the Discover fixture "Weekend 5-a-side", which the fixture user has **not** joined: any viewer of a standalone session may share it. Related docs: `client/docs/MVP/CLIENT-SESSION-49_SHARE_DIALOG_IN_THE_PLAYERS_SECTION.md`.
+
+| Test | What it checks |
+|---|---|
+| share with two friends | The Share button is in the Players section; the dialog lists the JOINED friend with "Joined" and no checkbox, the other two with checkboxes; "Share (0)" is disabled; ticking two makes it "Share (2)"; the request body is exactly `{ userIds: [the two ticked] }`; "Session shared." shows, the dialog **stays open**, the two stay ticked but disabled and the button is "Share (0)" again; Close closes only the dialog |
+| session no longer exists | Forced 404 `SESSION_NOT_FOUND` on the share: the app-wide error dialog reads "This session no longer exists.", no toast; "Got it" closes it **and** the Share dialog, the session modal stays |
+| the limit of one turn | 52 friends, 50 ticked: the footer reads "You reached the limit of one sharing turn.", "Share (50)" is enabled, the unticked boxes are disabled; un-ticking one lifts the warning and re-enables them |
+| group session | A group-linked session (forced detail response with `groupId`) has no Share button |
 
 ### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
 

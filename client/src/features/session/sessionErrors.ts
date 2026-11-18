@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSessionErrorDialogStore } from '@/app/sessionErrorDialogStore';
 import { getApiError } from '@/shared/lib/apiError';
@@ -16,6 +16,8 @@ const STAY_OPEN_CODES: ReadonlySet<string> = new Set([
   'SESSION_NOT_CANCELLABLE',
   'SESSION_NOT_PREPARING',
   'SESSION_NOT_PARTICIPANT',
+  // CLIENT-SESSION-49: a group session cannot be shared; the share dialog closes when this dialog is dismissed.
+  'SESSION_SHARE_NOT_ALLOWED',
 ]);
 
 /** Codes that open the dialog and, on "Got it", close the session modal: the user has no right to be in it. */
@@ -97,4 +99,32 @@ export function useSessionErrorGuard(sessionId: number | null, closeDetail: (() 
     if (sessionId === null) return;
     if (useSessionErrorDialogStore.getState().lastDismissedForbidden) closeRef.current?.();
   }, [dismissals, sessionId]);
+}
+
+/**
+ * CLIENT-SESSION-49: lets a dialog that sits on top of the session modal (the Share dialog) close itself once the app-wide
+ * session error dialog its own failed call opened is dismissed ("Got it" closes both). Returns `arm`: the failing call
+ * invokes it when it knows the error dialog is about to show; the next dismissal then runs `close`, once. A dismissal that
+ * nobody armed for (another card's error) closes nothing.
+ */
+export function useCloseOnSessionErrorDismissal(close: () => void): () => void {
+  const dismissals = useSessionErrorDialogStore((state) => state.dismissals);
+  const seenDismissals = useRef(dismissals);
+  const armed = useRef(false);
+  const closeRef = useRef(close);
+  useEffect(() => {
+    closeRef.current = close;
+  });
+
+  useEffect(() => {
+    if (dismissals === seenDismissals.current) return;
+    seenDismissals.current = dismissals;
+    if (!armed.current) return;
+    armed.current = false;
+    closeRef.current();
+  }, [dismissals]);
+
+  return useCallback(() => {
+    armed.current = true;
+  }, []);
 }

@@ -529,6 +529,7 @@ export function HomeFeedPage() {
           isParticipantsError={discoverModalData.isParticipantsError}
           result={discoverModalData.result}
           recordCommands={discoverModalData.recordCommands}
+          share={discoverModalData.share}
           mentionSource={discoverModalData.mentionSource}
           currentUserId={discoverModalData.currentUserId}
           canManage={discoverModalData.canManage}

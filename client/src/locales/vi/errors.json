@@ -156,6 +156,7 @@
     "SESSION_NOT_CANCELLABLE": "Buổi chơi này đã kết thúc hoặc đã bị hủy.",
     "SESSION_NOT_PREPARING": "Buổi chơi này không thể chỉnh sửa nữa.",
     "SESSION_NOT_PARTICIPANT": "Bạn không còn tham gia buổi chơi này.",
+    "SESSION_SHARE_NOT_ALLOWED": "Không thể chia sẻ buổi chơi này.",
     "SESSION_CREATOR_CANNOT_LEAVE": "Là người tạo, bạn không thể rời buổi chơi này. Hãy hủy buổi chơi.",
     "SESSION_LEAVE_TOO_LATE": "Đã quá muộn để rời đi: bạn chỉ có thể rời buổi chơi trước giờ bắt đầu 15 phút.",
     "SESSION_SPORT_REQUIRED": "Hãy chọn môn thể thao cho buổi chơi.",
