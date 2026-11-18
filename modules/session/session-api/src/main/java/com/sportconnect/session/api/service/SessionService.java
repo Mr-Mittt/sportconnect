@@ -5,6 +5,8 @@ import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
+import com.sportconnect.session.api.dto.SessionShareResponse;
+import com.sportconnect.session.api.dto.ShareSessionRequest;
 import com.sportconnect.session.api.dto.SessionDiscoverDateCountsResponse;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
@@ -496,4 +498,23 @@ public interface SessionService {
      * settings/recurrence update.
      */
     void generateNextOccurrenceForGroup(Long groupId);
+
+    /**
+     * SESSION-66 — a {@code JOINED} participant of a standalone session shares it with friends. A share is a
+     * notification, not an invitation: one {@code session.invitation.created} outbox row per recipient (actor = the
+     * caller), no participant row, no system comment; each friend opens the session from the notification and decides
+     * for themself whether to ask to join, under the normal join rules.
+     *
+     * <p>Refusals, checked in this order and before any write: {@code SESSION_NOT_FOUND} (404, missing or its group is
+     * gone), {@code SESSION_SHARE_NOT_ALLOWED} (403, the caller is not a {@code JOINED} participant, or it is a group
+     * session), {@code SESSION_NOT_SHAREABLE} (409, status other than {@code PREPARING}/{@code SCHEDULED}).
+     *
+     * <p>Skipped without error, and counted in {@code skipped}: anyone who is not a friend of the caller (the caller's
+     * own id included), a friend already {@code JOINED}, {@code REQUESTED} or {@code INVITED}, and a deactivated
+     * friend. Nothing in the answer tells these apart. A friend who {@code LEFT} (or was rejected, which is
+     * {@code LEFT}) is notified again.
+     *
+     * @return how many friends were notified and how many were skipped
+     */
+    SessionShareResponse shareSession(Long sessionId, UUID callerId, ShareSessionRequest request);
 }

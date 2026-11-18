@@ -43,8 +43,10 @@ public interface UserService {
     UserResponse getActiveUserForUpdate(UUID userId);
 
     /**
-     * Batch lookup by ID. Missing/inactive ids are simply absent from the returned map —
-     * no exception is thrown, mirroring a plain findAllById() semantics.
+     * Batch lookup by ID. Missing ids are simply absent from the returned map — no exception is thrown,
+     * mirroring a plain findAllById() semantics. <strong>Deactivated accounts are included</strong> (there is no
+     * active filter; the implementation never had one): a caller that must leave deactivated users out reads
+     * {@link UserResponse#getIsActive()} itself (SESSION-66 does).
      *
      * <p><strong>U16 — display names are deliberately not resolved here.</strong> Each {@link UserResponse} carries
      * {@code countryId} and {@code regionId}, but {@code country} is only the legacy free text and
@@ -56,14 +58,22 @@ public interface UserService {
     Map<UUID, UserResponse> getUsersByIds(List<UUID> userIds);
 
     /**
-     * U18 — the same batch-by-id contract as {@link #getUsersByIds} (one query, unknown/inactive ids simply
-     * absent, no exception), narrowed to {@link UserSummaryResponse} ({@code id}/{@code fullName}/{@code avatarUrl}).
+     * U18 — the same batch-by-id contract as {@link #getUsersByIds} (one query, unknown ids simply absent, no
+     * exception, deactivated accounts included), narrowed to {@link UserSummaryResponse} ({@code id}/{@code fullName}/{@code avatarUrl}).
      * Prefer this over {@link #getUsersByIds} at any call site that only resolves a display name and avatar —
      * which is every current cross-domain caller (post/comment authors, group members, session
      * creators/participants, notification actors). No reference-domain or other cross-domain call is added by
      * using this instead — both methods cost exactly one {@code userRepository} query.
      */
     Map<UUID, UserSummaryResponse> getUserSummariesByIds(List<UUID> userIds);
+
+    /**
+     * SESSION-66 — which of the given ids belong to an <em>active</em> account. One query that selects only the ids
+     * ({@code WHERE id IN (...) AND is_active = true}), so no user row is loaded or mapped: the cheap way to drop
+     * deactivated accounts from a list of ids. Ids with no account and deactivated ids are simply absent from the
+     * result; no exception is thrown. An empty (or null) input returns an empty set without querying.
+     */
+    Set<UUID> getActiveUserIds(Collection<UUID> userIds);
 
     /**
      * Get an active user by email. U23: {@code email} is optional on an account, so a {@code null} or blank value

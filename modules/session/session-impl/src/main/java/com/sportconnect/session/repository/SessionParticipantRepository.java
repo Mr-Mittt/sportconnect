@@ -30,6 +30,10 @@ public interface SessionParticipantRepository extends JpaRepository<SessionParti
     List<SessionParticipant> findBySessionIdAndStatusAndUserIdIn(
             Long sessionId, ParticipantStatus status, Collection<UUID> userIds);
 
+    /** SESSION-66: which of the given users already hold one of {@code statuses} in the session, in one query. */
+    List<SessionParticipant> findBySessionIdAndStatusInAndUserIdIn(
+            Long sessionId, Collection<ParticipantStatus> statuses, Collection<UUID> userIds);
+
     long countBySessionIdAndStatus(Long sessionId, ParticipantStatus status);
 
     /** Batch aggregate for a page of sessions — avoids one count query per row. */

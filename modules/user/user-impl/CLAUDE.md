@@ -77,6 +77,7 @@ DELETE /api/users/{userId}               ROLE_ADMIN
     beyond `fullName`/`avatarUrl`; all were migrated to the new method, which returns `UserSummaryResponse { id, fullName, avatarUrl }`
     (no PII, no geo fields, nothing that grows unnoticed the way `UserResponse` has). Same one-query, no-active-filter contract as
     `getUsersByIds`. Keep new batch-by-id callers on this method unless they genuinely need more of `UserResponse`.
+    A caller that only needs to **drop deactivated accounts** from a list of ids uses `getActiveUserIds(Collection<UUID>)` (SESSION-66): one `SELECT u.id ... WHERE u.id IN :ids AND u.isActive = true` (`UserRepository.findActiveIdsByIdIn`), ids only, no row loaded or mapped; empty or null input does not query.
   - **Profile update rule:** `countryId` present → `regionId` *replaces* the region (absent = cleared, so clients send both); a lone
     `regionId` is validated against the stored country; validated with `ReferenceService.requireValidSelection` (→ `400`) **before** any
     other field is applied. An old client's free-text `country` is silently ignored by Jackson (not rejected). Clearing a country is unsupported.

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -36,6 +37,13 @@ public interface UserRepository extends JpaRepository<User, UUID>, UserNameSearc
 
     /** U16: cheap "is this caller still active?" check (no entity load) for paths that only need the gate. */
     boolean existsByIdAndIsActiveTrue(UUID id);
+
+    /**
+     * SESSION-66: which of the given ids belong to an active account, in one query that returns only ids (no entity
+     * is loaded). Missing and deactivated ids are simply not in the result.
+     */
+    @Query("SELECT u.id FROM User u WHERE u.id IN :ids AND u.isActive = true")
+    List<UUID> findActiveIdsByIdIn(@Param("ids") Collection<UUID> ids);
 
     /**
      * U12: exclusive row lock ({@code SELECT ... FOR UPDATE}), held for the caller's whole
