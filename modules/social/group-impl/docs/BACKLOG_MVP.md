@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [B21](MVP/B21_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — join requests, invites | `TODO` |
 | 2 | [B22](MVP/B22_GROUP_RECURRENCE_GAME_MOOD.md) | Group recurrence config carries a game mood for the sessions it generates (deferred from SESSION-46) | `TODO` |
+| 3 | [B24](MVP/B24_GROUP_INVITE_AND_ADD_MUST_REFUSE_DEACTIVATED_ACCOUNTS.md) | Group `createInvitation` and `addMember` check only a friendship row, so a deactivated friend can be invited or added: refuse a deactivated target (coded, proposal `404 USER_NOT_FOUND` like `sendFriendRequest`); also decide the accept/approve paths (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
 
 ---
 

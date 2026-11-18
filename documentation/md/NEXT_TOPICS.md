@@ -113,3 +113,33 @@ only with the current password (`VERIFICATION_EMAIL_UNAVAILABLE`); a phone code 
 1. **The phone-code delivery decision** (SMS provider, Zalo, or none): the blocker for everything above. Decide
    before picking up A22, the phone half of A33 or AUTH-18; file the ticket(s) it produces.
 2. **A phone channel for the U24 confirmation code**, once (1) exists.
+
+
+---
+
+## Deactivated accounts in new interactions (found 2026-11-18)
+
+**The rule** (owner, 2026-11-18, raised during SESSION-66, recorded in root `CLAUDE.md` § Account lifecycle, `user-impl/CLAUDE.md` and the `UserService` Javadoc): a lookup to *show* a user includes deactivated accounts, so "{userA} invited you ..." always has the real name and never "Unknown user" (`getUserSummariesByIds` / `getUsersByIds`, which have no active filter by design); a lookup for a *new interaction* (inviting, sharing, tagging, adding, messaging, anything that reaches or acts on the person) excludes them (`UserService.getActiveUserIds`, one ids-only query backed by the partial index `idx_users_active_id`, V093), then refuses with a coded error or skips silently, whichever the use case wants.
+
+**The problem.** The rule was written after the fact. SESSION-66 (sharing a session) was built to it; the older paths were not. A targeted first pass (greps and reads, **not exhaustive**) found three paths that reach a deactivated or non-friend user, and a list of paths not yet read.
+
+**Tickets** (all `TODO`):
+
+| Ticket | Backlog | What |
+|---|---|---|
+| [`SESSION-68`](../../modules/session/docs/MVP/SESSION-68_CREATE_SESSION_INVITEES_MUST_BE_FRIENDS_AND_ACTIVE.md) | session MVP | `createSession` `inviteeIds` are checked for neither friendship nor active status. Skip silently (default) or refuse: decide at pickup. |
+| [`B24`](../../modules/social/group-impl/docs/MVP/B24_GROUP_INVITE_AND_ADD_MUST_REFUSE_DEACTIVATED_ACCOUNTS.md) | group-impl MVP | `createInvitation` and `addMember` check only a friendship row. Refuse a deactivated target (coded). |
+| [`CHAT-23`](../../services/chat/docs/MVP/CHAT-23_OPEN_DIRECT_CONVERSATION_MUST_REFUSE_A_DEACTIVATED_FRIEND.md) | chat MVP | `OpenDirect` cannot see that the friend is deactivated; needs a monolith event, a cache column and a refusal. |
+| [`U28`](../../modules/user/user-impl/docs/MVP/U28_FINISH_THE_DEACTIVATED_ACCOUNT_INTERACTION_AUDIT.md) | user-impl MVP | Finish the audit; file a ticket in the owning module for each gap it finds. |
+
+**Already done:** SESSION-66 (`POST /api/sessions/{id}/shares` skips deactivated friends and non-friends silently, counted in `skipped`), `V093` (the partial index) and `getActiveUserIds`, the corrected `UserService` Javadoc (the batch lookups include deactivated accounts).
+
+**Checked and not a gap:** `sendFriendRequest` (404 for a deactivated target), every name search (thread-people, group member tagging, `/api/users/search`: the SQL has `is_active = true`), every name display, result-record `playerIds` (people who already played: display, not a new interaction), the deactivated **caller** (A25 gate; chat's accepted window, CHAT-17).
+
+**Candidates with no ticket yet** (U28 settles each):
+1. Session `approveParticipant` / `rejectParticipant` for a requester deactivated after asking.
+2. Group `acceptJoinRequest`, `approveInvitation`, `acceptInvitation` for a person deactivated since the item was created (B24 proposes the same check).
+3. `acceptFriendRequest` whose sender was deactivated since.
+4. Notification fan-out writing rows for deactivated recipients (wasted rows only?).
+5. Group `transferOwnership`, `updateMemberRole`, `removeMember` targets; `@[Name](userId)` tags once they notify (NOTIF-12).
+6. A sweep of every other endpoint that takes a user id, in every module and the Go services.

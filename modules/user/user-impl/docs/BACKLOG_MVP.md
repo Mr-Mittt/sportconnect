@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [U19](MVP/U19_REMOVE_CITY_FIELD.md) | Remove `city` field entirely from the backend — superseded by Region (U16), found during CLIENT-REF-3 pickup | `TODO` |
+| 2 | [U28](MVP/U28_FINISH_THE_DEACTIVATED_ACCOUNT_INTERACTION_AUDIT.md) | Finish the audit of "new interaction" paths against the deactivated-account rule (session approve/reject, group accept/approve, `acceptFriendRequest`, notification fan-out, tags, every other user-id input); file a ticket in the owning module for each gap (NEXT_TOPICS) | `TODO` |
 
 ---
 
