@@ -238,3 +238,5 @@ suite, 262 tests, 0 failures).
 ---
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+**Update 2026-11-19 (SESSION-GROUP-5, owner):** this ticket's generation (one next occurrence per group from the `groups.recurrence_*` rule, triggered by a completion and by `updateGroupRecurrence`/`updateGroupSettings`) is replaced by the queue-based generator of SESSION-GROUP-5 and no longer exists; the test findings below (a `REQUIRES_NEW` failure-isolation boundary, the companion post) were carried over.

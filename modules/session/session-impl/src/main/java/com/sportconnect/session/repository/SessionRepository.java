@@ -30,6 +30,25 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     boolean existsByGroupIdAndScheduledStart(Long groupId, Instant scheduledStart);
 
+    /** SESSION-GROUP-5 — the duplicate guard of the generator (also enforced by the unique index on the pair). */
+    boolean existsByRecurrenceIdAndOccurrenceDate(Long recurrenceId, java.time.LocalDate occurrenceDate);
+
+    /** SESSION-GROUP-5 — the regular sessions generated for these recurrences from {@code from} on, in one query (the planner
+     * dedupes the slots it is about to queue against them). */
+    List<Session> findByRecurrenceIdInAndOccurrenceDateGreaterThanEqual(Collection<Long> recurrenceIds, java.time.LocalDate from);
+
+    /** SESSION-GROUP-5 — is there a regular session of the group in one of these statuses that starts before {@code before}?
+     * (Then its end will queue the next day by itself.) */
+    boolean existsByGroupIdAndRecurrenceIdIsNotNullAndStatusInAndScheduledStartLessThan(
+            Long groupId, Collection<SessionStatus> statuses, Instant before);
+
+    /** SESSION-GROUP-5 — the (group, local date) pairs, among the given groups, that still hold an open regular session: a day
+     * is over only when it no longer appears here. One query for every candidate pair. */
+    @Query("SELECT DISTINCT s.groupId, s.occurrenceDate FROM Session s WHERE s.groupId IN :groupIds "
+            + "AND s.recurrenceId IS NOT NULL AND s.status IN :openStatuses")
+    List<Object[]> findOpenRegularDays(@Param("groupIds") Collection<Long> groupIds,
+                                       @Param("openStatuses") Collection<SessionStatus> openStatuses);
+
     /**
      * SCHEDULED sessions whose scheduledStart has arrived but scheduledEndAt hasn't yet — i.e.
      * ready to become ONGOING. A session with no scheduledEndAt never matches (null comparisons

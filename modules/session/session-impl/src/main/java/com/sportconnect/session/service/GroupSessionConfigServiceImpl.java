@@ -28,6 +28,7 @@ import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,6 +69,8 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     private final PostService postService;
     private final UserService userService;
     private final SessionAttributeResolver attributeResolver;
+    // SESSION-GROUP-5: asks the generator to look at the group once this transaction commits.
+    private final ApplicationEventPublisher eventPublisher;
 
     // ---- settings -------------------------------------------------------------------------------------------------
 
@@ -115,6 +118,10 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                     params(name, saved.getMode(), null, null));
         }
         log.info("Group {} session settings changed by {}: enabled={}, mode={}", groupId, callerId, saved.isEnabled(), saved.getMode());
+        // SESSION-GROUP-5: switching generation ON, or switching the mode while it is on, makes slots due: queue and generate them.
+        if (saved.isEnabled() && (enabledChanged || modeChanged)) {
+            eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
+        }
         return toSettingsResponse(groupId, saved);
     }
 
@@ -153,6 +160,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         saveMembers(saved.getId(), audienceMembers);
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_ADDED, "added a", saved);
+        eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
         return toResponse(saved, audienceMembers);
     }
 
@@ -176,6 +184,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         saveMembers(recurrenceId, audienceMembers);
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_UPDATED, "changed the", saved);
+        eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
         return toResponse(saved, audienceMembers);
     }
 

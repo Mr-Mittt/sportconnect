@@ -4,7 +4,6 @@ import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
-import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.location.api.dto.LocationResponse;
@@ -69,6 +68,7 @@ import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -87,7 +87,6 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -128,9 +127,11 @@ public class SessionServiceImpl implements SessionService {
     private final SessionShareGate sessionShareGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
-    private final SessionGenerationService sessionGenerationService;
     // SESSION-23, extracted by SESSION-GROUP-4: the session attribute filter, shared with the group recurrence configurations.
     private final SessionAttributeResolver attributeResolver;
+    // SESSION-GROUP-5: who to tell about a group session (shared with the generator) and the generation trigger events.
+    private final GroupSessionRecipients groupRecipients;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** SESSION-65 — a {@code JOINED} participant may leave only until this long before {@code scheduledStart}.
      * The client mirrors the number ({@code LEAVE_CUTOFF_MINUTES} in {@code leaveCutoff.ts}); this is the authority. */
@@ -334,7 +335,7 @@ public class SessionServiceImpl implements SessionService {
                         .map(memberId -> SessionAudienceMember.builder().sessionId(saved.getId()).userId(memberId).build())
                         .toList());
             }
-            List<UUID> recipients = groupSessionRecipients(saved, userId, false);
+            List<UUID> recipients = groupRecipients.of(saved, userId, false);
             if (!recipients.isEmpty()) {
                 sessionOutboxEventRepository.saveAll(recipients.stream()
                         .map(recipientId -> sessionOutboxWriter.build("session.group.created",
@@ -795,7 +796,7 @@ public class SessionServiceImpl implements SessionService {
 
         if (saved.getGroupId() != null) {
             // SESSION-GROUP-1: tell the audience and the players (a cancel told nobody before). Standalone is unchanged.
-            List<UUID> recipients = groupSessionRecipients(saved, userId, true);
+            List<UUID> recipients = groupRecipients.of(saved, userId, true);
             if (!recipients.isEmpty()) {
                 sessionOutboxEventRepository.saveAll(recipients.stream()
                         .map(recipientId -> sessionOutboxWriter.build("session.group.cancelled",
@@ -806,6 +807,12 @@ public class SessionServiceImpl implements SessionService {
                                         .groupId(saved.getGroupId())
                                         .build()))
                         .toList());
+            }
+            // SESSION-GROUP-5: the end of a regular session may be the end of its day: queue the next day once this commits
+            // (nothing is queued when generation is off).
+            if (saved.getRecurrenceId() != null) {
+                eventPublisher.publishEvent(new GroupSessionGenerationEvents.RegularSessionsEnded(List.of(
+                        new GroupSessionGenerationEvents.GroupDay(saved.getGroupId(), saved.getOccurrenceDate()))));
             }
         }
         return toResponse(saved, userId);
@@ -1432,38 +1439,6 @@ public class SessionServiceImpl implements SessionService {
                 .collect(Collectors.toMap(Session::getId, Session::getTitle));
     }
 
-    /**
-     * SESSION-38 — re-fetches this one group's recurrence config from {@code group-api} (ID-only
-     * cross-domain reference; {@code group-impl} never pushes its own config data across the
-     * boundary) and delegates to {@link SessionGenerationService#generateForConfigs} — the same
-     * eligibility checks (autoGenerateSessions, a complete rule, not already generated) and
-     * idempotency backstop as every other generation path in this domain. A singleton-list call to
-     * a batch-shaped {@code group-api} method, matching {@code getGroupRecurrenceConfigsByGroupIds}'
-     * own no-per-row-loop-call contract — this is a single-group caller of a batch method, not a
-     * second, single-id method.
-     *
-     * <p><b>Deliberately not {@code @Transactional} itself.</b> Both calls already manage their own
-     * transaction ({@code getGroupRecurrenceConfigsByGroupIds} is {@code readOnly = true};
-     * {@code generateForConfigs} is {@code REQUIRES_NEW}, precisely so a generation failure can't
-     * poison the caller's transaction). Annotating <em>this</em> coordinating method
-     * {@code @Transactional} would undo that: called from {@code GroupServiceImpl}'s
-     * {@code updateGroupRecurrence}/{@code updateGroupSettings}, it would participate in their
-     * transaction, and — since Spring's transactional AOP marks a participating transaction
-     * rollback-only the moment an exception propagates through {@code @Transactional} boundary,
-     * regardless of what any inner method's own propagation setting already did — a failure
-     * bubbling up through this method would still poison the caller's transaction one level above
-     * where {@code REQUIRES_NEW} was supposed to stop it. Found by
-     * {@code GroupSessionGenerationFailureIsolationIntegrationTest}, which is exactly why that test
-     * exists (a real forced failure through real transaction management; no mocked test can see
-     * this class of bug).
-     */
-    @Override
-    public void generateNextOccurrenceForGroup(Long groupId) {
-        List<GroupRecurrenceConfigResponse> configs =
-                groupService.getGroupRecurrenceConfigsByGroupIds(List.of(groupId));
-        sessionGenerationService.generateForConfigs(configs);
-    }
-
     /** SESSION-10/A17 — the sole gate standing between a caller and a session's comment thread or
      * its own like, since post-impl's own PostGate makes SESSION_POST unconditionally unavailable.
      * Delegates to SessionGate (this module's own ResourceGate&lt;Session&gt;, same shape as
@@ -1542,34 +1517,6 @@ public class SessionServiceImpl implements SessionService {
     /** SESSION-GROUP-1 — the validated members of a {@code SPECIFIC} audience (the rule lives in {@link GroupAudiences}). */
     private List<UUID> resolveSpecificAudience(Long groupId, UUID creatorId, List<UUID> requested) {
         return GroupAudiences.validateSpecific(requested, creatorId, new HashSet<>(groupService.getMemberUserIds(groupId)));
-    }
-
-    /**
-     * SESSION-GROUP-1 — who to tell about a group session: its audience (every current member, or, for a {@code SPECIFIC}
-     * audience, the chosen ones who are still members; a session with no stored audience reads as all members), plus,
-     * with {@code includeJoined}, anyone still {@code JOINED}. Never the actor; active accounts only (the new-interaction
-     * rule: one ids-only query, never a user row per person). Group size is capped (500), so the lists are bounded.
-     */
-    private List<UUID> groupSessionRecipients(Session session, UUID actorId, boolean includeJoined) {
-        Set<UUID> members = new HashSet<>(groupService.getMemberUserIds(session.getGroupId()));
-        Set<UUID> ids = new LinkedHashSet<>();
-        if (session.getGroupAudience() == GroupAudience.SPECIFIC) {
-            sessionAudienceMemberRepository.findUserIdsBySessionId(session.getId()).stream()
-                    .filter(members::contains)
-                    .forEach(ids::add);
-        } else {
-            ids.addAll(members);
-        }
-        if (includeJoined) {
-            sessionParticipantRepository.findBySessionIdAndStatusIn(session.getId(), List.of(ParticipantStatus.JOINED))
-                    .forEach(participant -> ids.add(participant.getUserId()));
-        }
-        ids.remove(actorId);
-        if (ids.isEmpty()) {
-            return List.of();
-        }
-        Set<UUID> active = userService.getActiveUserIds(new ArrayList<>(ids));
-        return ids.stream().filter(active::contains).toList();
     }
 
     private SessionResponse toResponse(Session session, UUID callerId) {

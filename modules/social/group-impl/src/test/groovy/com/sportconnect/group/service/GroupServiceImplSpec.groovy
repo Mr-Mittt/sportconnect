@@ -11,7 +11,6 @@ import com.sportconnect.group.entity.*
 import com.sportconnect.group.repository.*
 import com.sportconnect.location.api.dto.LocationResponse
 import com.sportconnect.location.api.service.LocationService
-import com.sportconnect.session.api.service.SessionService
 import com.sportconnect.social.post.api.dto.PostResponse
 import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.api.dto.SystemCode
@@ -53,7 +52,6 @@ class GroupServiceImplSpec extends Specification {
     // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
     ObjectMapper objectMapper = new ObjectMapper()
     LocationService locationService = Mock()
-    SessionService sessionService = Mock()
 
     @Subject
     GroupServiceImpl groupService = new GroupServiceImpl(
@@ -73,9 +71,7 @@ class GroupServiceImplSpec extends Specification {
             invitationInviterRepository,
             stringRedisTemplate,
             objectMapper,
-            locationService,
-            sessionService
-    )
+            locationService)
 
     // A7: createGroup now resolves the sport before the profile gate, so every createGroup
     // test has to stub SportService. Two fixtures cover the only distinction that matters.
@@ -2001,50 +1997,6 @@ class GroupServiceImplSpec extends Specification {
         response != null
         response.maxMembers == defaultGroupType.maxMembers
         response.groupTypeName == "DEFAULT"
-    }
-
-    // ── SESSION-38: event-driven generation trigger ─────────────────────────
-
-    def "updateGroupSettings triggers session generation for this group after saving"() {
-        given:
-        def request = UpdateGroupSettingsRequest.builder().autoGenerateSessions(true).build()
-        def settings = GroupSettings.builder().id(1L).groupId(testGroup.id)
-                .groupTypeId(defaultGroupType.id).autoGenerateSessions(false).build()
-        def ownerMember = GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
-
-        when:
-        groupService.updateGroupSettings(testGroup.id, userId, request)
-
-        then:
-        1 * groupRepository.existsById(testGroup.id) >> true
-        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
-        1 * groupSettingsRepository.save(_) >> settings
-        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
-        1 * sessionService.generateNextOccurrenceForGroup(testGroup.id)
-    }
-
-    def "updateGroupSettings swallows a session generation failure without failing the request"() {
-        given:
-        def request = UpdateGroupSettingsRequest.builder().autoGenerateSessions(true).build()
-        def settings = GroupSettings.builder().id(1L).groupId(testGroup.id)
-                .groupTypeId(defaultGroupType.id).autoGenerateSessions(false).build()
-        def ownerMember = GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
-
-        when:
-        def response = groupService.updateGroupSettings(testGroup.id, userId, request)
-
-        then:
-        1 * groupRepository.existsById(testGroup.id) >> true
-        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupSettingsRepository.findByGroupId(testGroup.id) >> Optional.of(settings)
-        1 * groupSettingsRepository.save(_) >> settings
-        1 * groupTypeRepository.findById(defaultGroupType.id) >> Optional.of(defaultGroupType)
-        1 * sessionService.generateNextOccurrenceForGroup(testGroup.id) >> { throw new RuntimeException("boom") }
-        noExceptionThrown()
-        response != null
     }
 
     def "updateGroupSettings should throw BadRequestException when user is admin"() {
@@ -4130,46 +4082,6 @@ class GroupServiceImplSpec extends Specification {
     }
 
     // ── SESSION-38: event-driven generation trigger ─────────────────────────
-
-    def "updateGroupRecurrence triggers session generation for this group after saving"() {
-        given:
-        def request = UpdateGroupRecurrenceRequest.builder()
-                .recurrenceDayOfWeek(java.time.DayOfWeek.TUESDAY)
-                .recurrenceTime(java.time.LocalTime.of(19, 0))
-                .build()
-
-        when:
-        groupService.updateGroupRecurrence(testGroup.id, userId, request)
-
-        then:
-        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
-                Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
-        1 * groupRepository.save(_) >> { Group g -> g }
-        1 * sessionService.generateNextOccurrenceForGroup(testGroup.id)
-    }
-
-    def "updateGroupRecurrence swallows a session generation failure without failing the request"() {
-        given:
-        def request = UpdateGroupRecurrenceRequest.builder()
-                .recurrenceDayOfWeek(java.time.DayOfWeek.TUESDAY)
-                .recurrenceTime(java.time.LocalTime.of(19, 0))
-                .build()
-
-        when:
-        def result = groupService.updateGroupRecurrence(testGroup.id, userId, request)
-
-        then:
-        1 * groupRepository.findById(testGroup.id) >> Optional.of(testGroup)
-        1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
-        1 * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >>
-                Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
-        1 * groupRepository.save(_) >> { Group g -> g }
-        1 * sessionService.generateNextOccurrenceForGroup(testGroup.id) >> { throw new RuntimeException("boom") }
-        noExceptionThrown()
-        result != null
-    }
 
     def "getGroupsWithAutoGenerateSessionsEnabled returns only groups with a resolvable owner"() {
         given:

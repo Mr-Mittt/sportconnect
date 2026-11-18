@@ -411,7 +411,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     -- SESSION-GROUP-1 (V094): who a group session was made for; the unique (group_id, scheduled_start) key is gone.
-    group_audience VARCHAR(20)
+    group_audience VARCHAR(20),
+    -- SESSION-GROUP-5 (V096): the recurrence and local date a regular session was generated for (NULLs never collide).
+    recurrence_id BIGINT,
+    occurrence_date DATE,
+    CONSTRAINT unique_session_recurrence_occurrence UNIQUE (recurrence_id, occurrence_date)
 );
 
 -- SESSION-GROUP-1 (V094): the chosen members of a SPECIFIC audience (they decide only who is notified).
@@ -457,6 +461,22 @@ CREATE TABLE IF NOT EXISTS group_session_recurrence_members (
     user_id UUID NOT NULL,
     FOREIGN KEY (recurrence_id) REFERENCES group_session_recurrences(id) ON DELETE CASCADE,
     CONSTRAINT unique_group_session_recurrence_member UNIQUE (recurrence_id, user_id)
+);
+
+-- SESSION-GROUP-5 (V096): the slots still to be generated, drained in target_start order.
+CREATE TABLE IF NOT EXISTS group_session_generation_queue (
+    id BIGSERIAL PRIMARY KEY,
+    recurrence_id BIGINT NOT NULL,
+    occurrence_date DATE NOT NULL,
+    target_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    status VARCHAR(10) NOT NULL DEFAULT 'PENDING',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    last_error VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    FOREIGN KEY (recurrence_id) REFERENCES group_session_recurrences(id) ON DELETE CASCADE,
+    CONSTRAINT unique_group_session_queue_item UNIQUE (recurrence_id, occurrence_date)
 );
 
 CREATE TABLE IF NOT EXISTS session_participants (

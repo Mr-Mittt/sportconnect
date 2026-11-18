@@ -67,7 +67,7 @@ PUT    /api/groups/{groupId}/generalData                   owner or admin — gr
 GET    /api/groups/{groupId}/settings
 PUT    /api/groups/{groupId}/settings
 
-// Recurring Session Schedule (GROUP-RECUR-1) — read by modules/session's generation job, not yet built
+// Recurring Session Schedule (GROUP-RECUR-1) — SESSION-GROUP-5: nothing reads it any more (the session domain generates from its own configurations); removed by GROUP-1
 GET    /api/groups/{groupId}/recurrence         member-only
 PUT    /api/groups/{groupId}/recurrence         owner-only
 
@@ -154,8 +154,7 @@ GET    /api/groups/{groupId}/permissions/user-role
   `recurrenceLocationNote` (e.g. "always Court 3") is copied verbatim into each generated
   `Session.locationNote` — it's a default, not itself validated against the `Location`.
 - `getGroupOwnerId(groupId)` (SESSION-GROUP-4) is the public form of `resolveGroupOwnerId`: the group's *current* owner, for another domain that must author a server-written group post as the owner or create a session as the owner; no access check of its own. The new group-session configuration (settings, recurrences, `modules/session`) does not live in this module; the single `recurrence*` rule described here is replaced by it and removed by GROUP-1.
-- `getGroupsWithAutoGenerateSessionsEnabled()` is on the `GroupService` interface but is only
-  ever meant to be called by `modules/session`'s scheduled job — it's not wired to any controller
+- `getGroupsWithAutoGenerateSessionsEnabled()` is on the `GroupService` interface and, since SESSION-GROUP-5, called by nobody (the session domain no longer reads the old rule; GROUP-1 removes it) — it's not wired to any controller
   endpoint. It skips a `GroupSettings` row silently (no error) if the corresponding `Group` or its
   owner can't be resolved, rather than failing the whole batch.
 - Role names are plain strings — always use the exact values `"group_owner"`, `"group_admin"`, `"group_member"` when querying or comparing.

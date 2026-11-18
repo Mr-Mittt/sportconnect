@@ -254,5 +254,7 @@
     <include file="db/changelog/changes/V094__group_session_audience_and_drop_unique_start.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-GROUP-4: group_session_settings, group_session_recurrences, group_session_recurrence_members -->
     <include file="db/changelog/changes/V095__group_session_settings_and_recurrences.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-5: sessions.recurrence_id / occurrence_date (+ unique index), group_session_generation_queue -->
+    <include file="db/changelog/changes/V096__group_session_generation_queue.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

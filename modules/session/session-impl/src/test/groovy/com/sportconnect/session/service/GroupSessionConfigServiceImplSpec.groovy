@@ -23,6 +23,7 @@ import com.sportconnect.social.post.api.dto.SystemCode
 import com.sportconnect.social.post.api.service.PostService
 import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserService
+import org.springframework.context.ApplicationEventPublisher
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -42,11 +43,12 @@ class GroupSessionConfigServiceImplSpec extends Specification {
     PostService postService = Mock()
     UserService userService = Mock()
     SessionAttributeResolver attributeResolver = Mock()
+    ApplicationEventPublisher eventPublisher = Mock()
 
     @Subject
     GroupSessionConfigServiceImpl service = new GroupSessionConfigServiceImpl(
             settingsRepository, recurrenceRepository, memberRepository, groupService, locationService, postService,
-            userService, attributeResolver)
+            userService, attributeResolver, eventPublisher)
 
     UUID admin = UUID.randomUUID()
     UUID owner = UUID.randomUUID()
@@ -554,5 +556,50 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> []
         0 * memberRepository._
         empty == []
+    }
+
+    // ---- SESSION-GROUP-5: asking the generator to look at the group ----------------------------------------------------
+
+    def "switching generation ON, or the mode while it is on, publishes ConfigChanged; OFF, a no-op and a mode switch while off do not"() {
+        when:
+        service.updateSettings(5L, admin, request)
+
+        then:
+        1 * settingsRepository.findById(5L) >> existing
+        _ * settingsRepository.save(_ as GroupSessionSettings) >> { GroupSessionSettings s -> s }
+        (publishes ? 1 : 0) * eventPublisher.publishEvent({ e -> e instanceof GroupSessionGenerationEvents.ConfigChanged && e.groupId() == 5L })
+
+        where:
+        request                                                                   | existing                                                                                   | publishes
+        UpdateGroupSessionSettingsRequest.builder().enabled(true).build()         | Optional.empty()                                                                           | true
+        UpdateGroupSessionSettingsRequest.builder().mode(RecurrenceMode.MONTHLY).build() | Optional.of(GroupSessionSettings.builder().groupId(5L).enabled(true).build())       | true
+        UpdateGroupSessionSettingsRequest.builder().enabled(false).build()        | Optional.of(GroupSessionSettings.builder().groupId(5L).enabled(true).build())             | false
+        UpdateGroupSessionSettingsRequest.builder().mode(RecurrenceMode.MONTHLY).build() | Optional.of(GroupSessionSettings.builder().groupId(5L).enabled(false).build())      | false
+        UpdateGroupSessionSettingsRequest.builder().enabled(true).build()         | Optional.of(GroupSessionSettings.builder().groupId(5L).enabled(true).build())             | false
+    }
+
+    def "adding or replacing a configuration publishes ConfigChanged; deleting one does not"() {
+        when:
+        service.createRecurrence(5L, admin, complete().build())
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.empty()
+        1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
+        1 * eventPublisher.publishEvent({ e -> e instanceof GroupSessionGenerationEvents.ConfigChanged && e.groupId() == 5L })
+
+        when:
+        service.updateRecurrence(5L, 77L, admin, complete().build())
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
+        1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
+        1 * eventPublisher.publishEvent({ e -> e instanceof GroupSessionGenerationEvents.ConfigChanged })
+
+        when:
+        service.deleteRecurrence(5L, 77L, admin)
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
+        0 * eventPublisher.publishEvent(_)
     }
 }

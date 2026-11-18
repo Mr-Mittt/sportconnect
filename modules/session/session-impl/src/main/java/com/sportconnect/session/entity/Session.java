@@ -23,6 +23,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
@@ -165,6 +166,16 @@ public class Session {
     @Enumerated(EnumType.STRING)
     @Column(name = "group_audience", length = 20)
     private GroupAudience groupAudience;
+
+    /** SESSION-GROUP-5 — the recurrence configuration this regular group session was generated from; null for a custom
+     * session and for one generated before this column. No FK: a deleted recurrence leaves its sessions. */
+    @Column(name = "recurrence_id")
+    private Long recurrenceId;
+
+    /** SESSION-GROUP-5 — the local date (in the location's timezone) of the slot a regular session was generated for;
+     * with {@code recurrenceId} it is unique, the duplicate guard of the generator. */
+    @Column(name = "occurrence_date")
+    private LocalDate occurrenceDate;
 
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;

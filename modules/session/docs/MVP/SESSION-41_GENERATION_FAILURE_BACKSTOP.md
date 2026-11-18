@@ -1,6 +1,6 @@
 # SESSION-41 · No retry/backstop for a failed eager group-session generation attempt
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-19, closed by SESSION-GROUP-5: the generation queue retries a failed slot with a backoff and the startup recovery revives a `FAILED` one; the single-rule generator this ticket described no longer exists)
 **Type:** Enhancement (Reliability)
 **Depends on:** SESSION-38 (`IN PROGRESS`) — this ticket exists because of a gap SESSION-38's
 design deliberately accepts, not a bug in it.

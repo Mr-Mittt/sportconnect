@@ -14,6 +14,9 @@ public interface GroupSessionRecurrenceRepository extends JpaRepository<GroupSes
 
     Optional<GroupSessionRecurrence> findByIdAndGroupId(Long id, Long groupId);
 
+    /** SESSION-GROUP-5 — the complete (non-draft) recurrences of these groups, both modes (the planner keeps the active mode). */
+    List<GroupSessionRecurrence> findByGroupIdInAndDraftFalse(java.util.Collection<Long> groupIds);
+
     /** The per-day count behind the limit of 5 (drafts count). */
     long countByGroupIdAndModeAndDayKey(Long groupId, RecurrenceMode mode, Integer dayKey);
 

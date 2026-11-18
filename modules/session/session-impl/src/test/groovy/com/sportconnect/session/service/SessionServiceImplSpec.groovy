@@ -8,7 +8,6 @@ import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.common.exception.ResourceNotFoundException
-import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse
 import com.sportconnect.group.api.dto.GroupResponse
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.location.api.dto.LocationResponse
@@ -58,6 +57,7 @@ import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.api.service.UserService
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
@@ -90,7 +90,7 @@ class SessionServiceImplSpec extends Specification {
     SessionShareGate sessionShareGate = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
-    SessionGenerationService sessionGenerationService = Mock()
+    ApplicationEventPublisher eventPublisher = Mock()
     // SESSION-23: real filter + mapper â€” the filter is pure logic with its own spec, and the
     // size check needs a real serializer. Existing create/update tests pass no attributes, so
     // sportService.getSessionAttributeSchemaRaw is never hit; the attributes-path tests stub it.
@@ -100,8 +100,10 @@ class SessionServiceImplSpec extends Specification {
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, sessionAudienceMemberRepository, groupService, locationService, userService,
             userFriendService, sportService, userSportProfileService, postService, commentService, sessionGate,
-            sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService,
-            new SessionAttributeResolver(sportService, objectMapper))
+            sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter,
+            new SessionAttributeResolver(sportService, objectMapper),
+            new GroupSessionRecipients(groupService, sessionAudienceMemberRepository, sessionParticipantRepository, userService),
+            eventPublisher)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -755,6 +757,33 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionOutboxWriter.build("session.group.cancelled", { SessionGroupCancelledEvent e -> e.recipientUserId == stays }) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
         interaction { stubBatchEnrichment() }
+    }
+
+    def "cancelSession of a regular group session reports its (group, day) so the next day can be queued; a custom or standalone one reports nothing"() {
+        given:
+        def userId = UUID.randomUUID()
+        def day = java.time.LocalDate.of(2026, 11, 20)
+        def session = Session.builder().id(1L).groupId(groupId).createdBy(userId).status(SessionStatus.SCHEDULED)
+                .recurrenceId(recurrenceId).occurrenceDate(recurrenceId != null ? day : null).build()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        (groupId != null ? 1 : 0) * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.save(_ as Session) >> { Session s -> s }
+        _ * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, _) >> []
+        (reports ? 1 : 0) * eventPublisher.publishEvent({ e ->
+            e instanceof GroupSessionGenerationEvents.RegularSessionsEnded &&
+                    e.days() == [new GroupSessionGenerationEvents.GroupDay(5L, day)] })
+        interaction { stubBatchEnrichment() }
+
+        where:
+        groupId | recurrenceId | reports
+        5L      | 7L           | true
+        5L      | null         | false
+        null    | null         | false
     }
 
     def "cancelSession of a standalone session tells nobody through the group events"() {
@@ -2555,29 +2584,6 @@ class SessionServiceImplSpec extends Specification {
         thrown(BadRequestException)
         0 * userSportProfileService.getUserProfiles(*_)
         0 * sessionRepository.findDiscoverDateCounts(*_)
-    }
-
-    // â”€â”€ SESSION-38: generateNextOccurrenceForGroup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    def "generateNextOccurrenceForGroup re-fetches the group's config via a singleton-list batch call and delegates to SessionGenerationService"() {
-        given:
-        def config = GroupRecurrenceConfigResponse.builder().groupId(10L).build()
-
-        when:
-        sessionService.generateNextOccurrenceForGroup(10L)
-
-        then:
-        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> [config]
-        1 * sessionGenerationService.generateForConfigs([config])
-    }
-
-    def "generateNextOccurrenceForGroup still delegates with an empty configs list when the group isn't eligible"() {
-        when:
-        sessionService.generateNextOccurrenceForGroup(10L)
-
-        then:
-        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> []
-        1 * sessionGenerationService.generateForConfigs([])
     }
 
     def "getJoinedSessions delegates to the repository for the given status"() {
