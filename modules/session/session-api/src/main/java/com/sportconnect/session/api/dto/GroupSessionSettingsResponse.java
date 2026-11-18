@@ -18,4 +18,6 @@ public class GroupSessionSettingsResponse {
     private Long groupId;
     private boolean enabled;
     private RecurrenceMode mode;
+    /** SESSION-GROUP-6 — how many scheduled regular sessions this call cancelled ({@code cancelScheduled}); 0 otherwise. */
+    private int cancelledSessions;
 }

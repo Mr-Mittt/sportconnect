@@ -16,6 +16,10 @@ import com.sportconnect.session.api.dto.UpdateGroupSessionSettingsRequest
 import com.sportconnect.session.entity.GroupSessionRecurrence
 import com.sportconnect.session.entity.GroupSessionRecurrenceMember
 import com.sportconnect.session.entity.GroupSessionSettings
+import com.sportconnect.session.entity.Session
+import com.sportconnect.session.repository.SessionRepository
+import com.sportconnect.session.api.dto.RegularSessionScope
+import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository
 import com.sportconnect.session.repository.GroupSessionSettingsRepository
@@ -44,11 +48,15 @@ class GroupSessionConfigServiceImplSpec extends Specification {
     UserService userService = Mock()
     SessionAttributeResolver attributeResolver = Mock()
     ApplicationEventPublisher eventPublisher = Mock()
+    RegularSessionCanceller regularSessionCanceller = Mock()
+    SessionRepository sessionRepository = Mock()
+    UUID other = UUID.randomUUID()
 
     @Subject
     GroupSessionConfigServiceImpl service = new GroupSessionConfigServiceImpl(
             settingsRepository, recurrenceRepository, memberRepository, groupService, locationService, postService,
-            userService, attributeResolver, eventPublisher)
+            userService, attributeResolver, eventPublisher,
+            regularSessionCanceller, sessionRepository)
 
     UUID admin = UUID.randomUUID()
     UUID owner = UUID.randomUUID()
@@ -98,7 +106,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
                 { s, r -> s.getRecurrences(5L, UUID.randomUUID()) },
                 { s, r -> s.createRecurrence(5L, UUID.randomUUID(), r) },
                 { s, r -> s.updateRecurrence(5L, 77L, UUID.randomUUID(), r) },
-                { s, r -> s.deleteRecurrence(5L, 77L, UUID.randomUUID()) }
+                { s, r -> s.deleteRecurrence(5L, 77L, UUID.randomUUID(), false) }
         ]
     }
 
@@ -144,7 +152,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         false    | 'SESSION_GROUP_MEMBER_REQUIRED'  | { s, u -> s.updateSettings(5L, u, UpdateGroupSessionSettingsRequest.builder().enabled(true).build()) }
         true     | 'SESSION_GROUP_ADMIN_REQUIRED'   | { s, u -> s.createRecurrence(5L, u, GroupSessionRecurrenceRequest.builder().dayKey(1).build()) }
         true     | 'SESSION_GROUP_ADMIN_REQUIRED'   | { s, u -> s.updateRecurrence(5L, 77L, u, GroupSessionRecurrenceRequest.builder().dayKey(1).build()) }
-        true     | 'SESSION_GROUP_ADMIN_REQUIRED'   | { s, u -> s.deleteRecurrence(5L, 77L, u) }
+        true     | 'SESSION_GROUP_ADMIN_REQUIRED'   | { s, u -> s.deleteRecurrence(5L, 77L, u, false) }
     }
 
     // ---- settings -------------------------------------------------------------------------------------------------
@@ -512,7 +520,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         0 * postService._
 
         where:
-        call << [{ s, u, r -> s.updateRecurrence(5L, 77L, u, r) }, { s, u, r -> s.deleteRecurrence(5L, 77L, u) }]
+        call << [{ s, u, r -> s.updateRecurrence(5L, 77L, u, r) }, { s, u, r -> s.deleteRecurrence(5L, 77L, u, false) }]
     }
 
     def "deleting removes the members and the configuration (hard delete) and writes a DELETED post"() {
@@ -520,7 +528,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         def existing = stored(dayKey: 3)
 
         when:
-        service.deleteRecurrence(5L, 77L, admin)
+        service.deleteRecurrence(5L, 77L, admin, false)
 
         then:
         1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(existing)
@@ -596,10 +604,143 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * eventPublisher.publishEvent({ e -> e instanceof GroupSessionGenerationEvents.ConfigChanged })
 
         when:
-        service.deleteRecurrence(5L, 77L, admin)
+        service.deleteRecurrence(5L, 77L, admin, false)
 
         then:
         1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
         0 * eventPublisher.publishEvent(_)
+    }
+
+    // ---- SESSION-GROUP-6: cancelling what the old rule left scheduled ------------------------------------------------------
+
+    def "turning generation off with cancelScheduled cancels the group's scheduled regular sessions, tells the cancel by name, and says how many"() {
+        given:
+        def scheduled = [Session.builder().id(1L).groupId(5L).recurrenceId(7L).status(SessionStatus.SCHEDULED).build()]
+        def existing = GroupSessionSettings.builder().groupId(5L).enabled(true).mode(RecurrenceMode.WEEKLY).build()
+
+        when:
+        def result = service.updateSettings(5L, admin, UpdateGroupSessionSettingsRequest.builder().enabled(false).cancelScheduled(true).build())
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.of(existing)
+        _ * settingsRepository.save(_ as GroupSessionSettings) >> { GroupSessionSettings s -> s }
+        1 * sessionRepository.findByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(5L, [SessionStatus.SCHEDULED, SessionStatus.PREPARING]) >> scheduled
+        1 * regularSessionCanceller.cancel(scheduled, admin, "Cancelled because the group turned off regular sessions") >> 1
+        result.cancelledSessions == 1
+        !result.enabled
+    }
+
+    def "switching the mode with cancelScheduled cancels them too, with the mode in the reason; OFF wins when both change"() {
+        given:
+        def existing = GroupSessionSettings.builder().groupId(5L).enabled(true).mode(RecurrenceMode.WEEKLY).build()
+
+        when:
+        def result = service.updateSettings(5L, admin, request)
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.of(existing)
+        _ * settingsRepository.save(_ as GroupSessionSettings) >> { GroupSessionSettings s -> s }
+        1 * sessionRepository.findByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(5L, _) >> []
+        1 * regularSessionCanceller.cancel(_, admin, reason) >> 2
+        result.cancelledSessions == 2
+
+        where:
+        request                                                                                                              | reason
+        UpdateGroupSessionSettingsRequest.builder().mode(RecurrenceMode.MONTHLY).cancelScheduled(true).build()               | "Cancelled because the group switched its regular sessions to monthly"
+        UpdateGroupSessionSettingsRequest.builder().enabled(false).mode(RecurrenceMode.MONTHLY).cancelScheduled(true).build() | "Cancelled because the group turned off regular sessions"
+    }
+
+    def "nothing is cancelled unless asked, or when the call neither turns generation off nor switches the mode"() {
+        given:
+        def existing = GroupSessionSettings.builder().groupId(5L).enabled(on).mode(RecurrenceMode.WEEKLY).build()
+
+        when:
+        def result = service.updateSettings(5L, admin, request)
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.of(existing)
+        _ * settingsRepository.save(_ as GroupSessionSettings) >> { GroupSessionSettings s -> s }
+        0 * regularSessionCanceller._
+        0 * sessionRepository._
+        result.cancelledSessions == 0
+
+        where:
+        on    | request
+        true  | UpdateGroupSessionSettingsRequest.builder().enabled(false).build()                                  // "leave them there"
+        true  | UpdateGroupSessionSettingsRequest.builder().enabled(false).cancelScheduled(false).build()
+        false | UpdateGroupSessionSettingsRequest.builder().enabled(true).cancelScheduled(true).build()             // turning ON
+        true  | UpdateGroupSessionSettingsRequest.builder().enabled(true).cancelScheduled(true).build()             // no change
+    }
+
+    def "deleting a configuration with cancelScheduled cancels what it generated first, then deletes it; without it nothing is cancelled"() {
+        given:
+        def scheduled = [Session.builder().id(1L).groupId(5L).recurrenceId(77L).status(SessionStatus.SCHEDULED).build()]
+
+        when:
+        def cancelled = service.deleteRecurrence(5L, 77L, admin, true)
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
+        1 * sessionRepository.findByRecurrenceIdAndStatusIn(77L, [SessionStatus.SCHEDULED, SessionStatus.PREPARING]) >> scheduled
+        1 * regularSessionCanceller.cancel(scheduled, admin, "Cancelled because the group removed this regular session configuration") >> 1
+        then:
+        1 * memberRepository.deleteByRecurrenceId(77L)
+        then:
+        1 * recurrenceRepository.delete(_ as GroupSessionRecurrence)
+        cancelled == 1
+
+        when:
+        def none = service.deleteRecurrence(5L, 77L, admin, false)
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
+        0 * regularSessionCanceller._
+        0 * sessionRepository._
+        1 * recurrenceRepository.delete(_ as GroupSessionRecurrence)
+        none == 0
+    }
+
+    def "the count is per group (ALL) or per configuration (RECURRENCE), counts only SCHEDULED and PREPARING, and needs a manager"() {
+        when:
+        def all = service.countScheduledRegularSessions(5L, admin, RegularSessionScope.ALL, null)
+
+        then:
+        1 * sessionRepository.countByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(5L, [SessionStatus.SCHEDULED, SessionStatus.PREPARING]) >> 3L
+        all.count == 3
+
+        when:
+        def one = service.countScheduledRegularSessions(5L, admin, RegularSessionScope.RECURRENCE, 77L)
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
+        1 * sessionRepository.countByRecurrenceIdAndStatusIn(77L, [SessionStatus.SCHEDULED, SessionStatus.PREPARING]) >> 1L
+        one.count == 1
+
+        when: "a configuration of another group is not found"
+        service.countScheduledRegularSessions(5L, admin, RegularSessionScope.RECURRENCE, 99L)
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(99L, 5L) >> Optional.empty()
+        def e = thrown(ResourceNotFoundException)
+        e.errorCode == 'SESSION_RECURRENCE_NOT_FOUND'
+
+        when: "RECURRENCE needs its id"
+        service.countScheduledRegularSessions(5L, admin, RegularSessionScope.RECURRENCE, null)
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository._
+    }
+
+    def "counting is for owners and admins: a plain member is 403, an inactive group 404"() {
+        when:
+        service.countScheduledRegularSessions(5L, other, RegularSessionScope.ALL, null)
+
+        then:
+        1 * groupService.canManageMembers(5L, other) >> false
+        1 * groupService.isGroupMember(5L, other) >> true
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
+        0 * sessionRepository._
     }
 }

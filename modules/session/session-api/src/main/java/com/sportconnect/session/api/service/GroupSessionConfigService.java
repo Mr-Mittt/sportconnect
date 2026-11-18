@@ -3,6 +3,8 @@ package com.sportconnect.session.api.service;
 import com.sportconnect.session.api.dto.GroupSessionRecurrenceRequest;
 import com.sportconnect.session.api.dto.GroupSessionRecurrenceResponse;
 import com.sportconnect.session.api.dto.GroupSessionSettingsResponse;
+import com.sportconnect.session.api.dto.RegularSessionScope;
+import com.sportconnect.session.api.dto.RegularSessionsCountResponse;
 import com.sportconnect.session.api.dto.UpdateGroupSessionSettingsRequest;
 
 import java.util.List;
@@ -22,7 +24,10 @@ public interface GroupSessionConfigService {
     /** The group's settings; {@code enabled = false} and {@code WEEKLY} when none was ever saved. */
     GroupSessionSettingsResponse getSettings(Long groupId, UUID callerId);
 
-    /** Applies the non-null fields; a change writes its system post, an unchanged value writes nothing. */
+    /**
+     * Applies the non-null fields; a change writes its system post, an unchanged value writes nothing. With {@code cancelScheduled}
+     * a call that turns generation off or switches the mode also cancels the group's scheduled regular sessions (SESSION-GROUP-6).
+     */
     GroupSessionSettingsResponse updateSettings(Long groupId, UUID callerId, UpdateGroupSessionSettingsRequest request);
 
     /** Every configuration of the group, both modes, ordered by mode, day and start time. */
@@ -34,6 +39,16 @@ public interface GroupSessionConfigService {
     /** Replaces a configuration (its mode never changes). */
     GroupSessionRecurrenceResponse updateRecurrence(Long groupId, Long recurrenceId, UUID callerId, GroupSessionRecurrenceRequest request);
 
-    /** Hard delete. */
-    void deleteRecurrence(Long groupId, Long recurrenceId, UUID callerId);
+    /**
+     * Hard delete. With {@code cancelScheduled} the scheduled regular sessions generated from it are cancelled first (SESSION-GROUP-6);
+     * without it they are left there. Returns how many were cancelled.
+     */
+    int deleteRecurrence(Long groupId, Long recurrenceId, UUID callerId, boolean cancelScheduled);
+
+    /**
+     * SESSION-GROUP-6 — how many scheduled ({@code SCHEDULED}, {@code PREPARING}) regular sessions a group has, in total or for one
+     * configuration: what the owner is asked about before turning generation off, switching the mode or deleting a configuration.
+     * Owner or admin; {@code recurrenceId} is required for {@link RegularSessionScope#RECURRENCE}.
+     */
+    RegularSessionsCountResponse countScheduledRegularSessions(Long groupId, UUID callerId, RegularSessionScope scope, Long recurrenceId);
 }

@@ -20,4 +20,11 @@ public class UpdateGroupSessionSettingsRequest {
 
     /** {@code WEEKLY} or {@code MONTHLY}. Omitted = unchanged. */
     private RecurrenceMode mode;
+
+    /**
+     * SESSION-GROUP-6 — when this call turns generation <b>off</b> or <b>switches the mode</b>, also cancel every scheduled
+     * regular session of the group (the audience and the players are told). Omitted or {@code false} = "leave them there".
+     * Ignored by a call that does neither.
+     */
+    private Boolean cancelScheduled;
 }

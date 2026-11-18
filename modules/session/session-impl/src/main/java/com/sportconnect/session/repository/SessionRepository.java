@@ -42,6 +42,16 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     boolean existsByGroupIdAndRecurrenceIdIsNotNullAndStatusInAndScheduledStartLessThan(
             Long groupId, Collection<SessionStatus> statuses, Instant before);
 
+    /** SESSION-GROUP-6 — the regular sessions of a group in these statuses (what OFF and a mode switch may cancel). */
+    List<Session> findByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(Long groupId, Collection<SessionStatus> statuses);
+
+    /** SESSION-GROUP-6 — the sessions generated from one recurrence in these statuses (what deleting it may cancel). */
+    List<Session> findByRecurrenceIdAndStatusIn(Long recurrenceId, Collection<SessionStatus> statuses);
+
+    long countByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(Long groupId, Collection<SessionStatus> statuses);
+
+    long countByRecurrenceIdAndStatusIn(Long recurrenceId, Collection<SessionStatus> statuses);
+
     /** SESSION-GROUP-5 — the (group, local date) pairs, among the given groups, that still hold an open regular session: a day
      * is over only when it no longer appears here. One query for every candidate pair. */
     @Query("SELECT DISTINCT s.groupId, s.occurrenceDate FROM Session s WHERE s.groupId IN :groupIds "

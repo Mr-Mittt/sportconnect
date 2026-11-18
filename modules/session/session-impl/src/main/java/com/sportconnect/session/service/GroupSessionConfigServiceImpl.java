@@ -14,6 +14,8 @@ import com.sportconnect.session.api.dto.GroupSessionRecurrenceRequest;
 import com.sportconnect.session.api.dto.GroupSessionRecurrenceResponse;
 import com.sportconnect.session.api.dto.GroupSessionSettingsResponse;
 import com.sportconnect.session.api.dto.RecurrenceMode;
+import com.sportconnect.session.api.dto.RegularSessionScope;
+import com.sportconnect.session.api.dto.RegularSessionsCountResponse;
 import com.sportconnect.session.api.dto.UpdateGroupSessionSettingsRequest;
 import com.sportconnect.session.api.service.GroupSessionConfigService;
 import com.sportconnect.session.entity.GroupSessionRecurrence;
@@ -22,6 +24,7 @@ import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
+import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.user.api.dto.UserSummaryResponse;
@@ -71,6 +74,9 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     private final SessionAttributeResolver attributeResolver;
     // SESSION-GROUP-5: asks the generator to look at the group once this transaction commits.
     private final ApplicationEventPublisher eventPublisher;
+    // SESSION-GROUP-6: cancels the scheduled regular sessions when the owner asks for it.
+    private final RegularSessionCanceller regularSessionCanceller;
+    private final SessionRepository sessionRepository;
 
     // ---- settings -------------------------------------------------------------------------------------------------
 
@@ -105,6 +111,18 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         }
         GroupSessionSettings saved = settingsRepository.save(settings);
 
+        // SESSION-GROUP-6: the owner chose to cancel what the old rule left scheduled (only when generation is turned off or the
+        // mode is switched; a call that does neither ignores the flag). Done before the posts, in this transaction.
+        int cancelled = 0;
+        boolean turnedOff = enabledChanged && !saved.isEnabled();
+        if (Boolean.TRUE.equals(request.getCancelScheduled()) && (turnedOff || modeChanged)) {
+            cancelled = regularSessionCanceller.cancel(
+                    sessionRepository.findByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(groupId, RegularSessionCanceller.SCHEDULED_STATUSES),
+                    callerId, turnedOff
+                            ? "Cancelled because the group turned off regular sessions"
+                            : "Cancelled because the group switched its regular sessions to " + modeWord(saved.getMode()));
+        }
+
         String name = actorName(callerId);
         if (enabledChanged) {
             boolean on = saved.isEnabled();
@@ -122,7 +140,9 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         if (saved.isEnabled() && (enabledChanged || modeChanged)) {
             eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
         }
-        return toSettingsResponse(groupId, saved);
+        GroupSessionSettingsResponse response = toSettingsResponse(groupId, saved);
+        response.setCancelledSessions(cancelled);
+        return response;
     }
 
     // ---- recurrences ----------------------------------------------------------------------------------------------
@@ -190,12 +210,37 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
 
     @Override
     @Transactional
-    public void deleteRecurrence(Long groupId, Long recurrenceId, UUID callerId) {
+    public int deleteRecurrence(Long groupId, Long recurrenceId, UUID callerId, boolean cancelScheduled) {
         requireManager(groupId, callerId);
         GroupSessionRecurrence recurrence = findRecurrence(groupId, recurrenceId);
+        // SESSION-GROUP-6: the owner may cancel what this configuration left scheduled; otherwise those sessions stay (they keep
+        // their recurrence_id, no FK). Cancelling publishes nothing, so no next day is queued.
+        int cancelled = cancelScheduled
+                ? regularSessionCanceller.cancel(
+                        sessionRepository.findByRecurrenceIdAndStatusIn(recurrenceId, RegularSessionCanceller.SCHEDULED_STATUSES),
+                        callerId, "Cancelled because the group removed this regular session configuration")
+                : 0;
         memberRepository.deleteByRecurrenceId(recurrenceId);
         recurrenceRepository.delete(recurrence);
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_DELETED, "removed the", recurrence);
+        return cancelled;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RegularSessionsCountResponse countScheduledRegularSessions(Long groupId, UUID callerId, RegularSessionScope scope, Long recurrenceId) {
+        requireManager(groupId, callerId);
+        long count;
+        if (scope == RegularSessionScope.RECURRENCE) {
+            if (recurrenceId == null) {
+                throw new BadRequestException("recurrenceId is required for scope RECURRENCE");
+            }
+            findRecurrence(groupId, recurrenceId);
+            count = sessionRepository.countByRecurrenceIdAndStatusIn(recurrenceId, RegularSessionCanceller.SCHEDULED_STATUSES);
+        } else {
+            count = sessionRepository.countByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(groupId, RegularSessionCanceller.SCHEDULED_STATUSES);
+        }
+        return RegularSessionsCountResponse.builder().count((int) count).build();
     }
 
     // ---- access ---------------------------------------------------------------------------------------------------
