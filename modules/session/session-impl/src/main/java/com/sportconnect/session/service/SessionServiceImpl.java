@@ -15,6 +15,7 @@ import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.session.access.SessionDetailGate;
 import com.sportconnect.session.access.SessionGate;
+import com.sportconnect.session.access.SessionShareGate;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
@@ -27,8 +28,10 @@ import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.ThreadPersonResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
+import com.sportconnect.session.api.dto.SessionShareResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
+import com.sportconnect.session.api.dto.ShareSessionRequest;
 import com.sportconnect.session.api.dto.StartTimeFilter;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
@@ -59,6 +62,7 @@ import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
 import com.sportconnect.user.api.dto.UserSummaryResponse;
+import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -104,6 +108,8 @@ public class SessionServiceImpl implements SessionService {
     private final GroupService groupService;
     private final LocationService locationService;
     private final UserService userService;
+    // SESSION-66: the caller's friends, for the share check (user-api is one-way; user-impl has no dependency back here)
+    private final UserFriendService userFriendService;
     private final SportService sportService;
     private final UserSportProfileService userSportProfileService;
     // SESSION-10/A17: session-impl -> post-api is one-way — post-impl has no dependency back on
@@ -114,6 +120,7 @@ public class SessionServiceImpl implements SessionService {
     private final CommentService commentService;
     private final SessionGate sessionGate;
     private final SessionDetailGate sessionDetailGate;
+    private final SessionShareGate sessionShareGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
     private final SessionGenerationService sessionGenerationService;
@@ -839,6 +846,68 @@ public class SessionServiceImpl implements SessionService {
                     .build());
             writeParticipantComment(session, userId, SystemCode.SESSION_JOINED, " joined the session");
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public SessionShareResponse shareSession(Long sessionId, UUID callerId, ShareSessionRequest request) {
+        // Availability (404) before visibility (403), then the status: every refusal comes before any read of
+        // recipients' state and before any write, so a refused call leaves nothing behind.
+        Session session = sessionRepository.findById(sessionId).orElse(null);
+        sessionShareGate.require(session, callerId,
+                "SESSION_NOT_FOUND", "Session not found",
+                "SESSION_SHARE_NOT_ALLOWED", "Only a joined participant can share a standalone session");
+        if (session.getStatus() != SessionStatus.PREPARING && session.getStatus() != SessionStatus.SCHEDULED) {
+            throw new ConflictException("SESSION_NOT_SHAREABLE",
+                    "A session can be shared only while it is preparing or scheduled",
+                    Map.of("status", session.getStatus().name()));
+        }
+
+        List<UUID> requested = request.getUserIds().stream().distinct().toList();
+
+        // One query for the caller's friends, never areFriends per recipient. Anyone who is not a friend is silently
+        // ignored (owner, 2026-11-18): counted in skipped, never notified, so a share cannot reach a stranger and the
+        // answer does not tell friends from strangers. The caller is not in their own friend list, so their own id
+        // falls out here too.
+        Set<UUID> friendIds = new HashSet<>(userFriendService.getAcceptedFriendIds(callerId));
+        List<UUID> friends = requested.stream().filter(friendIds::contains).toList();
+
+        List<UUID> recipients = List.of();
+        if (!friends.isEmpty()) {
+            // Already in (or asked to be in) the session: nothing to share. LEFT is not "in", so it is notified again.
+            Set<UUID> alreadyIn = sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(sessionId,
+                            List.of(ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED), friends)
+                    .stream().map(SessionParticipant::getUserId).collect(Collectors.toSet());
+            List<UUID> candidates = friends.stream().filter(id -> !alreadyIn.contains(id)).toList();
+            if (!candidates.isEmpty()) {
+                // One query for which of them are active accounts, selecting only ids (no user row is loaded). A
+                // deactivated friend, or an id with no account, is dropped here silently: skipped, never notified. (The
+                // friend list the client shows is active-only, so this only happens when the account was deactivated
+                // after the list was loaded.)
+                Set<UUID> active = userService.getActiveUserIds(candidates);
+                recipients = candidates.stream().filter(active::contains).toList();
+            }
+        }
+
+        if (!recipients.isEmpty()) {
+            // The existing invitation event, so the notification text and click-to-open-session already work; the
+            // outbox rows ride this transaction, so a failure rolls the whole share back.
+            sessionOutboxEventRepository.saveAll(recipients.stream()
+                    .map(recipientId -> sessionOutboxWriter.build("session.invitation.created",
+                            SessionInvitationCreatedEvent.builder()
+                                    .sessionId(sessionId)
+                                    .actorId(callerId)
+                                    .recipientUserId(recipientId)
+                                    .build()))
+                    .toList());
+        }
+        log.info("Session {} shared by {} with {} friend(s), {} skipped", sessionId, callerId, recipients.size(),
+                requested.size() - recipients.size());
+        return SessionShareResponse.builder()
+                .sent(recipients.size())
+                .skipped(requested.size() - recipients.size())
+                .build();
     }
 
     @Override

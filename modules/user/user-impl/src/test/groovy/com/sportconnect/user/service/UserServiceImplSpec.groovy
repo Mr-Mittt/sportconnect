@@ -1445,6 +1445,32 @@ class UserServiceImplSpec extends Specification {
         result[b.id].countryId == null
     }
 
+    def "getActiveUserIds asks the repository once for ids only and returns exactly what it returns"() {
+        given:
+        def a = UUID.randomUUID()
+        def b = UUID.randomUUID()
+
+        when:
+        def result = userService.getActiveUserIds([a, b])
+
+        then:
+        1 * userRepository.findActiveIdsByIdIn([a, b]) >> [a]
+        0 * userRepository.findAllById(_)
+        result == [a] as Set
+    }
+
+    def "getActiveUserIds with no ids does not query"() {
+        when:
+        def result = userService.getActiveUserIds(ids)
+
+        then:
+        0 * userRepository._
+        result.isEmpty()
+
+        where:
+        ids << [[], null]
+    }
+
     def "searchUsers resolves every country name on the page with ONE lookup, however many rows"() {
         given:
         def callerId = UUID.randomUUID()

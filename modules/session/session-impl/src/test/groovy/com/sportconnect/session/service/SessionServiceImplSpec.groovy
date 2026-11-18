@@ -15,12 +15,14 @@ import com.sportconnect.location.api.dto.LocationResponse
 import com.sportconnect.location.api.service.LocationService
 import com.sportconnect.session.access.SessionDetailGate
 import com.sportconnect.session.access.SessionGate
+import com.sportconnect.session.access.SessionShareGate
 import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
 import com.sportconnect.session.api.dto.FeeType
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.RejectParticipantRequest
 import com.sportconnect.session.api.dto.SessionStatus
+import com.sportconnect.session.api.dto.ShareSessionRequest
 import com.sportconnect.session.api.dto.SessionType
 import com.sportconnect.session.api.dto.StartTimeFilter
 import com.sportconnect.session.api.dto.UpdateSessionRequest
@@ -47,6 +49,7 @@ import com.sportconnect.sport.api.dto.UserSportProfileResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
 import com.sportconnect.user.api.dto.UserSummaryResponse
+import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.api.service.UserService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.springframework.data.domain.PageImpl
@@ -70,12 +73,14 @@ class SessionServiceImplSpec extends Specification {
     GroupService groupService = Mock()
     LocationService locationService = Mock()
     UserService userService = Mock()
+    UserFriendService userFriendService = Mock()
     SportService sportService = Mock()
     UserSportProfileService userSportProfileService = Mock()
     PostService postService = Mock()
     CommentService commentService = Mock()
     SessionGate sessionGate = Mock()
     SessionDetailGate sessionDetailGate = Mock()
+    SessionShareGate sessionShareGate = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
     SessionGenerationService sessionGenerationService = Mock()
@@ -87,8 +92,8 @@ class SessionServiceImplSpec extends Specification {
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
-            sportService, userSportProfileService, postService, commentService, sessionGate, sessionDetailGate,
-            sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService, objectMapper)
+            userFriendService, sportService, userSportProfileService, postService, commentService, sessionGate,
+            sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService, objectMapper)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -3885,5 +3890,279 @@ class SessionServiceImplSpec extends Specification {
         1 * groupService.canManageMembers(5L, userId) >> false
         def e = thrown(ForbiddenException)
         e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
+    }
+
+    // ---------- SESSION-66: shareSession ----------
+
+    private Session shareable(UUID creatorId, SessionStatus status = SessionStatus.SCHEDULED) {
+        Session.builder().id(1L).sessionType(SessionType.STANDALONE).createdBy(creatorId).sportId(1L)
+                .status(status).build()
+    }
+
+    private static SessionParticipant participantRow(UUID userId, ParticipantStatus status) {
+        SessionParticipant.builder().sessionId(1L).userId(userId).status(status).build()
+    }
+
+    private static Set<UUID> activeIds(List<UUID> ids) {
+        ids as Set
+    }
+
+    def "shareSession notifies each friend with one session.invitation.created event and writes no participant row"() {
+        given:
+        def caller = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def b = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([a, b]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [a, b, UUID.randomUUID()]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
+        1 * userService.getActiveUserIds([a, b]) >> activeIds([a, b])
+        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+            e.sessionId == 1L && e.actorId == caller && e.recipientUserId == a }) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+            e.sessionId == 1L && e.actorId == caller && e.recipientUserId == b }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
+        0 * sessionParticipantRepository.save(_)
+        0 * sessionParticipantRepository.saveAll(_)
+        0 * commentService._
+        result.sent == 2
+        result.skipped == 0
+    }
+
+    def "shareSession allows a PREPARING and a SCHEDULED session"() {
+        given:
+        def caller = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def session = shareable(caller, status)
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([a]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [a]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
+        1 * userService.getActiveUserIds([a]) >> activeIds([a])
+        1 * sessionOutboxWriter.build("session.invitation.created", _ as SessionInvitationCreatedEvent) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll(_)
+        result.sent == 1
+
+        where:
+        status << [SessionStatus.PREPARING, SessionStatus.SCHEDULED]
+    }
+
+    def "shareSession is refused for a session that is not PREPARING or SCHEDULED, before the friends are read"() {
+        given:
+        def caller = UUID.randomUUID()
+        def session = shareable(caller, status)
+
+        when:
+        sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([UUID.randomUUID()]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_NOT_SHAREABLE'
+        e.errorParams == [status: status.name()]
+        0 * userFriendService._
+        0 * sessionOutboxEventRepository.saveAll(_)
+
+        where:
+        status << [SessionStatus.ONGOING, SessionStatus.COMPLETED, SessionStatus.CANCELLED]
+    }
+
+    def "shareSession refuses a caller the gate refuses (missing session, not joined, group session) and does nothing else"() {
+        given:
+        def caller = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([UUID.randomUUID()]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, "SESSION_NOT_FOUND", _, "SESSION_SHARE_NOT_ALLOWED", _) >> {
+            throw refusal }
+        def e = thrown(RuntimeException)
+        e.errorCode == code
+        0 * userFriendService._
+        0 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(*_)
+        0 * sessionOutboxEventRepository.saveAll(_)
+
+        where:
+        refusal                                                                     | code
+        new NotFoundException("SESSION_NOT_FOUND", "Session not found", null)       | 'SESSION_NOT_FOUND'
+        new ForbiddenException("SESSION_SHARE_NOT_ALLOWED", "Not allowed", null)    | 'SESSION_SHARE_NOT_ALLOWED'
+    }
+
+    def "shareSession silently ignores a recipient who is not a friend: no error, never looked up, counted as skipped"() {
+        given:
+        def caller = UUID.randomUUID()
+        def friend = UUID.randomUUID()
+        def stranger = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([friend, stranger]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [friend]
+        // only the friend goes on to the participant and user lookups: the stranger is dropped before them
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, [friend]) >> []
+        1 * userService.getActiveUserIds([friend]) >> activeIds([friend])
+        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+            e.recipientUserId == friend }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
+        noExceptionThrown()
+        result.sent == 1
+        result.skipped == 1
+    }
+
+    def "shareSession with only strangers sends nothing, asks nothing about them and does not fail"() {
+        given:
+        def caller = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller,
+                ShareSessionRequest.builder().userIds([UUID.randomUUID(), UUID.randomUUID()]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [UUID.randomUUID()]
+        0 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(*_)
+        0 * userService.getActiveUserIds(_)
+        0 * sessionOutboxEventRepository.saveAll(_)
+        result.sent == 0
+        result.skipped == 2
+    }
+
+    def "shareSession skips the caller, duplicates, friends already in the session and deactivated friends, and counts them"() {
+        given:
+        def caller = UUID.randomUUID()
+        def fresh = UUID.randomUUID()
+        def joined = UUID.randomUUID()
+        def requested = UUID.randomUUID()
+        def invited = UUID.randomUUID()
+        def deactivated = UUID.randomUUID()
+        def stranger = UUID.randomUUID()
+        def session = shareable(caller)
+        // the caller's own id and a stranger are not in the friend list: both fall out before any lookup
+        def ask = [fresh, fresh, caller, joined, requested, invited, deactivated, stranger]
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds(ask).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [fresh, joined, requested, invited, deactivated]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> [
+                participantRow(joined, ParticipantStatus.JOINED),
+                participantRow(requested, ParticipantStatus.REQUESTED),
+                participantRow(invited, ParticipantStatus.INVITED)]
+        // the user module answers with the active ones only: the deactivated friend is not in it
+        1 * userService.getActiveUserIds([fresh, deactivated]) >> ([fresh] as Set)
+        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+            e.recipientUserId == fresh }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
+        result.sent == 1
+        // 7 distinct ids asked for (the duplicate counts once), 1 sent
+        result.skipped == 6
+    }
+
+    def "shareSession skips a friend the user lookup does not return at all, as it skips a deactivated one"() {
+        given:
+        def caller = UUID.randomUUID()
+        def known = UUID.randomUUID()
+        def missing = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([known, missing]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [known, missing]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
+        1 * userService.getActiveUserIds([known, missing]) >> activeIds([known])
+        1 * sessionOutboxWriter.build("session.invitation.created", { SessionInvitationCreatedEvent e ->
+            e.recipientUserId == known }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
+        result.sent == 1
+        result.skipped == 1
+    }
+
+    def "shareSession notifies a friend who LEFT again: only JOINED, REQUESTED and INVITED count as already in"() {
+        given:
+        def caller = UUID.randomUUID()
+        def left = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([left]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [left]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, { Collection c ->
+            c as Set == [ParticipantStatus.JOINED, ParticipantStatus.REQUESTED, ParticipantStatus.INVITED] as Set }, [left]) >> []
+        1 * userService.getActiveUserIds([left]) >> activeIds([left])
+        1 * sessionOutboxWriter.build("session.invitation.created", _ as SessionInvitationCreatedEvent) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll(_)
+        result.sent == 1
+    }
+
+    def "shareSession with only the caller's own id sends nothing and writes nothing"() {
+        given:
+        def caller = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([caller]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> []
+        0 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(*_)
+        0 * userService.getActiveUserIds(_)
+        0 * sessionOutboxEventRepository.saveAll(_)
+        result.sent == 0
+        result.skipped == 1
+    }
+
+    def "shareSession looks nobody up again when every recipient is already in the session"() {
+        given:
+        def caller = UUID.randomUUID()
+        def joined = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([joined]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [joined]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> [
+                participantRow(joined, ParticipantStatus.JOINED)]
+        0 * userService.getActiveUserIds(_)
+        0 * sessionOutboxEventRepository.saveAll(_)
+        result.sent == 0
+        result.skipped == 1
     }
 }

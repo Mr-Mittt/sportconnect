@@ -220,6 +220,8 @@ SESSION-45 moved statuses the same way A11 and A18 did: permission failures 400 
 | `SESSION_NOT_PARTICIPANT` | 409 | none | Leaving a session the caller has no active participant row in (moved from 400). |
 | `SESSION_CREATOR_CANNOT_LEAVE` | 400 | none | The creator of a standalone session calls leave (cancel is their way out). |
 | `SESSION_LEAVE_TOO_LATE` | 409 | `{cutoffAt}` (ISO-8601 instant) | A `JOINED` participant calls leave later than 15 minutes before `scheduledStart`, in any session status (`CANCELLED` included) and for group sessions too (SESSION-65). Declining an invitation (`INVITED`) and cancelling a request (`REQUESTED`) are not subject to it. |
+| `SESSION_SHARE_NOT_ALLOWED` | 403 | none | `POST /api/sessions/{id}/shares` by someone who is not a `JOINED` participant of the session (`REQUESTED`, `INVITED`, `LEFT` or no row), or on a group session (not shareable yet). `SESSION_NOT_FOUND` (404) comes first (SESSION-66). |
+| `SESSION_NOT_SHAREABLE` | 409 | `{status}` | `POST /api/sessions/{id}/shares` on a session that is not `PREPARING` or `SCHEDULED` (`ONGOING`, `COMPLETED`, `CANCELLED`); `status` is its current status (SESSION-66). |
 | `SESSION_SPORT_REQUIRED` | 400 | none | Creating a standalone session without `sportId`. |
 | `SESSION_TITLE_REQUIRED` | 400 | none | Creating a session without a title, or updating one to a blank title (SESSION-49). |
 | `SESSION_LOCATION_SPORT_MISMATCH` | 400 | none | Create or update with a `locationId` whose sport differs from the session's. |

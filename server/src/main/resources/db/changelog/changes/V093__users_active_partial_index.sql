@@ -1,0 +1,12 @@
+-- SESSION-66: a partial index of the active accounts, keyed by id.
+--
+-- Active accounts are the ones every "new interaction" lookup wants: UserService.getActiveUserIds (the share drops
+-- deactivated friends with it), the per-id active checks, and the chat sync listing (a keyset scan over active ids).
+-- Deactivated rows stay out of the index, so it stays small as accounts are deactivated, and
+-- "WHERE id IN (...) AND is_active = true" can be answered from the index alone (an index-only scan). The primary key
+-- still serves every lookup by id; this index only adds the is_active condition to it. A plain index on is_active would
+-- be useless here (two values, almost all true), which is why it is partial.
+--
+-- Not CONCURRENTLY: Liquibase runs this in a transaction. The build takes a short write lock on users, which is fine at
+-- the current table size (the same trade-off as V090).
+CREATE INDEX IF NOT EXISTS idx_users_active_id ON users (id) WHERE is_active = true;

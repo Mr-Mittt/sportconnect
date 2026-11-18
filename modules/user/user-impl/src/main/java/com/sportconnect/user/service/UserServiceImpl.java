@@ -180,6 +180,16 @@ public class UserServiceImpl implements UserService {
                         .build()));
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public Set<UUID> getActiveUserIds(Collection<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Set.of();
+        }
+        return new HashSet<>(userRepository.findActiveIdsByIdIn(userIds));
+    }
+
     @Override
     @Transactional(readOnly = true)
     public UserResponse getUserByEmail(String email) {

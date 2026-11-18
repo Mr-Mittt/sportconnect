@@ -12,7 +12,9 @@ import com.sportconnect.session.api.dto.SessionDiscoverDateCountsResponse;
 import com.sportconnect.session.api.dto.SessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.SessionParticipantResponse;
 import com.sportconnect.session.api.dto.SessionResponse;
+import com.sportconnect.session.api.dto.SessionShareResponse;
 import com.sportconnect.session.api.dto.SessionStatus;
+import com.sportconnect.session.api.dto.ShareSessionRequest;
 import com.sportconnect.session.api.dto.StartTimeFilter;
 import com.sportconnect.session.api.dto.ThreadPersonResponse;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
@@ -366,6 +368,25 @@ public class SessionController {
             Authentication authentication) {
         sessionService.joinSession(sessionId, SecurityUtils.extractUserId(authentication));
         return ResponseEntity.ok(ApiResponse.success("Joined session successfully", null));
+    }
+
+    @Operation(summary = "Share a session with friends", description = "SESSION-66: a JOINED participant of a standalone PREPARING or SCHEDULED session notifies up to 50 of their friends. A share is not an invitation: no participant row is written, each friend decides for themself whether to ask to join. Anyone who is not a friend, friends already JOINED, REQUESTED or INVITED, deactivated friends and the caller's own id are silently skipped and counted.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Shared; the body says how many friends were notified and how many skipped"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "The list is empty, over 50 or holds a null"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Not a joined participant, or a group session (SESSION_SHARE_NOT_ALLOWED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Session not found (SESSION_NOT_FOUND)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "The session is not PREPARING or SCHEDULED (SESSION_NOT_SHAREABLE)")
+    })
+    @PostMapping("/{sessionId}/shares")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<SessionShareResponse>> shareSession(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody ShareSessionRequest request,
+            Authentication authentication) {
+        SessionShareResponse result = sessionService.shareSession(sessionId, SecurityUtils.extractUserId(authentication), request);
+        return ResponseEntity.ok(ApiResponse.success("Session shared", result));
     }
 
     @Operation(summary = "Leave a session", description = "Also doubles as declining an INVITED row or cancelling the caller's own REQUESTED row (SESSION-9) — same endpoint, just a different button label client-side depending on the caller's current status.")
