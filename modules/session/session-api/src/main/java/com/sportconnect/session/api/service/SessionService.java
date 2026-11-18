@@ -198,6 +198,12 @@ public interface SessionService {
      * resulting values (400 {@code SESSION_GENDER_SLOTS_EXCEED_OPEN}). Changing
      * {@code scheduledStart} without {@code durationMinutes} moves {@code scheduledEndAt} by the
      * same amount; a sent {@code durationMinutes} wins; no end stays no end.
+     *
+     * <p>SESSION-67: in the same transaction, one {@code SESSION_*_CHANGED} system comment is written
+     * into the session's thread for every field whose <em>stored</em> value really changed (a request
+     * that re-sends the stored values writes none), authored by the session's creator, naming the
+     * editor in its {@code name} param; the comment write failing rolls the edit back. See
+     * {@code SystemCode} for the codes and their params.
      */
     SessionResponse updateSession(Long sessionId, UUID userId, UpdateSessionRequest request);
 

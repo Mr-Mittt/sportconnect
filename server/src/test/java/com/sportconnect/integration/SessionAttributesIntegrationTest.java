@@ -18,6 +18,7 @@ import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.entity.Post;
+import com.sportconnect.social.post.repository.CommentRepository;
 import com.sportconnect.social.post.repository.PostRepository;
 import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.repository.SportRepository;
@@ -64,6 +65,9 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
     private PostRepository postRepository;
 
     @Autowired
+    private CommentRepository commentRepository;
+
+    @Autowired
     private SessionRepository sessionRepository;
 
     @Autowired
@@ -83,6 +87,7 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
     void setUpFixtures() throws Exception {
         sessionParticipantRepository.deleteAll();
         sessionRepository.deleteAll();
+        commentRepository.deleteAll();
         postRepository.deleteAll();
         sportRepository.deleteAll();
         userRepository.deleteAll();
@@ -142,6 +147,7 @@ class SessionAttributesIntegrationTest extends RedisBaseIT {
     void tearDown() {
         sessionParticipantRepository.deleteAll();
         sessionRepository.deleteAll();
+        commentRepository.deleteAll();
         postRepository.deleteAll();
         sportRepository.deleteAll();
         userRepository.deleteAll();

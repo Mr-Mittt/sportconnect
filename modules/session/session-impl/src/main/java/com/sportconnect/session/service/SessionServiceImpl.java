@@ -51,6 +51,7 @@ import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
 import com.sportconnect.social.post.api.dto.PostLikeInfoResponse;
 import com.sportconnect.social.post.api.dto.SystemCode;
+import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest;
 import com.sportconnect.social.post.api.service.CommentService;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.SportResponse;
@@ -491,6 +492,13 @@ public class SessionServiceImpl implements SessionService {
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: load, {@link #requireCanModify}, 409 {@code SESSION_NOT_PREPARING} unless {@code PREPARING}; snapshot the
+     * editable fields; apply every non-null request field; save; {@link #writeFieldChangeComments} (SESSION-67); write
+     * the field-agnostic {@code session.details.updated} event; map the response.
+     */
     @Override
     @Transactional
     public SessionResponse updateSession(Long sessionId, UUID userId, UpdateSessionRequest request) {
@@ -503,6 +511,8 @@ public class SessionServiceImpl implements SessionService {
             throw new ConflictException("SESSION_NOT_PREPARING",
                     "This session can no longer be edited", Map.of("status", session.getStatus().name()));
         }
+        // SESSION-67: what the session looked like before this edit, for the per-field system comments below.
+        SessionFieldChanges.Snapshot before = SessionFieldChanges.snapshot(session);
 
         if (request.getTitle() != null) {
             session.setTitle(requireTitle(request.getTitle()));
@@ -575,6 +585,11 @@ public class SessionServiceImpl implements SessionService {
 
         Session saved = sessionRepository.save(session);
 
+        // SESSION-67: one system comment per field whose value really changed (compared on the stored values, so a
+        // request that re-sends the same values writes nothing), in the same transaction: a failed write rolls the
+        // edit back. Written before the notification event, which stays field-agnostic.
+        writeFieldChangeComments(saved, userId, before);
+
         // SESSION-24: field-agnostic — fires on every successful update, fanned out to the
         // session's currently-JOINED participants (actor excluded at consume time).
         sessionOutboxWriter.record("session.details.updated", SessionUpdatedEvent.builder()
@@ -583,6 +598,33 @@ public class SessionServiceImpl implements SessionService {
                 .build());
 
         return toResponse(saved, userId);
+    }
+
+    /**
+     * SESSION-67: writes one {@code SESSION_*_CHANGED} system comment per field the edit really changed, as one batch
+     * ({@code createSystemSessionComments}: one insert for all of them). The editor's name and, when the location
+     * changed, both location names are resolved once and only when something changed, and baked into the params. The
+     * comments are authored by the session's creator like every session system comment, and do not emit
+     * {@code session.comment.created} (the edit already notifies through {@code session.details.updated}).
+     */
+    private void writeFieldChangeComments(Session saved, UUID editorId, SessionFieldChanges.Snapshot before) {
+        SessionFieldChanges.Snapshot after = SessionFieldChanges.snapshot(saved);
+        List<SessionFieldChanges.Change> changes = SessionFieldChanges.diff(before, after,
+                () -> resolveParticipantName(editorId),
+                () -> locationService.getLocationsByIds(Stream.of(before.locationId(), after.locationId())
+                        .filter(Objects::nonNull).distinct().collect(Collectors.toList())));
+        if (changes.isEmpty()) {
+            return;
+        }
+        commentService.createSystemSessionComments(changes.stream()
+                .map(change -> SystemSessionCommentRequest.builder()
+                        .postId(saved.getPostId())
+                        .authorUserId(saved.getCreatedBy())
+                        .content(change.content())
+                        .systemCode(change.code())
+                        .systemParams(change.params())
+                        .build())
+                .collect(Collectors.toList()));
     }
 
     /**

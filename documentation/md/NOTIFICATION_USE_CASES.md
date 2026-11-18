@@ -167,7 +167,7 @@ be sent at all when the old address was never verified. U26 settles it at pickup
 
 SESSION-46 makes `PREPARING` a fully editable draft that the host leaves with an explicit Schedule action. Should the people who already joined or requested a `PREPARING` session be told when the host schedules it ("the details are final")? Related: every successful edit while `PREPARING` already fans out `session.details.updated` to the joined participants, which may be chatty while a host edits several times; should those be throttled or batched until Schedule? Open: recipients (joined only, or also requested/invited), one notice or one per edit, and how it relates to NOTIF-7 (the auto-cancel of a `PREPARING` session that never got scheduled).
 
-**Partly answered (2026-11-17, owner, SESSION-67):** what changed in a `PREPARING` edit is told in the discussion thread, one system comment per changed field; the generic notification stays as it is, and throttling it remains open.
+**Partly answered (2026-11-17, owner, SESSION-67):** what changed in a `PREPARING` edit is told in the discussion thread, one system comment per changed field; the generic notification stays as it is, and throttling it remains open. **Built 2026-11-18 (SESSION-67):** one comment per field whose stored value changed, in the same transaction, no comment notification.
 
 ### NOTIF-11 · A result record is added, changed or deleted in a session
 **Date added:** 2026-11-12

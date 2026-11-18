@@ -2479,6 +2479,159 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
     }
 
+    // SESSION-67: one system comment per changed field of a PREPARING edit
+
+    private Session editedSession(UUID userId) {
+        Session.builder().id(1L).postId(77L).createdBy(userId).sportId(1L).locationId(1L).title("Old title")
+                .scheduledStart(Instant.parse("2026-11-20T11:00:00Z")).status(SessionStatus.PREPARING)
+                .capacity(10).feeType(FeeType.FREE).build()
+    }
+
+    def "updateSession writes one batch with a system comment per changed field, naming the editor"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = editedSession(userId)
+        def request = UpdateSessionRequest.builder().title("New title").capacity(20).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        userService.getUserSummariesByIds([userId]) >> [(userId): summaryOf(userId, "Alex")]
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save(_) >> session
+        1 * commentService.createSystemSessionComments({ List l ->
+            l*.systemCode == [SystemCode.SESSION_TITLE_CHANGED, SystemCode.SESSION_CAPACITY_CHANGED] &&
+                    l.every { it.postId == 77L && it.authorUserId == userId } &&
+                    l[0].systemParams == [name: "Alex", old: "Old title", new: "New title"] &&
+                    l[0].content == 'Alex updated the title "New title"' &&
+                    l[1].systemParams == [name: "Alex", old: "10", new: "20"] &&
+                    l[1].content == 'Alex changed the capacity from "10" to "20"'
+        })
+        interaction { stubBatchEnrichment() }
+        1 * sessionOutboxWriter.record("session.details.updated", _)
+        0 * sessionOutboxWriter.record("session.comment.created", _)
+    }
+
+    def "updateSession writes no comment when the request re-sends the stored values, and still notifies"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = editedSession(userId)
+        def request = UpdateSessionRequest.builder().title("Old title").capacity(10).feeType(FeeType.FREE).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save(_) >> session
+        0 * commentService.createSystemSessionComments(_)
+        0 * userService.getUserSummariesByIds([userId])
+        interaction { stubBatchEnrichment() }
+        1 * sessionOutboxWriter.record("session.details.updated", _)
+    }
+
+    def "updateSession with an empty request writes no comment"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = editedSession(userId)
+
+        when:
+        sessionService.updateSession(1L, userId, UpdateSessionRequest.builder().build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save(_) >> session
+        0 * commentService.createSystemSessionComments(_)
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession bakes both location names in with one batch lookup"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = editedSession(userId)
+        def courtB = LocationResponse.builder().id(3L).sportId(1L).name("Court B").build()
+        def request = UpdateSessionRequest.builder().locationId(3L).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        userService.getUserSummariesByIds([userId]) >> [(userId): summaryOf(userId, "Alex")]
+        1 * locationService.getLocation(3L) >> courtB
+        1 * locationService.getLocationsByIds([1L, 3L]) >> [1L: basketballLocation, 3L: courtB]
+        1 * sessionRepository.save(_) >> session
+        1 * commentService.createSystemSessionComments({ List l ->
+            l.size() == 1 && l[0].systemCode == SystemCode.SESSION_LOCATION_CHANGED &&
+                    l[0].systemParams == [name: "Alex", old: "Court", new: "Court B"]
+        })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession by a group admin names the admin, but the comments are authored by the session's creator"() {
+        given:
+        def creatorId = UUID.randomUUID()
+        def adminId = UUID.randomUUID()
+        def session = editedSession(creatorId)
+        session.groupId = 5L
+        def request = UpdateSessionRequest.builder().capacity(20).build()
+
+        when:
+        sessionService.updateSession(1L, adminId, request)
+
+        then:
+        userService.getUserSummariesByIds([adminId]) >> [(adminId): summaryOf(adminId, "Admin Ann")]
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.canManageMembers(5L, adminId) >> true
+        1 * sessionRepository.save(_) >> session
+        1 * commentService.createSystemSessionComments({ List l ->
+            l.size() == 1 && l[0].authorUserId == creatorId && l[0].systemParams.name == "Admin Ann" &&
+                    l[0].content == 'Admin Ann changed the capacity from "10" to "20"'
+        })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession looks up only the new location when the session had none"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = editedSession(userId)
+        session.locationId = null
+        def courtB = LocationResponse.builder().id(3L).sportId(1L).name("Court B").build()
+        def request = UpdateSessionRequest.builder().locationId(3L).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * locationService.getLocation(3L) >> courtB
+        1 * locationService.getLocationsByIds([3L]) >> [3L: courtB]
+        1 * sessionRepository.save(_) >> session
+        1 * commentService.createSystemSessionComments({ List l ->
+            l.size() == 1 && l[0].systemParams.old == "" && l[0].systemParams.new == "Court B" &&
+                    l[0].content.endsWith('added the location "Court B"')
+        })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "updateSession fails, and sends no notification, when the comments cannot be written"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = editedSession(userId)
+        def request = UpdateSessionRequest.builder().capacity(20).build()
+
+        when:
+        sessionService.updateSession(1L, userId, request)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save(_) >> session
+        1 * commentService.createSystemSessionComments(_) >> { throw new IllegalStateException("boom") }
+        thrown(IllegalStateException)
+        0 * sessionOutboxWriter.record(_, _)
+    }
+
     def "updateSession rejects switching to FIXED without ever supplying a feeAmountVnd"() {
         given:
         def userId = UUID.randomUUID()

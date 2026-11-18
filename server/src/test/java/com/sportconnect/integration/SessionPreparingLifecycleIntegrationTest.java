@@ -9,11 +9,14 @@ import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.entity.SessionOutboxEvent;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.entity.Comment;
 import com.sportconnect.social.post.entity.Post;
+import com.sportconnect.social.post.repository.CommentRepository;
 import com.sportconnect.social.post.repository.PostRepository;
 import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.repository.SportRepository;
@@ -28,9 +31,13 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +58,7 @@ class SessionPreparingLifecycleIntegrationTest extends RedisBaseIT {
     @Autowired private SessionParticipantRepository sessionParticipantRepository;
     @Autowired private SessionOutboxEventRepository sessionOutboxEventRepository;
     @Autowired private PostRepository postRepository;
+    @Autowired private CommentRepository commentRepository;
     @Autowired private LocationRepository locationRepository;
     @Autowired private SportRepository sportRepository;
     @Autowired private UserRepository userRepository;
@@ -77,6 +85,7 @@ class SessionPreparingLifecycleIntegrationTest extends RedisBaseIT {
     }
 
     private void clearAll() {
+        commentRepository.deleteAll();
         sessionOutboxEventRepository.deleteAll();
         sessionParticipantRepository.deleteAll();
         sessionRepository.deleteAll();
@@ -319,5 +328,99 @@ class SessionPreparingLifecycleIntegrationTest extends RedisBaseIT {
                         .header("Authorization", bearer(inactiveId)))
                 .andExpect(status().isUnauthorized());
         assertThat(sessionRepository.findById(sessionId).orElseThrow().getStatus()).isEqualTo(SessionStatus.PREPARING);
+    }
+
+    // ---- SESSION-67: one system comment per changed field --------------------------------------------------------
+
+    private List<SessionOutboxEvent> outboxEvents(String type) {
+        return sessionOutboxEventRepository.findAll().stream().filter(e -> type.equals(e.getEventType())).toList();
+    }
+
+    /** The session thread through the real endpoint, as code to params (newest first in the response). */
+    private Map<String, JsonNode> threadByCode(Long sessionId) throws Exception {
+        String body = mockMvc.perform(get("/api/sessions/{id}/comments", sessionId))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        Map<String, JsonNode> byCode = new LinkedHashMap<>();
+        for (JsonNode comment : objectMapper.readTree(body).get("data").get("content")) {
+            assertThat(comment.get("commentType").asText()).isEqualTo("SESSION_SYSTEM");
+            byCode.put(comment.get("systemCode").asText(), comment);
+        }
+        return byCode;
+    }
+
+    @Test
+    void update_writesOneSystemCommentPerChangedField_readableInTheThread_andOneDetailsEvent() throws Exception {
+        authenticateAs(creatorId);
+        Long sessionId = createViaApi(createBody().build());
+
+        mockMvc.perform(put("/api/sessions/{id}", sessionId).contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(UpdateSessionRequest.builder().title("Sunday game").locationId(locationId)
+                                .feeType(FeeType.FIXED).feeAmountVnd(50000L).durationMinutes(60).capacity(12)
+                                .feeNote("Bring cash").build())))
+                .andExpect(status().isOk());
+
+        Map<String, JsonNode> thread = threadByCode(sessionId);
+        assertThat(thread.keySet()).containsExactlyInAnyOrder("SESSION_TITLE_CHANGED", "SESSION_LOCATION_CHANGED",
+                "SESSION_DURATION_CHANGED", "SESSION_CAPACITY_CHANGED", "SESSION_FEE_CHANGED", "SESSION_FEE_NOTE_CHANGED");
+
+        JsonNode title = thread.get("SESSION_TITLE_CHANGED");
+        assertThat(title.get("systemParams").get("name").asText()).isEqualTo("Host User");
+        assertThat(title.get("systemParams").get("old").asText()).isEqualTo("Test session");
+        assertThat(title.get("systemParams").get("new").asText()).isEqualTo("Sunday game");
+        assertThat(title.get("content").asText()).isEqualTo("Host User updated the title \"Sunday game\"");
+
+        JsonNode location = thread.get("SESSION_LOCATION_CHANGED").get("systemParams");
+        assertThat(location.get("old").asText()).isEmpty();
+        assertThat(location.get("new").asText()).isEqualTo("Court");
+
+        JsonNode fee = thread.get("SESSION_FEE_CHANGED").get("systemParams");
+        assertThat(fee.get("oldFeeType").asText()).isEmpty();
+        assertThat(fee.get("newFeeType").asText()).isEqualTo("FIXED");
+        assertThat(fee.get("newFeeAmountVnd").asText()).isEqualTo("50000");
+
+        JsonNode capacity = thread.get("SESSION_CAPACITY_CHANGED");
+        assertThat(capacity.get("content").asText()).isEqualTo("Host User changed the capacity from \"10\" to \"12\"");
+        assertThat(thread.get("SESSION_DURATION_CHANGED").get("systemParams").get("new").asText()).isEqualTo("60");
+
+        // Authored by the session's creator, like every session system comment.
+        for (Comment comment : commentRepository.findAll()) {
+            assertThat(comment.getUserId()).isEqualTo(creatorId);
+        }
+        // The notification stays one field-agnostic event, and the comments do not also ping as comments.
+        assertThat(outboxEvents("session.details.updated")).hasSize(1);
+        assertThat(outboxEvents("session.comment.created")).isEmpty();
+    }
+
+    @Test
+    void update_thatResendsTheStoredValues_writesNoComment() throws Exception {
+        authenticateAs(creatorId);
+        Long sessionId = createViaApi(createBody().build());
+
+        mockMvc.perform(put("/api/sessions/{id}", sessionId).contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(UpdateSessionRequest.builder().title("Test session").capacity(10).gameMood(5).build())))
+                .andExpect(status().isOk());
+
+        assertThat(threadByCode(sessionId)).isEmpty();
+        assertThat(commentRepository.count()).isZero();
+        assertThat(outboxEvents("session.details.updated")).hasSize(1);
+    }
+
+    @Test
+    void update_whoseCommentsCannotBeWritten_rollsTheWholeEditBack_andSendsNoNotification() throws Exception {
+        authenticateAs(creatorId);
+        Long sessionId = createViaApi(createBody().build());
+        // The companion post is the thread anchor: without it the comment batch is refused after the fields were set.
+        Session stored = sessionRepository.findById(sessionId).orElseThrow();
+        postRepository.deleteById(stored.getPostId());
+
+        int status = mockMvc.perform(put("/api/sessions/{id}", sessionId).contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(UpdateSessionRequest.builder().title("Never stored").capacity(99).build())))
+                .andReturn().getResponse().getStatus();
+
+        assertThat(status).isGreaterThanOrEqualTo(400);
+        Session after = sessionRepository.findById(sessionId).orElseThrow();
+        assertThat(after.getTitle()).isEqualTo("Test session");
+        assertThat(after.getCapacity()).isEqualTo(10);
+        assertThat(outboxEvents("session.details.updated")).isEmpty();
     }
 }
