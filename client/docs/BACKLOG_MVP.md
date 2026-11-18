@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-18 (CLIENT-NOTIF-7 done)
+**Last updated:** 2026-11-18 (CLIENT-SESSION-51 done)
 
 ---
 
@@ -68,7 +68,6 @@ New tickets get inserted at the appropriate position when filed, same as before 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 28 | [CLIENT-SESSION-51](MVP/CLIENT-SESSION-51_LOCALISED_FIELD_CHANGE_SYSTEM_COMMENTS.md) | Localised system comments for the fields a host changed (**standalone chain**; depends on SESSION-67) | `TODO` |
 | 29 | [CLIENT-SESSION-49](MVP/CLIENT-SESSION-49_INVITE_FRIENDS_DIALOG_IN_THE_PLAYERS_SECTION.md) | "Invite friends" dialog from the Players section header: friends not joined first with checkboxes, joined friends below, "Invite (x)" (**standalone chain**; depends on SESSION-66) | `TODO` |
 | 2 | [FRIEND-3](MVP/FRIEND-3_CHAT_BOX_NOT_READY_AFTER_ACCEPTING_A_FRIEND_REQUEST.md) | The 1:1 chat box on `/friends` stays unavailable after accepting a friend request until a reload (found 2026-10-30, INFRA-7 live checks) — `useAcceptFriendRequest` invalidates only `friendKeys`, and the chat service's friendship cache may lag; cause to be confirmed at pickup | `TODO` |
 | 3 | [SPORT-6](MVP/SPORT-6_REFERENCE_FIELD_WIDGET.md) | Reference field widget — search/link/free-text combobox for `Reference`-shaped attributes (rackets, footwear); the one v2 field type needing real interaction rather than a form control — **moved to last in queue 2026-08-26 (user decision)**: hard-blocked on backend A14, which was postponed 2026-08-25 pending aggregation-strategy design work | `TODO` |
@@ -143,6 +142,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 36 | [CLIENT-SESSION-51](MVP/CLIENT-SESSION-51_LOCALISED_FIELD_CHANGE_SYSTEM_COMMENTS.md) | Localised system comments for the fields a host changed (pair of SESSION-67): one sentence per shape (added, updated, changed, removed) from the `old`/`new` params, values in the viewer's language and zone (start, duration, fee, mood, approval), the stored English text as the fallback; 4 templates and 13 labels in en and vi; 23 of 23 mutants killed | `DONE` (2026-11-18) |
 | 35 | [CLIENT-NOTIF-7](MVP/CLIENT-NOTIF-7_SHOW_THE_REJECT_REASON_IN_THE_NOTIFICATION.md) | The rejected-join-request notification shows the host's reason, and a "Clear read notifications" control (**standalone chain**; depends on NTF-8) | `DONE` (2026-11-18) |
 | 34 | [CLIENT-SESSION-50](MVP/CLIENT-SESSION-50_FOCUS_THE_FIRST_MISSING_FIELD_ON_CONTINUE_EDITING.md) | "Continue editing" in the "Are you ready?" popup focuses the first missing field, top to bottom; the red asterisk on Duration, Ends at, Location and Fee; the date select of Starts at / Ends at half as wide; the Ends at date follows the Starts at date while the duration is missing (**standalone chain**) | `DONE` (2026-11-17) |
 | 33 | [CLIENT-GL-49](MVP/CLIENT-GL-49_SESSION_RESULT_SCOREBOARD.md) | Session Result section: the client-computed scoreboard (split out of CLIENT-GL-38) | `DONE` (2026-11-17) |

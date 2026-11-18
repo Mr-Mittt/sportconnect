@@ -34,7 +34,29 @@
     "SESSION_STARTED": "Buổi chơi đã bắt đầu",
     "SESSION_RECORDS_UPDATED": "{{name}} đã cập nhật kết quả",
     "GROUP_MEMBER_JOINED": "{{name}} đã tham gia nhóm 👋",
-    "GROUP_MEMBER_JOINED_INVITED": "{{name}} đã tham gia nhóm — được {{inviter}} mời 👋"
+    "GROUP_MEMBER_JOINED_INVITED": "{{name}} đã tham gia nhóm — được {{inviter}} mời 👋",
+    "SESSION_ATTRIBUTES_CHANGED": "{{name}} đã cập nhật thông tin môn chơi",
+    "fieldChange": {
+      "added": "{{name}} đã thêm {{field}} \"{{value}}\"",
+      "updated": "{{name}} đã cập nhật {{field}} \"{{value}}\"",
+      "changed": "{{name}} đã đổi {{field}} từ \"{{old}}\" sang \"{{new}}\"",
+      "removed": "{{name}} đã xóa {{field}}"
+    },
+    "fieldLabel": {
+      "SESSION_TITLE_CHANGED": "tên",
+      "SESSION_LOCATION_CHANGED": "địa điểm",
+      "SESSION_LOCATION_NOTE_CHANGED": "ghi chú địa điểm",
+      "SESSION_START_CHANGED": "giờ bắt đầu",
+      "SESSION_DURATION_CHANGED": "thời lượng",
+      "SESSION_CAPACITY_CHANGED": "sức chứa",
+      "SESSION_FEE_CHANGED": "phí",
+      "SESSION_FEE_NOTE_CHANGED": "ghi chú phí",
+      "SESSION_AUTO_APPROVE_CHANGED": "cách duyệt tham gia",
+      "SESSION_INITIAL_SLOT_CHANGED": "số người chơi có sẵn",
+      "SESSION_MALE_SLOTS_CHANGED": "chỗ trống cho nam",
+      "SESSION_FEMALE_SLOTS_CHANGED": "chỗ trống cho nữ",
+      "SESSION_GAME_MOOD_CHANGED": "cường độ"
+    }
   },
   "notifications": {
     "someone": "Ai đó",

@@ -530,6 +530,31 @@ describe('CommentItem', () => {
       show(coded({ systemCode: 'SOMETHING_NEW', content: 'Something new happened' }));
       expect(screen.getByText('Something new happened')).toBeInTheDocument();
     });
+
+    // CLIENT-SESSION-51: a host's field change is drawn as a system line, in the viewer's language.
+    it('draws a field change as a system line with its sentence, and no user-comment controls', () => {
+      show(
+        coded({
+          content: 'STORED ENGLISH',
+          systemCode: 'SESSION_FEE_CHANGED',
+          systemParams: {
+            name: 'Priya Shah',
+            oldFeeType: 'FREE',
+            oldFeeAmountVnd: '',
+            newFeeType: 'FIXED',
+            newFeeAmountVnd: '50000',
+          },
+        }),
+      );
+      expect(screen.getByText('Priya Shah changed the fee from "Free" to "50 000 ₫"')).toBeInTheDocument();
+      expect(screen.queryByText('STORED ENGLISH')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('shows the stored content when a field change lacks a value it needs', () => {
+      show(coded({ content: 'Priya Shah changed the duration', systemCode: 'SESSION_DURATION_CHANGED', systemParams: { name: 'Priya Shah' } }));
+      expect(screen.getByText('Priya Shah changed the duration')).toBeInTheDocument();
+    });
   });
 
   describe('timestamp (CLIENT-GL-51)', () => {

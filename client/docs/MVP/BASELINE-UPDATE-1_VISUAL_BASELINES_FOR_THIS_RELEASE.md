@@ -53,6 +53,7 @@ Visual regression no longer runs per PR: it is the manual workflow `client-visua
 | `notification-bell-populated-*` and `notification-bell-with-load-more-*` at 375, 768, 1280 (6 files) | CLIENT-NOTIF-7 | changed: the popover header gains the "Clear read" text button beside "Mark all read" (both fixtures hold read items: ids 3-7 in the default list, 9 of the 11 paginated ones); the row list gains `outline-none` and `tabIndex=-1`, which draw nothing. Confirm for `with-load-more` in the `client-visual` run |
 | `notification-bell-empty-*` at 375, 768, 1280 | CLIENT-NOTIF-7 | unchanged: no items, so no "Clear read" and no "Mark all read" |
 | none | CLIENT-NOTIF-7 (the reason line) | no change: no visual spec seeds a `session.join_request.rejected` notification with a reason (only the functional spec does) |
+| none | CLIENT-SESSION-51 | no change expected: the locales only gain keys and no visual spec renders a field-change comment (the session-detail modal spec shows a `SESSION_JOINED` entry, text unchanged) |
 | every other baseline | all | byte-identical; a diff there is a regression, not an update |
 
 The SESSION-49 row comes from its diff (locale strings, the pre-filled title, the MSW handlers), not from a rendered comparison: nothing was rendered for it. `/updatebaseline` Phase 3 derives the real set from `git diff master...HEAD -- client/` and shows it to the owner.
