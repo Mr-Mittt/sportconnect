@@ -248,7 +248,8 @@ public class SessionServiceImpl implements SessionService {
 
         Session session = Session.builder()
                 .groupId(groupId)
-                .isPublic(groupId == null)
+                // SESSION-69: standalone defaults to public and the creator may make it private; a group session is never public.
+                .isPublic(groupId == null && !Boolean.FALSE.equals(request.getIsPublic()))
                 .postId(postId)
                 .sessionType(sessionType)
                 .createdBy(userId)
@@ -565,6 +566,10 @@ public class SessionServiceImpl implements SessionService {
         if (request.getAutoApprove() != null) {
             session.setAutoApprove(request.getAutoApprove());
         }
+        // SESSION-69: public/private is a standalone session's own setting; a group-linked one is never public, so it is ignored.
+        if (request.getIsPublic() != null && session.getGroupId() == null) {
+            session.setIsPublic(request.getIsPublic());
+        }
         if (request.getInitialSlot() != null) {
             session.setInitialSlot(request.getInitialSlot());
         }
@@ -792,6 +797,14 @@ public class SessionServiceImpl implements SessionService {
     @Transactional
     public void joinSession(Long sessionId, UUID userId) {
         Session session = findSessionOrThrow(sessionId);
+        // SESSION-69: a private standalone session is joinable only by someone who already holds a row on it (an invitee accepting,
+        // or a participant who asked before it went private); checked first, so a stranger learns nothing else about it (not even
+        // that it is cancelled). The row is read only for a private session, so a public one costs nothing extra.
+        if (session.getGroupId() == null && Boolean.FALSE.equals(session.getIsPublic())
+                && sessionParticipantRepository.findBySessionIdAndUserId(sessionId, userId)
+                        .filter(SessionDetailGate::grantsAccess).isEmpty()) {
+            throw new ForbiddenException("SESSION_FORBIDDEN", "You don't have access to this session", null);
+        }
         if (session.getStatus() == SessionStatus.CANCELLED) {
             throw new ConflictException("SESSION_CANCELLED", "Cannot join a cancelled session", null);
         }
@@ -859,7 +872,7 @@ public class SessionServiceImpl implements SessionService {
         Session session = sessionRepository.findById(sessionId).orElse(null);
         sessionShareGate.require(session, callerId,
                 "SESSION_NOT_FOUND", "Session not found",
-                "SESSION_SHARE_NOT_ALLOWED", "A group session cannot be shared");
+                "SESSION_SHARE_NOT_ALLOWED", "A group or private session cannot be shared");
 
         List<UUID> requested = request.getUserIds().stream().distinct().toList();
 
@@ -966,8 +979,14 @@ public class SessionServiceImpl implements SessionService {
     public Page<SessionParticipantResponse> getSessionParticipants(
             Long sessionId, UUID callerId, ParticipantStatus status, Pageable pageable) {
         ParticipantStatus effectiveStatus = status != null ? status : ParticipantStatus.JOINED;
+        // SESSION-69: the player list is part of the session's detail, so it follows the detail gate (404, then 403): a private
+        // session's players, and a group session's, are not readable by anyone who may not open it.
+        Session session = sessionRepository.findById(sessionId).orElse(null);
+        sessionDetailGate.require(session, callerId,
+                "SESSION_NOT_FOUND", "Session not found",
+                "SESSION_FORBIDDEN", "You don't have access to this session");
         if (effectiveStatus != ParticipantStatus.JOINED) {
-            requireCanModify(findSessionOrThrow(sessionId), callerId);
+            requireCanModify(session, callerId);
         }
 
         Page<SessionParticipant> participants = sessionParticipantRepository
@@ -1577,6 +1596,7 @@ public class SessionServiceImpl implements SessionService {
                         .feeType(session.getFeeType())
                         .feeAmountVnd(session.getFeeAmountVnd())
                         .autoApprove(session.getAutoApprove())
+                        .isPublic(session.getIsPublic())
                         .initialSlot(session.getInitialSlot())
                         .maleSlots(session.getMaleSlots())
                         .femaleSlots(session.getFemaleSlots())

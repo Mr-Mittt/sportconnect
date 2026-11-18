@@ -46,6 +46,10 @@ public class UpdateSessionRequest {
 
     private Boolean autoApprove;
 
+    /** SESSION-69 — switches a standalone session between public ({@code true}) and private ({@code false}); null leaves it. Only
+     * while {@code PREPARING} (the whole call is 409 {@code SESSION_NOT_PREPARING} otherwise); ignored for a group-linked session. */
+    private Boolean isPublic;
+
     @Min(value = 0, message = "initialSlot must be >= 0")
     private Integer initialSlot;
 

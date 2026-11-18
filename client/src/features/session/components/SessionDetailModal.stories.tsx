@@ -90,6 +90,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     gameMood: 5,
     feeNote: null,
     autoApprove: false,
+    isPublic: true,
     likeCount: 2,
     isLikedByCurrentUser: false,
     callerParticipation: null,
@@ -296,6 +297,20 @@ export const Loading: Story = {
 
 export const LoadError: Story = {
   args: { session: undefined, isError: true, participants: [] },
+};
+
+/** CLIENT-SESSION-52: a private standalone session: no Share button (a shared friend could not open it). */
+export const PrivateSession: Story = {
+  args: { session: makeSession({ isPublic: false }) },
+};
+
+/** CLIENT-SESSION-52: the host's Who editor of a PREPARING session, with the visibility switch off and its warning. */
+export const PreparingWhoEditPrivate: Story = {
+  args: { canManage: true, session: makeSession({ status: 'PREPARING', location: null, feeType: null, isPublic: false }) },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click((await body.findAllByRole('button', { name: 'Edit' }))[3]);
+  },
 };
 
 export const GroupLinked: Story = {

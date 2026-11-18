@@ -57,6 +57,7 @@ export function makeSession(overrides: Partial<Session> & Pick<Session, 'id'>): 
     gameMood: 5,
     feeNote: null,
     autoApprove: false,
+    isPublic: true,
     likeCount: 0,
     isLikedByCurrentUser: false,
     callerParticipation: null,

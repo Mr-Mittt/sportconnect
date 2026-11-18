@@ -15,6 +15,10 @@
     "auto": "Auto approval",
     "hostApproval": "Need host approval"
   },
+  "sessionVisibility": {
+    "public": "Public",
+    "private": "Private"
+  },
   "attributeValues": {
     "yes": "Yes",
     "no": "No",
@@ -55,7 +59,8 @@
       "SESSION_INITIAL_SLOT_CHANGED": "taken slots",
       "SESSION_MALE_SLOTS_CHANGED": "male slots",
       "SESSION_FEMALE_SLOTS_CHANGED": "female slots",
-      "SESSION_GAME_MOOD_CHANGED": "game mood"
+      "SESSION_GAME_MOOD_CHANGED": "game mood",
+      "SESSION_VISIBILITY_CHANGED": "visibility"
     }
   },
   "notifications": {

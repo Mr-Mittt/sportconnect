@@ -326,6 +326,16 @@ function MoodBadge({ mood }: { mood: number }) {
   );
 }
 
+/** CLIENT-SESSION-52: "Public" / "Private" for a standalone session. */
+function visibilityText(session: Session, t: (key: string) => string): string {
+  return session.isPublic ? t('detail.summary.public') : t('detail.summary.private');
+}
+
+/** The Visibility line of the Who summary: standalone sessions only (a group session is always members-only). */
+function visibilitySummary(session: Session, t: (key: string) => string): SectionSummaryItem[] {
+  return session.groupId === null ? [{ label: t('detail.summary.visibility'), value: visibilityText(session, t) }] : [];
+}
+
 function WhoSection(props: SectionProps) {
   const t = useOverridableText('session', props.i18nOverridePrefix);
   const { session } = props;
@@ -336,6 +346,7 @@ function WhoSection(props: SectionProps) {
     femaleSlots: session.femaleSlots,
     gameMood: session.gameMood,
     autoApprove: session.autoApprove,
+    isPublic: session.isPublic,
   });
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const canSave = who.open !== '' && who.effectiveTaken >= 1 && !who.genderOverOpen;
@@ -348,6 +359,7 @@ function WhoSection(props: SectionProps) {
     { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
     { label: t('detail.summary.mood'), value: formatGameMood(session.gameMood) },
     { label: t('detail.summary.autoApprove'), value: session.autoApprove ? yes : no },
+    ...visibilitySummary(session, t),
   ];
   return (
     <>
@@ -386,6 +398,8 @@ function WhoSection(props: SectionProps) {
               onGameMoodChange={who.setGameMood}
               autoApprove={who.autoApprove}
               onAutoApproveChange={(next) => (next ? setIsConfirmOpen(true) : who.setAutoApprove(false))}
+              // CLIENT-SESSION-52: only a standalone session can be private; a group session has no switch.
+              visibility={session.groupId === null ? { isPublic: who.isPublic, onChange: who.setIsPublic } : undefined}
             />
             {errorLine}
           </>
@@ -397,6 +411,9 @@ function WhoSection(props: SectionProps) {
               <MoodBadge mood={session.gameMood} />
             </ViewRow>
             <ViewRow label={t('detail.summary.autoApprove')}>{session.autoApprove ? yes : no}</ViewRow>
+            {session.groupId === null && (
+              <ViewRow label={t('detail.summary.visibility')}>{visibilityText(session, t)}</ViewRow>
+            )}
           </>
         )}
       </SessionFormSection>
@@ -586,6 +603,7 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
       { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
       { label: t('detail.summary.mood'), value: formatGameMood(session.gameMood) },
       { label: t('detail.summary.autoApprove'), value: session.autoApprove ? yes : no },
+      ...visibilitySummary(session, t),
     ],
     [
       { label: t('detail.summary.fee'), value: fee },
@@ -645,6 +663,7 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
         <MoodBadge mood={session.gameMood} />
       </ViewRow>
       <ViewRow label={t('detail.summary.autoApprove')}>{session.autoApprove ? yes : no}</ViewRow>
+      {session.groupId === null && <ViewRow label={t('detail.summary.visibility')}>{visibilityText(session, t)}</ViewRow>}
       <ViewRow label={t('detail.summary.fee')}>{fee ?? '...'}</ViewRow>
       <ViewRow label={t('detail.summary.feeNote')}>{session.feeNote ?? '...'}</ViewRow>
       {attributes.map((entry) => (

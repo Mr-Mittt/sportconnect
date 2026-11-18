@@ -541,8 +541,8 @@ export function SessionDetailModal({
   // PREPARING) gets the read-only mode: Session information and Players, both collapsed.
   const readOnly = session !== undefined && !(canManage && session.status === 'PREPARING');
   // CLIENT-SESSION-49: every viewer of a standalone session may share it, in any status and whatever their own
-  // participation; a group session is not shareable (SESSION-66), so no button.
-  const canShare = share !== undefined && session !== undefined && session.groupId === null;
+  // participation; a group session is not shareable (SESSION-66), nor is a private one (SESSION-69): no button.
+  const canShare = share !== undefined && session !== undefined && session.groupId === null && session.isPublic;
   const shareButton = canShare ? (
     <ShareSessionButton i18nOverridePrefix={i18nOverridePrefix} onClick={share.onOpen} />
   ) : undefined;

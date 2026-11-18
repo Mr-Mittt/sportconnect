@@ -107,6 +107,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     gameMood: 5,
     feeNote: null,
     autoApprove: false,
+    isPublic: true,
     likeCount: 0,
     isLikedByCurrentUser: false,
     callerParticipation: null,
@@ -1150,6 +1151,80 @@ describe('SessionDetailModal', () => {
       await user.click(box);
       expect(box).not.toBeChecked();
       expect(screen.queryByText('Turn on auto approve?')).not.toBeInTheDocument();
+    });
+
+    describe('CLIENT-SESSION-52: public / private in the Who section', () => {
+      const privateSession = makeSession({ ...preparing, isPublic: false });
+      const groupSession = makeSession({ ...preparing, groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false });
+
+      it('a public session shows the switch on; switching it off warns and saves isPublic: false', async () => {
+        const user = userEvent.setup();
+        const onUpdateSession = vi.fn();
+        render(<SessionDetailModal {...baseProps} canManage session={preparing} onUpdateSession={onUpdateSession} />);
+        await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+        const toggle = screen.getByRole('switch', { name: 'Public session' });
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByText('Everyone can see and ask to join your session')).toBeInTheDocument();
+        expect(screen.queryByText(/Only you and invited friends/)).not.toBeInTheDocument();
+
+        await user.click(toggle);
+
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
+        expect(screen.getByText(/Only you and invited friends can see this session/)).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+        expect(onUpdateSession).toHaveBeenCalledWith(expect.objectContaining({ isPublic: false }), expect.any(Function));
+      });
+
+      it('a private session starts off with the warning; switching it on saves isPublic: true', async () => {
+        const user = userEvent.setup();
+        const onUpdateSession = vi.fn();
+        render(<SessionDetailModal {...baseProps} canManage session={privateSession} onUpdateSession={onUpdateSession} />);
+        await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+        const toggle = screen.getByRole('switch', { name: 'Public session' });
+        expect(toggle).toHaveAttribute('aria-checked', 'false');
+        expect(screen.getByText(/Only you and invited friends can see this session/)).toBeInTheDocument();
+
+        await user.click(toggle);
+
+        expect(screen.queryByText(/Only you and invited friends/)).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+        expect(onUpdateSession).toHaveBeenCalledWith(expect.objectContaining({ isPublic: true }), expect.any(Function));
+      });
+
+      it('a save that leaves the switch alone sends no isPublic', async () => {
+        const user = userEvent.setup();
+        const onUpdateSession = vi.fn();
+        render(<SessionDetailModal {...baseProps} canManage session={privateSession} onUpdateSession={onUpdateSession} />);
+        await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+        fireEvent.change(screen.getByRole('slider', { name: 'Game mood' }), { target: { value: '8' } });
+
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+
+        expect(onUpdateSession).toHaveBeenCalledTimes(1);
+        expect(onUpdateSession.mock.calls[0][0]).not.toHaveProperty('isPublic');
+      });
+
+      it('a group session has no visibility switch in its Who editor', async () => {
+        const user = userEvent.setup();
+        render(<SessionDetailModal {...baseProps} canManage session={groupSession} />);
+        await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
+        expect(screen.getByLabelText('Taken slot')).toBeInTheDocument();
+        expect(screen.queryByRole('switch', { name: 'Public session' })).not.toBeInTheDocument();
+      });
+
+      it('the Who summary names the visibility of a standalone session, and a group session has none', () => {
+        const { unmount } = render(<SessionDetailModal {...baseProps} canManage session={preparing} />);
+        expect(screen.getAllByText('Visibility:').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Public').length).toBeGreaterThan(0);
+        unmount();
+
+        const { unmount: unmountPrivate } = render(<SessionDetailModal {...baseProps} canManage session={privateSession} />);
+        expect(screen.getAllByText('Private').length).toBeGreaterThan(0);
+        unmountPrivate();
+
+        render(<SessionDetailModal {...baseProps} canManage session={groupSession} />);
+        expect(screen.queryByText('Visibility:')).not.toBeInTheDocument();
+      });
     });
 
     it('a coded save failure shows its own line inside the section being edited', async () => {

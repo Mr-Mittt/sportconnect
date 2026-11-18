@@ -644,6 +644,7 @@ export const mockSession: Session = {
   // empty participantsState (the join/leave/cancel journey's own premise) would land in
   // REQUESTED instead of JOINED.
   autoApprove: true,
+  isPublic: true, // SESSION-69: a standalone session is public
   likeCount: 0,
   isLikedByCurrentUser: false,
   // Overwritten per-response by sessions.ts's resolveCallerParticipation (SESSION-9) — this
@@ -688,6 +689,7 @@ export const mockGroupSession: Session = {
   gameMood: 5,
   feeNote: null,
   autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
+  isPublic: false, // SESSION-69: a group session is members-only
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null, // overwritten per-response — see mockSession's note above.
@@ -733,6 +735,7 @@ export const mockOwnedGroupSession: Session = {
   gameMood: 5,
   feeNote: null,
   autoApprove: true, // pre-existing fixture — same backfill reasoning as mockSession above.
+  isPublic: false, // SESSION-69: a group session is members-only
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null, // overwritten per-response — see mockSession's note above.
@@ -803,6 +806,7 @@ export const mockDiscoverableSession: Session = {
   gameMood: 5,
   feeNote: null,
   autoApprove: true,
+  isPublic: true, // SESSION-69: a standalone session is public
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null, // overwritten per-response — see mockSession's note above.
@@ -854,6 +858,7 @@ export const mockInvitedSession: Session = {
   gameMood: 5,
   feeNote: null,
   autoApprove: true,
+  isPublic: false, // SESSION-69: a group session is members-only
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null, // overwritten per-response — see mockSession's note above.
@@ -905,6 +910,7 @@ export const mockRequestedSession: Session = {
   gameMood: 5,
   feeNote: null,
   autoApprove: false, // must stay false — an autoApprove join instantly resolves to JOINED, never REQUESTED.
+  isPublic: false, // SESSION-69: a group session is members-only
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null, // overwritten per-response — see mockSession's note above.
@@ -958,6 +964,7 @@ export const mockCancelledSession: Session = {
   gameMood: 5,
   feeNote: null,
   autoApprove: true,
+  isPublic: true, // SESSION-69: a standalone session is public
   likeCount: 0,
   isLikedByCurrentUser: false,
   callerParticipation: null, // overwritten per-response — see mockSession's note above.

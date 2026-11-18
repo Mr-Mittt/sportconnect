@@ -231,6 +231,20 @@ class SessionDiscoverIntegrationTest extends BaseIT {
                         othersId.intValue(), previouslyLeftId.intValue())));
     }
 
+    /** SESSION-69 — a private standalone session is never discoverable, whoever asks (the host is excluded anyway, a stranger is the point). */
+    @Test
+    void aPrivateStandaloneSession_isNeverDiscoverable() throws Exception {
+        Long publicId = save(sessionBuilder());
+        save(sessionBuilder().isPublic(false));
+
+        authenticateAs(callerId);
+        mockMvc.perform(get("/api/sessions/discover")
+                        .param("date", DEFAULT_DATE.toString()).param("viewerZoneId", JVM_ZONE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.content[0].id").value(publicId.intValue()));
+    }
+
     /** SESSION-42 — widened from JOINED-only: a session the caller already REQUESTED to join or
      * was INVITED to shouldn't still surface as newly discoverable either. */
     @Test

@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { useSessionWhoFields } from './useSessionWhoFields';
 
-const initial = { taken: '', open: '', maleSlots: null, femaleSlots: null, gameMood: 5, autoApprove: false };
+const initial = { taken: '', open: '', maleSlots: null, femaleSlots: null, gameMood: 5, autoApprove: false, isPublic: true };
 
 describe('useSessionWhoFields', () => {
   it('capacity is taken + open, a blank taken slot meaning the creator alone', () => {
@@ -61,7 +61,7 @@ describe('useSessionWhoFields', () => {
 
   it('builds the update payload, sending 0 for a cleared gender', () => {
     const { result } = renderHook(() =>
-      useSessionWhoFields({ taken: '1', open: '9', maleSlots: 3, femaleSlots: null, gameMood: 7, autoApprove: true }),
+      useSessionWhoFields({ taken: '1', open: '9', maleSlots: 3, femaleSlots: null, gameMood: 7, autoApprove: true, isPublic: true }),
     );
     act(() => result.current.setFemaleChecked(false));
     expect(result.current.toUpdatePayload()).toEqual({
@@ -72,5 +72,28 @@ describe('useSessionWhoFields', () => {
       gameMood: 7,
       autoApprove: true,
     });
+  });
+
+  // CLIENT-SESSION-52
+  it('starts with the visibility it is given, and the update payload carries isPublic only once it changed', () => {
+    const { result } = renderHook(() => useSessionWhoFields({ ...initial, isPublic: true }));
+    expect(result.current.isPublic).toBe(true);
+    expect(result.current.toUpdatePayload()).not.toHaveProperty('isPublic');
+
+    act(() => result.current.setIsPublic(false));
+    expect(result.current.isPublic).toBe(false);
+    expect(result.current.toUpdatePayload()).toMatchObject({ isPublic: false });
+
+    // Back to where it started: nothing to send again.
+    act(() => result.current.setIsPublic(true));
+    expect(result.current.toUpdatePayload()).not.toHaveProperty('isPublic');
+  });
+
+  it('a private session switched to public sends isPublic: true', () => {
+    const { result } = renderHook(() => useSessionWhoFields({ ...initial, isPublic: false }));
+    expect(result.current.toUpdatePayload()).not.toHaveProperty('isPublic');
+
+    act(() => result.current.setIsPublic(true));
+    expect(result.current.toUpdatePayload()).toMatchObject({ isPublic: true });
   });
 });

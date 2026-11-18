@@ -126,6 +126,30 @@ describe('field change entries (CLIENT-SESSION-51)', () => {
     });
   });
 
+  describe('visibility (SESSION-69)', () => {
+    it('reads public to private with the labels, in both languages', async () => {
+      await inBoth(
+        'SESSION_VISIBILITY_CHANGED',
+        { name: 'Alex', old: 'public', new: 'private' },
+        'Alex changed the visibility from "Public" to "Private"',
+        'Alex đã đổi chế độ hiển thị từ "Công khai" sang "Riêng tư"',
+      );
+    });
+
+    it('reads private to public with the labels, in both languages', async () => {
+      await inBoth(
+        'SESSION_VISIBILITY_CHANGED',
+        { name: 'Alex', old: 'private', new: 'public' },
+        'Alex changed the visibility from "Private" to "Public"',
+        'Alex đã đổi chế độ hiển thị từ "Riêng tư" sang "Công khai"',
+      );
+    });
+
+    it('falls back to the stored text for a value it does not know', () => {
+      expect(text('SESSION_VISIBILITY_CHANGED', { name: 'Alex', old: 'public', new: 'secret' })).toBe('stored content');
+    });
+  });
+
   describe('the fee: type and amount on each side as one value', () => {
     const fee = (oldType: string, oldAmount: string, newType: string, newAmount: string) => ({
       name: 'Alex',
@@ -211,8 +235,8 @@ describe('field change entries (CLIENT-SESSION-51)', () => {
     });
   });
 
-  it('knows exactly the thirteen field codes (the attributes code is an ordinary template)', () => {
-    expect(FIELD_CHANGE_CODES).toHaveLength(13);
+  it('knows exactly the fourteen field codes (the attributes code is an ordinary template)', () => {
+    expect(FIELD_CHANGE_CODES).toHaveLength(14);
     expect(isFieldChangeCode('SESSION_TITLE_CHANGED')).toBe(true);
     expect(isFieldChangeCode('SESSION_ATTRIBUTES_CHANGED')).toBe(false);
     expect(isFieldChangeCode('SESSION_JOINED')).toBe(false);

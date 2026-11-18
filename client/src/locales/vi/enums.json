@@ -15,6 +15,10 @@
     "auto": "Tự động duyệt",
     "hostApproval": "Cần chủ trận duyệt"
   },
+  "sessionVisibility": {
+    "public": "Công khai",
+    "private": "Riêng tư"
+  },
   "attributeValues": {
     "yes": "Có",
     "no": "Không",
@@ -55,7 +59,8 @@
       "SESSION_INITIAL_SLOT_CHANGED": "số người chơi có sẵn",
       "SESSION_MALE_SLOTS_CHANGED": "chỗ trống cho nam",
       "SESSION_FEMALE_SLOTS_CHANGED": "chỗ trống cho nữ",
-      "SESSION_GAME_MOOD_CHANGED": "cường độ"
+      "SESSION_GAME_MOOD_CHANGED": "cường độ",
+      "SESSION_VISIBILITY_CHANGED": "chế độ hiển thị"
     }
   },
   "notifications": {

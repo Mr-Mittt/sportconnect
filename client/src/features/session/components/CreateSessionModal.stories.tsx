@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { userEvent, within } from 'storybook/test';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
@@ -136,6 +137,14 @@ export const SportPreselectedFromSoleProfile: Story = {
  * banner still shows, now for Fee alone. */
 export const LocationChosen: Story = {
   args: { activeSport: 'basketball', selectedLocation: location },
+};
+
+/** CLIENT-SESSION-52: the footer switch turned off: the private hint and the warning across the footer. */
+export const PrivateSession: Story = {
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole('switch', { name: 'Public session' }));
+  },
 };
 
 export const Submitting: Story = {

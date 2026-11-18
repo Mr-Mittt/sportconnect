@@ -77,6 +77,9 @@ public class SessionResponse {
 
     private Boolean autoApprove;
 
+    /** SESSION-69 — {@code false}: a private standalone session, or any group-linked one (members only). */
+    private Boolean isPublic;
+
     /** SESSION-46 — informational per-gender open slots; null = not specified. */
     private Integer maleSlots;
 

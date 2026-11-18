@@ -88,6 +88,11 @@ public class CreateSessionRequest {
      * in PENDING, awaiting creator/owner-admin approval. */
     private Boolean autoApprove;
 
+    /** SESSION-69 — omitted → {@code true} (public). {@code false} makes a <b>private</b> standalone session: seen only by its
+     * creator and its invitees, never listed in Discover, not joinable or shareable by anyone else. Ignored for a group-linked
+     * session (always non-public). */
+    private Boolean isPublic;
+
     /** Pre-creates an INVITED SessionParticipant row per id — bypasses the autoApprove gate once
      * that user calls joinSession (resolves straight to JOINED). The caller's own id and
      * duplicates are silently ignored, not rejected. */

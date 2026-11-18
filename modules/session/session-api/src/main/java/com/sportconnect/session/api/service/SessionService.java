@@ -257,7 +257,9 @@ public interface SessionService {
     void leaveSession(Long sessionId, UUID userId);
 
     /**
-     * status omitted → JOINED, public (unchanged contract). Any other status (in practice
+     * SESSION-69: first gated like the detail ({@code SessionDetailGate}: 404 {@code SESSION_NOT_FOUND}, then 403
+     * {@code SESSION_FORBIDDEN} for someone who may not open the session, so a private session's players are not readable
+     * by a stranger). Then: status omitted → JOINED (unchanged contract). Any other status (in practice
      * REQUESTED, the approval queue, or INVITED) requires the caller to pass requireCanModify's
      * gate — creator for standalone, owner/admin for group-linked — same as
      * cancelSession/updateSession.
@@ -507,7 +509,7 @@ public interface SessionService {
      * under the normal join rules.
      *
      * <p>Refusals, checked in this order and before any write: {@code SESSION_NOT_FOUND} (404, missing or its group is
-     * gone), {@code SESSION_SHARE_NOT_ALLOWED} (403, a group session: shareable by nobody for now).
+     * gone), {@code SESSION_SHARE_NOT_ALLOWED} (403, a group session or a private one, SESSION-69: shareable by nobody).
      *
      * <p>Skipped without error, and counted in {@code skipped}: anyone who is not a friend of the caller (the caller's
      * own id included), a friend already {@code JOINED}, {@code REQUESTED} or {@code INVITED}, and a deactivated

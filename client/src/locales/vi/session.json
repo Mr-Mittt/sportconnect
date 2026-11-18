@@ -314,6 +314,9 @@
       "anyone": "bất kỳ ai",
       "mood": "Cường độ",
       "autoApprove": "Tự động duyệt",
+      "visibility": "Chế độ hiển thị",
+      "public": "Công khai",
+      "private": "Riêng tư",
       "yes": "Có",
       "no": "Không",
       "fee": "Phí",
@@ -386,6 +389,12 @@
     },
     "autoApprove": {
       "label": "Tự động duyệt yêu cầu tham gia"
+    },
+    "visibility": {
+      "switchLabel": "Buổi chơi công khai",
+      "hintPublic": "Mọi người đều có thể thấy và xin tham gia buổi chơi của bạn",
+      "hintPrivate": "Ngoài người bạn mời, không ai có thể tìm thấy hay xin tham gia buổi chơi của bạn",
+      "warning": "Chỉ bạn và những người bạn đã mời mới thấy được buổi chơi này; những người khác sẽ không thể tìm thấy và tham gia."
     },
     "endsAt": {
       "label": "Kết thúc lúc"

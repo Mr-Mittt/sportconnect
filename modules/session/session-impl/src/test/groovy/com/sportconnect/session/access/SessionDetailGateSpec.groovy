@@ -24,6 +24,18 @@ class SessionDetailGateSpec extends Specification {
         Session.builder().id(1L).postId(999L).groupId(gId).isPublic(isPublic).build()
     }
 
+    def "grantsAccess: JOINED, REQUESTED and INVITED keep access to a private session, LEFT does not (SESSION-69)"() {
+        expect:
+        SessionDetailGate.grantsAccess(SessionParticipant.builder().status(status).build()) == expected
+
+        where:
+        status                      | expected
+        ParticipantStatus.JOINED    | true
+        ParticipantStatus.REQUESTED | true
+        ParticipantStatus.INVITED   | true
+        ParticipantStatus.LEFT      | false
+    }
+
     // ── isAvailable (same rule as SessionGate) ──────────────────────────────
 
     def "isAvailable is false for null"() {

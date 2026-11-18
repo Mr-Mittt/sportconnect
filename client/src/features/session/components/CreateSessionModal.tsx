@@ -34,6 +34,7 @@ import { useSessionWhoFields } from '../useSessionWhoFields';
 import { useAuthStore } from '@/app/authStore';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { AutoApproveConfirmDialog, LeaveWithoutSavingDialog, SessionReadinessDialog } from './SessionConfirmDialogs';
+import { SessionVisibilitySwitch, SessionVisibilityWarning } from './SessionVisibility';
 import { SectionSummary, SessionFormSection, type SectionSummaryItem } from './SessionFormSection';
 import { CostFields, OverviewFields, WhenFields, WhereFields, WhoFields } from './SessionSectionFields';
 import { EmptyHint } from '@/shared/components/EmptyHint';
@@ -312,6 +313,7 @@ export function CreateSessionModal({
     femaleSlots: null,
     gameMood: GAME_MOOD_DEFAULT,
     autoApprove: false,
+    isPublic: true,
   });
   // CLIENT-SESSION-21: no default — undefined means "not picked yet", a valid choice (PREPARING).
   const [feeType, setFeeType] = useState<FeeType | undefined>(undefined);
@@ -345,6 +347,7 @@ export function CreateSessionModal({
     who.setWhoCanJoin('ANYONE');
     who.setGameMood(GAME_MOOD_DEFAULT);
     who.setAutoApprove(false);
+    who.setIsPublic(true);
     setFeeType(undefined);
     setFeeAmountVnd('');
     setFeeNote('');
@@ -374,6 +377,7 @@ export function CreateSessionModal({
     who.whoCanJoin !== 'ANYONE' ||
     who.gameMood !== GAME_MOOD_DEFAULT ||
     who.autoApprove ||
+    !who.isPublic ||
     feeType !== undefined ||
     feeAmountVnd !== '' ||
     feeNote.trim() !== '' ||
@@ -518,6 +522,8 @@ export function CreateSessionModal({
       feeNote: feeNote.trim() || undefined,
       initialSlot: who.initialSlot,
       autoApprove: who.autoApprove,
+      // CLIENT-SESSION-52: always sent; the default is public.
+      isPublic: who.isPublic,
       maleSlots: who.maleSlots > 0 ? who.maleSlots : undefined,
       femaleSlots: who.femaleSlots > 0 ? who.femaleSlots : undefined,
       gameMood: who.gameMood,
@@ -751,15 +757,26 @@ export function CreateSessionModal({
                   </p>
                 )}
               </div>
-              <div className="border-hairline-t flex items-center justify-end gap-3 border-border px-4 py-3">
-                <Button
-                  variant="primary"
-                  onClick={requestSubmit}
-                  disabled={isSubmitting}
-                  className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
-                >
-                  {isSubmitting ? t('create.creating') : t('create.submit')}
-                </Button>
+              <div className="border-hairline-t flex flex-col gap-2 border-border px-4 py-3">
+                {/* CLIENT-SESSION-52: while the switch is off, a warning spans the footer, above the switch and the button. */}
+                {!who.isPublic && <SessionVisibilityWarning i18nOverridePrefix={i18nOverridePrefix} />}
+                <div className="flex items-center justify-between gap-3">
+                  <SessionVisibilitySwitch
+                    i18nOverridePrefix={i18nOverridePrefix}
+                    id="create-session-visibility"
+                    isPublic={who.isPublic}
+                    onChange={who.setIsPublic}
+                    className="flex-1"
+                  />
+                  <Button
+                    variant="primary"
+                    onClick={requestSubmit}
+                    disabled={isSubmitting}
+                    className={cn('shrink-0 cursor-pointer disabled:cursor-default', POST_BUTTON_DISABLED_OVERRIDE)}
+                  >
+                    {isSubmitting ? t('create.creating') : t('create.submit')}
+                  </Button>
+                </div>
               </div>
             </>
           )}

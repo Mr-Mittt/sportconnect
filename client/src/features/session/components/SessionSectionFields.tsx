@@ -12,6 +12,7 @@ import { GameMoodSlider } from './GameMoodSlider';
 import { LocationFavoritesDropdown } from './LocationFavoritesDropdown';
 import { SessionStartTimePicker } from './SessionStartTimePicker';
 import type { WhoCanJoin } from '@/shared/lib/sessionSlots';
+import { SessionVisibilitySwitch, SessionVisibilityWarning } from './SessionVisibility';
 
 /** The fee note's length limit (SESSION-46's `feeNote @Size(300)`). */
 export const FEE_NOTE_MAX = 300;
@@ -236,6 +237,11 @@ interface WhoFieldsProps extends CommonProps {
   autoApprove: boolean;
   /** Already routed through the "turn on auto approve?" confirmation by the container. */
   onAutoApproveChange: (next: boolean) => void;
+  /**
+   * CLIENT-SESSION-52: the public / private switch, shown under the auto approve checkbox; absent = no switch (the create form
+   * has it in its footer instead, and a group session has none).
+   */
+  visibility?: { isPublic: boolean; onChange: (next: boolean) => void };
   /** Create-only extras under the checkbox (the invite-friends field). */
   extra?: ReactNode;
   /** `{taken}/{capacity}` helper line under the two slot inputs (create form). */
@@ -270,6 +276,7 @@ export function WhoFields({
   onGameMoodChange,
   autoApprove,
   onAutoApproveChange,
+  visibility,
   extra,
   slotsSummary,
   idPrefix,
@@ -404,6 +411,18 @@ export function WhoFields({
         />
         {t('create.autoApprove.label')}
       </label>
+
+      {visibility !== undefined && (
+        <div className="flex flex-col gap-2">
+          <SessionVisibilitySwitch
+            i18nOverridePrefix={i18nOverridePrefix}
+            id={`${idPrefix}-visibility`}
+            isPublic={visibility.isPublic}
+            onChange={visibility.onChange}
+          />
+          {!visibility.isPublic && <SessionVisibilityWarning i18nOverridePrefix={i18nOverridePrefix} />}
+        </div>
+      )}
 
       {extra}
     </div>

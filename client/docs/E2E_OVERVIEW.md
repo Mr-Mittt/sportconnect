@@ -232,6 +232,7 @@ e2e/
     session-results.spec.ts   # CLIENT-GL-38, CLIENT-GL-39
     session-thread-tags.spec.ts # CLIENT-GL-50
     session-share.spec.ts     # CLIENT-SESSION-49
+    session-visibility.spec.ts # CLIENT-SESSION-52
     post-tags.spec.ts           # CLIENT-GL-50 part 2
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5, CLIENT-NOTIF-7
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
@@ -1290,6 +1291,16 @@ Sharing a standalone session with friends from the Players section header (SESSI
 | session no longer exists | Forced 404 `SESSION_NOT_FOUND` on the share: the app-wide error dialog reads "This session no longer exists.", no toast; "Got it" closes it **and** the Share dialog, the session modal stays |
 | the limit of one turn | 52 friends, 50 ticked: the footer reads "You reached the limit of one sharing turn.", "Share (50)" is enabled, the unticked boxes are disabled; un-ticking one lifts the warning and re-enables them |
 | group session | A group-linked session (forced detail response with `groupId`) has no Share button |
+
+### `e2e/flows/session-visibility.spec.ts` (CLIENT-SESSION-52, 3 `test()`s)
+
+The public / private switch of a standalone session (SESSION-69). The MSW session handlers keep `isPublic` on create and on `PUT` (and Discover omits a private session), so the requests are what is asserted; who can see a private session is the server's rule, covered by its integration tests and not enforced by the mock. Related docs: `client/docs/MVP/CLIENT-SESSION-52_PUBLIC_PRIVATE_SWITCH_IN_THE_SESSION_FORMS.md`.
+
+| Test | What it checks |
+|---|---|
+| a new session is public | The create form's footer has the "Public session" switch, **on**, with the public hint, no warning, and it sits left of "Create session" (its box starts left of the button's); a session created without touching it sends `isPublic: true` |
+| switching it off | The switch turns off, the hint changes to "Except for your invitee, ...", the amber warning "Only you and invited friends can see this session; ..." shows and the public hint is gone; the create request carries `isPublic: false` and the title |
+| the host switches a PREPARING session | On "Court booking pending" the Share button is there; in the Who section's editor the switch is on, switching it off shows the warning; Save sends `isPublic: false` (PUT), the summary reads "Private", the switch is gone and the **Share button is gone** (a private session cannot be shared) |
 
 ### `e2e/flows/session-errors.spec.ts` (CLIENT-ERR-7, 5 `test()`s)
 
