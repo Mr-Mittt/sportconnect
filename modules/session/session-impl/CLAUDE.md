@@ -4,6 +4,8 @@ Scheduled sports activities — group-linked (created by any group member, manag
 Always references a `Location` (`modules/location`) by id; never carries its own raw location
 fields. See `modules/location/location-impl/CLAUDE.md` for that side of the boundary.
 
+**Group sessions (SESSION-GROUP-1 to 10): the topic's design and client contract is `modules/session/docs/GROUP_SESSION_DESIGN.md`**; rules 15 to 18 below are the server rules.
+
 ## Dependencies
 
 | From | Why |

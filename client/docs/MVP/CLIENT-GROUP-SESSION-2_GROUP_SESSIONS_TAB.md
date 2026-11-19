@@ -12,3 +12,5 @@
 **Consumer census:** `GroupTabs`, `GroupsPage`, `groups.json`, `SessionDetailModal`, `SessionDetailSections`, `SessionCard`, `useSessionDetailModalData`, `sessionKeys`, e2e mocks, `BASELINE-UPDATE-1` rows for the new visual surfaces.
 
 ---
+
+**Server contract (built 2026-11-19; the whole contract is `modules/session/docs/GROUP_SESSION_DESIGN.md` § 4.2).** `GET /api/sessions/group/{groupId}?bucket=ONGOING|SCHEDULED|PREPARING|HISTORY&page=&size=`, member only (`403 SESSION_GROUP_MEMBER_REQUIRED`). `SCHEDULED` is only `SCHEDULED`; `PREPARING` is its own bucket; `HISTORY` is `COMPLETED` plus `CANCELLED`, newest first; the other buckets are soonest first; the caller's `sort` is ignored; an unknown `bucket` is an un-coded 400. A page of `SessionResponse`, which has **no** field telling a regular session from a custom one. A regular session appears moments after the rule change that caused it, so a refetch right after a save in the settings may not show it yet.

@@ -47,6 +47,18 @@ Design the implementation with these non-negotiable constraints:
 - **Service interfaces as contracts** — depend on the interface so a future network transport (Feign, gRPC) is a drop-in swap
 - **Deactivated users get no further interaction** — any new authenticated endpoint or service method must explicitly reject a caller whose `isActive` is `false`, unless it's read-only data already public without auth (see CLAUDE.md's Account lifecycle rule)
 
+**Design review: run it yourself before presenting the plan** (added 2026-11-19 from the review of the group-session chain, where the owner's questions found the defects that 640 tests and mutation checks had not, because those tests were written from the same design). Answer each question that applies, in one line, in the plan; a design that cannot answer one is not ready.
+
+- **Table or column?** For every new table: who writes it, who reads it, does anything ever query it by an id or join it? A list written once and read as a whole (an audience, a set of ids) is a column, not a table; a table nothing ever deletes from needs a retention rule.
+- **What does each status mean?** Every value of a new status or state means exactly one thing ("DONE" must not cover both "made" and "skipped, nothing made"). Say which states can be revived and which are final.
+- **Async, queued or scheduled work:** what triggers it, what drains it, on which thread, and what is the clock of a retry (a backoff with nothing to wake it is not a retry)? Is the work bounded, never an unbounded drain on a request thread?
+- **Two at once:** what happens when two instances, or two threads of one instance (a request thread and the scheduler thread), run the same step? Every transaction has its own pooled connection, so one instance with threads races like two instances. Name the guard (a unique key, a row lock such as `FOR UPDATE SKIP LOCKED`, a compare-and-set update) and what the loser does: a unique key alone makes the loser fail, not skip.
+- **Identity and time:** what identifies a thing, and does the key survive an edit of the rule, a timezone change or DST (a local date, not an instant, when "one per day" is the rule)? What happens to a queued or pending item when the rule that produced it is edited?
+- **Failure and visibility:** how does an operator see that it went wrong (a log line, a reason column, a count), and what does the user see?
+- **What can the tests prove?** Which of the above can the planned tests prove here (H2, one thread) and which cannot (PostgreSQL-only SQL, two real instances)? Plan the real-concurrency test now (see Phase 5) and name the rest as not run.
+
+Then **argue against your own plan once**: for each table, status, queue and scheduled job, would the owner ask "do we really need this?" or "what if two run?" Fix the plan, or put the answer in it.
+
 Produce a concrete plan covering:
 
 1. **Backend** — new entities, DTOs, repository methods, service interface methods, controller endpoints, Liquibase migration scripts
@@ -59,5 +71,7 @@ Produce a concrete plan covering:
 ## Phase 4 — Plan approval
 
 Present the full plan clearly and concisely. Wait for the user to explicitly approve it before stopping.
+
+If the plan is a **chain of tickets**, mark its **review gates**: stop and review with the user after the ticket that fixes the data model, and after the one that adds queued, async or scheduled work, before later tickets build on them (a decision changed there is cheap; changed after the rest is built it touches every ticket, as the audience tables and the queue did). Say whether the chain lands as one PR or in slices.
 
 The approved plan is the handoff to `/implement`. Make sure it is detailed enough that implementation can proceed without revisiting design decisions.
