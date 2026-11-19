@@ -38,6 +38,8 @@
 | 17 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
 | 18 | [SESSION-62](MVP/SESSION-62_REJECT_A_SESSION_START_IN_THE_PAST.md) | Reject a session start in the past (coded 400 `SESSION_START_IN_PAST`, 5-minute grace) on create and on a start change; the client already restricts it in CLIENT-GL-38 | `TODO` |
 | 19 | [SESSION-68](MVP/SESSION-68_CREATE_SESSION_INVITEES_MUST_BE_FRIENDS_AND_ACTIVE.md) | `createSession` invitees must be friends and active: `inviteeIds` are checked for neither today, so a stranger or a deactivated account becomes an `INVITED` row and gets a notification; skip silently (default) or refuse, decided at pickup (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
+| 20 | [SESSION-GROUP-7](MVP/SESSION-GROUP-7_SCHEDULED_SESSION_JOBS_HAVE_NO_MULTI_POD_LOCK.md) | The three scheduled session jobs (start ongoing, close past, cancel unprepared) run on every server instance with no lock: two instances can start the same session and tell its players twice (found in the SESSION-GROUP-5 queue review) | `TODO` |
+| 21 | [SESSION-GROUP-8](MVP/SESSION-GROUP-8_PRUNE_OLD_GENERATION_QUEUE_ROWS.md) | Prune the finished (`DONE`, `IGNORED`) rows of `group_session_generation_queue` after about 30 days; they are kept for ever today (depends on SESSION-GROUP-5) | `TODO` |
 
 ---
 
