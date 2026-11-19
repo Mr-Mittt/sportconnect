@@ -73,7 +73,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         queued = item()
         recurrenceOpt = Optional.of(recurrence())
         settingsOpt = Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build())
-        queueRepository.findById(1L) >> { Optional.of(queued) }
+        queueRepository.findByIdForUpdateSkipLocked(1L) >> { Optional.of(queued) }
         recurrenceRepository.findById(5L) >> { recurrenceOpt }
         settingsRepository.findById(10L) >> { settingsOpt }
         groupService.isGroupActive(10L) >> { groupActive }
@@ -207,14 +207,14 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         LocalDate.of(2026, 11, 18) | RecurrenceMode.MONTHLY | 19     | false     // the owner moved it to the 19th
     }
 
-    def "a missing or already handled queue row is a no-op"() {
+    def "a missing, locked (another runner holds it) or already handled queue row is a no-op"() {
         when:
         generator.generate(2L)
         generator.generate(3L)
 
         then:
-        1 * queueRepository.findById(2L) >> Optional.empty()
-        1 * queueRepository.findById(3L) >> Optional.of(item(status: GroupSessionGenerationItem.Status.DONE))
+        1 * queueRepository.findByIdForUpdateSkipLocked(2L) >> Optional.empty()
+        1 * queueRepository.findByIdForUpdateSkipLocked(3L) >> Optional.of(item(status: GroupSessionGenerationItem.Status.DONE))
         0 * recurrenceRepository._
         0 * sessionRepository.save(_)
         0 * queueRepository.save(_)
@@ -297,10 +297,19 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         4      | GroupSessionGenerationItem.Status.FAILED  | null
     }
 
+    def "a failure on a slot another runner holds (or that is gone) is not recorded: that runner is handling it"() {
+        when:
+        generator.recordFailure(6L, "boom")
+
+        then:
+        1 * queueRepository.findByIdForUpdateSkipLocked(6L) >> Optional.empty()
+        0 * queueRepository.save(_)
+    }
+
     def "the stored error is cut to the column's 500 characters, and a row no longer pending is left alone"() {
         given:
         def finished = item(status: GroupSessionGenerationItem.Status.DONE)
-        queueRepository.findById(4L) >> Optional.of(finished)
+        queueRepository.findByIdForUpdateSkipLocked(4L) >> Optional.of(finished)
 
         when:
         generator.recordFailure(1L, "x" * 900)

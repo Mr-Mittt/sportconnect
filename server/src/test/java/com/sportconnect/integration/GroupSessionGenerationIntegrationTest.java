@@ -13,6 +13,7 @@ import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.GroupSessionGenerationItem;
 import com.sportconnect.session.service.GroupSessionGenerationPlanner;
+import com.sportconnect.session.service.GroupSessionOccurrenceGenerator;
 import com.sportconnect.session.service.GroupSessionQueueWriter;
 import com.sportconnect.session.entity.GroupSessionRecurrence;
 import com.sportconnect.session.entity.GroupSessionSettings;
@@ -38,6 +39,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -54,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -100,6 +104,8 @@ class GroupSessionGenerationIntegrationTest extends RedisBaseIT {
     @Autowired private GroupSessionGenerationRunner runner;
     @Autowired private GroupSessionGenerationPlanner planner;
     @Autowired private GroupSessionQueueWriter queueWriter;
+    @Autowired private GroupSessionOccurrenceGenerator generator;
+    @Autowired private PlatformTransactionManager transactionManager;
 
     private UUID ownerId;
     private UUID adminId;
@@ -663,6 +669,53 @@ class GroupSessionGenerationIntegrationTest extends RedisBaseIT {
             pool.shutdownNow();
         }
         assertThat(queueRepository.findAll()).hasSize(1);
+    }
+
+    // ---- SESSION-GROUP-5 review: FOR UPDATE SKIP LOCKED ---------------------------------------------------------------------
+
+    @Test
+    void aSlotAnotherRunnerHolds_isSkippedAtOnce_notBuiltTwice_andItsFailureIsNotCounted_thenGeneratedWhenFree() throws Exception {
+        Instant start = slotStart();
+        Long recurrenceId = savedRecurrence(start);
+        Long itemId = queuePending(recurrenceId, LocalDate.ofInstant(start, ZoneOffset.UTC), start);
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        Future<?> holder;
+        try {
+            // Runner A: holds the slot's row lock inside an open transaction.
+            holder = pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                queueRepository.findByIdForUpdateSkipLocked(itemId).orElseThrow();
+                locked.countDown();
+                try {
+                    release.await(60, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertThat(locked.await(20, TimeUnit.SECONDS)).isTrue();
+
+            // Runner B meanwhile: the slot is skipped at once (this would time out if B waited for the lock), nothing is built,
+            // and the failure it would have recorded is left to the runner that holds the slot.
+            Future<Integer> other = pool.submit(() -> {
+                generator.generate(itemId);
+                generator.recordFailure(itemId, "boom");
+                return runner.processDue();
+            });
+            other.get(20, TimeUnit.SECONDS);
+            assertThat(regularSessions()).isEmpty();
+            assertThat(queueRepository.findById(itemId).orElseThrow().getAttempts()).isZero();
+            assertThat(queueRepository.findById(itemId).orElseThrow().getStatus()).isEqualTo(GroupSessionGenerationItem.Status.PENDING);
+        } finally {
+            release.countDown();
+            pool.shutdown();
+        }
+        holder.get(30, TimeUnit.SECONDS);
+
+        // Free again: the next run generates it, once.
+        runner.processDue();
+        assertThat(regularSessions()).hasSize(1);
+        assertThat(queueRepository.findById(itemId).orElseThrow().getStatus()).isEqualTo(GroupSessionGenerationItem.Status.DONE);
     }
 
     @Test

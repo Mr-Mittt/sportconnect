@@ -68,7 +68,8 @@ public class GroupSessionOccurrenceGenerator {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void generate(Long itemId) {
-        GroupSessionGenerationItem item = queueRepository.findById(itemId).orElse(null);
+        // The row lock comes first (SKIP LOCKED): a slot another runner is building is skipped, not built twice.
+        GroupSessionGenerationItem item = queueRepository.findByIdForUpdateSkipLocked(itemId).orElse(null);
         if (item == null || item.getStatus() != GroupSessionGenerationItem.Status.PENDING) {
             return;
         }
@@ -169,7 +170,8 @@ public class GroupSessionOccurrenceGenerator {
     /** Counts a failed attempt: back off 1, 5, 15, 60 minutes, then {@code FAILED} on the fifth. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFailure(Long itemId, String error) {
-        GroupSessionGenerationItem item = queueRepository.findById(itemId).orElse(null);
+        // Locked too: if another runner holds the slot it is handling it, so the failure is not counted twice.
+        GroupSessionGenerationItem item = queueRepository.findByIdForUpdateSkipLocked(itemId).orElse(null);
         if (item == null || item.getStatus() != GroupSessionGenerationItem.Status.PENDING) {
             return;
         }

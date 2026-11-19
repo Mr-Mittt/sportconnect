@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface GroupSessionGenerationQueueRepository extends JpaRepository<GroupSessionGenerationItem, Long> {
 
@@ -28,6 +29,20 @@ public interface GroupSessionGenerationQueueRepository extends JpaRepository<Gro
 
     /** Every queue row of these recurrences, in one query (the planner dedupes against it). */
     List<GroupSessionGenerationItem> findByRecurrenceIdIn(Collection<Long> recurrenceIds);
+
+    /**
+     * The slot, row-locked for the rest of the caller's transaction, or empty when the row is gone <b>or locked by another
+     * runner</b> ({@code FOR UPDATE SKIP LOCKED}). The generating transaction takes it first, so two runners (two instances, or
+     * two threads of one) never build the same slot: the second one skips it and takes another. The lock is released on commit
+     * or rollback, and a dead connection releases it too, so a crash leaves the slot {@code PENDING} and nothing to recover.
+     *
+     * <p>A native query, on purpose: Hibernate's {@code H2Dialect} (6.3) drops the skip-locked hint and emits a plain
+     * {@code FOR UPDATE} (found by the IT: the second runner waited and timed out), so a JPA lock hint would have been tested on
+     * H2 as something other than what PostgreSQL runs. The SQL below is the same text on both. It must run inside a transaction
+     * (a lock taken in autocommit is released at once); {@code generate} and {@code recordFailure} are {@code REQUIRES_NEW}.
+     */
+    @Query(value = "SELECT * FROM group_session_generation_queue WHERE id = :id FOR UPDATE SKIP LOCKED", nativeQuery = true)
+    Optional<GroupSessionGenerationItem> findByIdForUpdateSkipLocked(@Param("id") Long id);
 
     // ---- the planner's writes: each one a single atomic statement, so two planners can race without losing an update ----------
 
