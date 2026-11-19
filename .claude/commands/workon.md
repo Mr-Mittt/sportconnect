@@ -192,6 +192,18 @@ Surface findings as a short summary before designing. Confirm no surprises.
 - **Service interfaces as contracts** — future network transport is a drop-in swap
 - **Deactivated users get no further interaction** — any new authenticated endpoint or service method must explicitly reject a caller whose `isActive` is `false`, unless it's read-only data already public without auth (see CLAUDE.md's Account lifecycle rule)
 
+**Design review: run it yourself before presenting the plan** (added 2026-11-19 from the review of the group-session chain, where the owner's questions found the defects that 640 tests and mutation checks had not, because those tests were written from the same design). Answer each question that applies, in one line, in the plan; a design that cannot answer one is not ready.
+
+- **Table or column?** For every new table: who writes it, who reads it, does anything ever query it by an id or join it? A list written once and read as a whole (an audience, a set of ids) is a column, not a table; a table nothing ever deletes from needs a retention rule.
+- **What does each status mean?** Every value of a new status or state means exactly one thing ("DONE" must not cover both "made" and "skipped, nothing made"). Say which states can be revived and which are final.
+- **Async, queued or scheduled work:** what triggers it, what drains it, on which thread, and what is the clock of a retry (a backoff with nothing to wake it is not a retry)? Is the work bounded, never an unbounded drain on a request thread?
+- **Two at once:** what happens when two instances, or two threads of one instance (a request thread and the scheduler thread), run the same step? Every transaction has its own pooled connection, so one instance with threads races like two instances. Name the guard (a unique key, a row lock such as `FOR UPDATE SKIP LOCKED`, a compare-and-set update) and what the loser does: a unique key alone makes the loser fail, not skip.
+- **Identity and time:** what identifies a thing, and does the key survive an edit of the rule, a timezone change or DST (a local date, not an instant, when "one per day" is the rule)? What happens to a queued or pending item when the rule that produced it is edited?
+- **Failure and visibility:** how does an operator see that it went wrong (a log line, a reason column, a count), and what does the user see?
+- **What can the tests prove?** Which of the above can the planned tests prove here (H2, one thread) and which cannot (PostgreSQL-only SQL, two real instances)? Plan the real-concurrency test now (see Phase 5) and name the rest as not run.
+
+Then **argue against your own plan once**: for each table, status, queue and scheduled job, would the owner ask "do we really need this?" or "what if two run?" Fix the plan, or put the answer in it.
+
 Produce a concrete plan:
 1. **Backend** — migrations, entities, DTOs, repository methods, service interface methods, service impl, controller endpoints, security config changes
 2. **Cross-cutting** — changes to `common`, shared utilities
@@ -291,6 +303,13 @@ Follow the folder structure in `client/CLAUDE.md` exactly — files named after 
    real MockMvc request/response mismatch. If any `*IntegrationTest`/`*IT` class touches the
    module you changed, treat a passing `:server:test` as mandatory evidence, not optional
    extra credit — a green module-test run alone is not sufficient to call Phase 5 done.
+5. **Concurrency proof**, for any ticket that adds queued, async or scheduled work, a lock, or an "only one"
+   rule: a green single-thread test proves none of it. Add a real-concurrency IT (two threads behind a
+   `CyclicBarrier`, or a row lock held in one thread while another runs the step and must skip or wait) and
+   a mutation check that fails without the guard. Run the exact SQL the guard uses in the IT: a JPA lock
+   hint that H2's dialect drops is tested as something PostgreSQL does not run (found with
+   `FOR UPDATE SKIP LOCKED`, SESSION-GROUP-10). Say in the conclusion what H2 and one JVM could not prove
+   (PostgreSQL itself, two real instances).
 
 **Client:**
 
