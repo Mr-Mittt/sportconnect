@@ -11,3 +11,5 @@
 **Consumer census:** `canShare`, `ShareSessionDialog`/`useSessionDetailModalData` (`share` slice), `useShareSession`, `notificationText.ts`, `notifications/types.ts`, `errors.json`, `I18N_READINESS.md`, e2e mocks.
 
 ---
+
+**Server contract (built 2026-11-19; the whole contract is `modules/session/docs/GROUP_SESSION_DESIGN.md` § 4.3 and § 7).** `POST /api/sessions/{id}/shares` on a group session: any member of the group in any status (`403 SESSION_GROUP_MEMBER_REQUIRED` otherwise), `{ userIds }` of 1 to 50, answer `{ sent, skipped }`; the recipients are other members of the group (not friends), and anyone outside the group, deactivated, repeated or already in the session is skipped and counted. Notifications: `type` `session.group.created` (a group session was created or generated for you) and `session.group.cancelled` (a group session you were told about, or joined, was cancelled); each carries the session id and the actor and **no group id**. Add both `NotificationType` values, their `getNotificationText` cases and `enums.json` entries in en and vi.

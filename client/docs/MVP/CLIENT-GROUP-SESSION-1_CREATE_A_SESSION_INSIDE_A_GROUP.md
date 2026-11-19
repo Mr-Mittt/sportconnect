@@ -17,3 +17,5 @@ The client cannot create a group session today: `CreateSessionModal` never sends
 **Out of scope:** editing the audience after creation, the Sessions tab (CLIENT-GROUP-SESSION-2), sharing (-3).
 
 ---
+
+**Server contract (built 2026-11-19; the whole contract is `modules/session/docs/GROUP_SESSION_DESIGN.md` § 4.1).** `POST /api/sessions` with `groupId` is open to any member (`403 SESSION_GROUP_MEMBER_REQUIRED` otherwise); the group's sport is used and `sportId` is ignored (the client hides the sport and sends none); `audience` is `ALL_MEMBERS` (default) or `SPECIFIC` with `audienceUserIds` (at least one other member, no upper limit; `400 SESSION_AUDIENCE_REQUIRED`, `400 SESSION_AUDIENCE_NOT_MEMBER {count}`); `autoApprove` defaults to `true` for a group session when omitted; `isPublic` is ignored (a group session is never public); the creator is `JOINED`. The answer is the usual `SessionResponse` and does **not** carry the audience. Add en and vi copy for the three error codes.

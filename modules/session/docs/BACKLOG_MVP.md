@@ -41,6 +41,7 @@
 | 20 | [SESSION-GROUP-7](MVP/SESSION-GROUP-7_SCHEDULED_SESSION_JOBS_HAVE_NO_MULTI_POD_LOCK.md) | The three scheduled session jobs (start ongoing, close past, cancel unprepared) run on every server instance with no lock: two instances can start the same session and tell its players twice (found in the SESSION-GROUP-5 queue review) | `TODO` |
 | 21 | [SESSION-GROUP-8](MVP/SESSION-GROUP-8_PRUNE_OLD_GENERATION_QUEUE_ROWS.md) | Prune the finished (`DONE`, `IGNORED`) rows of `group_session_generation_queue` after about 30 days; they are kept for ever today (depends on SESSION-GROUP-5) | `TODO` |
 | 22 | [SESSION-GROUP-9](MVP/SESSION-GROUP-9_SCALE_THE_GENERATION_RUNNERS_WITH_THE_BACKLOG.md) | Scale the generation runners with the backlog: the fixed single worker starts more runners when the queue is crowded, up to a configured maximum in parallel (depends on SESSION-GROUP-5's hardening) | `TODO` |
+| 23 | [SESSION-GROUP-11](MVP/SESSION-GROUP-11_SOLID_FIVE_PER_DAY_LIMIT_TRANSFER_HOST_BEFORE_DEACTIVATING_AND_CANCEL_ONLY_THE_OLD_MODE.md) | Close the three known limits of the group-session chain: a 5-per-day limit that holds under a race, transfer the group before the host deactivates, and a mode switch that cancels only the old mode's scheduled sessions (client contract change for CLIENT-GROUP-SESSION-6) | `TODO` |
 
 ---
 
