@@ -213,12 +213,14 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
     }
 
     @Test
-    void create_aGroupSession_asAPlainMember_is403SessionGroupAdminRequired() throws Exception {
-        authenticateAs(memberId);
+    void create_aGroupSession_asANonMember_is403SessionGroupMemberRequired() throws Exception {
+        // SESSION-GROUP-1: any member may create a group session now (SessionGroupCustomSessionIntegrationTest covers that);
+        // only a non-member is refused, with the member code instead of the old owner/admin one.
+        authenticateAs(outsiderId);
         mockMvc.perform(post("/api/sessions").contentType(MediaType.APPLICATION_JSON)
                         .content(toJson(createBody().groupId(groupId).build())))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_ADMIN_REQUIRED"));
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_MEMBER_REQUIRED"));
     }
 
     @Test

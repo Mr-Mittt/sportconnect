@@ -1,14 +1,9 @@
 package com.sportconnect.session.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sportconnect.common.attributes.AttributeSchema;
-import com.sportconnect.common.attributes.value.AttributeValueFilter;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
 import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
-import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.location.api.dto.LocationResponse;
@@ -19,6 +14,8 @@ import com.sportconnect.session.access.SessionShareGate;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
+import com.sportconnect.session.api.dto.GroupAudience;
+import com.sportconnect.session.api.dto.GroupSessionBucket;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionDiscoverDateCount;
@@ -35,6 +32,8 @@ import com.sportconnect.session.api.dto.ShareSessionRequest;
 import com.sportconnect.session.api.dto.StartTimeFilter;
 import com.sportconnect.session.api.dto.UpdateSessionRequest;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
+import com.sportconnect.session.api.event.SessionGroupCancelledEvent;
+import com.sportconnect.session.api.event.SessionGroupCreatedEvent;
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
@@ -67,6 +66,7 @@ import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -124,12 +124,11 @@ public class SessionServiceImpl implements SessionService {
     private final SessionShareGate sessionShareGate;
     private final SessionOutboxEventRepository sessionOutboxEventRepository;
     private final SessionOutboxWriter sessionOutboxWriter;
-    private final SessionGenerationService sessionGenerationService;
-    private final ObjectMapper objectMapper;
-
-    /** SESSION-23 — same serialized-size ceiling profile attributes use
-     * ({@code UserSportProfileServiceImpl.MAX_ATTRIBUTES_BYTES}); checked against the filtered map. */
-    private static final int MAX_ATTRIBUTES_BYTES = 4096;
+    // SESSION-23, extracted by SESSION-GROUP-4: the session attribute filter, shared with the group recurrence configurations.
+    private final SessionAttributeResolver attributeResolver;
+    // SESSION-GROUP-5: who to tell about a group session (shared with the generator) and the generation trigger events.
+    private final GroupSessionRecipients groupRecipients;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** SESSION-65 — a {@code JOINED} participant may leave only until this long before {@code scheduledStart}.
      * The client mirrors the number ({@code LEAVE_CUTOFF_MINUTES} in {@code leaveCutoff.ts}); this is the authority. */
@@ -183,13 +182,24 @@ public class SessionServiceImpl implements SessionService {
         Long groupId = request.getGroupId();
         Long sportId;
         SessionType sessionType;
+        // Whether the sport came from the request (and so still has to be an active one): always for a standalone session,
+        // for a group session only when the group has no sport of its own.
+        boolean sportFromRequest = true;
 
         if (groupId != null) {
-            if (!groupService.canManageMembers(groupId, userId)) {
-                throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED", "Only group owners and admins can create sessions for this group", null);
+            // SESSION-GROUP-1: any member of the group may create a (custom) session in it, not only an owner or admin.
+            // isGroupMember is false for a missing, deleted or inactive group too, so those answer 403 as before.
+            if (!groupService.isGroupMember(groupId, userId)) {
+                throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can create sessions for this group", null);
             }
             GroupResponse group = groupService.getGroup(groupId, userId);
-            sportId = request.getSportId() != null ? request.getSportId() : group.getSportId();
+            // The sport is the group's (the create form hides the field); the request's sportId only fills a group that
+            // has none of its own (a group created before that was required).
+            sportFromRequest = group.getSportId() == null;
+            sportId = sportFromRequest ? request.getSportId() : group.getSportId();
+            if (sportId == null) {
+                throw new BadRequestException("SESSION_SPORT_REQUIRED", "sportId is required: this group has no sport", null);
+            }
             sessionType = SessionType.GROUP_RECURRING;
         } else {
             if (request.getSportId() == null) {
@@ -199,16 +209,11 @@ public class SessionServiceImpl implements SessionService {
             sessionType = SessionType.STANDALONE;
         }
 
-        // A7: reject a caller-supplied sportId naming a deactivated sport. Gated on the request
-        // field being non-null rather than on the standalone/group branch, because the group
-        // branch also honours request.getSportId() when present and only falls back to the
-        // group's own sportId when it is absent - branching on sessionType would let a
-        // caller-supplied inactive sport through on a group session. The inherited
-        // group.getSportId() case needs no check here: GroupServiceImpl.createGroup now rejects
-        // inactive sports, so no new group can carry one. A group created before A7 against a
-        // since-deactivated sport is pre-existing data and keeps working, same read-path policy
-        // as A6.
-        if (request.getSportId() != null) {
+        // A7: reject a caller-supplied sportId naming a deactivated sport. A group's own sport needs no check here:
+        // GroupServiceImpl.createGroup rejects inactive sports, so no new group can carry one (SESSION-GROUP-1: the request's
+        // sportId is ignored for a group session that has a sport). A group created before A7 against a since-deactivated
+        // sport is pre-existing data and keeps working, same read-path policy as A6.
+        if (sportFromRequest) {
             sportService.requireActiveSportById(sportId);
         }
 
@@ -231,14 +236,23 @@ public class SessionServiceImpl implements SessionService {
                 feeAmountVnd, scheduledEndAt).isEmpty()
                 ? SessionStatus.SCHEDULED
                 : SessionStatus.PREPARING;
-        boolean autoApprove = Boolean.TRUE.equals(request.getAutoApprove());
+        // SESSION-GROUP-1: a group session auto-approves by default (a member joins at once); a standalone one does not.
+        boolean autoApprove = request.getAutoApprove() != null ? request.getAutoApprove() : groupId != null;
+        GroupAudience audience = null;
+        List<UUID> specificAudience = List.of();
+        if (groupId != null) {
+            audience = request.getAudience() != null ? request.getAudience() : GroupAudience.ALL_MEMBERS;
+            if (audience == GroupAudience.SPECIFIC) {
+                specificAudience = resolveSpecificAudience(groupId, userId, request.getAudienceUserIds());
+            }
+        }
         int initialSlot = request.getInitialSlot() != null ? request.getInitialSlot() : 0;
         validateGenderSlots(request.getMaleSlots(), request.getFemaleSlots(), request.getCapacity(), initialSlot);
         String title = requireTitle(request.getTitle());
         // SESSION-23: filter the submitted attributes against the sport's session schema (replace
         // semantics — the filtered map is the whole stored value). Null when none were supplied,
         // which also short-circuits the schema fetch for a session whose sport carries no schema.
-        Map<String, Object> attributes = resolveAttributes(request.getAttributes(), sportId);
+        Map<String, Object> attributes = attributeResolver.resolve(request.getAttributes(), sportId);
 
         // SESSION-10/A17: the companion SESSION_POST is created first, inline in this same
         // @Transactional method, so a failure here rolls back the whole session creation instead
@@ -265,6 +279,9 @@ public class SessionServiceImpl implements SessionService {
                 .feeType(request.getFeeType())
                 .feeAmountVnd(feeAmountVnd)
                 .autoApprove(autoApprove)
+                .groupAudience(audience)
+                // SESSION-GROUP-1: a SPECIFIC audience is kept on the session (read again at a cancel); unique, enforced by the converter.
+                .groupAudienceUserIds(specificAudience.isEmpty() ? null : specificAudience)
                 .initialSlot(initialSlot)
                 .maleSlots(request.getMaleSlots())
                 .femaleSlots(request.getFemaleSlots())
@@ -276,15 +293,13 @@ public class SessionServiceImpl implements SessionService {
         Session saved = sessionRepository.save(session);
 
         List<SessionParticipant> seedParticipants = new ArrayList<>();
-        if (groupId == null) {
-            // Standalone only — a group-linked session's creator is already implicitly the
-            // group's owner/admin, not auto-added as a participant.
-            seedParticipants.add(SessionParticipant.builder()
-                    .sessionId(saved.getId())
-                    .userId(userId)
-                    .status(ParticipantStatus.JOINED)
-                    .build());
-        }
+        // The creator is JOINED, standalone or group (SESSION-GROUP-1: a group session's creator is a member who plays in
+        // it, no longer always an owner or admin who only manages it).
+        seedParticipants.add(SessionParticipant.builder()
+                .sessionId(saved.getId())
+                .userId(userId)
+                .status(ParticipantStatus.JOINED)
+                .build());
         List<SessionOutboxEvent> inviteOutboxEvents = new ArrayList<>();
         if (request.getInviteeIds() != null) {
             request.getInviteeIds().stream()
@@ -309,6 +324,23 @@ public class SessionServiceImpl implements SessionService {
         }
         if (!inviteOutboxEvents.isEmpty()) {
             sessionOutboxEventRepository.saveAll(inviteOutboxEvents);
+        }
+        if (groupId != null) {
+            // SESSION-GROUP-1: tell the audience. The notification is session.group.created, one row per member, in this
+            // transaction (a failure rolls back the session too). No INVITED row: every member can see and join and has to
+            // click Join to become a participant; the audience only decides who is notified.
+            List<UUID> recipients = groupRecipients.of(saved, userId, false);
+            if (!recipients.isEmpty()) {
+                sessionOutboxEventRepository.saveAll(recipients.stream()
+                        .map(recipientId -> sessionOutboxWriter.build("session.group.created",
+                                SessionGroupCreatedEvent.builder()
+                                        .sessionId(saved.getId())
+                                        .actorId(userId)
+                                        .recipientUserId(recipientId)
+                                        .groupId(groupId)
+                                        .build()))
+                        .toList());
+            }
         }
 
         log.info("Created session {} (type={}, group={})", saved.getId(), saved.getSessionType(), saved.getGroupId());
@@ -341,14 +373,25 @@ public class SessionServiceImpl implements SessionService {
      * check already uses in this class, rather than distinguishing "doesn't exist" from "exists
      * but you can't see it" the way {@code getGroup} does (arguably the safer choice — it doesn't
      * leak group existence to a non-member either).
+     *
+     * <p>SESSION-GROUP-2: with a {@code bucket} the page holds only that bucket's statuses, in a fixed order (soonest start
+     * first, newest first for {@code HISTORY}); the caller's own {@code Pageable} sort is ignored, as in {@code /upcoming}.
+     * Without one it is every status, as before.
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable) {
+    public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, GroupSessionBucket bucket, Pageable pageable) {
         if (!groupService.isGroupMember(groupId, currentUserId)) {
             throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can view this group's sessions", null);
         }
-        return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
+        if (bucket == null) {
+            return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
+        }
+        Pageable fixedOrder = unsorted(pageable);
+        Page<Session> page = bucket.newestFirst()
+                ? sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(groupId, bucket.statuses(), fixedOrder)
+                : sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(groupId, bucket.statuses(), fixedOrder);
+        return toResponsePage(page, currentUserId);
     }
 
     /**
@@ -589,7 +632,7 @@ public class SessionServiceImpl implements SessionService {
         // never fetches the schema (and so never 404s on a since-deactivated sport). An explicit
         // empty map filters to empty and clears them.
         if (request.getAttributes() != null) {
-            session.setAttributes(resolveAttributes(request.getAttributes(), session.getSportId()));
+            session.setAttributes(attributeResolver.resolve(request.getAttributes(), session.getSportId()));
         }
         // Re-resolved unconditionally so the FIXED/feeAmountVnd invariant holds regardless of
         // which fee field (if either) this request touched - catches "switched to FIXED without
@@ -638,52 +681,6 @@ public class SessionServiceImpl implements SessionService {
                         .systemParams(change.params())
                         .build())
                 .collect(Collectors.toList()));
-    }
-
-    /**
-     * SESSION-23 — turns a caller-supplied session attribute map into the map to persist.
-     *
-     * <p>Flow: {@code null} request → {@code null} (nothing supplied; the caller stores that as-is,
-     * and the sport's session schema is never fetched). Otherwise fetch the sport's
-     * {@code #ref}-expanded session schema via {@link SportService#getSessionAttributeSchemaRaw},
-     * run the submitted map through common {@link AttributeValueFilter} (unknown / wrong-typed /
-     * switched-off entries dropped silently), then enforce the 4KB serialized cap on what survives.
-     *
-     * <p><b>Deactivated sport:</b> {@code getSessionAttributeSchemaRaw} is active-only and throws
-     * {@code ResourceNotFoundException} for an inactive sport. That propagates here by design — a
-     * caller only reaches this method by actively supplying attributes, and submitting structured
-     * attributes against a dead sport's schema has no meaning, the same stance {@code createSession}
-     * already takes on a caller-supplied inactive {@code sportId}. A create/update that supplies no
-     * attributes never calls this and is unaffected.
-     *
-     * @return the filtered map to store (possibly empty — an explicit clear), or {@code null} when
-     *         nothing was supplied
-     */
-    private Map<String, Object> resolveAttributes(Map<String, Object> requested, Long sportId) {
-        if (requested == null) {
-            return null;
-        }
-        AttributeSchema schema = sportService.getSessionAttributeSchemaRaw(sportId);
-        Map<String, Object> filtered = AttributeValueFilter.filter(requested, schema);
-        validateAttributesSize(filtered);
-        return filtered;
-    }
-
-    /** Rejects a session-attributes map whose JSON serialization exceeds {@link #MAX_ATTRIBUTES_BYTES};
-     * mirrors {@code UserSportProfileServiceImpl.validateAttributesSize}. Checked against the already
-     * filtered map, so an oversized payload that is mostly junk still fails rather than being
-     * silently trimmed to fit. */
-    private void validateAttributesSize(Map<String, Object> attributes) {
-        try {
-            byte[] json = objectMapper.writeValueAsBytes(attributes);
-            if (json.length > MAX_ATTRIBUTES_BYTES) {
-                log.warn("Rejected session attributes: {} bytes exceeds the {}-byte limit", json.length, MAX_ATTRIBUTES_BYTES);
-                throw new BadRequestException("Session attributes exceed the maximum allowed size (4KB)");
-            }
-        } catch (JsonProcessingException e) {
-            log.warn("Rejected session attributes: could not serialize to JSON", e);
-            throw new BadRequestException("Invalid session attributes");
-        }
     }
 
     /** Enforces "feeAmountVnd is meaningful only when feeType is FIXED": returns candidateAmount
@@ -789,8 +786,30 @@ public class SessionServiceImpl implements SessionService {
         session.setCancelReason(request != null ? request.getReason() : null);
         session.setCancelledBy(userId);
         session.setCancelledAt(LocalDateTime.now());
+        Session saved = sessionRepository.save(session);
 
-        return toResponse(sessionRepository.save(session), userId);
+        if (saved.getGroupId() != null) {
+            // SESSION-GROUP-1: tell the audience and the players (a cancel told nobody before). Standalone is unchanged.
+            List<UUID> recipients = groupRecipients.of(saved, userId, true);
+            if (!recipients.isEmpty()) {
+                sessionOutboxEventRepository.saveAll(recipients.stream()
+                        .map(recipientId -> sessionOutboxWriter.build("session.group.cancelled",
+                                SessionGroupCancelledEvent.builder()
+                                        .sessionId(saved.getId())
+                                        .actorId(userId)
+                                        .recipientUserId(recipientId)
+                                        .groupId(saved.getGroupId())
+                                        .build()))
+                        .toList());
+            }
+            // SESSION-GROUP-5: the end of a regular session may be the end of its day: queue the next day once this commits
+            // (nothing is queued when generation is off).
+            if (saved.getRecurrenceId() != null) {
+                eventPublisher.publishEvent(new GroupSessionGenerationEvents.RegularSessionsEnded(List.of(
+                        new GroupSessionGenerationEvents.GroupDay(saved.getGroupId(), saved.getOccurrenceDate()))));
+            }
+        }
+        return toResponse(saved, userId);
     }
 
     @Override
@@ -867,21 +886,28 @@ public class SessionServiceImpl implements SessionService {
     @Transactional
     public SessionShareResponse shareSession(Long sessionId, UUID callerId, ShareSessionRequest request) {
         // Availability (404) before visibility (403): every refusal comes before any read of recipients' state and
-        // before any write, so a refused call leaves nothing behind. Any caller may share a standalone session in any
-        // status; only a group session is refused.
+        // before any write, so a refused call leaves nothing behind. Any caller may share a public standalone session in
+        // any status; a private one is refused (SESSION_SHARE_NOT_ALLOWED); a group session is shareable by its members
+        // only (SESSION-GROUP-3: a non-member gets SESSION_GROUP_MEMBER_REQUIRED, as on join, because they could not open it).
         Session session = sessionRepository.findById(sessionId).orElse(null);
+        boolean groupSession = session != null && session.getGroupId() != null;
         sessionShareGate.require(session, callerId,
                 "SESSION_NOT_FOUND", "Session not found",
-                "SESSION_SHARE_NOT_ALLOWED", "A group or private session cannot be shared");
+                groupSession ? "SESSION_GROUP_MEMBER_REQUIRED" : "SESSION_SHARE_NOT_ALLOWED",
+                groupSession ? "Only group members can share this session" : "A private session cannot be shared");
 
         List<UUID> requested = request.getUserIds().stream().distinct().toList();
 
-        // One query for the caller's friends, never areFriends per recipient. Anyone who is not a friend is silently
-        // ignored (owner, 2026-11-18): counted in skipped, never notified, so a share cannot reach a stranger and the
-        // answer does not tell friends from strangers. The caller is not in their own friend list, so their own id
-        // falls out here too.
-        Set<UUID> friendIds = new HashSet<>(userFriendService.getAcceptedFriendIds(callerId));
-        List<UUID> friends = requested.stream().filter(friendIds::contains).toList();
+        // Who the caller may reach: their friends for a standalone session (one query, never areFriends per recipient),
+        // the other members of the group for a group session (one query, SESSION-GROUP-3: friends are not the audience
+        // there). Anyone outside that set is silently ignored (owner, 2026-11-18): counted in skipped, never notified, so a
+        // share cannot reach a stranger and the answer does not tell them from the allowed. The caller's own id falls out
+        // of the friend list by itself and is removed from the member list.
+        Set<UUID> reachable = groupSession
+                ? new HashSet<>(groupService.getMemberUserIds(session.getGroupId()))
+                : new HashSet<>(userFriendService.getAcceptedFriendIds(callerId));
+        reachable.remove(callerId);
+        List<UUID> friends = requested.stream().filter(reachable::contains).toList();
 
         List<UUID> recipients = List.of();
         if (!friends.isEmpty()) {
@@ -1407,38 +1433,6 @@ public class SessionServiceImpl implements SessionService {
                 .collect(Collectors.toMap(Session::getId, Session::getTitle));
     }
 
-    /**
-     * SESSION-38 — re-fetches this one group's recurrence config from {@code group-api} (ID-only
-     * cross-domain reference; {@code group-impl} never pushes its own config data across the
-     * boundary) and delegates to {@link SessionGenerationService#generateForConfigs} — the same
-     * eligibility checks (autoGenerateSessions, a complete rule, not already generated) and
-     * idempotency backstop as every other generation path in this domain. A singleton-list call to
-     * a batch-shaped {@code group-api} method, matching {@code getGroupRecurrenceConfigsByGroupIds}'
-     * own no-per-row-loop-call contract — this is a single-group caller of a batch method, not a
-     * second, single-id method.
-     *
-     * <p><b>Deliberately not {@code @Transactional} itself.</b> Both calls already manage their own
-     * transaction ({@code getGroupRecurrenceConfigsByGroupIds} is {@code readOnly = true};
-     * {@code generateForConfigs} is {@code REQUIRES_NEW}, precisely so a generation failure can't
-     * poison the caller's transaction). Annotating <em>this</em> coordinating method
-     * {@code @Transactional} would undo that: called from {@code GroupServiceImpl}'s
-     * {@code updateGroupRecurrence}/{@code updateGroupSettings}, it would participate in their
-     * transaction, and — since Spring's transactional AOP marks a participating transaction
-     * rollback-only the moment an exception propagates through {@code @Transactional} boundary,
-     * regardless of what any inner method's own propagation setting already did — a failure
-     * bubbling up through this method would still poison the caller's transaction one level above
-     * where {@code REQUIRES_NEW} was supposed to stop it. Found by
-     * {@code GroupSessionGenerationFailureIsolationIntegrationTest}, which is exactly why that test
-     * exists (a real forced failure through real transaction management; no mocked test can see
-     * this class of bug).
-     */
-    @Override
-    public void generateNextOccurrenceForGroup(Long groupId) {
-        List<GroupRecurrenceConfigResponse> configs =
-                groupService.getGroupRecurrenceConfigsByGroupIds(List.of(groupId));
-        sessionGenerationService.generateForConfigs(configs);
-    }
-
     /** SESSION-10/A17 — the sole gate standing between a caller and a session's comment thread or
      * its own like, since post-impl's own PostGate makes SESSION_POST unconditionally unavailable.
      * Delegates to SessionGate (this module's own ResourceGate&lt;Session&gt;, same shape as
@@ -1502,9 +1496,21 @@ public class SessionServiceImpl implements SessionService {
             if (!session.getCreatedBy().equals(userId)) {
                 throw new ForbiddenException("SESSION_CREATOR_REQUIRED", "Only the creator can modify this session", null);
             }
-        } else if (!groupService.canManageMembers(session.getGroupId(), userId)) {
-            throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED", "Only group owners and admins can modify this session", null);
+        } else {
+            // SESSION-GROUP-1: a group session is managed by its creator, for as long as they are still a member of the
+            // group (a creator who left loses the right), and by the group's owner and admins.
+            boolean creatorWhileMember = session.getCreatedBy().equals(userId)
+                    && groupService.isGroupMember(session.getGroupId(), userId);
+            if (!creatorWhileMember && !groupService.canManageMembers(session.getGroupId(), userId)) {
+                throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED",
+                        "Only the creator or a group owner or admin can modify this session", null);
+            }
         }
+    }
+
+    /** SESSION-GROUP-1 — the validated members of a {@code SPECIFIC} audience (the rule lives in {@link GroupAudiences}). */
+    private List<UUID> resolveSpecificAudience(Long groupId, UUID creatorId, List<UUID> requested) {
+        return GroupAudiences.validateSpecific(requested, creatorId, new HashSet<>(groupService.getMemberUserIds(groupId)));
     }
 
     private SessionResponse toResponse(Session session, UUID callerId) {

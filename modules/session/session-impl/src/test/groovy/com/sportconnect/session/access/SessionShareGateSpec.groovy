@@ -10,7 +10,7 @@ import spock.lang.Subject
 
 /**
  * SESSION-66 / CLIENT-SESSION-49: any identified caller may share a standalone session, in any status and whatever their
- * own participation; a group session is shareable by nobody, and neither is a private standalone session (SESSION-69).
+ * own participation; a private standalone session is not (SESSION-69); a group session is shareable by its members (SESSION-GROUP-3).
  */
 class SessionShareGateSpec extends Specification {
 
@@ -86,33 +86,74 @@ class SessionShareGateSpec extends Specification {
         fb.errorCode == "SESSION_SHARE_NOT_ALLOWED"
     }
 
-    def "a group session is not shareable, by anyone, in any status, with no group lookup"() {
+    def "a group session is shareable by a member of the group, in any status (SESSION-GROUP-3)"() {
         when:
         def result = gate.isVisibleTo(session(5L, status), viewerId)
 
         then:
-        !result
-        0 * groupService._
+        1 * groupService.isGroupMember(5L, viewerId) >> true
+        result
 
         where:
         status << SessionStatus.values().toList()
     }
 
-    def "require answers 404 for a missing session and 403 for a group session, with the given codes"() {
+    def "a group session is not shareable by someone who is not a member of the group"() {
         when:
-        gate.require(null, viewerId, "SESSION_NOT_FOUND", "nf", "SESSION_SHARE_NOT_ALLOWED", "no")
+        def result = gate.isVisibleTo(session(5L, status), viewerId)
+
+        then:
+        1 * groupService.isGroupMember(5L, viewerId) >> false
+        !result
+
+        where:
+        status << SessionStatus.values().toList()
+    }
+
+    def "an unauthenticated viewer cannot share a group session, with no group lookup"() {
+        when:
+        def result = gate.isVisibleTo(session(5L), null)
+
+        then:
+        !result
+        0 * groupService._
+    }
+
+    def "a group session's isPublic is irrelevant: membership decides"() {
+        when:
+        def result = gate.isVisibleTo(session(5L, SessionStatus.SCHEDULED, false), viewerId)
+
+        then:
+        1 * groupService.isGroupMember(5L, viewerId) >> true
+        result
+    }
+
+    def "require answers 404 for a missing session and 403 with the given code for a non-member of a group session"() {
+        when:
+        gate.require(null, viewerId, "SESSION_NOT_FOUND", "nf", "SESSION_GROUP_MEMBER_REQUIRED", "no")
 
         then:
         def nf = thrown(NotFoundException)
         nf.errorCode == "SESSION_NOT_FOUND"
 
         when:
-        gate.require(session(5L), viewerId, "SESSION_NOT_FOUND", "nf", "SESSION_SHARE_NOT_ALLOWED", "no")
+        gate.require(session(5L), viewerId, "SESSION_NOT_FOUND", "nf", "SESSION_GROUP_MEMBER_REQUIRED", "no")
 
         then:
         1 * groupService.isGroupActive(5L) >> true
+        1 * groupService.isGroupMember(5L, viewerId) >> false
         def fb = thrown(ForbiddenException)
-        fb.errorCode == "SESSION_SHARE_NOT_ALLOWED"
+        fb.errorCode == "SESSION_GROUP_MEMBER_REQUIRED"
+    }
+
+    def "require answers 404 for a group session whose group is no longer active, before the member check"() {
+        when:
+        gate.require(session(5L), viewerId, "SESSION_NOT_FOUND", "nf", "SESSION_GROUP_MEMBER_REQUIRED", "no")
+
+        then:
+        1 * groupService.isGroupActive(5L) >> false
+        0 * groupService.isGroupMember(*_)
+        thrown(NotFoundException)
     }
 
     def "require lets a standalone session through for a viewer who has no relation to it"() {

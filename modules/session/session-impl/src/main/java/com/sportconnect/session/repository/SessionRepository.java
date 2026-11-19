@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -20,7 +21,43 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     Page<Session> findByGroupId(Long groupId, Pageable pageable);
 
+    /** SESSION-GROUP-2 — a group's sessions in the given statuses, soonest start first (the ordering is part of the name, so
+     * the caller's own Pageable sort must be stripped). Served by {@code idx_sessions_group_scheduled_start}. */
+    Page<Session> findByGroupIdAndStatusInOrderByScheduledStartAsc(Long groupId, Collection<SessionStatus> statuses, Pageable pageable);
+
+    /** SESSION-GROUP-2 — the same, newest start first (the History bucket). */
+    Page<Session> findByGroupIdAndStatusInOrderByScheduledStartDesc(Long groupId, Collection<SessionStatus> statuses, Pageable pageable);
+
     boolean existsByGroupIdAndScheduledStart(Long groupId, Instant scheduledStart);
+
+    /** SESSION-GROUP-5 — the duplicate guard of the generator (also enforced by the unique index on the pair). */
+    boolean existsByRecurrenceIdAndOccurrenceDate(Long recurrenceId, java.time.LocalDate occurrenceDate);
+
+    /** SESSION-GROUP-5 — the regular sessions generated for these recurrences from {@code from} on, in one query (the planner
+     * dedupes the slots it is about to queue against them). */
+    List<Session> findByRecurrenceIdInAndOccurrenceDateGreaterThanEqual(Collection<Long> recurrenceIds, java.time.LocalDate from);
+
+    /** SESSION-GROUP-5 — is there a regular session of the group in one of these statuses that starts before {@code before}?
+     * (Then its end will queue the next day by itself.) */
+    boolean existsByGroupIdAndRecurrenceIdIsNotNullAndStatusInAndScheduledStartLessThan(
+            Long groupId, Collection<SessionStatus> statuses, Instant before);
+
+    /** SESSION-GROUP-6 — the regular sessions of a group in these statuses (what OFF and a mode switch may cancel). */
+    List<Session> findByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(Long groupId, Collection<SessionStatus> statuses);
+
+    /** SESSION-GROUP-6 — the sessions generated from one recurrence in these statuses (what deleting it may cancel). */
+    List<Session> findByRecurrenceIdAndStatusIn(Long recurrenceId, Collection<SessionStatus> statuses);
+
+    long countByGroupIdAndRecurrenceIdIsNotNullAndStatusIn(Long groupId, Collection<SessionStatus> statuses);
+
+    long countByRecurrenceIdAndStatusIn(Long recurrenceId, Collection<SessionStatus> statuses);
+
+    /** SESSION-GROUP-5 — the (group, local date) pairs, among the given groups, that still hold an open regular session: a day
+     * is over only when it no longer appears here. One query for every candidate pair. */
+    @Query("SELECT DISTINCT s.groupId, s.occurrenceDate FROM Session s WHERE s.groupId IN :groupIds "
+            + "AND s.recurrenceId IS NOT NULL AND s.status IN :openStatuses")
+    List<Object[]> findOpenRegularDays(@Param("groupIds") Collection<Long> groupIds,
+                                       @Param("openStatuses") Collection<SessionStatus> openStatuses);
 
     /**
      * SCHEDULED sessions whose scheduledStart has arrived but scheduledEndAt hasn't yet — i.e.

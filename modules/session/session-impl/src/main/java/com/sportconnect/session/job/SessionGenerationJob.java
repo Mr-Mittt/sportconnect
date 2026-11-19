@@ -8,15 +8,13 @@ import org.springframework.stereotype.Component;
 /**
  * Cadence is intentionally coarse — closing past sessions is status-only cosmetics (nothing
  * downstream depends on sub-hour accuracy yet). No distributed lock — fine for the current
- * single-instance deployment; {@code sessions.unique_group_session_start} is the idempotency
- * backstop if this ever runs on multiple instances.
+ * single-instance deployment.
  *
- * <p><b>SESSION-38:</b> the hourly {@code generateUpcomingSessions()} sweep (re-scanning every
- * group with auto-generate enabled, regardless of whether its next occurrence already existed) is
- * removed — group session generation is now event-driven, triggered directly from
- * {@link SessionGenerationService#closePastSessions} (on completion) and
- * {@code SessionServiceImpl.generateNextOccurrenceForGroup} (on a recurrence/settings change),
- * never from a periodic job.
+ * <p><b>SESSION-GROUP-5:</b> no job generates sessions. Regular group sessions are generated from a queue
+ * ({@code GroupSessionGenerationPlanner}, {@code GroupSessionGenerationRunner}) fed by the startup recovery, by a regular
+ * session ending ({@code SessionGenerationService.closePastSessions}, {@code cancelSession}) and by a configuration change;
+ * its duplicate guard is the unique {@code (recurrence_id, occurrence_date)} index on {@code sessions}. (SESSION-38's
+ * event-driven single-rule generation, and SESSION-2's hourly sweep before it, are gone.)
  */
 @Component
 @RequiredArgsConstructor

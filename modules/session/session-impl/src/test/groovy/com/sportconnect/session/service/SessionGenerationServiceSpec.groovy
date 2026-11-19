@@ -1,8 +1,5 @@
 package com.sportconnect.session.service
 
-import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse
-import com.sportconnect.group.api.service.GroupService
-import com.sportconnect.location.api.service.LocationService
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.dto.SessionType
 import com.sportconnect.session.api.event.SessionStatusStartedEvent
@@ -13,100 +10,26 @@ import com.sportconnect.session.repository.SessionRepository
 import com.sportconnect.social.post.api.dto.SystemCode
 import com.sportconnect.social.post.api.dto.SystemSessionCommentRequest
 import com.sportconnect.social.post.api.service.CommentService
-import com.sportconnect.social.post.api.service.PostService
-import com.sportconnect.user.api.service.UserService
-import org.springframework.dao.DataIntegrityViolationException
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import spock.lang.Specification
 import spock.lang.Subject
 
-import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
 
 class SessionGenerationServiceSpec extends Specification {
 
     SessionRepository sessionRepository = Mock()
-    GroupService groupService = Mock()
-    LocationService locationService = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
     CommentService commentService = Mock()
-    PostService postService = Mock()
-    UserService userService = Mock()
+    ApplicationEventPublisher eventPublisher = Mock()
 
     @Subject
     SessionGenerationService service = new SessionGenerationService(
-            sessionRepository, groupService, locationService, sessionOutboxEventRepository, sessionOutboxWriter,
-            commentService, postService, userService)
-
-    def setup() {
-        // SESSION-38: every successful generateForConfigs session creation now creates a companion
-        // SESSION_POST first — lenient default so tests that aren't specifically about this don't
-        // each need to stub it themselves, same convention as SessionServiceImplSpec's setup().
-        postService.createSessionPost(_, _) >> 999L
-        userService.findPreferredLanguageCodes(_) >> [:]
-    }
-
-    def "generateForConfigs skips a group with an incomplete recurrence rule"() {
-        given:
-        def config = GroupRecurrenceConfigResponse.builder()
-                .groupId(1L).sportId(1L).ownerId(UUID.randomUUID())
-                .recurrenceDayOfWeek(DayOfWeek.TUESDAY)
-                .recurrenceLocationId(null) // incomplete — no location
-                .build()
-
-        when:
-        service.generateForConfigs([config])
-
-        then:
-        1 * locationService.getLocationsByIds([]) >> [:]
-        0 * sessionRepository._
-    }
-
-    def "generateForConfigs skips a group whose next occurrence already exists"() {
-        given:
-        def config = GroupRecurrenceConfigResponse.builder()
-                .groupId(1L).sportId(1L).ownerId(UUID.randomUUID())
-                .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0))
-                .recurrenceLocationId(5L)
-                .build()
-
-        when:
-        service.generateForConfigs([config])
-
-        then:
-        1 * locationService.getLocationsByIds([5L]) >> [:]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> true
-        0 * sessionRepository.save(_)
-    }
-
-    def "generateForConfigs titles the session after the group in the owner's language, from one batch lookup (SESSION-49)"() {
-        given:
-        def viOwner = UUID.randomUUID()
-        def enOwner = UUID.randomUUID()
-        def configs = [
-                GroupRecurrenceConfigResponse.builder().groupId(1L).groupName("Nhóm A").sportId(1L).ownerId(viOwner)
-                        .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0)).recurrenceLocationId(5L).build(),
-                GroupRecurrenceConfigResponse.builder().groupId(2L).groupName("Group B").sportId(1L).ownerId(enOwner)
-                        .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0)).recurrenceLocationId(5L).build()]
-        def saved = []
-
-        when:
-        service.generateForConfigs(configs)
-
-        then:
-        1 * locationService.getLocationsByIds([5L]) >> [:]
-        1 * userService.findPreferredLanguageCodes({ it as Set == [viOwner, enOwner] as Set }) >> [(viOwner): "vi"]
-        2 * sessionRepository.existsByGroupIdAndScheduledStart(_, _ as Instant) >> false
-        1 * postService.createSessionPost(viOwner, "Session: Trận đấu của nhóm Nhóm A") >> 11L
-        1 * postService.createSessionPost(enOwner, "Session: Group B's session") >> 12L
-        2 * sessionRepository.save({ Session s -> saved << s.title; true }) >> { Session s -> s }
-        saved as Set == ["Trận đấu của nhóm Nhóm A", "Group B's session"] as Set
-    }
+            sessionRepository, sessionOutboxEventRepository, sessionOutboxWriter, commentService, eventPublisher)
 
     def "generatedTitle follows the language, falls back to English and fits the column (SESSION-49)"() {
         expect:
@@ -126,115 +49,6 @@ class SessionGenerationServiceSpec extends Specification {
         SessionGenerationService.generatedTitle("x" * 300, "en").length() == 200
     }
 
-    def "generateForConfigs creates a session copying the recurrence config"() {
-        given:
-        def ownerId = UUID.randomUUID()
-        def config = GroupRecurrenceConfigResponse.builder()
-                .groupId(1L).sportId(1L).ownerId(ownerId)
-                .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0))
-                .recurrenceDurationMinutes(90).recurrenceLocationId(5L)
-                .recurrenceLocationNote("Court 3")
-                .build()
-
-        when:
-        service.generateForConfigs([config])
-
-        then:
-        1 * locationService.getLocationsByIds([5L]) >> [:]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> false
-        1 * sessionRepository.save({ Session s ->
-            s.groupId == 1L &&
-            s.sessionType == SessionType.GROUP_RECURRING &&
-            s.createdBy == ownerId &&
-            s.sportId == 1L &&
-            s.locationId == 5L &&
-            s.locationNote == "Court 3" &&
-            s.status == SessionStatus.SCHEDULED &&
-            s.scheduledEndAt == s.scheduledStart.plusSeconds(90 * 60)
-        }) >> { Session s -> s }
-    }
-
-    def "generateForConfigs swallows a unique-constraint race instead of failing the batch"() {
-        given:
-        def config = GroupRecurrenceConfigResponse.builder()
-                .groupId(1L).sportId(1L).ownerId(UUID.randomUUID())
-                .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0))
-                .recurrenceLocationId(5L)
-                .build()
-
-        when:
-        service.generateForConfigs([config])
-
-        then:
-        1 * locationService.getLocationsByIds([5L]) >> [:]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> false
-        1 * sessionRepository.save(_) >> { throw new DataIntegrityViolationException("dup") }
-        noExceptionThrown()
-    }
-
-    def "generateForConfigs batch-resolves locations once across multiple configs, never per config"() {
-        given:
-        def configA = GroupRecurrenceConfigResponse.builder()
-                .groupId(1L).sportId(1L).ownerId(UUID.randomUUID())
-                .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0))
-                .recurrenceLocationId(5L)
-                .build()
-        def configB = GroupRecurrenceConfigResponse.builder()
-                .groupId(2L).sportId(1L).ownerId(UUID.randomUUID())
-                .recurrenceDayOfWeek(DayOfWeek.WEDNESDAY).recurrenceTime(LocalTime.of(20, 0))
-                .recurrenceLocationId(6L)
-                .build()
-
-        when:
-        service.generateForConfigs([configA, configB])
-
-        then:
-        1 * locationService.getLocationsByIds({ it as Set == [5L, 6L] as Set }) >> [:]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(1L, _ as Instant) >> true
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(2L, _ as Instant) >> true
-        0 * sessionRepository.save(_)
-    }
-
-    /** SESSION-36: uses LocalTime.MIDNIGHT instead of {@code LocalTime.now().minusHours(1)} — the
-     * previous version wrapped to the *previous* day's clock face whenever run within an hour
-     * after midnight (e.g. 00:30 - 1h = 23:30), which reads as *later* than "now" on the same
-     * calendar day, silently inverting the assertion. Midnight is always <= any real "now" for
-     * the entire day (equal only at the exact first nanosecond), so this is deterministic
-     * regardless of when the suite runs — no production change needed for this. */
-    def "computeNextOccurrence rolls forward a week when today is the target weekday but the time already passed"() {
-        when:
-        def result = service.computeNextOccurrence(LocalDate.now().dayOfWeek, LocalTime.MIDNIGHT)
-
-        then:
-        result.toLocalDate() == LocalDate.now().plusWeeks(1)
-        result.toLocalTime() == LocalTime.MIDNIGHT
-    }
-
-    /** SESSION-36: uses LocalTime.MAX instead of {@code LocalTime.now().plusHours(2)} — the
-     * previous version wrapped to an *earlier*-looking clock face whenever run within 2 hours of
-     * midnight (e.g. 23:15 + 2h = 01:15), silently inverting the assertion the same way the test
-     * above did. LocalTime.MAX (23:59:59.999999999) is always >= any real "now" for the entire
-     * day, so this is deterministic regardless of when the suite runs. */
-    def "computeNextOccurrence uses today when today is the target weekday and the time hasn't passed"() {
-        when:
-        def result = service.computeNextOccurrence(LocalDate.now().dayOfWeek, LocalTime.MAX)
-
-        then:
-        result.toLocalDate() == LocalDate.now()
-    }
-
-    def "computeNextOccurrence finds the next matching weekday when today is a different day"() {
-        given:
-        def otherDay = DayOfWeek.values().find { it != LocalDate.now().dayOfWeek }
-
-        when:
-        def result = service.computeNextOccurrence(otherDay, LocalTime.NOON)
-
-        then:
-        result.dayOfWeek == otherDay
-        !result.toLocalDate().isBefore(LocalDate.now())
-    }
-
     def "closePastSessions flips SCHEDULED/ONGOING sessions past their end time to COMPLETED, looping until empty"() {
         given:
         def pageable = PageRequest.of(0, 200)
@@ -252,7 +66,7 @@ class SessionGenerationServiceSpec extends Specification {
                 [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >>>
                 [firstBatch, secondBatch]
         1 * sessionRepository.saveAll({ List sessions -> sessions[0].status == SessionStatus.COMPLETED })
-        0 * groupService._
+        0 * eventPublisher.publishEvent(_)
     }
 
     def "closePastSessions does nothing when there are no past-due sessions"() {
@@ -266,90 +80,53 @@ class SessionGenerationServiceSpec extends Specification {
         1 * sessionRepository.findSessionsToComplete(
                 [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >> new PageImpl([])
         0 * sessionRepository.saveAll(_)
-        0 * groupService._
+        0 * eventPublisher.publishEvent(_)
     }
 
-    // ── SESSION-38: on-completion event-driven generation trigger ───────────
+    // -- SESSION-GROUP-5: closePastSessions reports the regular sessions it completed -------------------------------------
 
-    def "closePastSessions triggers generation for a completed GROUP_RECURRING session's group"() {
+    def "closePastSessions reports the regular sessions it completed as one event, one entry per (group, day)"() {
         given:
         def pageable = PageRequest.of(0, 200)
-        def groupSession = Session.builder().id(1L).groupId(10L)
-                .sessionType(SessionType.GROUP_RECURRING).status(SessionStatus.ONGOING).build()
-        def batch = new PageImpl([groupSession], pageable, 1)
-        def config = GroupRecurrenceConfigResponse.builder()
-                .groupId(10L).sportId(1L).ownerId(UUID.randomUUID())
-                .recurrenceDayOfWeek(DayOfWeek.TUESDAY).recurrenceTime(LocalTime.of(19, 0))
-                .recurrenceLocationId(5L)
-                .build()
+        def day = LocalDate.of(2026, 11, 20)
+        def regular = Session.builder().id(1L).groupId(10L).sessionType(SessionType.GROUP_RECURRING)
+                .status(SessionStatus.ONGOING).recurrenceId(7L).occurrenceDate(day).build()
+        def sameDayAndGroup = Session.builder().id(2L).groupId(10L).sessionType(SessionType.GROUP_RECURRING)
+                .status(SessionStatus.ONGOING).recurrenceId(8L).occurrenceDate(day).build()
+        def otherGroup = Session.builder().id(3L).groupId(11L).sessionType(SessionType.GROUP_RECURRING)
+                .status(SessionStatus.SCHEDULED).recurrenceId(9L).occurrenceDate(day).build()
+        def custom = Session.builder().id(4L).groupId(10L).sessionType(SessionType.GROUP_RECURRING)
+                .status(SessionStatus.ONGOING).build()
+        def standalone = Session.builder().id(5L).sessionType(SessionType.STANDALONE).status(SessionStatus.ONGOING).build()
 
         when:
         service.closePastSessions()
 
         then:
-        1 * sessionRepository.findSessionsToComplete(
-                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >> batch
+        1 * sessionRepository.findSessionsToComplete([SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >>
+                new PageImpl([regular, sameDayAndGroup, otherGroup, custom, standalone], pageable, 5)
         1 * sessionRepository.saveAll(_)
-        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> [config]
-        1 * locationService.getLocationsByIds([5L]) >> [:]
-        1 * sessionRepository.existsByGroupIdAndScheduledStart(10L, _ as Instant) >> true
+        1 * eventPublisher.publishEvent({ e ->
+            e instanceof GroupSessionGenerationEvents.RegularSessionsEnded &&
+                    (e.days() as Set) == ([new GroupSessionGenerationEvents.GroupDay(10L, day),
+                                           new GroupSessionGenerationEvents.GroupDay(11L, day)] as Set) &&
+                    e.days().size() == 2
+        })
     }
 
-    /** No-N+1: two completed GROUP_RECURRING sessions for two different groups in the same batch
-     * resolve their groups' configs in a single call, not one per session. */
-    def "closePastSessions resolves multiple completed groups' configs in one batched call"() {
+    def "closePastSessions reports nothing when the batch holds no regular session (custom and standalone ones never trigger)"() {
         given:
         def pageable = PageRequest.of(0, 200)
-        def sessionGroupA = Session.builder().id(1L).groupId(10L)
-                .sessionType(SessionType.GROUP_RECURRING).status(SessionStatus.ONGOING).build()
-        def sessionGroupB = Session.builder().id(2L).groupId(20L)
-                .sessionType(SessionType.GROUP_RECURRING).status(SessionStatus.ONGOING).build()
-        def batch = new PageImpl([sessionGroupA, sessionGroupB], pageable, 2)
+        def custom = Session.builder().id(1L).groupId(10L).sessionType(SessionType.GROUP_RECURRING).status(SessionStatus.ONGOING).build()
+        def standalone = Session.builder().id(2L).sessionType(SessionType.STANDALONE).status(SessionStatus.ONGOING).build()
 
         when:
         service.closePastSessions()
 
         then:
-        1 * sessionRepository.findSessionsToComplete(
-                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >> batch
+        1 * sessionRepository.findSessionsToComplete(_, _ as Instant, pageable) >> new PageImpl([custom, standalone], pageable, 2)
         1 * sessionRepository.saveAll(_)
-        1 * groupService.getGroupRecurrenceConfigsByGroupIds({ it as Set == [10L, 20L] as Set }) >> []
-    }
-
-    def "closePastSessions never calls group-api when the completed batch has no GROUP_RECURRING sessions"() {
-        given:
-        def pageable = PageRequest.of(0, 200)
-        def standalone = Session.builder().id(1L).sessionType(SessionType.STANDALONE).status(SessionStatus.ONGOING).build()
-        def batch = new PageImpl([standalone], pageable, 1)
-
-        when:
-        service.closePastSessions()
-
-        then:
-        1 * sessionRepository.findSessionsToComplete(
-                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >> batch
-        1 * sessionRepository.saveAll(_)
-        0 * groupService._
-    }
-
-    /** A generation failure must not fail closePastSessions — the batch's COMPLETED transitions
-     * already succeeded and must not be treated as failed just because generation had a problem. */
-    def "closePastSessions swallows a generation failure without failing the batch"() {
-        given:
-        def pageable = PageRequest.of(0, 200)
-        def groupSession = Session.builder().id(1L).groupId(10L)
-                .sessionType(SessionType.GROUP_RECURRING).status(SessionStatus.ONGOING).build()
-        def batch = new PageImpl([groupSession], pageable, 1)
-
-        when:
-        service.closePastSessions()
-
-        then:
-        1 * sessionRepository.findSessionsToComplete(
-                [SessionStatus.SCHEDULED, SessionStatus.ONGOING], _ as Instant, pageable) >> batch
-        1 * sessionRepository.saveAll(_)
-        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> { throw new RuntimeException("boom") }
-        noExceptionThrown()
+        0 * eventPublisher.publishEvent(_)
     }
 
     def "startOngoingSessions flips SCHEDULED sessions whose start has arrived to ONGOING, looping until empty"() {

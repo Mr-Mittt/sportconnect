@@ -6,6 +6,8 @@ import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent;
+import com.sportconnect.session.api.event.SessionGroupCancelledEvent;
+import com.sportconnect.session.api.event.SessionGroupCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
@@ -139,6 +141,16 @@ public class SessionEventsConsumer {
             case "session.share.created" -> {
                 // SESSION-66 / CLIENT-SESSION-49: a friend shared a session with the recipient (single recipient).
                 SessionShareCreatedEvent e = objectMapper.readValue(body, SessionShareCreatedEvent.class);
+                yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId());
+            }
+            case "session.group.created" -> {
+                // SESSION-GROUP-1: a group session was created for the recipient (single recipient).
+                SessionGroupCreatedEvent e = objectMapper.readValue(body, SessionGroupCreatedEvent.class);
+                yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId());
+            }
+            case "session.group.cancelled" -> {
+                // SESSION-GROUP-1: a group session was cancelled; the recipient is in its audience or was JOINED.
+                SessionGroupCancelledEvent e = objectMapper.readValue(body, SessionGroupCancelledEvent.class);
                 yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId());
             }
             case "session.invitation.created" -> {

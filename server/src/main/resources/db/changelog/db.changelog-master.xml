@@ -250,5 +250,19 @@
     <include file="db/changelog/changes/V092__notifications_message.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-66: partial index of the active users (id WHERE is_active = true) for the "active accounts only" lookups -->
     <include file="db/changelog/changes/V093__users_active_partial_index.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-1: sessions.group_audience + session_audience_members; the unique (group_id, scheduled_start) key is dropped for a plain index -->
+    <include file="db/changelog/changes/V094__group_session_audience_and_drop_unique_start.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-4: group_session_settings, group_session_recurrences, group_session_recurrence_members -->
+    <include file="db/changelog/changes/V095__group_session_settings_and_recurrences.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-5: sessions.recurrence_id / occurrence_date (+ unique index), group_session_generation_queue -->
+    <include file="db/changelog/changes/V096__group_session_generation_queue.sql" relativeToChangelogFile="false"/>
+    <!-- GROUP-1: drops groups.recurrence_* and group_settings.auto_generate_sessions (the old single weekly rule; DESTRUCTIVE) -->
+    <include file="db/changelog/changes/V097__drop_old_group_recurrence_rule.sql" relativeToChangelogFile="false"/>
+    <!-- Review: a SPECIFIC group-session audience moves from session_audience_members (dropped) to sessions.group_audience_user_ids -->
+    <include file="db/changelog/changes/V098__group_session_audience_on_session.sql" relativeToChangelogFile="false"/>
+    <!-- Review: a SPECIFIC recurrence audience moves from group_session_recurrence_members (dropped) to group_session_recurrences.audience_user_ids -->
+    <include file="db/changelog/changes/V099__group_session_recurrence_audience_on_recurrence.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-5 review: a skipped queue row is IGNORED with a reason (and last_attempt_at) -->
+    <include file="db/changelog/changes/V100__group_session_queue_ignored_status.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

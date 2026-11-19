@@ -1,0 +1,41 @@
+# SESSION-GROUP-10 · Review corrections and enhancements of the group-session chain (SESSION-GROUP-1, 4 and 5)
+
+**Status:** `DONE` (2026-11-19)
+**Type:** Correction and Enhancement · **Depends on:** SESSION-GROUP-1, SESSION-GROUP-4, SESSION-GROUP-5 (changes what they built); client contract notes on CLIENT-GROUP-SESSION-4 and 5
+**Filed:** 2026-11-19, after the owner reviewed the server chain (SESSION-GROUP-1 to 6, GROUP-1) point by point: why a table for an audience, why a settings table, what drains the queue and what happens when two things run at once. Every point was argued in the session; each commit below is what was decided. Built on two local branches: `feature/session-group-audience-on-session` (the first commit, `ccc5bd8`) and `feature/session-group-recurrence-audience-on-recurrence` (the other eight).
+
+## The eight commits of this branch (and the one before it)
+
+| Commit | What | Why |
+|---|---|---|
+| `ccc5bd8` (previous branch) | A `SPECIFIC` session audience is stored on the session, not in a table: `sessions.group_audience_user_ids`, one TEXT column of comma-separated UUIDs, unique in Java (`UuidListConverter`), read and split at a cancel (V098, which copies any rows and drops `session_audience_members`) | The audience is written once, read only when the session is cancelled and never queried by an id; the table's rows were never deleted (one per chosen member per session, for ever) |
+| `6dcfe05` | The same for a recurrence: `group_session_recurrences.audience_user_ids`, replacing `group_session_recurrence_members` (V099); an update replaces the list whole, switching to ALL_MEMBERS clears it, generation copies it onto the session | It was always read and replaced as a whole; the table cost a delete + flush + insert on every update (Hibernate runs inserts before deletes and the unique key collided), a second query on every list, and an entity, repository and table |
+| `dbc0be2` (docs) | Filed SESSION-GROUP-7 (the three `SessionGenerationJob` jobs run on every instance with no lock) and SESSION-GROUP-8 (prune finished queue rows) | Follow-ups must exist as real tickets, not as prose |
+| `d11fbfe` (docs) | The known concurrency gaps of the queue written down (Q1 to Q4: two planners queue one slot; S1: two runners build one slot; S2: attempts counted twice; E1: a stale queued day after an edit), with the log lines that show them | One instance with several threads races exactly like two instances: each transaction has its own pooled connection, never shared |
+| `1bc89f3` (docs) | The decision that the runner becomes asynchronous; SESSION-GROUP-9 (scale the runners with the backlog, up to a limit); "saved, sessions will appear shortly" contract on CLIENT-GROUP-SESSION-4 and 5; gaps R1 and R2 | The queue was drained only as a side effect of three events, synchronously on the triggering thread |
+| `4e3becf` | A skipped slot is `IGNORED` with a reason (`OUTDATED`, `SUPERSEDED`, `GENERATION_OFF`, `RECURRENCE_INACTIVE`, `GROUP_INACTIVE`), `DONE` means a session exists, the planner revives `IGNORED` rows, `last_attempt_at` is set on a failure, and `generate()` has a last guard: the queued date must still fall on the recurrence's day rule (V100) | `DONE` meant both "made" and "skipped", so a slot skipped while generation was off was never generated when it was switched back on; and after an owner moved the weekday, the old queued slot generated a session on the old day (reproduced by an IT before the fix) |
+| `633f4ba` | The planner is race-free: `NOT_SUPPORTED`, one slot at a time through `GroupSessionQueueWriter` (each write its own `REQUIRES_NEW` transaction), a lost insert race absorbed and logged as `queue race absorbed`, `FAILED`/`IGNORED` rows revived by an atomic compare-and-set, a `PENDING` slot's `target_start` refreshed, the recurrence's other `PENDING` slots ignored as `OUTDATED` or `SUPERSEDED` | A unique-key violation rolled back the planner's whole transaction (every enabled group at startup); `ON CONFLICT` is not usable on H2 (spiked), so the violation is caught outside the writer's transaction |
+| `eb1de85` | `generate()` and `recordFailure()` row-lock the slot with a native `SELECT ... FOR UPDATE SKIP LOCKED`; no `PROCESSING` status | Two runners built the same slot (the loser created a post, then failed on the unique sessions index); a crash releases the lock and leaves the slot `PENDING`. Native because Hibernate 6.3's `H2Dialect` drops the JPA skip-locked hint and emits a plain `FOR UPDATE` (found by the IT) |
+| `7544671` | `GroupSessionGenerationWorker`: one asynchronous worker thread per instance (queue of one, discard policy, so nudges coalesce), nudged by the triggers after they plan inline, and by `GroupSessionGenerationDrainJob` every 60 seconds; properties `app.session.generation.async` and `app.session.generation.safety-net` | The retry backoff had no clock (R1), and a backlog landed on one owner's request thread with no limit on runners (R2). Not an `Executor` bean: that would switch off Boot's `applicationTaskExecutor`, used by the `@Async` email sender |
+
+## Decisions recorded
+
+- **Audience is a column, not a table**, on the session and on the recurrence (owner: uuid[] stored as a string, uniqueness in Java, read and split when needed). The audience only decides who is notified; a member becomes a participant by clicking Join.
+- **`group_session_settings` stays in the session domain.** A setting lives with the domain whose behaviour it changes (here: cancelling sessions, queueing generation, a group post, all in session-impl); a setting several modules must obey (group privacy, active or deleted, membership) is the group's, exposed through group-api and pulled by the others.
+- **Custom and regular sessions are told apart by `sessions.recurrence_id`** (set = regular, null = custom or older). Left as it is: no response field, no new `SessionType` (the name `GROUP_RECURRING` is misleading for a custom session).
+- **The slot's identity is `(recurrence_id, occurrence_date)`**, the local date in the location's timezone; the instant (`target_start`) orders the queue and is refreshed when a same-day edit reuses the row. An instant as identity would let a time or timezone edit create a second session for one local day.
+- **One authoritative slot per recurrence**: its next slot; any other `PENDING` slot of the recurrence is obsolete (this replaces the owner's three-case proposal: an old slot still ahead after an edit is the stale one, not the new one).
+
+## Migrations and configuration
+
+`V098` (audience on the session), `V099` (audience on the recurrence) and `V100` (`IGNORED`, `ignored_reason`, `last_attempt_at`), each registered in `db.changelog-master.xml`, mirrored in the H2 `schema.sql`, with their release-note and rollback lines. Nothing was released with the tables they replace, so on production they add a column and drop an empty table. Two optional properties, both default `true`, both `false` in the test profile.
+
+## Tests
+
+Session-impl 649 tests and 153 server ITs (the session and group set) green at the end. Mutation checks: 6 of 6 (session audience), 5 of 5 (recurrence audience, one survivor tightened), 9 of 10 (IGNORED and the guard; the survivor was an equivalent mutant and the line was removed), 10 of 10 (race-free queueing), 4 of 4 (`SKIP LOCKED`), 8 of 8 (worker). Real-concurrency ITs: two planners at once behind a barrier, a row lock held in one thread while another runner is skipped, and the real asynchronous worker returning at once and generating in the background.
+
+## Not run, not done
+
+Not run: PostgreSQL itself (the migrations and the lock statement ran on H2), two real instances, a live server with async and the safety net on, the full `:server:test`. Not done: the runner's returned count still includes slots it skipped because another runner held them (a log number only). Follow-ups filed: SESSION-GROUP-7 (scheduled jobs lock), SESSION-GROUP-8 (prune the queue), SESSION-GROUP-9 (scale the worker); client: the contract note on CLIENT-GROUP-SESSION-4 and 5 (the six client tickets are not started).
+
+**Out of scope:** The client; the scheduled jobs of `SessionGenerationJob`; pruning the queue; scaling the worker.

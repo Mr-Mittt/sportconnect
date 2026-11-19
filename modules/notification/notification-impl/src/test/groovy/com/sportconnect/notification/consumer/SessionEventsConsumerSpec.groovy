@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent
+import com.sportconnect.session.api.event.SessionGroupCancelledEvent
+import com.sportconnect.session.api.event.SessionGroupCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent
 import com.sportconnect.session.api.event.SessionShareCreatedEvent
@@ -255,6 +257,40 @@ class SessionEventsConsumerSpec extends Specification {
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.share.created" && e.sessionId() == 7L && e.actorId() == actorId &&
+                    e.singleRecipient() == recipientId && e.message() == null
+        })
+    }
+
+    def "dispatches session.group.created as a single-recipient event (SESSION-GROUP-1)"() {
+        given:
+        def actorId = UUID.randomUUID()
+        def recipientId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(SessionGroupCreatedEvent.builder()
+                .sessionId(8L).actorId(actorId).recipientUserId(recipientId).groupId(5L).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.group.created", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.group.created" && e.sessionId() == 8L && e.actorId() == actorId &&
+                    e.singleRecipient() == recipientId && e.message() == null
+        })
+    }
+
+    def "dispatches session.group.cancelled as a single-recipient event (SESSION-GROUP-1)"() {
+        given:
+        def actorId = UUID.randomUUID()
+        def recipientId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(SessionGroupCancelledEvent.builder()
+                .sessionId(9L).actorId(actorId).recipientUserId(recipientId).groupId(5L).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.group.cancelled", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.group.cancelled" && e.sessionId() == 9L && e.actorId() == actorId &&
                     e.singleRecipient() == recipientId && e.message() == null
         })
     }

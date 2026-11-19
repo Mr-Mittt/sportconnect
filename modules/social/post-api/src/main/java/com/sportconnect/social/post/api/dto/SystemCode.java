@@ -19,6 +19,13 @@ package com.sportconnect.social.post.api.dto;
  * {@code true}/{@code false}. {@code SESSION_FEE_CHANGED} carries {@code oldFeeType}, {@code oldFeeAmountVnd},
  * {@code newFeeType} and {@code newFeeAmountVnd} instead (amount empty unless {@code FIXED});
  * {@code SESSION_ATTRIBUTES_CHANGED} carries {@code name} only.
+ *
+ * <p>SESSION-GROUP-4: the {@code GROUP_SESSION_*} codes are the {@code GROUP_SYSTEM} posts written when the owner or an admin
+ * changes how a group's regular sessions are generated. All carry {@code name} (who changed it) and {@code mode}
+ * ({@code WEEKLY} or {@code MONTHLY}); {@code GROUP_SESSION_RECURRENCE_ADDED}, {@code _UPDATED} and {@code _DELETED} also
+ * carry {@code day} (the weekday number 1 to 7, Monday first, or the day of the month, per {@code mode}) and {@code time}
+ * ({@code HH:mm}, empty if none); {@code GROUP_SESSION_MODE_CHANGED} carries {@code mode} as the new mode.
+ * {@code GROUP_SESSION_GENERATION_ON} and {@code _OFF} carry {@code name} and {@code mode}.
  */
 public enum SystemCode {
     SESSION_JOINED,
@@ -41,5 +48,11 @@ public enum SystemCode {
     SESSION_MALE_SLOTS_CHANGED,
     SESSION_FEMALE_SLOTS_CHANGED,
     SESSION_GAME_MOOD_CHANGED,
-    SESSION_ATTRIBUTES_CHANGED
+    SESSION_ATTRIBUTES_CHANGED,
+    GROUP_SESSION_RECURRENCE_ADDED,
+    GROUP_SESSION_RECURRENCE_UPDATED,
+    GROUP_SESSION_RECURRENCE_DELETED,
+    GROUP_SESSION_GENERATION_ON,
+    GROUP_SESSION_GENERATION_OFF,
+    GROUP_SESSION_MODE_CHANGED
 }

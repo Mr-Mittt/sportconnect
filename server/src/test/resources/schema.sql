@@ -109,7 +109,6 @@ CREATE TABLE IF NOT EXISTS group_settings (
     allow_member_posts BOOLEAN DEFAULT TRUE,
     require_post_approval BOOLEAN DEFAULT FALSE,
     allow_member_invites BOOLEAN DEFAULT FALSE,
-    auto_generate_sessions BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -146,13 +145,6 @@ CREATE TABLE IF NOT EXISTS groups (
     is_active BOOLEAN DEFAULT TRUE,
     rules VARCHAR(2000) NOT NULL DEFAULT '',
     schedule VARCHAR(2000) NOT NULL DEFAULT '',
-    -- GROUP-RECUR-1 (V033/V036) — needed for a real @SpringBootTest to persist a Group entity,
-    -- which has mapped these fields since that ticket shipped.
-    recurrence_day_of_week VARCHAR(10),
-    recurrence_time TIME,
-    recurrence_duration_minutes INTEGER,
-    recurrence_location_id BIGINT,
-    recurrence_location_note VARCHAR(500),
     sport_id BIGINT,
     created_by UUID NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -410,7 +402,63 @@ CREATE TABLE IF NOT EXISTS sessions (
     attributes JSON,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
-    CONSTRAINT unique_group_session_start UNIQUE (group_id, scheduled_start)
+    -- SESSION-GROUP-1 (V094): who a group session was made for; the unique (group_id, scheduled_start) key is gone.
+    group_audience VARCHAR(20),
+    -- Review (V098): the chosen members of a SPECIFIC audience, comma-separated UUIDs (session_audience_members is gone).
+    group_audience_user_ids TEXT,
+    -- SESSION-GROUP-5 (V096): the recurrence and local date a regular session was generated for (NULLs never collide).
+    recurrence_id BIGINT,
+    occurrence_date DATE,
+    CONSTRAINT unique_session_recurrence_occurrence UNIQUE (recurrence_id, occurrence_date)
+);
+
+-- SESSION-GROUP-4 (V095): a group's regular-session settings and recurrence configurations. H2 JSON stands in for JSONB.
+CREATE TABLE IF NOT EXISTS group_session_settings (
+    group_id BIGINT PRIMARY KEY,
+    enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    mode VARCHAR(10) NOT NULL DEFAULT 'WEEKLY',
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS group_session_recurrences (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    mode VARCHAR(10) NOT NULL,
+    day_key INTEGER NOT NULL,
+    start_time TIME NOT NULL,
+    duration_minutes INTEGER,
+    location_id BIGINT,
+    location_note VARCHAR(500),
+    audience VARCHAR(20) NOT NULL DEFAULT 'ALL_MEMBERS',
+    -- Review (V099): the chosen members of a SPECIFIC audience, comma-separated UUIDs (group_session_recurrence_members is gone).
+    audience_user_ids TEXT,
+    fee_type VARCHAR(10),
+    fee_amount_vnd BIGINT,
+    fee_note VARCHAR(300),
+    game_mood INTEGER NOT NULL DEFAULT 5,
+    attributes JSON,
+    is_draft BOOLEAN NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- SESSION-GROUP-5 (V096): the slots still to be generated, drained in target_start order.
+CREATE TABLE IF NOT EXISTS group_session_generation_queue (
+    id BIGSERIAL PRIMARY KEY,
+    recurrence_id BIGINT NOT NULL,
+    occurrence_date DATE NOT NULL,
+    target_start TIMESTAMP WITH TIME ZONE NOT NULL,
+    status VARCHAR(10) NOT NULL DEFAULT 'PENDING',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    last_error VARCHAR(500),
+    -- SESSION-GROUP-5 review (V100): why a slot was skipped (IGNORED), and when it was last tried.
+    ignored_reason VARCHAR(30),
+    last_attempt_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    FOREIGN KEY (recurrence_id) REFERENCES group_session_recurrences(id) ON DELETE CASCADE,
+    CONSTRAINT unique_group_session_queue_item UNIQUE (recurrence_id, occurrence_date)
 );
 
 CREATE TABLE IF NOT EXISTS session_participants (

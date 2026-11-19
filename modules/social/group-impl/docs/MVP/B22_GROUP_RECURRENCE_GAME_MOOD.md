@@ -1,6 +1,6 @@
 # B22 · Group recurrence config carries a game mood for the sessions it generates
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-19, closed as superseded: the old single rule this ticket would have extended was removed by GROUP-1; the game mood now lives on the new recurrence configuration, SESSION-GROUP-4)
 **Type:** Enhancement · **Depends on:** SESSION-46 (session backlog) ·
 **Filed:** 2026-11-11, deferred from SESSION-46 (owner: generated recurring sessions get `gameMood` 5 for now; the group-level setting is its own topic).
 

@@ -20,10 +20,11 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CreateSessionRequest {
 
-    /** Null = standalone session. Non-null = group-linked, gated on canManageMembers. */
+    /** Null = standalone session. Non-null = group-linked: any active member of the group may create it (SESSION-GROUP-1). */
     private Long groupId;
 
-    /** Required when groupId is null; inherited from the group otherwise if omitted. */
+    /** Required when groupId is null. For a group session it is ignored: the sport is always the group's
+     * (SESSION-GROUP-1; the create form hides it). */
     private Long sportId;
 
     @Size(max = 200, message = "title must not exceed 200 characters")
@@ -84,9 +85,18 @@ public class CreateSessionRequest {
     @Size(max = 300, message = "feeNote must not exceed 300 characters")
     private String feeNote;
 
-    /** Omitted → false (not mandatory like capacity/feeType). false = non-invited joiners land
-     * in PENDING, awaiting creator/owner-admin approval. */
+    /** Omitted → false for a standalone session, {@code true} for a group session (SESSION-GROUP-1). false = non-invited
+     * joiners land in PENDING, awaiting creator/owner-admin approval. */
     private Boolean autoApprove;
+
+    /** SESSION-GROUP-1 — group session only (ignored for a standalone one): who is notified. Omitted →
+     * {@code ALL_MEMBERS}. Decides nothing about who can see or join the session. */
+    private GroupAudience audience;
+
+    /** SESSION-GROUP-1 — with {@code audience = SPECIFIC}: the members to notify (at least one, no upper limit; every id
+     * must be a member of the group, else 400 {@code SESSION_AUDIENCE_NOT_MEMBER}). The creator's own id and duplicates
+     * are ignored. Ignored when the audience is {@code ALL_MEMBERS}. */
+    private List<UUID> audienceUserIds;
 
     /** SESSION-69 — omitted → {@code true} (public). {@code false} makes a <b>private</b> standalone session: seen only by its
      * creator and its invitees, never listed in Discover, not joinable or shareable by anyone else. Ignored for a group-linked

@@ -2,6 +2,7 @@ package com.sportconnect.session.api.service;
 
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
+import com.sportconnect.session.api.dto.GroupSessionBucket;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
@@ -51,6 +52,12 @@ public interface SessionService {
      * <p>SESSION-33: {@code request.scheduledStart} is a client-supplied offset-aware instant,
      * stored exactly as the UTC instant it implies — never reinterpreted through {@code
      * locationId}'s own timezone.
+     *
+     * <p>SESSION-GROUP-1: with a {@code groupId}, any active member of the group may create the session (403
+     * {@code SESSION_GROUP_MEMBER_REQUIRED} otherwise); the sport is the group's (a sent {@code sportId} is ignored when the
+     * group has one), the session is never public, {@code autoApprove} defaults to true and the creator is {@code JOINED}.
+     * {@code audience} ({@code ALL_MEMBERS} default, or {@code SPECIFIC} with {@code audienceUserIds}) decides only who is
+     * notified with {@code session.group.created}; every member can still see and join, and no {@code INVITED} row is made.
      */
     SessionResponse createSession(UUID userId, CreateSessionRequest request);
 
@@ -75,8 +82,11 @@ public interface SessionService {
      * non-member, whether the group is public, private, non-existent, or inactive —
      * {@code GroupService.isGroupMember} returns false uniformly for all of those, and this
      * deliberately doesn't distinguish them (doesn't leak group existence to a non-member).
+     *
+     * <p>SESSION-GROUP-2: {@code bucket} (nullable) narrows to ONGOING, SCHEDULED, PREPARING (its own bucket) or HISTORY
+     * (COMPLETED and CANCELLED, newest first), in a fixed order that ignores the caller's own sort; null = every status.
      */
-    Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable);
+    Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, GroupSessionBucket bucket, Pageable pageable);
 
     /**
      * SESSION-27 — every session (standalone or group-linked) where the caller currently has a
@@ -485,23 +495,6 @@ public interface SessionService {
     Map<Long, String> getSessionTitlesByIds(List<Long> sessionIds);
 
     /**
-     * SESSION-38 — event-driven replacement for the old hourly full-group-scan sweep. Called by
-     * {@code group-impl} right after {@code updateGroupRecurrence}/{@code updateGroupSettings}
-     * saves, on the chance that save just made this group eligible for auto-generation. A no-op
-     * (never throws for these cases) if the group isn't found, {@code autoGenerateSessions} is
-     * false, the recurrence rule is incomplete, or the next occurrence already exists — the caller
-     * doesn't need to pre-check any of that itself. Idempotent, like every other generation path in
-     * this domain — safe to call more than once for the same group.
-     *
-     * <p>The caller is responsible for failure isolation: a genuine failure (e.g. a
-     * {@code LocationService} lookup error) propagates as an unchecked exception rather than being
-     * swallowed here, since only the caller knows whether its own operation should still succeed.
-     * {@code group-impl}'s caller catches and logs rather than letting it fail the enclosing
-     * settings/recurrence update.
-     */
-    void generateNextOccurrenceForGroup(Long groupId);
-
-    /**
      * SESSION-66 — any user shares a standalone session with friends, whatever the session's status and whatever their
      * own participation (CLIENT-SESSION-49 relaxed the first rules). A share is a notification, not an invitation: one
      * {@code session.share.created} outbox row per recipient (actor = the caller), no participant row, no system
@@ -509,7 +502,9 @@ public interface SessionService {
      * under the normal join rules.
      *
      * <p>Refusals, checked in this order and before any write: {@code SESSION_NOT_FOUND} (404, missing or its group is
-     * gone), {@code SESSION_SHARE_NOT_ALLOWED} (403, a group session or a private one, SESSION-69: shareable by nobody).
+     * gone), {@code SESSION_SHARE_NOT_ALLOWED} (403, a private standalone session, SESSION-69) or, for a group session,
+     * {@code SESSION_GROUP_MEMBER_REQUIRED} (403, the caller is not a member of the group; SESSION-GROUP-3: a member shares
+     * a group session with the group's other members instead of friends).
      *
      * <p>Skipped without error, and counted in {@code skipped}: anyone who is not a friend of the caller (the caller's
      * own id included), a friend already {@code JOINED}, {@code REQUESTED} or {@code INVITED}, and a deactivated

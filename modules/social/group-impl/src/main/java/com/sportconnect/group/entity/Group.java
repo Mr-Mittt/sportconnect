@@ -50,30 +50,11 @@ public class Group {
     @Builder.Default
     private String rules = "";
 
-    /** Free-text notes, owner-editable prose — kept as-is; see recurrence* fields below for the
-     * structured rule the session-generation job actually reads (SESSION-2). */
+    /** Free-text notes, owner-editable prose (GROUP-1: the structured recurrence rule that used to sit beside it is gone;
+     * regular sessions are configured in the session domain, SESSION-GROUP-4). */
     @Column(columnDefinition = "TEXT")
     @Builder.Default
     private String schedule = "";
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "recurrence_day_of_week", length = 10)
-    private DayOfWeek recurrenceDayOfWeek;
-
-    @Column(name = "recurrence_time")
-    private LocalTime recurrenceTime;
-
-    @Column(name = "recurrence_duration_minutes")
-    private Integer recurrenceDurationMinutes;
-
-    /** References modules/location's shared Location table — no JPA relation, id only. */
-    @Column(name = "recurrence_location_id")
-    private Long recurrenceLocationId;
-
-    /** Copied verbatim into Session.locationNote on every auto-generated occurrence — e.g.
-     * "always Court 3". */
-    @Column(name = "recurrence_location_note", length = 500)
-    private String recurrenceLocationNote;
 
     @Column(name = "sport_id")
     private Long sportId;

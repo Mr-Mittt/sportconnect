@@ -13,15 +13,12 @@ import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
 import com.sportconnect.group.api.dto.GroupMemberSearchResultResponse;
-import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
-import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
 import com.sportconnect.group.api.dto.UpdateGroupGeneralDataRequest;
-import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import com.sportconnect.group.api.service.GroupService;
@@ -43,9 +40,6 @@ import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.group.repository.GroupRoleRepository;
 import com.sportconnect.group.repository.GroupSettingsRepository;
 import com.sportconnect.group.repository.GroupTypeRepository;
-import com.sportconnect.location.api.dto.LocationResponse;
-import com.sportconnect.location.api.service.LocationService;
-import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.api.dto.SystemCode;
@@ -100,8 +94,6 @@ public class GroupServiceImpl implements GroupService {
     private final GroupInvitationInviterRepository invitationInviterRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
-    private final LocationService locationService;
-    private final SessionService sessionService;
 
     // services/chat (the first non-Java service in this repo) consumes this stream to keep its
     // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md for the full
@@ -110,17 +102,13 @@ public class GroupServiceImpl implements GroupService {
     private static final int DOMAIN_EVENT_SCHEMA_VERSION = 1;
 
     /**
-     * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code postService} and
-     * {@code sessionService} must be {@code @Lazy}: PostServiceImpl depends on GroupService too
-     * (membership/permission checks), and as of SESSION-38 SessionServiceImpl does too (it already
-     * depended on GroupService since SESSION-1) — eager construction of either pair of beans forms
-     * a cycle Spring refuses to start with by default. postService is only used here for a handful
-     * of pinned-post lookups, and sessionService only for triggering event-driven generation from
-     * updateGroupRecurrence/updateGroupSettings — a lazy proxy defers resolving the real
-     * PostServiceImpl/SessionServiceImpl bean until one of those calls actually happens, which is
-     * well after every bean exists. Relying on Lombok to copy @Lazy onto a generated constructor
-     * parameter is not guaranteed without a lombok.config entry, so this is spelled out by hand
-     * instead.
+     * Explicit constructor (not {@code @RequiredArgsConstructor}) because {@code postService} must be {@code @Lazy}:
+     * PostServiceImpl depends on GroupService too (membership/permission checks), so eager construction of the pair forms a
+     * cycle Spring refuses to start with by default. postService is only used here for a handful of pinned-post lookups and
+     * the B9 welcome post, so a lazy proxy defers resolving the real PostServiceImpl until one of those calls actually
+     * happens, well after every bean exists. Relying on Lombok to copy @Lazy onto a generated constructor parameter is not
+     * guaranteed without a lombok.config entry, so this is spelled out by hand instead. (SESSION-GROUP-5: the second lazy
+     * dependency, on the session domain, is gone with the old generation trigger.)
      */
     public GroupServiceImpl(
             GroupRepository groupRepository,
@@ -138,9 +126,7 @@ public class GroupServiceImpl implements GroupService {
             GroupInvitationRepository invitationRepository,
             GroupInvitationInviterRepository invitationInviterRepository,
             StringRedisTemplate stringRedisTemplate,
-            ObjectMapper objectMapper,
-            LocationService locationService,
-            @Lazy SessionService sessionService) {
+            ObjectMapper objectMapper) {
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.joinRequestRepository = joinRequestRepository;
@@ -157,8 +143,6 @@ public class GroupServiceImpl implements GroupService {
         this.invitationInviterRepository = invitationInviterRepository;
         this.stringRedisTemplate = stringRedisTemplate;
         this.objectMapper = objectMapper;
-        this.locationService = locationService;
-        this.sessionService = sessionService;
     }
 
     /**
@@ -1044,159 +1028,11 @@ public class GroupServiceImpl implements GroupService {
         if (request.getAllowMemberInvites() != null) {
             settings.setAllowMemberInvites(request.getAllowMemberInvites());
         }
-        if (request.getAutoGenerateSessions() != null) {
-            settings.setAutoGenerateSessions(request.getAutoGenerateSessions());
-        }
 
         settings = groupSettingsRepository.save(settings);
         log.info("Updated settings for group {} by owner {}", groupId, userId);
-        triggerSessionGenerationIfEligible(groupId);
 
         return mapToGroupSettingsResponse(settings);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public GroupRecurrenceResponse getGroupRecurrence(Long groupId, UUID userId) {
-        Group group = groupRepository.findById(groupId)
-                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
-
-        if (!isGroupMember(groupId, userId)) {
-            throw new ForbiddenException("GROUP_MEMBER_REQUIRED", "Only group members can view the recurring session schedule", null);
-        }
-
-        return mapToRecurrenceResponse(group);
-    }
-
-    @Override
-    @Transactional
-    public GroupRecurrenceResponse updateGroupRecurrence(Long groupId, UUID userId, UpdateGroupRecurrenceRequest request) {
-        Group group = groupRepository.findById(groupId)
-                .orElseThrow(() -> new NotFoundException("GROUP_NOT_FOUND", "Group not found", null));
-
-        if (!isGroupOwner(groupId, userId)) {
-            throw new ForbiddenException("GROUP_OWNER_REQUIRED", "Only group owner can update the recurring session schedule", null);
-        }
-
-        if (request.getRecurrenceLocationId() != null) {
-            if (group.getSportId() == null) {
-                throw new BadRequestException("Group has no sport set — cannot validate a sport-specific location");
-            }
-            LocationResponse location = locationService.getLocation(request.getRecurrenceLocationId());
-            if (!group.getSportId().equals(location.getSportId())) {
-                throw new BadRequestException("GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH", "recurrenceLocationId does not match this group's sport", null);
-            }
-            group.setRecurrenceLocationId(request.getRecurrenceLocationId());
-        }
-        if (request.getRecurrenceLocationNote() != null) {
-            group.setRecurrenceLocationNote(request.getRecurrenceLocationNote());
-        }
-        if (request.getRecurrenceDayOfWeek() != null) {
-            group.setRecurrenceDayOfWeek(request.getRecurrenceDayOfWeek());
-        }
-        if (request.getRecurrenceTime() != null) {
-            group.setRecurrenceTime(request.getRecurrenceTime());
-        }
-        if (request.getRecurrenceDurationMinutes() != null) {
-            group.setRecurrenceDurationMinutes(request.getRecurrenceDurationMinutes());
-        }
-
-        group = groupRepository.save(group);
-        log.info("Updated recurrence schedule for group {} by owner {}", groupId, userId);
-        triggerSessionGenerationIfEligible(groupId);
-
-        return mapToRecurrenceResponse(group);
-    }
-
-    /**
-     * SESSION-38 — fires the event-driven generation trigger after {@code updateGroupRecurrence}/
-     * {@code updateGroupSettings} saves. Unconditional and best-effort: always calls
-     * {@code SessionService.generateNextOccurrenceForGroup}, relying entirely on the session
-     * domain's own eligibility check (autoGenerateSessions + a complete rule + not already
-     * generated) rather than duplicating that logic here — this method's only job is "something
-     * about this group's schedule might have just become eligible, let the session domain decide."
-     * A failure is logged and swallowed, never rethrown: the caller's settings/recurrence save
-     * already succeeded and must not be rolled back over a generation-side problem (e.g. a
-     * transient LocationService error) — see SESSION-38's own doc for this decision, and
-     * SESSION-41 for the follow-up on retrying a failure like this one.
-     */
-    private void triggerSessionGenerationIfEligible(Long groupId) {
-        try {
-            sessionService.generateNextOccurrenceForGroup(groupId);
-        } catch (Exception e) {
-            log.warn("Event-driven session generation failed for group {} — will only retry on the "
-                    + "next trigger for this group (SESSION-41 tracks a real backstop)", groupId, e);
-        }
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<GroupRecurrenceConfigResponse> getGroupsWithAutoGenerateSessionsEnabled() {
-        return buildRecurrenceConfigs(groupSettingsRepository.findByAutoGenerateSessionsTrue());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<GroupRecurrenceConfigResponse> getGroupRecurrenceConfigsByGroupIds(List<Long> groupIds) {
-        if (groupIds.isEmpty()) {
-            return List.of();
-        }
-        return buildRecurrenceConfigs(groupSettingsRepository.findByGroupIdInAndAutoGenerateSessionsTrue(groupIds));
-    }
-
-    /** Shared batch owner/group resolution for {@link #getGroupsWithAutoGenerateSessionsEnabled()}
-     * and {@link #getGroupRecurrenceConfigsByGroupIds(List)} — the two differ only in how
-     * {@code enabledSettings} is fetched (all-enabled vs. a specific id set), not in how each row
-     * is resolved into a response. Silently skips a settings row whose {@code Group} or owner
-     * can't be resolved, matching this method's pre-existing behavior. */
-    private List<GroupRecurrenceConfigResponse> buildRecurrenceConfigs(List<GroupSettings> enabledSettings) {
-        if (enabledSettings.isEmpty()) {
-            return List.of();
-        }
-
-        List<Long> groupIds = enabledSettings.stream()
-                .map(GroupSettings::getGroupId)
-                .collect(Collectors.toList());
-        Map<Long, Group> groupsById = groupRepository.findAllById(groupIds).stream()
-                .collect(Collectors.toMap(Group::getId, g -> g));
-
-        GroupRole ownerRole = groupRoleRepository.findByRoleName("group_owner").orElse(null);
-        Map<Long, UUID> ownerIdsByGroupId = ownerRole == null
-                ? Collections.emptyMap()
-                : groupMemberRepository.findByGroupIdInAndRoleId(groupIds, ownerRole.getId()).stream()
-                        .collect(Collectors.toMap(GroupMember::getGroupId, GroupMember::getUserId, (a, b) -> a));
-
-        List<GroupRecurrenceConfigResponse> result = new ArrayList<>();
-        for (GroupSettings settings : enabledSettings) {
-            Group group = groupsById.get(settings.getGroupId());
-            UUID ownerId = ownerIdsByGroupId.get(settings.getGroupId());
-            if (group == null || ownerId == null) {
-                continue;
-            }
-            result.add(GroupRecurrenceConfigResponse.builder()
-                    .groupId(group.getId())
-                    .groupName(group.getGroupName())
-                    .sportId(group.getSportId())
-                    .ownerId(ownerId)
-                    .recurrenceDayOfWeek(group.getRecurrenceDayOfWeek())
-                    .recurrenceTime(group.getRecurrenceTime())
-                    .recurrenceDurationMinutes(group.getRecurrenceDurationMinutes())
-                    .recurrenceLocationId(group.getRecurrenceLocationId())
-                    .recurrenceLocationNote(group.getRecurrenceLocationNote())
-                    .build());
-        }
-        return result;
-    }
-
-    private GroupRecurrenceResponse mapToRecurrenceResponse(Group group) {
-        return GroupRecurrenceResponse.builder()
-                .groupId(group.getId())
-                .recurrenceDayOfWeek(group.getRecurrenceDayOfWeek())
-                .recurrenceTime(group.getRecurrenceTime())
-                .recurrenceDurationMinutes(group.getRecurrenceDurationMinutes())
-                .recurrenceLocationId(group.getRecurrenceLocationId())
-                .recurrenceLocationNote(group.getRecurrenceLocationNote())
-                .build();
     }
 
     @Override
@@ -1247,6 +1083,12 @@ public class GroupServiceImpl implements GroupService {
         if (!isGroupActive(groupId)) return List.of();
 
         return groupMemberRepository.findUserIdsByGroupId(groupId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UUID getGroupOwnerId(Long groupId) {
+        return resolveGroupOwnerId(groupId);
     }
 
     @Override
@@ -2018,7 +1860,6 @@ public class GroupServiceImpl implements GroupService {
                 .allowMemberInvites(settings.getAllowMemberInvites())
                 .groupTypeName(groupType.getTypeName())
                 .maxMembers(groupType.getMaxMembers())
-                .autoGenerateSessions(settings.getAutoGenerateSessions())
                 .createdAt(settings.getCreatedAt())
                 .updatedAt(settings.getUpdatedAt())
                 .build();

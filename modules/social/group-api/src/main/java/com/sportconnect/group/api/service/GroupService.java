@@ -8,15 +8,12 @@ import com.sportconnect.group.api.dto.GroupInfoResponse;
 import com.sportconnect.group.api.dto.GroupInvitationResponse;
 import com.sportconnect.group.api.dto.GroupMemberResponse;
 import com.sportconnect.group.api.dto.GroupMemberSearchResultResponse;
-import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse;
-import com.sportconnect.group.api.dto.GroupRecurrenceResponse;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.dto.GroupSearchResponse;
 import com.sportconnect.group.api.dto.GroupSettingsResponse;
 import com.sportconnect.group.api.dto.JoinRequestResponse;
 import com.sportconnect.group.api.dto.PinnedPostResponse;
 import com.sportconnect.group.api.dto.UpdateGroupGeneralDataRequest;
-import com.sportconnect.group.api.dto.UpdateGroupRecurrenceRequest;
 import com.sportconnect.group.api.dto.UpdateGroupRequest;
 import com.sportconnect.group.api.dto.UpdateGroupSettingsRequest;
 import org.springframework.data.domain.Page;
@@ -155,38 +152,6 @@ public interface GroupService {
 
     GroupSettingsResponse updateGroupSettings(Long groupId, UUID userId, UpdateGroupSettingsRequest request);
 
-    // Recurring Session Schedule
-    /** Member-read gate, mirroring getGroupSettings. */
-    GroupRecurrenceResponse getGroupRecurrence(Long groupId, UUID userId);
-
-    /**
-     * Owner-write gate, mirroring updateGroupSettings. Validates (via LocationService) that
-     * recurrenceLocationId's sport matches the group's sportId when a non-null locationId is
-     * given — a BadRequestException otherwise. The session-generation job trusts an
-     * already-validated recurrenceLocationId and never re-checks it.
-     */
-    GroupRecurrenceResponse updateGroupRecurrence(Long groupId, UUID userId, UpdateGroupRecurrenceRequest request);
-
-    /**
-     * Groups with GroupSettings.autoGenerateSessions=true and a complete recurrence rule.
-     * Used exclusively by the session domain's scheduled generation job — never call this
-     * per-row in a loop from elsewhere; it already does its own batch resolution internally.
-     */
-    List<GroupRecurrenceConfigResponse> getGroupsWithAutoGenerateSessionsEnabled();
-
-    /**
-     * SESSION-38 — same shape and filtering as {@link #getGroupsWithAutoGenerateSessionsEnabled()}
-     * (GroupSettings.autoGenerateSessions=true, resolvable owner), scoped to {@code groupIds}
-     * instead of every enabled group. Does <b>not</b> filter by recurrence-rule completeness —
-     * that check is the session domain's own concern (a group with autoGenerateSessions=true but
-     * an incomplete rule is still included here; the caller decides what "complete" means). Backs
-     * the session domain's event-driven generation triggers — the completion trigger calls this
-     * with a real batch of groupIds (never one call per session), the recurrence/settings-change
-     * trigger calls it with a single-element list. Never call this per-row in a loop; batch every
-     * id you need in one call.
-     */
-    List<GroupRecurrenceConfigResponse> getGroupRecurrenceConfigsByGroupIds(List<Long> groupIds);
-
     // Permission Checks
     /**
      * Existence/lifecycle only, no caller-identity component — true iff the group exists and is
@@ -216,6 +181,14 @@ public interface GroupService {
      * of its own: the caller must already have authorized the request.
      */
     List<UUID> getMemberUserIds(Long groupId);
+
+    /**
+     * SESSION-GROUP-4 — the group's current owner: who a server-written group post is authored as (the B9 welcome post's
+     * rule: the current owner, not {@code createdBy}, and no system-user account) and who a generated session is created by.
+     * Throws {@code NotFoundException} for a group with no owner row. No access check of its own: the caller must already have
+     * authorized the request.
+     */
+    UUID getGroupOwnerId(Long groupId);
 
     boolean canManageMembers(Long groupId, UUID userId);
     

@@ -8,7 +8,6 @@ import com.sportconnect.common.exception.ConflictException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.common.exception.ResourceNotFoundException
-import com.sportconnect.group.api.dto.GroupRecurrenceConfigResponse
 import com.sportconnect.group.api.dto.GroupResponse
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.location.api.dto.LocationResponse
@@ -19,6 +18,8 @@ import com.sportconnect.session.access.SessionShareGate
 import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
 import com.sportconnect.session.api.dto.FeeType
+import com.sportconnect.session.api.dto.GroupSessionBucket
+import com.sportconnect.session.api.dto.GroupAudience
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.RejectParticipantRequest
 import com.sportconnect.session.api.dto.SessionStatus
@@ -27,6 +28,8 @@ import com.sportconnect.session.api.dto.SessionType
 import com.sportconnect.session.api.dto.StartTimeFilter
 import com.sportconnect.session.api.dto.UpdateSessionRequest
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent
+import com.sportconnect.session.api.event.SessionGroupCancelledEvent
+import com.sportconnect.session.api.event.SessionGroupCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
 import com.sportconnect.session.api.event.SessionShareCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
@@ -53,6 +56,7 @@ import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.api.service.UserService
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.domain.PageImpl
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
@@ -84,7 +88,7 @@ class SessionServiceImplSpec extends Specification {
     SessionShareGate sessionShareGate = Mock()
     SessionOutboxEventRepository sessionOutboxEventRepository = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
-    SessionGenerationService sessionGenerationService = Mock()
+    ApplicationEventPublisher eventPublisher = Mock()
     // SESSION-23: real filter + mapper â€” the filter is pure logic with its own spec, and the
     // size check needs a real serializer. Existing create/update tests pass no attributes, so
     // sportService.getSessionAttributeSchemaRaw is never hit; the attributes-path tests stub it.
@@ -94,7 +98,10 @@ class SessionServiceImplSpec extends Specification {
     SessionServiceImpl sessionService = new SessionServiceImpl(
             sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
             userFriendService, sportService, userSportProfileService, postService, commentService, sessionGate,
-            sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter, sessionGenerationService, objectMapper)
+            sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter,
+            new SessionAttributeResolver(sportService, objectMapper),
+            new GroupSessionRecipients(groupService, sessionParticipantRepository, userService),
+            eventPublisher)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
     def tennisLocation = LocationResponse.builder().id(2L).sportId(2L).name("Tennis Court").build()
@@ -116,6 +123,11 @@ class SessionServiceImplSpec extends Specification {
         // Lenient default for the same reason as above â€” 40+ createSession tests pass a sportId
         // without caring about sport status; the one test that does care overrides this.
         sportService.requireActiveSportById(_) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
+        // SESSION-GROUP-1: a group session's create and cancel look up the group's members and which of the people to tell are
+        // active. Lenient empty defaults (nobody to tell) for the tests that are not about the notification; the ones that are
+        // stub both themselves.
+        groupService.getMemberUserIds(_) >> []
+        userService.getActiveUserIds(_) >> ([] as Set)
     }
 
     private void stubBatchEnrichment() {
@@ -206,7 +218,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.createSession(userId, request)
 
         then:
-        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.isGroupMember(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> group
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * sessionRepository.save({ Session s -> s.groupId == 5L && s.isPublic == false }) >> saved
@@ -225,7 +237,7 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionRepository.save(_)
     }
 
-    def "createSession requires canManageMembers for a group-linked session"() {
+    def "createSession requires group membership for a group-linked session (SESSION-GROUP-1: not owner/admin)"() {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder().title("Test session")
@@ -235,9 +247,10 @@ class SessionServiceImplSpec extends Specification {
         sessionService.createSession(userId, request)
 
         then:
-        1 * groupService.canManageMembers(5L, userId) >> false
+        1 * groupService.isGroupMember(5L, userId) >> false
+        0 * groupService.canManageMembers(*_)
         def e = thrown(ForbiddenException)
-        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
+        e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
         0 * sessionRepository.save(_)
     }
 
@@ -255,7 +268,7 @@ class SessionServiceImplSpec extends Specification {
         def result = sessionService.createSession(userId, request)
 
         then:
-        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.isGroupMember(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> group
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * sessionRepository.save({ Session s -> s.sportId == 1L && s.sessionType == SessionType.GROUP_RECURRING }) >> saved
@@ -284,7 +297,7 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
     }
 
-    def "createSession does not auto-join the creator for a group-linked session"() {
+    def "createSession auto-joins the creator for a group-linked session too (SESSION-GROUP-1)"() {
         given:
         def userId = UUID.randomUUID()
         def request = CreateSessionRequest.builder().title("Test session")
@@ -298,11 +311,13 @@ class SessionServiceImplSpec extends Specification {
         sessionService.createSession(userId, request)
 
         then:
-        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.isGroupMember(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> group
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * sessionRepository.save({ Session s -> s.isPublic == false }) >> saved
-        0 * sessionParticipantRepository.saveAll(_)
+        1 * sessionParticipantRepository.saveAll({ List participants ->
+            participants.size() == 1 && participants[0].userId == userId && participants[0].status == ParticipantStatus.JOINED
+        })
         interaction { stubBatchEnrichment() }
     }
 
@@ -398,10 +413,382 @@ class SessionServiceImplSpec extends Specification {
         0 * sportService.requireActiveSportById(_)
 
         and:
-        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.isGroupMember(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> group
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * sessionRepository.save(_ as Session) >> saved
+        interaction { stubBatchEnrichment() }
+    }
+
+    // -- SESSION-GROUP-1: a member creates a custom group session, with an audience ---------------------------------------
+
+    private Session savedGroupSession(UUID creator, GroupAudience audience, Long groupId = 5L, List<UUID> chosen = null) {
+        Session.builder().id(2L).groupId(groupId).sessionType(SessionType.GROUP_RECURRING).createdBy(creator)
+                .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
+                .status(SessionStatus.SCHEDULED).groupAudience(audience).groupAudienceUserIds(chosen).build()
+    }
+
+    private CreateSessionRequest.CreateSessionRequestBuilder groupRequest() {
+        CreateSessionRequest.builder().title("Test session").groupId(5L).locationId(1L)
+                .scheduledStart(Instant.now().plusSeconds(86400))
+    }
+
+    def "createSession uses the group's sport and ignores a sportId sent for a group session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = groupRequest().sportId(9L).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        0 * sportService.requireActiveSportById(_)
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.sportId == 1L }) >> savedGroupSession(userId, GroupAudience.ALL_MEMBERS)
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession falls back to the sent sportId (checked active) for a group that has no sport, and 400s when there is none"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when: "the group has no sport and the request names one"
+        sessionService.createSession(userId, groupRequest().sportId(1L).build())
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).build()
+        1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).isActive(true).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.sportId == 1L }) >> savedGroupSession(userId, GroupAudience.ALL_MEMBERS)
+        interaction { stubBatchEnrichment() }
+
+        when: "the group has no sport and the request names none"
+        sessionService.createSession(userId, groupRequest().build())
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).build()
+        def e = thrown(BadRequestException)
+        e.errorCode == 'SESSION_SPORT_REQUIRED'
+        0 * sessionRepository.save(_)
+    }
+
+    def "createSession auto approve defaults to true for a group session, false for a standalone one, and an explicit value wins"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        (request.groupId != null ? 1 : 0) * groupService.isGroupMember(5L, userId) >> true
+        (request.groupId != null ? 1 : 0) * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.autoApprove == expected }) >> savedGroupSession(userId, null)
+        interaction { stubBatchEnrichment() }
+
+        where:
+        request                                                          | expected
+        groupRequest().build()                                           | true
+        groupRequest().autoApprove(false).build()                        | false
+        CreateSessionRequest.builder().title("T").sportId(1L).locationId(1L)
+                .scheduledStart(Instant.now().plusSeconds(86400)).build()  | false
+        CreateSessionRequest.builder().title("T").sportId(1L).locationId(1L)
+                .scheduledStart(Instant.now().plusSeconds(86400)).autoApprove(true).build() | true
+    }
+
+    def "createSession with no audience notifies every other active member of the group with session.group.created and stores ALL_MEMBERS"() {
+        given:
+        def userId = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def b = UUID.randomUUID()
+        def deactivated = UUID.randomUUID()
+        def saved = savedGroupSession(userId, GroupAudience.ALL_MEMBERS)
+
+        when:
+        sessionService.createSession(userId, groupRequest().build())
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.groupAudience == GroupAudience.ALL_MEMBERS && s.groupAudienceUserIds == null }) >> saved
+        1 * groupService.getMemberUserIds(5L) >> [userId, a, b, deactivated]
+        1 * userService.getActiveUserIds({ Collection c -> (c as Set) == ([a, b, deactivated] as Set) }) >> ([a, b] as Set)
+        1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e ->
+            e.sessionId == 2L && e.actorId == userId && e.recipientUserId == a && e.groupId == 5L }) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e ->
+            e.sessionId == 2L && e.actorId == userId && e.recipientUserId == b && e.groupId == 5L }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
+        0 * sessionParticipantRepository.saveAll({ List l -> l.any { it.status == ParticipantStatus.INVITED } })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession with a SPECIFIC audience stores the chosen members and notifies only them, never the creator, never an INVITED row"() {
+        given:
+        def userId = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def b = UUID.randomUUID()
+        def other = UUID.randomUUID()
+        def saved = savedGroupSession(userId, GroupAudience.SPECIFIC, 5L, [a, b])
+        def request = groupRequest().audience(GroupAudience.SPECIFIC).audienceUserIds([a, b, a, userId]).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        2 * groupService.getMemberUserIds(5L) >> [userId, a, b, other]
+        // The chosen members go on the session itself: distinct, without the creator, in the order given.
+        1 * sessionRepository.save({ Session s -> s.groupAudience == GroupAudience.SPECIFIC && s.groupAudienceUserIds == [a, b] }) >> saved
+        1 * userService.getActiveUserIds({ Collection c -> (c as Set) == ([a, b] as Set) }) >> ([a, b] as Set)
+        1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e -> e.recipientUserId == a }) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e -> e.recipientUserId == b }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
+        0 * sessionParticipantRepository.saveAll({ List l -> l.any { it.status == ParticipantStatus.INVITED } })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "createSession refuses a SPECIFIC audience that names someone who is not a member of the group"() {
+        given:
+        def userId = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def stranger = UUID.randomUUID()
+        def request = groupRequest().audience(GroupAudience.SPECIFIC).audienceUserIds([a, stranger]).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * groupService.getMemberUserIds(5L) >> [userId, a]
+        def e = thrown(BadRequestException)
+        e.errorCode == 'SESSION_AUDIENCE_NOT_MEMBER'
+        e.errorParams.count == 1L
+        0 * sessionRepository.save(_)
+        0 * sessionOutboxEventRepository.saveAll(_)
+    }
+
+    def "createSession refuses a SPECIFIC audience with nobody to notify (null, empty, or only the creator)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def request = groupRequest().audience(GroupAudience.SPECIFIC).audienceUserIds(ids(userId)).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        def e = thrown(BadRequestException)
+        e.errorCode == 'SESSION_AUDIENCE_REQUIRED'
+        0 * sessionRepository.save(_)
+
+        where:
+        ids << [{ UUID u -> null }, { UUID u -> [] }, { UUID u -> [u] }]
+    }
+
+    def "createSession puts no cap on a SPECIFIC audience"() {
+        given:
+        def userId = UUID.randomUUID()
+        def chosen = (1..60).collect { UUID.randomUUID() }
+        def request = groupRequest().audience(GroupAudience.SPECIFIC).audienceUserIds(chosen).build()
+
+        when:
+        sessionService.createSession(userId, request)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        2 * groupService.getMemberUserIds(5L) >> ([userId] + chosen)
+        1 * sessionRepository.save({ Session s -> s.groupAudienceUserIds.size() == 60 }) >> savedGroupSession(userId, GroupAudience.SPECIFIC, 5L, chosen)
+        interaction { stubBatchEnrichment() }
+        noExceptionThrown()
+    }
+
+    def "createSession ignores audienceUserIds when the audience is ALL_MEMBERS, and ignores the audience for a standalone session"() {
+        given:
+        def userId = UUID.randomUUID()
+        def stranger = UUID.randomUUID()
+
+        when: "ALL_MEMBERS with a list"
+        sessionService.createSession(userId, groupRequest().audience(GroupAudience.ALL_MEMBERS).audienceUserIds([stranger]).build())
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.groupAudienceUserIds == null }) >> savedGroupSession(userId, GroupAudience.ALL_MEMBERS)
+        interaction { stubBatchEnrichment() }
+
+        when: "a standalone session with an audience"
+        sessionService.createSession(userId, CreateSessionRequest.builder().title("T").sportId(1L).locationId(1L)
+                .scheduledStart(Instant.now().plusSeconds(86400)).audience(GroupAudience.SPECIFIC).audienceUserIds([stranger]).build())
+
+        then:
+        1 * locationService.getLocation(1L) >> basketballLocation
+        1 * sessionRepository.save({ Session s -> s.groupAudience == null && s.groupAudienceUserIds == null }) >> Session.builder().id(3L).sessionType(SessionType.STANDALONE)
+                .createdBy(userId).sportId(1L).locationId(1L).scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED).build()
+        0 * groupService._
+        interaction { stubBatchEnrichment() }
+    }
+
+    // -- SESSION-GROUP-1: who may change a group session, and who is told when it is cancelled -----------------------------
+
+    def "cancelSession lets the creator of a group session cancel it while still a member, without asking for a manager role"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(userId).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        def result = sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.isGroupMember(5L, userId) >> true
+        0 * groupService.canManageMembers(*_)
+        1 * sessionRepository.save(_ as Session) >> { Session s -> s }
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, _) >> []
+        interaction { stubBatchEnrichment() }
+        result.status == SessionStatus.CANCELLED
+    }
+
+    def "cancelSession refuses the creator of a group session once they have left the group, unless they manage it"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(userId).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.isGroupMember(5L, userId) >> false
+        1 * groupService.canManageMembers(5L, userId) >> false
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_ADMIN_REQUIRED'
+        0 * sessionRepository.save(_)
+        0 * sessionOutboxEventRepository.saveAll(_)
+    }
+
+    def "cancelSession lets a group owner or admin who did not create the session cancel it"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(UUID.randomUUID()).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        0 * groupService.isGroupMember(*_)
+        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * sessionRepository.save(_ as Session) >> { Session s -> s }
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, _) >> []
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "cancelSession of a group session tells the audience and the joined players, never the actor, with session.group.cancelled"() {
+        given:
+        def actor = UUID.randomUUID()
+        def member = UUID.randomUUID()
+        def player = UUID.randomUUID()
+        def deactivated = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(actor).status(SessionStatus.SCHEDULED)
+                .groupAudience(GroupAudience.ALL_MEMBERS).build()
+
+        when:
+        sessionService.cancelSession(1L, actor, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.isGroupMember(5L, actor) >> true
+        1 * sessionRepository.save(_ as Session) >> { Session s -> s }
+        1 * groupService.getMemberUserIds(5L) >> [actor, member, deactivated]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, [ParticipantStatus.JOINED]) >> [
+                SessionParticipant.builder().userId(actor).build(), SessionParticipant.builder().userId(player).build()]
+        1 * userService.getActiveUserIds({ Collection c -> (c as Set) == ([member, player, deactivated] as Set) }) >> ([member, player] as Set)
+        1 * sessionOutboxWriter.build("session.group.cancelled", { SessionGroupCancelledEvent e ->
+            e.sessionId == 1L && e.actorId == actor && e.recipientUserId == member && e.groupId == 5L }) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.group.cancelled", { SessionGroupCancelledEvent e ->
+            e.recipientUserId == player }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "cancelSession of a SPECIFIC-audience session tells only the chosen members who are still in the group"() {
+        given:
+        def actor = UUID.randomUUID()
+        def stays = UUID.randomUUID()
+        def left = UUID.randomUUID()
+        def notChosen = UUID.randomUUID()
+        def session = Session.builder().id(1L).groupId(5L).createdBy(actor).status(SessionStatus.SCHEDULED)
+                .groupAudience(GroupAudience.SPECIFIC).groupAudienceUserIds([stays, left]).build()
+
+        when:
+        sessionService.cancelSession(1L, actor, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * groupService.isGroupMember(5L, actor) >> true
+        1 * sessionRepository.save(_ as Session) >> { Session s -> s }
+        1 * groupService.getMemberUserIds(5L) >> [actor, stays, notChosen]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, [ParticipantStatus.JOINED]) >> []
+        1 * userService.getActiveUserIds({ Collection c -> (c as Set) == ([stays] as Set) }) >> ([stays] as Set)
+        1 * sessionOutboxWriter.build("session.group.cancelled", { SessionGroupCancelledEvent e -> e.recipientUserId == stays }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
+        interaction { stubBatchEnrichment() }
+    }
+
+    def "cancelSession of a regular group session reports its (group, day) so the next day can be queued; a custom or standalone one reports nothing"() {
+        given:
+        def userId = UUID.randomUUID()
+        def day = java.time.LocalDate.of(2026, 11, 20)
+        def session = Session.builder().id(1L).groupId(groupId).createdBy(userId).status(SessionStatus.SCHEDULED)
+                .recurrenceId(recurrenceId).occurrenceDate(recurrenceId != null ? day : null).build()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        (groupId != null ? 1 : 0) * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.save(_ as Session) >> { Session s -> s }
+        _ * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, _) >> []
+        (reports ? 1 : 0) * eventPublisher.publishEvent({ e ->
+            e instanceof GroupSessionGenerationEvents.RegularSessionsEnded &&
+                    e.days() == [new GroupSessionGenerationEvents.GroupDay(5L, day)] })
+        interaction { stubBatchEnrichment() }
+
+        where:
+        groupId | recurrenceId | reports
+        5L      | 7L           | true
+        5L      | null         | false
+        null    | null         | false
+    }
+
+    def "cancelSession of a standalone session tells nobody through the group events"() {
+        given:
+        def userId = UUID.randomUUID()
+        def session = Session.builder().id(1L).createdBy(userId).status(SessionStatus.SCHEDULED).build()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionRepository.save(_ as Session) >> { Session s -> s }
+        0 * groupService._
+        0 * sessionOutboxEventRepository.saveAll(_)
         interaction { stubBatchEnrichment() }
     }
 
@@ -554,7 +941,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.getGroupSessions(5L, userId, pageable)
+        sessionService.getGroupSessions(5L, userId, null, pageable)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> true
@@ -567,13 +954,68 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.getGroupSessions(5L, userId, pageable)
+        sessionService.getGroupSessions(5L, userId, null, pageable)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> false
         def e = thrown(ForbiddenException)
         e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
         0 * sessionRepository.findByGroupId(*_)
+    }
+
+    // -- SESSION-GROUP-2: a group's sessions by bucket ---------------------------------------------------------------
+
+    def "getGroupSessions with a bucket asks only for that bucket's statuses, in the fixed order, ignoring the caller's own sort"() {
+        given:
+        def userId = UUID.randomUUID()
+        def callerPage = PageRequest.of(2, 10, Sort.by("title").descending())
+
+        when:
+        sessionService.getGroupSessions(5L, userId, bucket, callerPage)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        (newestFirst ? 0 : 1) * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(5L, statuses,
+                { Pageable p -> p.pageNumber == 2 && p.pageSize == 10 && p.sort.unsorted }) >> new PageImpl([])
+        (newestFirst ? 1 : 0) * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(5L, statuses,
+                { Pageable p -> p.pageNumber == 2 && p.pageSize == 10 && p.sort.unsorted }) >> new PageImpl([])
+        0 * sessionRepository.findByGroupId(*_)
+
+        where:
+        bucket                        | statuses                                          | newestFirst
+        GroupSessionBucket.ONGOING    | [SessionStatus.ONGOING]                           | false
+        GroupSessionBucket.SCHEDULED  | [SessionStatus.SCHEDULED]                         | false
+        GroupSessionBucket.PREPARING  | [SessionStatus.PREPARING]                         | false
+        GroupSessionBucket.HISTORY    | [SessionStatus.COMPLETED, SessionStatus.CANCELLED] | true
+    }
+
+    def "getGroupSessions without a bucket keeps every status and the caller's own paging and sort"() {
+        given:
+        def userId = UUID.randomUUID()
+        def pageable = PageRequest.of(0, 10, Sort.by("title"))
+
+        when:
+        sessionService.getGroupSessions(5L, userId, null, pageable)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.findByGroupId(5L, pageable) >> new PageImpl([])
+        0 * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(*_)
+        0 * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(*_)
+    }
+
+    def "getGroupSessions with a bucket still refuses a non-member before any query"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getGroupSessions(5L, userId, GroupSessionBucket.HISTORY, PageRequest.of(0, 10))
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> false
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
+        0 * sessionRepository._
     }
 
     def "updateSession allows the creator of a standalone session"() {
@@ -2134,29 +2576,6 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionRepository.findDiscoverDateCounts(*_)
     }
 
-    // â”€â”€ SESSION-38: generateNextOccurrenceForGroup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-    def "generateNextOccurrenceForGroup re-fetches the group's config via a singleton-list batch call and delegates to SessionGenerationService"() {
-        given:
-        def config = GroupRecurrenceConfigResponse.builder().groupId(10L).build()
-
-        when:
-        sessionService.generateNextOccurrenceForGroup(10L)
-
-        then:
-        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> [config]
-        1 * sessionGenerationService.generateForConfigs([config])
-    }
-
-    def "generateNextOccurrenceForGroup still delegates with an empty configs list when the group isn't eligible"() {
-        when:
-        sessionService.generateNextOccurrenceForGroup(10L)
-
-        then:
-        1 * groupService.getGroupRecurrenceConfigsByGroupIds([10L]) >> []
-        1 * sessionGenerationService.generateForConfigs([])
-    }
-
     def "getJoinedSessions delegates to the repository for the given status"() {
         given:
         def userId = UUID.randomUUID()
@@ -3149,7 +3568,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.createSession(userId, request)
 
         then:
-        1 * groupService.canManageMembers(5L, userId) >> true
+        1 * groupService.isGroupMember(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> group
         1 * locationService.getLocation(1L) >> basketballLocation
         1 * postService.createSessionPost(userId, _) >> 43L
@@ -4198,6 +4617,107 @@ class SessionServiceImplSpec extends Specification {
 
         where:
         status << SessionStatus.values().toList()
+    }
+
+    // ---------- SESSION-GROUP-3: sharing a group session with the group's members ----------
+
+    private Session shareableGroupSession(UUID creatorId, SessionStatus status = SessionStatus.SCHEDULED) {
+        Session.builder().id(1L).groupId(5L).sessionType(SessionType.GROUP_RECURRING).createdBy(creatorId).sportId(1L)
+                .status(status).isPublic(false).build()
+    }
+
+    def "shareSession on a group session reaches the group's members, not the caller's friends, with the same share event"() {
+        given:
+        def caller = UUID.randomUUID()
+        def memberA = UUID.randomUUID()
+        def memberB = UUID.randomUUID()
+        def friendNotInGroup = UUID.randomUUID()
+        def session = shareableGroupSession(UUID.randomUUID())
+
+        when:
+        def result = sessionService.shareSession(1L, caller,
+                ShareSessionRequest.builder().userIds([memberA, memberB, friendNotInGroup]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, "SESSION_NOT_FOUND", _, "SESSION_GROUP_MEMBER_REQUIRED", _) >> session
+        1 * groupService.getMemberUserIds(5L) >> [caller, memberA, memberB]
+        0 * userFriendService._
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, [memberA, memberB]) >> []
+        1 * userService.getActiveUserIds([memberA, memberB]) >> activeIds([memberA, memberB])
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
+            e.sessionId == 1L && e.actorId == caller && e.recipientUserId == memberA }) >> new SessionOutboxEvent()
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e ->
+            e.recipientUserId == memberB }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
+        0 * sessionParticipantRepository.save(_)
+        0 * sessionParticipantRepository.saveAll(_)
+        result.sent == 2
+        result.skipped == 1
+    }
+
+    def "shareSession on a group session skips the caller, a deactivated member and a member already in the session"() {
+        given:
+        def caller = UUID.randomUUID()
+        def fresh = UUID.randomUUID()
+        def alreadyIn = UUID.randomUUID()
+        def deactivated = UUID.randomUUID()
+        def session = shareableGroupSession(caller)
+
+        when:
+        def result = sessionService.shareSession(1L, caller,
+                ShareSessionRequest.builder().userIds([caller, fresh, alreadyIn, deactivated, fresh]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, _, _, _, _) >> session
+        1 * groupService.getMemberUserIds(5L) >> [caller, fresh, alreadyIn, deactivated]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, [fresh, alreadyIn, deactivated]) >> [
+                participantRow(alreadyIn, ParticipantStatus.JOINED)]
+        1 * userService.getActiveUserIds([fresh, deactivated]) >> activeIds([fresh])
+        1 * sessionOutboxWriter.build("session.share.created", { SessionShareCreatedEvent e -> e.recipientUserId == fresh }) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 1 })
+        result.sent == 1
+        result.skipped == 3
+    }
+
+    def "shareSession on a group session is refused with the member code for a non-member, before anything is read or written"() {
+        given:
+        def caller = UUID.randomUUID()
+        def session = shareableGroupSession(UUID.randomUUID())
+
+        when:
+        sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([UUID.randomUUID()]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, "SESSION_NOT_FOUND", _, "SESSION_GROUP_MEMBER_REQUIRED", _) >> {
+            throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can share this session", null) }
+        def e = thrown(ForbiddenException)
+        e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
+        0 * groupService.getMemberUserIds(*_)
+        0 * userFriendService._
+        0 * sessionOutboxEventRepository.saveAll(_)
+    }
+
+    def "shareSession on a standalone session never asks the group for members and passes the private-session code to the gate"() {
+        given:
+        def caller = UUID.randomUUID()
+        def a = UUID.randomUUID()
+        def session = shareable(caller)
+
+        when:
+        sessionService.shareSession(1L, caller, ShareSessionRequest.builder().userIds([a]).build())
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(session)
+        1 * sessionShareGate.require(session, caller, "SESSION_NOT_FOUND", _, "SESSION_SHARE_NOT_ALLOWED", _) >> session
+        0 * groupService.getMemberUserIds(*_)
+        1 * userFriendService.getAcceptedFriendIds(caller) >> [a]
+        1 * sessionParticipantRepository.findBySessionIdAndStatusInAndUserIdIn(1L, _, _) >> []
+        1 * userService.getActiveUserIds([a]) >> activeIds([a])
+        1 * sessionOutboxWriter.build("session.share.created", _ as SessionShareCreatedEvent) >> new SessionOutboxEvent()
+        1 * sessionOutboxEventRepository.saveAll(_)
     }
 
     def "shareSession refuses a caller the gate refuses (missing session, group session) and does nothing else"() {

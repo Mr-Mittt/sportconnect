@@ -8,6 +8,8 @@ import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.event.SessionCommentCreatedEvent;
+import com.sportconnect.session.api.event.SessionGroupCancelledEvent;
+import com.sportconnect.session.api.event.SessionGroupCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
@@ -382,6 +384,39 @@ class SessionEventsConsumerIntegrationTest extends RabbitMqTestContainerBase {
         });
         assertThat(notificationRepository
                 .findByRecipientUserIdOrderByUpdatedAtDesc(sharerId, PageRequest.of(0, 10))
+                .getContent()).isEmpty();
+    }
+
+    /**
+     * SESSION-GROUP-1 - the only place {@code session.group.created} and {@code session.group.cancelled} are exercised over
+     * the real exchange: both keys have three words so they match the queue's {@code session.*.*} binding, and the consumer
+     * turns each into one notification for the recipient, naming the actor and the session.
+     */
+    @Test
+    void sessionGroupCreatedAndCancelledEvents_consumedOverRealRabbitMq_notifyTheRecipientWithTheirOwnTypes() throws Exception {
+        UUID actorId = UUID.randomUUID();
+        UUID memberId = UUID.randomUUID();
+
+        publish("session.group.created", "it-test:" + UUID.randomUUID(), SessionGroupCreatedEvent.builder()
+                .sessionId(991L).actorId(actorId).recipientUserId(memberId).groupId(5L).build());
+        publish("session.group.cancelled", "it-test:" + UUID.randomUUID(), SessionGroupCancelledEvent.builder()
+                .sessionId(992L).actorId(actorId).recipientUserId(memberId).groupId(5L).build());
+
+        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
+            List<Notification> notifications = notificationRepository
+                    .findByRecipientUserIdOrderByUpdatedAtDesc(memberId, PageRequest.of(0, 10))
+                    .getContent();
+            assertThat(notifications).extracting(Notification::getType)
+                    .containsExactlyInAnyOrder("session.group.created", "session.group.cancelled");
+            assertThat(notifications).allSatisfy(notification -> {
+                assertThat(notification.getEntityType()).isEqualTo("SESSION");
+                assertThat(notification.getActorIds()).containsExactly(actorId);
+                assertThat(notification.getMessage()).isNull();
+            });
+            assertThat(notifications).extracting(Notification::getEntityId).containsExactlyInAnyOrder("991", "992");
+        });
+        assertThat(notificationRepository
+                .findByRecipientUserIdOrderByUpdatedAtDesc(actorId, PageRequest.of(0, 10))
                 .getContent()).isEmpty();
     }
 
