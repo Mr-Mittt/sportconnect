@@ -21,15 +21,15 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class GroupSessionGenerationListener {
 
     private final GroupSessionGenerationPlanner planner;
-    private final GroupSessionGenerationRunner runner;
+    private final GroupSessionGenerationWorker worker;
 
     /** Down-time recovery: a group whose next slot passed while the server was down gets it (if still running) or the next one. */
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
         try {
             int queued = planner.enqueueForAllEnabledGroups();
-            int attempted = runner.processDue();
-            log.info("Group session generation at startup: {} slot(s) queued, {} attempted", queued, attempted);
+            worker.nudge();
+            log.info("Group session generation at startup: {} slot(s) queued, the worker is draining", queued);
         } catch (Exception e) {
             log.error("Group session generation at startup failed", e);
         }
@@ -39,7 +39,7 @@ public class GroupSessionGenerationListener {
     public void onRegularSessionsEnded(GroupSessionGenerationEvents.RegularSessionsEnded event) {
         try {
             planner.enqueueAfterDaysEnded(event.days());
-            runner.processDue();
+            worker.nudge();
         } catch (Exception e) {
             log.warn("Group session generation after regular sessions ended failed for {}", event.days(), e);
         }
@@ -49,7 +49,7 @@ public class GroupSessionGenerationListener {
     public void onConfigChanged(GroupSessionGenerationEvents.ConfigChanged event) {
         try {
             planner.enqueueAfterConfigurationChange(event.groupId());
-            runner.processDue();
+            worker.nudge();
         } catch (Exception e) {
             log.warn("Group session generation after a configuration change failed for group {}", event.groupId(), e);
         }

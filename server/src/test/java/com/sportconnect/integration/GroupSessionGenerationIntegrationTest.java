@@ -13,6 +13,7 @@ import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.GroupSessionGenerationItem;
 import com.sportconnect.session.service.GroupSessionGenerationPlanner;
+import com.sportconnect.session.service.GroupSessionGenerationWorker;
 import com.sportconnect.session.service.GroupSessionOccurrenceGenerator;
 import com.sportconnect.session.service.GroupSessionQueueWriter;
 import com.sportconnect.session.entity.GroupSessionRecurrence;
@@ -65,6 +66,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -716,6 +718,48 @@ class GroupSessionGenerationIntegrationTest extends RedisBaseIT {
         runner.processDue();
         assertThat(regularSessions()).hasSize(1);
         assertThat(queueRepository.findById(itemId).orElseThrow().getStatus()).isEqualTo(GroupSessionGenerationItem.Status.DONE);
+    }
+
+    // ---- SESSION-GROUP-5 review: the asynchronous worker ---------------------------------------------------------------------
+
+    @Test
+    void theAsynchronousWorker_returnsAtOnce_leavesALockedSlotToItsHolder_andGeneratesItInTheBackgroundWhenFree() throws Exception {
+        Instant start = slotStart();
+        Long recurrenceId = savedRecurrence(start);
+        queuePending(recurrenceId, LocalDate.ofInstant(start, ZoneOffset.UTC), start);
+        Long itemId = queueRepository.findAll().get(0).getId();
+        GroupSessionGenerationWorker worker = new GroupSessionGenerationWorker(runner, true);   // the real, asynchronous one
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> holder = pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                queueRepository.findByIdForUpdateSkipLocked(itemId).orElseThrow();
+                locked.countDown();
+                try {
+                    release.await(60, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertThat(locked.await(20, TimeUnit.SECONDS)).isTrue();
+
+            long before = System.nanoTime();
+            worker.nudge();                                                       // returns at once, the drain runs elsewhere
+            assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - before)).isLessThan(2000);
+            Thread.sleep(1000);                                                   // the worker has skipped the locked slot by now
+            assertThat(regularSessions()).isEmpty();
+
+            release.countDown();
+            holder.get(30, TimeUnit.SECONDS);
+            worker.nudge();                                                       // what the 60-second safety net does
+            await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> assertThat(regularSessions()).hasSize(1));
+            assertThat(queueRepository.findById(itemId).orElseThrow().getStatus()).isEqualTo(GroupSessionGenerationItem.Status.DONE);
+        } finally {
+            release.countDown();
+            pool.shutdown();
+            worker.shutdown();
+        }
     }
 
     @Test
