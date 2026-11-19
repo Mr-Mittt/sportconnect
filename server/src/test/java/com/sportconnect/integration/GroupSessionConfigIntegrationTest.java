@@ -8,7 +8,6 @@ import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.location.entity.Location;
 import com.sportconnect.location.repository.LocationRepository;
 import com.sportconnect.session.api.dto.RecurrenceMode;
-import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.social.post.api.dto.PostType;
@@ -54,7 +53,6 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
 
     @Autowired private GroupSessionSettingsRepository settingsRepository;
     @Autowired private GroupSessionRecurrenceRepository recurrenceRepository;
-    @Autowired private GroupSessionRecurrenceMemberRepository memberRepository;
     @Autowired private GroupRepository groupRepository;
     @Autowired private GroupMemberRepository groupMemberRepository;
     @Autowired private PostRepository postRepository;
@@ -100,7 +98,6 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
     }
 
     private void clearAll() {
-        memberRepository.deleteAll();
         recurrenceRepository.deleteAll();
         settingsRepository.deleteAll();
         postRepository.deleteAll();
@@ -314,10 +311,10 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         body.put("audienceUserIds", List.of(memberId.toString(), otherMemberId.toString()));
         Long id = createAs(adminId, body);
 
-        assertThat(memberRepository.findByRecurrenceId(id)).extracting(m -> m.getUserId())
-                .containsExactlyInAnyOrder(memberId, otherMemberId);
+        assertThat(recurrenceRepository.findById(id).orElseThrow().getAudienceUserIds())
+                .containsExactly(memberId, otherMemberId);
 
-        // Replace with one of the two (a kept member must not collide with its own old row) and a new location note.
+        // Replace with one of the two (the whole list is replaced, a kept member included) and a new location note.
         Map<String, Object> replacement = complete(4, "18:00");
         replacement.put("audience", "SPECIFIC");
         replacement.put("audienceUserIds", List.of(memberId.toString()));
@@ -326,7 +323,7 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.data.locationNote").value("Court 3"))
                 .andExpect(jsonPath("$.data.audienceUserIds.length()").value(1));
 
-        assertThat(memberRepository.findByRecurrenceId(id)).extracting(m -> m.getUserId()).containsExactly(memberId);
+        assertThat(recurrenceRepository.findById(id).orElseThrow().getAudienceUserIds()).containsExactly(memberId);
     }
 
     @Test
@@ -380,7 +377,6 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         sendAs(adminId, "DELETE", "/recurrences/" + id, null).andExpect(status().isOk());
 
         assertThat(recurrenceRepository.findById(id)).isEmpty();
-        assertThat(memberRepository.findByRecurrenceId(id)).isEmpty();
         assertThat(systemPosts()).extracting(Post::getSystemCode).contains(SystemCode.GROUP_SESSION_RECURRENCE_DELETED);
         sendAs(adminId, "DELETE", "/recurrences/" + id, null).andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_RECURRENCE_NOT_FOUND"));

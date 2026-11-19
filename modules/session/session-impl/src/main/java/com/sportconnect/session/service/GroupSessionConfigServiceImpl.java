@@ -19,9 +19,7 @@ import com.sportconnect.session.api.dto.RegularSessionsCountResponse;
 import com.sportconnect.session.api.dto.UpdateGroupSessionSettingsRequest;
 import com.sportconnect.session.api.service.GroupSessionConfigService;
 import com.sportconnect.session.entity.GroupSessionRecurrence;
-import com.sportconnect.session.entity.GroupSessionRecurrenceMember;
 import com.sportconnect.session.entity.GroupSessionSettings;
-import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.repository.SessionRepository;
@@ -66,7 +64,6 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
 
     private final GroupSessionSettingsRepository settingsRepository;
     private final GroupSessionRecurrenceRepository recurrenceRepository;
-    private final GroupSessionRecurrenceMemberRepository memberRepository;
     private final GroupService groupService;
     private final LocationService locationService;
     private final PostService postService;
@@ -155,14 +152,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         if (recurrences.isEmpty()) {
             return List.of();
         }
-        // One query for every chosen member of every recurrence, never one per recurrence.
-        Map<Long, List<UUID>> membersByRecurrence = memberRepository
-                .findByRecurrenceIdIn(recurrences.stream().map(GroupSessionRecurrence::getId).toList()).stream()
-                .collect(Collectors.groupingBy(GroupSessionRecurrenceMember::getRecurrenceId,
-                        Collectors.mapping(GroupSessionRecurrenceMember::getUserId, Collectors.toList())));
-        return recurrences.stream()
-                .map(recurrence -> toResponse(recurrence, membersByRecurrence.getOrDefault(recurrence.getId(), List.of())))
-                .toList();
+        return recurrences.stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -171,17 +161,16 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         requireManager(groupId, callerId);
         RecurrenceMode mode = settingsRepository.findById(groupId).map(GroupSessionSettings::getMode).orElse(RecurrenceMode.WEEKLY);
         GroupSessionRecurrence recurrence = GroupSessionRecurrence.builder().groupId(groupId).mode(mode).build();
-        List<UUID> audienceMembers = apply(recurrence, request, groupId, callerId);
+        apply(recurrence, request, groupId, callerId);
 
         if (recurrenceRepository.countByGroupIdAndModeAndDayKey(groupId, mode, recurrence.getDayKey()) >= MAX_PER_DAY) {
             throw dayLimit();
         }
         GroupSessionRecurrence saved = recurrenceRepository.save(recurrence);
-        saveMembers(saved.getId(), audienceMembers);
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_ADDED, "added a", saved);
         eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
-        return toResponse(saved, audienceMembers);
+        return toResponse(saved);
     }
 
     @Override
@@ -190,22 +179,17 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                                                            GroupSessionRecurrenceRequest request) {
         requireManager(groupId, callerId);
         GroupSessionRecurrence recurrence = findRecurrence(groupId, recurrenceId);
-        List<UUID> audienceMembers = apply(recurrence, request, groupId, callerId);
+        apply(recurrence, request, groupId, callerId);
 
         if (recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(groupId, recurrence.getMode(), recurrence.getDayKey(),
                 recurrenceId) >= MAX_PER_DAY) {
             throw dayLimit();
         }
         GroupSessionRecurrence saved = recurrenceRepository.save(recurrence);
-        // The unique (recurrence, user) key forbids inserting a kept member before the old row is deleted, and Hibernate runs
-        // inserts before deletes: flush the delete first.
-        memberRepository.deleteByRecurrenceId(recurrenceId);
-        memberRepository.flush();
-        saveMembers(recurrenceId, audienceMembers);
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_UPDATED, "changed the", saved);
         eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
-        return toResponse(saved, audienceMembers);
+        return toResponse(saved);
     }
 
     @Override
@@ -220,7 +204,6 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                         sessionRepository.findByRecurrenceIdAndStatusIn(recurrenceId, RegularSessionCanceller.SCHEDULED_STATUSES),
                         callerId, "Cancelled because the group removed this regular session configuration")
                 : 0;
-        memberRepository.deleteByRecurrenceId(recurrenceId);
         recurrenceRepository.delete(recurrence);
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_DELETED, "removed the", recurrence);
         return cancelled;
@@ -286,9 +269,10 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
 
     /**
      * Validates {@code request} and writes it onto {@code recurrence} (a new, mode-bearing one or an existing one: its mode
-     * never changes). Returns the validated members of a {@code SPECIFIC} audience, empty otherwise. Nothing is saved here.
+     * never changes). The validated members of a {@code SPECIFIC} audience go onto the recurrence itself (null otherwise). Nothing is
+     * saved here.
      */
-    private List<UUID> apply(GroupSessionRecurrence recurrence, GroupSessionRecurrenceRequest request, Long groupId, UUID callerId) {
+    private void apply(GroupSessionRecurrence recurrence, GroupSessionRecurrenceRequest request, Long groupId, UUID callerId) {
         RecurrenceMode mode = recurrence.getMode();
         if (!mode.isValidDay(request.getDayKey())) {
             throw new BadRequestException("SESSION_RECURRENCE_DAY_INVALID",
@@ -322,6 +306,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         recurrence.setLocationId(request.getLocationId());
         recurrence.setLocationNote(blankToNull(request.getLocationNote()));
         recurrence.setAudience(audience);
+        recurrence.setAudienceUserIds(audienceMembers.isEmpty() ? null : audienceMembers);
         recurrence.setFeeType(feeType);
         // The amount is meaningful only for a FIXED fee; a FIXED fee without one makes the configuration a draft.
         recurrence.setFeeAmountVnd(feeType == FeeType.FIXED ? request.getFeeAmountVnd() : null);
@@ -330,7 +315,6 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         recurrence.setAttributes(attributeResolver.resolve(request.getAttributes(), group.getSportId()));
         List<String> missing = missingFields(recurrence);
         recurrence.setDraft(!missing.isEmpty());
-        return audienceMembers;
     }
 
     /** What a complete configuration still lacks: the same readiness a session needs to be scheduled (location, duration, a fixed fee's amount). */
@@ -348,14 +332,6 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         return missing;
     }
 
-    private void saveMembers(Long recurrenceId, List<UUID> memberIds) {
-        if (!memberIds.isEmpty()) {
-            memberRepository.saveAll(memberIds.stream()
-                    .map(userId -> GroupSessionRecurrenceMember.builder().recurrenceId(recurrenceId).userId(userId).build())
-                    .toList());
-        }
-    }
-
     private GroupSessionSettingsResponse toSettingsResponse(Long groupId, GroupSessionSettings settings) {
         return GroupSessionSettingsResponse.builder()
                 .groupId(groupId)
@@ -364,7 +340,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                 .build();
     }
 
-    private GroupSessionRecurrenceResponse toResponse(GroupSessionRecurrence recurrence, List<UUID> audienceMembers) {
+    private GroupSessionRecurrenceResponse toResponse(GroupSessionRecurrence recurrence) {
         return GroupSessionRecurrenceResponse.builder()
                 .id(recurrence.getId())
                 .groupId(recurrence.getGroupId())
@@ -375,7 +351,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                 .locationId(recurrence.getLocationId())
                 .locationNote(recurrence.getLocationNote())
                 .audience(recurrence.getAudience())
-                .audienceUserIds(audienceMembers)
+                .audienceUserIds(recurrence.getAudienceUserIds() != null ? recurrence.getAudienceUserIds() : List.of())
                 .feeType(recurrence.getFeeType())
                 .feeAmountVnd(recurrence.getFeeAmountVnd())
                 .feeNote(recurrence.getFeeNote())

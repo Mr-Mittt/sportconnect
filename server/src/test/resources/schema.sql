@@ -430,6 +430,8 @@ CREATE TABLE IF NOT EXISTS group_session_recurrences (
     location_id BIGINT,
     location_note VARCHAR(500),
     audience VARCHAR(20) NOT NULL DEFAULT 'ALL_MEMBERS',
+    -- Review (V099): the chosen members of a SPECIFIC audience, comma-separated UUIDs (group_session_recurrence_members is gone).
+    audience_user_ids TEXT,
     fee_type VARCHAR(10),
     fee_amount_vnd BIGINT,
     fee_note VARCHAR(300),
@@ -438,14 +440,6 @@ CREATE TABLE IF NOT EXISTS group_session_recurrences (
     is_draft BOOLEAN NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS group_session_recurrence_members (
-    id BIGSERIAL PRIMARY KEY,
-    recurrence_id BIGINT NOT NULL,
-    user_id UUID NOT NULL,
-    FOREIGN KEY (recurrence_id) REFERENCES group_session_recurrences(id) ON DELETE CASCADE,
-    CONSTRAINT unique_group_session_recurrence_member UNIQUE (recurrence_id, user_id)
 );
 
 -- SESSION-GROUP-5 (V096): the slots still to be generated, drained in target_start order.

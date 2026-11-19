@@ -4,6 +4,7 @@ import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.GroupAudience;
 import com.sportconnect.session.api.dto.RecurrenceMode;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -23,7 +24,9 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * SESSION-GROUP-4 — one recurrence configuration of a group: a wall-clock slot (a day and a local start time) and what the
@@ -71,6 +74,12 @@ public class GroupSessionRecurrence {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private GroupAudience audience = GroupAudience.ALL_MEMBERS;
+
+    /** The members a {@code SPECIFIC} audience chose, kept on the configuration itself as comma-separated UUIDs (see
+     * {@link UuidListConverter}; unique, enforced in Java before the save). Null for {@code ALL_MEMBERS}. */
+    @Convert(converter = UuidListConverter.class)
+    @Column(name = "audience_user_ids", columnDefinition = "TEXT")
+    private List<UUID> audienceUserIds;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "fee_type", length = 10)

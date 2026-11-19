@@ -10,11 +10,9 @@ import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.api.event.SessionGroupCreatedEvent;
 import com.sportconnect.session.entity.GroupSessionGenerationItem;
 import com.sportconnect.session.entity.GroupSessionRecurrence;
-import com.sportconnect.session.entity.GroupSessionRecurrenceMember;
 import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.repository.GroupSessionGenerationQueueRepository;
-import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
@@ -56,7 +54,6 @@ public class GroupSessionOccurrenceGenerator {
     private final GroupSessionGenerationQueueRepository queueRepository;
     private final GroupSessionRecurrenceRepository recurrenceRepository;
     private final GroupSessionSettingsRepository settingsRepository;
-    private final GroupSessionRecurrenceMemberRepository recurrenceMemberRepository;
     private final SessionRepository sessionRepository;
     private final SessionOutboxEventRepository outboxRepository;
     private final SessionOutboxWriter outboxWriter;
@@ -116,10 +113,8 @@ public class GroupSessionOccurrenceGenerator {
         Long postId = postService.createSessionPost(ownerId, "Session: " + title);
 
         // The audience is snapshotted onto the session (a later edit of the recurrence must not change who is told of a cancel).
-        List<UUID> chosenMembers = recurrence.getAudience() == GroupAudience.SPECIFIC
-                ? recurrenceMemberRepository.findByRecurrenceId(recurrence.getId()).stream()
-                        .map(GroupSessionRecurrenceMember::getUserId).distinct().toList()
-                : null;
+        List<UUID> chosenMembers = recurrence.getAudience() == GroupAudience.SPECIFIC && recurrence.getAudienceUserIds() != null
+                ? List.copyOf(recurrence.getAudienceUserIds()) : null;
         Session session = Session.builder()
                 .groupId(groupId)
                 .isPublic(false)

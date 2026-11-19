@@ -12,12 +12,10 @@ import com.sportconnect.session.api.dto.SessionType
 import com.sportconnect.session.api.event.SessionGroupCreatedEvent
 import com.sportconnect.session.entity.GroupSessionGenerationItem
 import com.sportconnect.session.entity.GroupSessionRecurrence
-import com.sportconnect.session.entity.GroupSessionRecurrenceMember
 import com.sportconnect.session.entity.GroupSessionSettings
 import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionOutboxEvent
 import com.sportconnect.session.repository.GroupSessionGenerationQueueRepository
-import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository
 import com.sportconnect.session.repository.GroupSessionSettingsRepository
 import com.sportconnect.session.repository.SessionOutboxEventRepository
@@ -45,7 +43,6 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
     GroupSessionGenerationQueueRepository queueRepository = Mock()
     GroupSessionRecurrenceRepository recurrenceRepository = Mock()
     GroupSessionSettingsRepository settingsRepository = Mock()
-    GroupSessionRecurrenceMemberRepository recurrenceMemberRepository = Mock()
     SessionRepository sessionRepository = Mock()
     SessionOutboxEventRepository outboxRepository = Mock()
     SessionOutboxWriter outboxWriter = Mock()
@@ -57,7 +54,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
 
     @Subject
     GroupSessionOccurrenceGenerator generator = new GroupSessionOccurrenceGenerator(
-            queueRepository, recurrenceRepository, settingsRepository, recurrenceMemberRepository, sessionRepository,
+            queueRepository, recurrenceRepository, settingsRepository, sessionRepository,
             outboxRepository, outboxWriter, groupService, locationService, postService, userService, recipients)
 
     UUID owner = UUID.randomUUID()
@@ -98,7 +95,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
     private static GroupSessionRecurrence recurrence(Map args = [:]) {
         GroupSessionRecurrence.builder().id(5L).groupId(10L).mode(RecurrenceMode.WEEKLY).dayKey(3)
                 .startTime(LocalTime.parse(args.start ?: "18:00")).durationMinutes(args.minutes ?: 90).locationId(9L)
-                .locationNote("Court 3").audience(args.audience ?: GroupAudience.ALL_MEMBERS).feeType(FeeType.FIXED)
+                .locationNote("Court 3").audience(args.audience ?: GroupAudience.ALL_MEMBERS).audienceUserIds(args.audienceUserIds).feeType(FeeType.FIXED)
                 .feeAmountVnd(50000L).feeNote("per head").gameMood(7).attributes([balls: true]).draft(args.draft ?: false).build()
     }
 
@@ -201,15 +198,12 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         def told = []
         def a = UUID.randomUUID()
         def b = UUID.randomUUID()
-        recurrenceOpt = Optional.of(recurrence(audience: GroupAudience.SPECIFIC))
+        recurrenceOpt = Optional.of(recurrence(audience: GroupAudience.SPECIFIC, audienceUserIds: [a, b]))
 
         when:
         generator.generate(1L)
 
         then:
-        1 * recurrenceMemberRepository.findByRecurrenceId(5L) >> [
-                GroupSessionRecurrenceMember.builder().recurrenceId(5L).userId(a).build(),
-                GroupSessionRecurrenceMember.builder().recurrenceId(5L).userId(b).build()]
         // Snapshotted onto the session itself, distinct.
         1 * sessionRepository.save(_ as Session) >> { Session s -> built = s; s.id = 55L; s }
         1 * recipients.of({ Session s -> s.id == 55L && s.groupAudience == GroupAudience.SPECIFIC }, owner, false) >> [a]
@@ -224,12 +218,14 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         built.groupAudienceUserIds == [a, b]
     }
 
-    def "an ALL_MEMBERS slot stores no chosen members; nobody to tell writes no events"() {
+    def "an ALL_MEMBERS slot stores no chosen members, even if the recurrence still carries a list; nobody to tell writes no events"() {
+        given:
+        recurrenceOpt = Optional.of(recurrence(audienceUserIds: [UUID.randomUUID()]))
+
         when:
         generator.generate(1L)
 
         then:
-        0 * recurrenceMemberRepository._
         1 * sessionRepository.save(_ as Session) >> { Session s -> built = s; s.id = 55L; s }
         1 * recipients.of(_, owner, false) >> []
         0 * outboxRepository.saveAll(_)

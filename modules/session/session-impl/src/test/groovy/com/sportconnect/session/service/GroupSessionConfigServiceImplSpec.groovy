@@ -14,13 +14,11 @@ import com.sportconnect.session.api.dto.GroupSessionRecurrenceRequest
 import com.sportconnect.session.api.dto.RecurrenceMode
 import com.sportconnect.session.api.dto.UpdateGroupSessionSettingsRequest
 import com.sportconnect.session.entity.GroupSessionRecurrence
-import com.sportconnect.session.entity.GroupSessionRecurrenceMember
 import com.sportconnect.session.entity.GroupSessionSettings
 import com.sportconnect.session.entity.Session
 import com.sportconnect.session.repository.SessionRepository
 import com.sportconnect.session.api.dto.RegularSessionScope
 import com.sportconnect.session.api.dto.SessionStatus
-import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository
 import com.sportconnect.session.repository.GroupSessionSettingsRepository
 import com.sportconnect.social.post.api.dto.SystemCode
@@ -41,7 +39,6 @@ class GroupSessionConfigServiceImplSpec extends Specification {
 
     GroupSessionSettingsRepository settingsRepository = Mock()
     GroupSessionRecurrenceRepository recurrenceRepository = Mock()
-    GroupSessionRecurrenceMemberRepository memberRepository = Mock()
     GroupService groupService = Mock()
     LocationService locationService = Mock()
     PostService postService = Mock()
@@ -54,7 +51,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
 
     @Subject
     GroupSessionConfigServiceImpl service = new GroupSessionConfigServiceImpl(
-            settingsRepository, recurrenceRepository, memberRepository, groupService, locationService, postService,
+            settingsRepository, recurrenceRepository, groupService, locationService, postService,
             userService, attributeResolver, eventPublisher,
             regularSessionCanceller, sessionRepository)
 
@@ -143,7 +140,6 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         0 * settingsRepository.save(_)
         0 * recurrenceRepository.save(_)
         0 * recurrenceRepository.delete(_)
-        0 * memberRepository.saveAll(_)
         0 * postService._
 
         where:
@@ -373,7 +369,8 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * settingsRepository.findById(5L) >> Optional.empty()
         1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
         1 * groupService.getMemberUserIds(5L) >> [admin, a, b]
-        1 * memberRepository.saveAll({ List l -> l.size() == 2 && (l*.userId as Set) == ([a, b] as Set) && l.every { it.recurrenceId == 77L } })
+        // The chosen members go on the recurrence itself: distinct, in the order given.
+        1 * recurrenceRepository.save({ GroupSessionRecurrence r -> r.audienceUserIds == [a, b] }) >> { GroupSessionRecurrence r -> r.id = 77L; r }
         specific.audience == GroupAudience.SPECIFIC
         (specific.audienceUserIds as Set) == ([a, b] as Set)
 
@@ -384,7 +381,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * settingsRepository.findById(5L) >> Optional.empty()
         1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
         0 * groupService.getMemberUserIds(*_)
-        0 * memberRepository.saveAll(_)
+        1 * recurrenceRepository.save({ GroupSessionRecurrence r -> r.audienceUserIds == null }) >> { GroupSessionRecurrence r -> r.id = 77L; r }
         all.audienceUserIds == []
     }
 
@@ -462,7 +459,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
 
     // ---- update, delete, list --------------------------------------------------------------------------------------
 
-    def "updating replaces the fields and the chosen members (delete, flush, then insert), keeps the mode and writes an UPDATED post"() {
+    def "updating replaces the fields and the chosen members, keeps the mode and writes an UPDATED post"() {
         given:
         def existing = stored(mode: RecurrenceMode.MONTHLY, dayKey: 10)
         def a = UUID.randomUUID()
@@ -476,20 +473,45 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
         1 * groupService.getMemberUserIds(5L) >> [admin, a]
         1 * recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(5L, RecurrenceMode.MONTHLY, 12, 77L) >> 0L
-        1 * recurrenceRepository.save({ GroupSessionRecurrence r -> r.mode == RecurrenceMode.MONTHLY && r.dayKey == 12 && r.durationMinutes == 45 }) >> { GroupSessionRecurrence r -> r }
-
-        then: "the old members are removed and flushed before the new ones are inserted"
-        1 * memberRepository.deleteByRecurrenceId(77L)
-
-        then:
-        1 * memberRepository.flush()
-
-        then:
-        1 * memberRepository.saveAll({ List l -> l*.userId == [a] })
+        1 * recurrenceRepository.save({ GroupSessionRecurrence r ->
+            r.mode == RecurrenceMode.MONTHLY && r.dayKey == 12 && r.durationMinutes == 45 && r.audienceUserIds == [a] }) >> { GroupSessionRecurrence r -> r }
         1 * postService.createSystemPost(5L, owner, "Alice Admin changed the monthly session on the 12th at 18:30",
                 SystemCode.GROUP_SESSION_RECURRENCE_UPDATED, [name: "Alice Admin", mode: "MONTHLY", day: "12", time: "18:30"])
         result.mode == RecurrenceMode.MONTHLY
         result.dayKey == 12
+        result.audienceUserIds == [a]
+    }
+
+    def "updating from SPECIFIC to ALL_MEMBERS clears the chosen members; a new list replaces the old one whole"() {
+        given:
+        def a = UUID.randomUUID()
+        def b = UUID.randomUUID()
+        def existing = stored(dayKey: 4)
+        existing.audience = GroupAudience.SPECIFIC
+        existing.audienceUserIds = [a, b]
+
+        when: "replaced by a different list"
+        def replaced = service.updateRecurrence(5L, 77L, admin, complete().dayKey(4).audience(GroupAudience.SPECIFIC).audienceUserIds([b]).build())
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(existing)
+        1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
+        1 * groupService.getMemberUserIds(5L) >> [admin, a, b]
+        1 * recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(5L, RecurrenceMode.WEEKLY, 4, 77L) >> 0L
+        replaced.audienceUserIds == [b]
+        existing.audienceUserIds == [b]
+
+        when: "switched to all members, with a stale list in the request"
+        def all = service.updateRecurrence(5L, 77L, admin, complete().dayKey(4).audience(GroupAudience.ALL_MEMBERS).audienceUserIds([a]).build())
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(existing)
+        1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
+        0 * groupService.getMemberUserIds(*_)
+        1 * recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(5L, RecurrenceMode.WEEKLY, 4, 77L) >> 0L
+        all.audience == GroupAudience.ALL_MEMBERS
+        all.audienceUserIds == []
+        existing.audienceUserIds == null
     }
 
     def "updating counts the other configurations of the target day, never itself, against the limit"() {
@@ -503,7 +525,6 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         def e = thrown(ConflictException)
         e.errorCode == 'SESSION_RECURRENCE_DAY_LIMIT'
         0 * recurrenceRepository.save(_)
-        0 * memberRepository.deleteByRecurrenceId(_)
         0 * postService._
     }
 
@@ -523,7 +544,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         call << [{ s, u, r -> s.updateRecurrence(5L, 77L, u, r) }, { s, u, r -> s.deleteRecurrence(5L, 77L, u, false) }]
     }
 
-    def "deleting removes the members and the configuration (hard delete) and writes a DELETED post"() {
+    def "deleting removes the configuration, members and all (hard delete), and writes a DELETED post"() {
         given:
         def existing = stored(dayKey: 3)
 
@@ -532,27 +553,25 @@ class GroupSessionConfigServiceImplSpec extends Specification {
 
         then:
         1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(existing)
-        1 * memberRepository.deleteByRecurrenceId(77L)
         1 * recurrenceRepository.delete(existing)
         1 * postService.createSystemPost(5L, owner, "Alice Admin removed the weekly session on Wednesday at 18:30",
                 SystemCode.GROUP_SESSION_RECURRENCE_DELETED, [name: "Alice Admin", mode: "WEEKLY", day: "3", time: "18:30"])
     }
 
-    def "the list asks for every chosen member of every configuration in one query, and none when there is nothing"() {
+    def "the list carries each configuration's chosen members from the row itself, with no second query, and nothing when there is nothing"() {
         given:
         def a = UUID.randomUUID()
         def r1 = stored(dayKey: 1)
         def r2 = stored(dayKey: 2)
         r2.id = 78L
         r2.audience = GroupAudience.SPECIFIC
+        r2.audienceUserIds = [a]
 
         when:
         def result = service.getRecurrences(5L, admin)
 
         then:
         1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [r1, r2]
-        1 * memberRepository.findByRecurrenceIdIn([77L, 78L]) >> [GroupSessionRecurrenceMember.builder().recurrenceId(78L).userId(a).build()]
-        0 * memberRepository.findByRecurrenceId(_)
         result*.id == [77L, 78L]
         result[0].audienceUserIds == []
         result[1].audienceUserIds == [a]
@@ -562,7 +581,6 @@ class GroupSessionConfigServiceImplSpec extends Specification {
 
         then:
         1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> []
-        0 * memberRepository._
         empty == []
     }
 
@@ -683,8 +701,6 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
         1 * sessionRepository.findByRecurrenceIdAndStatusIn(77L, [SessionStatus.SCHEDULED, SessionStatus.PREPARING]) >> scheduled
         1 * regularSessionCanceller.cancel(scheduled, admin, "Cancelled because the group removed this regular session configuration") >> 1
-        then:
-        1 * memberRepository.deleteByRecurrenceId(77L)
         then:
         1 * recurrenceRepository.delete(_ as GroupSessionRecurrence)
         cancelled == 1
