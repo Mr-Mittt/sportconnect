@@ -63,6 +63,23 @@ class GroupSessionOccurrencesSpec extends Specification {
         1   | "2026-12-31" | "2027-01-01"
     }
 
+    def "fallsOnRule: the weekday for weekly, the day of the month for monthly, a month without that day never"() {
+        expect:
+        GroupSessionOccurrences.fallsOnRule(recurrence, date) == expected
+
+        where:
+        recurrence    | date                       | expected
+        weekly(3)     | LocalDate.of(2026, 11, 18) | true      // Wednesday
+        weekly(3)     | LocalDate.of(2026, 11, 19) | false
+        weekly(7)     | LocalDate.of(2026, 11, 22) | true      // Sunday
+        monthly(18)   | LocalDate.of(2026, 11, 18) | true
+        monthly(18)   | LocalDate.of(2026, 12, 18) | true
+        monthly(18)   | LocalDate.of(2026, 11, 19) | false
+        monthly(31)   | LocalDate.of(2026, 12, 31) | true
+        monthly(31)   | LocalDate.of(2026, 11, 30) | false     // November has no 31st: not clamped to the 30th
+        monthly(30)   | LocalDate.of(2027, 2, 28)  | false     // nor February's last day
+    }
+
     def "a slot is the date and local start time read in the zone, as a UTC instant, ending after the duration"() {
         when:
         def slot = GroupSessionOccurrences.at(weekly(3, "07:30", 60), HCM, LocalDate.of(2026, 11, 18))

@@ -93,7 +93,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
     }
 
     private static GroupSessionRecurrence recurrence(Map args = [:]) {
-        GroupSessionRecurrence.builder().id(5L).groupId(10L).mode(RecurrenceMode.WEEKLY).dayKey(3)
+        GroupSessionRecurrence.builder().id(5L).groupId(10L).mode(args.mode ?: RecurrenceMode.WEEKLY).dayKey(args.dayKey ?: 3)
                 .startTime(LocalTime.parse(args.start ?: "18:00")).durationMinutes(args.minutes ?: 90).locationId(9L)
                 .locationNote("Court 3").audience(args.audience ?: GroupAudience.ALL_MEMBERS).audienceUserIds(args.audienceUserIds).feeType(FeeType.FIXED)
                 .feeAmountVnd(50000L).feeNote("per head").gameMood(7).attributes([balls: true]).draft(args.draft ?: false).build()
@@ -133,7 +133,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         built.occurrenceDate == TODAY
     }
 
-    def "a slot already under way becomes ONGOING, one that has ended is skipped (DONE, no session)"() {
+    def "a slot already under way becomes ONGOING, one that has ended is IGNORED as OUTDATED (no session)"() {
         given:
         recurrenceOpt = Optional.of(recurrence(start: start, minutes: minutes))
 
@@ -142,7 +142,8 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
 
         then:
         (created ? 1 : 0) * sessionRepository.save(_ as Session) >> { Session s -> built = s; s.id = 55L; s }
-        queued.status == GroupSessionGenerationItem.Status.DONE
+        queued.status == (created ? GroupSessionGenerationItem.Status.DONE : GroupSessionGenerationItem.Status.IGNORED)
+        queued.ignoredReason == (created ? null : GroupSessionGenerationItem.IgnoredReason.OUTDATED)
         built?.status == status
 
         where:
@@ -153,7 +154,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         "08:30" | 90      | false   | null                     // ends exactly 10:00: ended
     }
 
-    def "nothing is created, and the row is DONE, when the recurrence is gone, a draft, incomplete, or generation does not apply"() {
+    def "nothing is created when the recurrence is gone, a draft, incomplete, or generation does not apply: the row is IGNORED with the reason, or DONE when the session already exists"() {
         given:
         recurrenceOpt = recurrenceResult
         settingsOpt = settingsResult
@@ -167,17 +168,43 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         0 * sessionRepository.save(_)
         0 * postService.createSessionPost(*_)
         0 * outboxRepository.saveAll(_)
-        queued.status == GroupSessionGenerationItem.Status.DONE
+        queued.status == (reason == null ? GroupSessionGenerationItem.Status.DONE : GroupSessionGenerationItem.Status.IGNORED)
+        queued.ignoredReason == reason
 
         where:
-        recurrenceResult                                       | settingsResult                                                                                        | active | exists
-        Optional.empty()                                       | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | true   | false
-        Optional.of(recurrence(draft: true))                   | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | true   | false
-        Optional.of(recurrence())                              | Optional.empty()                                                                                      | true   | false
-        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(false).mode(RecurrenceMode.WEEKLY).build()) | true   | false
-        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.MONTHLY).build()) | true   | false
-        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | false  | false
-        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | true   | true
+        recurrenceResult                                       | settingsResult                                                                                        | active | exists | reason
+        Optional.empty()                                       | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | true   | false | GroupSessionGenerationItem.IgnoredReason.RECURRENCE_INACTIVE
+        Optional.of(recurrence(draft: true))                   | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | true   | false | GroupSessionGenerationItem.IgnoredReason.RECURRENCE_INACTIVE
+        Optional.of(recurrence())                              | Optional.empty()                                                                                      | true   | false | GroupSessionGenerationItem.IgnoredReason.GENERATION_OFF
+        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(false).mode(RecurrenceMode.WEEKLY).build()) | true   | false | GroupSessionGenerationItem.IgnoredReason.GENERATION_OFF
+        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.MONTHLY).build()) | true   | false | GroupSessionGenerationItem.IgnoredReason.GENERATION_OFF
+        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | false  | false | GroupSessionGenerationItem.IgnoredReason.GROUP_INACTIVE
+        Optional.of(recurrence())                              | Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(RecurrenceMode.WEEKLY).build()) | true   | true | null
+    }
+
+    def "a queued date that no longer falls on the recurrence's day is IGNORED as SUPERSEDED, before anything is built; one that does is generated"() {
+        given:
+        queued = item(date: date)
+        recurrenceOpt = Optional.of(recurrence(mode: mode, dayKey: dayKey))
+        settingsOpt = Optional.of(GroupSessionSettings.builder().groupId(10L).enabled(true).mode(mode).build())
+
+        when:
+        generator.generate(1L)
+
+        then:
+        (onRule ? 1 : 0) * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).timezone("UTC").build()
+        (onRule ? 1 : 0) * sessionRepository.save(_ as Session) >> { Session s -> s.id = 55L; s }
+        (onRule ? 1 : 0) * postService.createSessionPost(*_) >> 900L   // nothing is built for a stale date, not even the post
+        queued.status == (onRule ? GroupSessionGenerationItem.Status.DONE : GroupSessionGenerationItem.Status.IGNORED)
+        queued.ignoredReason == (onRule ? null : GroupSessionGenerationItem.IgnoredReason.SUPERSEDED)
+
+        where:
+        date                     | mode                   | dayKey | onRule
+        LocalDate.of(2026, 11, 18) | RecurrenceMode.WEEKLY  | 3      | true      // a Wednesday, the rule is Wednesday
+        LocalDate.of(2026, 11, 18) | RecurrenceMode.WEEKLY  | 4      | false     // the owner moved it to Thursday
+        LocalDate.of(2026, 11, 19) | RecurrenceMode.WEEKLY  | 3      | false     // queued for the day after
+        LocalDate.of(2026, 11, 18) | RecurrenceMode.MONTHLY | 18     | true      // the 18th
+        LocalDate.of(2026, 11, 18) | RecurrenceMode.MONTHLY | 19     | false     // the owner moved it to the 19th
     }
 
     def "a missing or already handled queue row is a no-op"() {
@@ -256,6 +283,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         then:
         queued.attempts == before + 1
         queued.lastError == "boom"
+        queued.lastAttemptAt == NOW
         queued.status == status
         (status == GroupSessionGenerationItem.Status.PENDING ? queued.nextAttemptAt : NOW) == (minutes ? NOW.plusSeconds(minutes * 60L) : NOW)
         1 * queueRepository.save(queued)

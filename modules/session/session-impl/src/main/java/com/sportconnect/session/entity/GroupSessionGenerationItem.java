@@ -39,7 +39,14 @@ public class GroupSessionGenerationItem {
 
     public static final int MAX_ATTEMPTS = 5;
 
-    public enum Status { PENDING, DONE, FAILED }
+    /**
+     * {@code PENDING} waits to be generated; {@code DONE} means a session exists for the slot; {@code FAILED} gave up after
+     * {@link #MAX_ATTEMPTS}; {@code IGNORED} was skipped for an {@link IgnoredReason} and is revived if the slot is wanted again.
+     */
+    public enum Status { PENDING, DONE, FAILED, IGNORED }
+
+    /** Why a slot was skipped: the slot has ended, the recurrence no longer has this date, or generation no longer applies. */
+    public enum IgnoredReason { OUTDATED, SUPERSEDED, GENERATION_OFF, RECURRENCE_INACTIVE, GROUP_INACTIVE }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -68,6 +75,14 @@ public class GroupSessionGenerationItem {
 
     @Column(name = "last_error", length = 500)
     private String lastError;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ignored_reason", length = 30)
+    private IgnoredReason ignoredReason;
+
+    /** When the generator last tried this slot (set on a failed attempt). */
+    @Column(name = "last_attempt_at")
+    private Instant lastAttemptAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

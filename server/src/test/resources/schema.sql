@@ -452,6 +452,9 @@ CREATE TABLE IF NOT EXISTS group_session_generation_queue (
     attempts INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TIMESTAMP WITH TIME ZONE NOT NULL,
     last_error VARCHAR(500),
+    -- SESSION-GROUP-5 review (V100): why a slot was skipped (IGNORED), and when it was last tried.
+    ignored_reason VARCHAR(30),
+    last_attempt_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
     FOREIGN KEY (recurrence_id) REFERENCES group_session_recurrences(id) ON DELETE CASCADE,

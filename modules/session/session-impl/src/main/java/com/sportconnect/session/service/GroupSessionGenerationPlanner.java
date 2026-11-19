@@ -169,7 +169,7 @@ public class GroupSessionGenerationPlanner {
         return byGroup;
     }
 
-    /** Puts the slots on the queue unless already queued or generated; revives a {@code FAILED} one. */
+    /** Puts the slots on the queue unless already queued or generated; revives a {@code FAILED} or {@code IGNORED} one. */
     private int queue(List<Candidate> candidates, Instant now) {
         if (candidates.isEmpty()) {
             return 0;
@@ -197,10 +197,12 @@ public class GroupSessionGenerationPlanner {
                         .targetStart(candidate.slot().start())
                         .nextAttemptAt(now)
                         .build());
-            } else if (existing.getStatus() == GroupSessionGenerationItem.Status.FAILED) {
+            } else if (existing.getStatus() == GroupSessionGenerationItem.Status.FAILED
+                    || existing.getStatus() == GroupSessionGenerationItem.Status.IGNORED) {
                 existing.setStatus(GroupSessionGenerationItem.Status.PENDING);
                 existing.setAttempts(0);
                 existing.setLastError(null);
+                existing.setIgnoredReason(null);
                 existing.setNextAttemptAt(now);
                 existing.setTargetStart(candidate.slot().start());
                 changed.add(existing);

@@ -139,7 +139,7 @@ class GroupSessionGenerationPlannerSpec extends Specification {
 
     // ---- idempotence -------------------------------------------------------------------------------------------------
 
-    def "a slot already queued (PENDING or DONE) or already generated is left alone; a FAILED one is revived"() {
+    def "a slot already queued (PENDING or DONE) or already generated is left alone; a FAILED or IGNORED one is revived"() {
         given:
         def pending = GroupSessionGenerationItem.builder().id(1L).recurrenceId(1L).occurrenceDate(TODAY)
                 .status(GroupSessionGenerationItem.Status.PENDING).nextAttemptAt(NOW).targetStart(NOW).build()
@@ -147,6 +147,9 @@ class GroupSessionGenerationPlannerSpec extends Specification {
                 .status(GroupSessionGenerationItem.Status.DONE).nextAttemptAt(NOW).targetStart(NOW).build()
         def failed = GroupSessionGenerationItem.builder().id(3L).recurrenceId(3L).occurrenceDate(TODAY)
                 .status(GroupSessionGenerationItem.Status.FAILED).attempts(5).lastError("boom").nextAttemptAt(NOW.minusSeconds(999)).targetStart(NOW).build()
+        def ignored = GroupSessionGenerationItem.builder().id(5L).recurrenceId(5L).occurrenceDate(TODAY)
+                .status(GroupSessionGenerationItem.Status.IGNORED).ignoredReason(GroupSessionGenerationItem.IgnoredReason.GENERATION_OFF)
+                .nextAttemptAt(NOW.minusSeconds(999)).targetStart(NOW).build()
         def session = Session.builder().id(7L).recurrenceId(4L).occurrenceDate(TODAY).build()
 
         when:
@@ -155,13 +158,16 @@ class GroupSessionGenerationPlannerSpec extends Specification {
         then:
         1 * settingsRepository.findByEnabledTrue() >> [on(10L)]
         1 * settingsRepository.findByGroupIdInAndEnabledTrue(_) >> [on(10L)]
-        1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> [rec(1L, 10L, 3), rec(2L, 10L, 3), rec(3L, 10L, 3), rec(4L, 10L, 3)]
-        1 * queueRepository.findByRecurrenceIdIn(_) >> [pending, done, failed]
+        1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> [rec(1L, 10L, 3), rec(2L, 10L, 3), rec(3L, 10L, 3), rec(4L, 10L, 3), rec(5L, 10L, 3)]
+        1 * queueRepository.findByRecurrenceIdIn(_) >> [pending, done, failed, ignored]
         1 * sessionRepository.findByRecurrenceIdInAndOccurrenceDateGreaterThanEqual(_, TODAY) >> [session]
         1 * queueRepository.saveAll({ List l ->
-            l.size() == 1 && l[0].is(failed) && failed.status == GroupSessionGenerationItem.Status.PENDING &&
-                    failed.attempts == 0 && failed.lastError == null && failed.nextAttemptAt == NOW })
-        count == 1
+            l.size() == 2 && l.any { it.is(failed) } && l.any { it.is(ignored) } &&
+                    failed.status == GroupSessionGenerationItem.Status.PENDING &&
+                    failed.attempts == 0 && failed.lastError == null && failed.nextAttemptAt == NOW &&
+                    ignored.status == GroupSessionGenerationItem.Status.PENDING && ignored.ignoredReason == null &&
+                    ignored.nextAttemptAt == NOW })
+        count == 2
     }
 
     // ---- a regular session ended -------------------------------------------------------------------------------------

@@ -49,6 +49,14 @@ final class GroupSessionOccurrences {
         throw new IllegalStateException("No month with day " + dayKey + " found after " + from);
     }
 
+    /**
+     * Whether {@code date} is a day the recurrence falls on (the weekday for {@code WEEKLY}, the day of the month for
+     * {@code MONTHLY}, a month without that day never). A queued slot whose date fails this was queued under an older rule.
+     */
+    static boolean fallsOnRule(GroupSessionRecurrence recurrence, LocalDate date) {
+        return firstDateOnOrAfter(recurrence.getMode(), recurrence.getDayKey(), date).equals(date);
+    }
+
     /** The slot of the recurrence on {@code date}, in {@code zone}. */
     static Occurrence at(GroupSessionRecurrence recurrence, ZoneId zone, LocalDate date) {
         Instant start = LocalDateTime.of(date, recurrence.getStartTime()).atZone(zone).toInstant();

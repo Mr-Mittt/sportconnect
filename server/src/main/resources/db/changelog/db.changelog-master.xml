@@ -262,5 +262,7 @@
     <include file="db/changelog/changes/V098__group_session_audience_on_session.sql" relativeToChangelogFile="false"/>
     <!-- Review: a SPECIFIC recurrence audience moves from group_session_recurrence_members (dropped) to group_session_recurrences.audience_user_ids -->
     <include file="db/changelog/changes/V099__group_session_recurrence_audience_on_recurrence.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-GROUP-5 review: a skipped queue row is IGNORED with a reason (and last_attempt_at) -->
+    <include file="db/changelog/changes/V100__group_session_queue_ignored_status.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

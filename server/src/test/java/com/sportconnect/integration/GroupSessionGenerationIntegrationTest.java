@@ -435,12 +435,15 @@ class GroupSessionGenerationIntegrationTest extends RedisBaseIT {
     @Test
     void aFailingSlot_isRetriedWithABackoff_andEndsFailedAfterFiveAttempts() throws Exception {
         settingsRepository.save(GroupSessionSettings.builder().groupId(groupId).enabled(true).mode(RecurrenceMode.WEEKLY).build());
-        // A location that does not exist: generating this slot fails every time.
+        // A location that does not exist: generating this slot fails every time. The queued date is tomorrow, and the recurrence
+        // falls on tomorrow's weekday (a date off the rule is ignored, not retried).
+        LocalDate tomorrow = LocalDate.now(ZoneOffset.UTC).plusDays(1);
         Long recurrenceId = recurrenceRepository.save(GroupSessionRecurrence.builder().groupId(groupId).mode(RecurrenceMode.WEEKLY)
-                .dayKey(1).startTime(LocalTime.of(18, 0)).durationMinutes(90).locationId(987654L).draft(false).build()).getId();
+                .dayKey(tomorrow.getDayOfWeek().getValue()).startTime(LocalTime.of(18, 0)).durationMinutes(90).locationId(987654L)
+                .draft(false).build()).getId();
         Instant now = Instant.now();
         Long itemId = queueRepository.save(GroupSessionGenerationItem.builder().recurrenceId(recurrenceId)
-                .occurrenceDate(LocalDate.now(ZoneOffset.UTC).plusDays(1)).targetStart(now.plus(Duration.ofDays(1)))
+                .occurrenceDate(tomorrow).targetStart(now.plus(Duration.ofDays(1)))
                 .nextAttemptAt(now.minusSeconds(5)).build()).getId();
 
         runner.processDue();
@@ -462,6 +465,73 @@ class GroupSessionGenerationIntegrationTest extends RedisBaseIT {
         queueRepository.save(afterFirst);
         runner.processDue();
         assertThat(queueRepository.findById(itemId).orElseThrow().getStatus()).isEqualTo(GroupSessionGenerationItem.Status.FAILED);
+    }
+
+    // ---- SESSION-GROUP-5 review: IGNORED slots (queue hardening) ---------------------------------------------------------
+
+    /** A PENDING queue row, due now, for {@code date}. */
+    private Long queuePending(Long recurrenceId, LocalDate date, Instant targetStart) {
+        return queueRepository.save(GroupSessionGenerationItem.builder().recurrenceId(recurrenceId).occurrenceDate(date)
+                .targetStart(targetStart).nextAttemptAt(Instant.now().minusSeconds(5)).build()).getId();
+    }
+
+    @Test
+    void aQueuedDate_thatNoLongerFallsOnTheRecurrencesDay_isIgnoredAsSuperseded_andNoSessionIsCreated() throws Exception {
+        enableGeneration();
+        // The rule is "the weekday of a slot two hours from now"; the queued row is for a date two days later (another weekday):
+        // the situation after an edit moved the recurrence's day while the old slot was still queued.
+        Instant start = slotStart();
+        Long recurrenceId = recurrenceRepository.save(GroupSessionRecurrence.builder().groupId(groupId).mode(RecurrenceMode.WEEKLY)
+                .dayKey(start.atOffset(ZoneOffset.UTC).getDayOfWeek().getValue()).startTime(LocalTime.ofInstant(start, ZoneOffset.UTC))
+                .durationMinutes(90).locationId(locationId).draft(false).build()).getId();
+        LocalDate staleDate = LocalDate.ofInstant(start, ZoneOffset.UTC).plusDays(2);
+        Long itemId = queuePending(recurrenceId, staleDate, start.plus(Duration.ofDays(2)));
+
+        runner.processDue();
+
+        assertThat(regularSessions()).isEmpty();
+        GroupSessionGenerationItem item = queueRepository.findById(itemId).orElseThrow();
+        assertThat(item.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.IGNORED);
+        assertThat(item.getIgnoredReason()).isEqualTo(GroupSessionGenerationItem.IgnoredReason.SUPERSEDED);
+    }
+
+    @Test
+    void aSlotThatHasEnded_isIgnoredAsOutdated_notDone() throws Exception {
+        enableGeneration();
+        Instant start = Instant.now().minus(Duration.ofHours(3)).truncatedTo(ChronoUnit.MINUTES); // ended 90 minutes ago
+        Long recurrenceId = recurrenceRepository.save(GroupSessionRecurrence.builder().groupId(groupId).mode(RecurrenceMode.WEEKLY)
+                .dayKey(start.atOffset(ZoneOffset.UTC).getDayOfWeek().getValue()).startTime(LocalTime.ofInstant(start, ZoneOffset.UTC))
+                .durationMinutes(90).locationId(locationId).draft(false).build()).getId();
+        Long itemId = queuePending(recurrenceId, LocalDate.ofInstant(start, ZoneOffset.UTC), start);
+
+        runner.processDue();
+
+        assertThat(regularSessions()).isEmpty();
+        GroupSessionGenerationItem item = queueRepository.findById(itemId).orElseThrow();
+        assertThat(item.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.IGNORED);
+        assertThat(item.getIgnoredReason()).isEqualTo(GroupSessionGenerationItem.IgnoredReason.OUTDATED);
+    }
+
+    @Test
+    void aSlotIgnoredBecauseGenerationWasOff_isRevivedAndGenerated_whenItIsSwitchedBackOn() throws Exception {
+        Instant start = slotStart();
+        Long recurrenceId = addRecurrence(start);                       // generation is off: nothing is queued or generated
+        assertThat(queueRepository.findAll()).isEmpty();
+        LocalDate date = LocalDate.ofInstant(start, ZoneOffset.UTC);
+        Long itemId = queuePending(recurrenceId, date, start);          // the slot was queued just before the owner switched off
+
+        runner.processDue();
+        GroupSessionGenerationItem ignored = queueRepository.findById(itemId).orElseThrow();
+        assertThat(ignored.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.IGNORED);
+        assertThat(ignored.getIgnoredReason()).isEqualTo(GroupSessionGenerationItem.IgnoredReason.GENERATION_OFF);
+        assertThat(regularSessions()).isEmpty();
+
+        enableGeneration();                                             // switched back on, the same day
+
+        assertThat(regularSessions()).hasSize(1);
+        GroupSessionGenerationItem revived = queueRepository.findById(itemId).orElseThrow();
+        assertThat(revived.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.DONE);
+        assertThat(revived.getIgnoredReason()).isNull();
     }
 
     @Test

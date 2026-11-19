@@ -77,17 +77,24 @@ public class GroupSessionOccurrenceGenerator {
         GroupSessionRecurrence recurrence = recurrenceRepository.findById(item.getRecurrenceId()).orElse(null);
         if (recurrence == null || recurrence.isDraft() || recurrence.getLocationId() == null
                 || recurrence.getDurationMinutes() == null) {
-            done(item, "the recurrence is gone or incomplete");
+            ignore(item, GroupSessionGenerationItem.IgnoredReason.RECURRENCE_INACTIVE, "the recurrence is gone or incomplete");
             return;
         }
         Long groupId = recurrence.getGroupId();
         GroupSessionSettings settings = settingsRepository.findById(groupId).orElse(null);
         if (settings == null || !settings.isEnabled() || settings.getMode() != recurrence.getMode()) {
-            done(item, "generation is off or the recurrence is of the other mode");
+            ignore(item, GroupSessionGenerationItem.IgnoredReason.GENERATION_OFF, "generation is off or the recurrence is of the other mode");
             return;
         }
         if (!groupService.isGroupActive(groupId)) {
-            done(item, "the group is no longer active");
+            ignore(item, GroupSessionGenerationItem.IgnoredReason.GROUP_INACTIVE, "the group is no longer active");
+            return;
+        }
+
+        // The last guard (owner, 2026-11-19): the slot is rebuilt from the recurrence as it is now, so a queued date that no longer
+        // falls on its day rule (the owner moved the weekday or the month day while this slot was still queued) is stale.
+        if (!GroupSessionOccurrences.fallsOnRule(recurrence, item.getOccurrenceDate())) {
+            ignore(item, GroupSessionGenerationItem.IgnoredReason.SUPERSEDED, "the date no longer falls on the recurrence's day");
             return;
         }
 
@@ -95,7 +102,7 @@ public class GroupSessionOccurrenceGenerator {
         ZoneId zone = location.getTimezone() != null ? ZoneId.of(location.getTimezone()) : ZoneId.systemDefault();
         GroupSessionOccurrences.Occurrence occurrence = GroupSessionOccurrences.at(recurrence, zone, item.getOccurrenceDate());
         if (!occurrence.end().isAfter(now)) {
-            done(item, "the slot has already ended");
+            ignore(item, GroupSessionGenerationItem.IgnoredReason.OUTDATED, "the slot has already ended");
             return;
         }
         if (sessionRepository.existsByRecurrenceIdAndOccurrenceDate(recurrence.getId(), item.getOccurrenceDate())) {
@@ -168,6 +175,7 @@ public class GroupSessionOccurrenceGenerator {
         }
         int attempts = item.getAttempts() + 1;
         item.setAttempts(attempts);
+        item.setLastAttemptAt(clock.instant());
         item.setLastError(error == null ? null : error.substring(0, Math.min(error.length(), 500)));
         if (attempts >= GroupSessionGenerationItem.MAX_ATTEMPTS) {
             item.setStatus(GroupSessionGenerationItem.Status.FAILED);
@@ -179,9 +187,18 @@ public class GroupSessionOccurrenceGenerator {
                 attempts, error);
     }
 
+    /** The slot is covered (its session already exists): nothing to make. */
     private void done(GroupSessionGenerationItem item, String why) {
         item.setStatus(GroupSessionGenerationItem.Status.DONE);
         queueRepository.save(item);
         log.debug("Queue item {} skipped: {}", item.getId(), why);
+    }
+
+    /** The slot is skipped, with the reason kept on the row; the planner revives it if the slot is wanted again. */
+    private void ignore(GroupSessionGenerationItem item, GroupSessionGenerationItem.IgnoredReason reason, String why) {
+        item.setStatus(GroupSessionGenerationItem.Status.IGNORED);
+        item.setIgnoredReason(reason);
+        queueRepository.save(item);
+        log.debug("Queue item {} ignored ({}): {}", item.getId(), reason, why);
     }
 }
