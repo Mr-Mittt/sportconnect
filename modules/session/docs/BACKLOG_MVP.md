@@ -40,6 +40,7 @@
 | 19 | [SESSION-68](MVP/SESSION-68_CREATE_SESSION_INVITEES_MUST_BE_FRIENDS_AND_ACTIVE.md) | `createSession` invitees must be friends and active: `inviteeIds` are checked for neither today, so a stranger or a deactivated account becomes an `INVITED` row and gets a notification; skip silently (default) or refuse, decided at pickup (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
 | 20 | [SESSION-GROUP-7](MVP/SESSION-GROUP-7_SCHEDULED_SESSION_JOBS_HAVE_NO_MULTI_POD_LOCK.md) | The three scheduled session jobs (start ongoing, close past, cancel unprepared) run on every server instance with no lock: two instances can start the same session and tell its players twice (found in the SESSION-GROUP-5 queue review) | `TODO` |
 | 21 | [SESSION-GROUP-8](MVP/SESSION-GROUP-8_PRUNE_OLD_GENERATION_QUEUE_ROWS.md) | Prune the finished (`DONE`, `IGNORED`) rows of `group_session_generation_queue` after about 30 days; they are kept for ever today (depends on SESSION-GROUP-5) | `TODO` |
+| 22 | [SESSION-GROUP-9](MVP/SESSION-GROUP-9_SCALE_THE_GENERATION_RUNNERS_WITH_THE_BACKLOG.md) | Scale the generation runners with the backlog: the fixed single worker starts more runners when the queue is crowded, up to a configured maximum in parallel (depends on SESSION-GROUP-5's hardening) | `TODO` |
 
 ---
 
