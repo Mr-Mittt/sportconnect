@@ -12,6 +12,8 @@ import com.sportconnect.session.api.dto.RecurrenceMode;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.GroupSessionGenerationItem;
+import com.sportconnect.session.service.GroupSessionGenerationPlanner;
+import com.sportconnect.session.service.GroupSessionQueueWriter;
 import com.sportconnect.session.entity.GroupSessionRecurrence;
 import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.entity.Session;
@@ -45,12 +47,18 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -90,6 +98,8 @@ class GroupSessionGenerationIntegrationTest extends RedisBaseIT {
     @Autowired private SessionGenerationService sessionGenerationService;
     @Autowired private GroupSessionGenerationListener listener;
     @Autowired private GroupSessionGenerationRunner runner;
+    @Autowired private GroupSessionGenerationPlanner planner;
+    @Autowired private GroupSessionQueueWriter queueWriter;
 
     private UUID ownerId;
     private UUID adminId;
@@ -532,6 +542,127 @@ class GroupSessionGenerationIntegrationTest extends RedisBaseIT {
         GroupSessionGenerationItem revived = queueRepository.findById(itemId).orElseThrow();
         assertThat(revived.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.DONE);
         assertThat(revived.getIgnoredReason()).isNull();
+    }
+
+    // ---- SESSION-GROUP-5 review: race-free queueing -------------------------------------------------------------------------
+
+    private Long savedRecurrence(Instant start) {
+        settingsRepository.save(GroupSessionSettings.builder().groupId(groupId).enabled(true).mode(RecurrenceMode.WEEKLY).build());
+        return recurrenceRepository.save(GroupSessionRecurrence.builder().groupId(groupId).mode(RecurrenceMode.WEEKLY)
+                .dayKey(start.atOffset(ZoneOffset.UTC).getDayOfWeek().getValue()).startTime(LocalTime.ofInstant(start, ZoneOffset.UTC))
+                .durationMinutes(90).locationId(locationId).draft(false).build()).getId();
+    }
+
+    @Test
+    void queueingASlot_ignoresTheRecurrencesOtherPendingSlots_asOutdatedWhenStarted_andSupersededWhenNot() {
+        Instant start = slotStart();
+        Long recurrenceId = savedRecurrence(start);
+        LocalDate date = LocalDate.ofInstant(start, ZoneOffset.UTC);
+        Long started = queuePending(recurrenceId, date.minusDays(7), start.minus(Duration.ofDays(7)));   // its start has passed
+        Long notStarted = queuePending(recurrenceId, date.plusDays(7), start.plus(Duration.ofDays(7)));  // an old rule's later slot
+
+        int queued = planner.enqueueAfterConfigurationChange(groupId);
+
+        assertThat(queued).isEqualTo(1);
+        assertThat(queueRepository.findById(started).orElseThrow()).satisfies(item -> {
+            assertThat(item.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.IGNORED);
+            assertThat(item.getIgnoredReason()).isEqualTo(GroupSessionGenerationItem.IgnoredReason.OUTDATED);
+        });
+        assertThat(queueRepository.findById(notStarted).orElseThrow()).satisfies(item -> {
+            assertThat(item.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.IGNORED);
+            assertThat(item.getIgnoredReason()).isEqualTo(GroupSessionGenerationItem.IgnoredReason.SUPERSEDED);
+        });
+        assertThat(queueRepository.findAll()).filteredOn(i -> i.getStatus() == GroupSessionGenerationItem.Status.PENDING)
+                .singleElement().satisfies(item -> {
+                    assertThat(item.getOccurrenceDate()).isEqualTo(date);
+                    assertThat(item.getTargetStart()).isEqualTo(start);
+                });
+    }
+
+    @Test
+    void aPendingSlot_isReusedWhenTheTimeIsEditedTheSameDay_andItsOrderKeyIsRefreshed() {
+        Instant start = slotStart();
+        Long recurrenceId = savedRecurrence(start);
+        LocalDate date = LocalDate.ofInstant(start, ZoneOffset.UTC);
+        Long itemId = queuePending(recurrenceId, date, start.minus(Duration.ofHours(1)));                // the old time
+
+        int queued = planner.enqueueAfterConfigurationChange(groupId);
+
+        assertThat(queued).isZero();                                                                     // no new row
+        assertThat(queueRepository.findAll()).singleElement().satisfies(item -> {
+            assertThat(item.getId()).isEqualTo(itemId);
+            assertThat(item.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.PENDING);
+            assertThat(item.getTargetStart()).isEqualTo(start);
+        });
+    }
+
+    @Test
+    void reviving_isACompareAndSet_onlyOneCallerRevivesAFailedSlot() {
+        Instant start = slotStart();
+        Long recurrenceId = savedRecurrence(start);
+        LocalDate date = LocalDate.ofInstant(start, ZoneOffset.UTC);
+        Long itemId = queueRepository.save(GroupSessionGenerationItem.builder().recurrenceId(recurrenceId).occurrenceDate(date)
+                .targetStart(start).status(GroupSessionGenerationItem.Status.FAILED).attempts(5).lastError("boom")
+                .nextAttemptAt(Instant.now().minusSeconds(999)).build()).getId();
+
+        int first = queueWriter.revive(recurrenceId, date, start, Instant.now());
+        int second = queueWriter.revive(recurrenceId, date, start, Instant.now());
+
+        assertThat(first).isEqualTo(1);
+        assertThat(second).isZero();
+        GroupSessionGenerationItem item = queueRepository.findById(itemId).orElseThrow();
+        assertThat(item.getStatus()).isEqualTo(GroupSessionGenerationItem.Status.PENDING);
+        assertThat(item.getAttempts()).isZero();
+        assertThat(item.getLastError()).isNull();
+
+        // A slot that already has its session (DONE) is never revived.
+        LocalDate other = date.plusDays(7);
+        Long doneId = queueRepository.save(GroupSessionGenerationItem.builder().recurrenceId(recurrenceId).occurrenceDate(other)
+                .targetStart(start.plus(Duration.ofDays(7))).status(GroupSessionGenerationItem.Status.DONE)
+                .nextAttemptAt(Instant.now()).build()).getId();
+        assertThat(queueWriter.revive(recurrenceId, other, start.plus(Duration.ofDays(7)), Instant.now())).isZero();
+        assertThat(queueRepository.findById(doneId).orElseThrow().getStatus()).isEqualTo(GroupSessionGenerationItem.Status.DONE);
+        // ... and its order key is never rewritten either (only a PENDING slot's is).
+        assertThat(queueWriter.refreshTarget(recurrenceId, other, start, Instant.now())).isZero();
+        assertThat(queueRepository.findById(doneId).orElseThrow().getTargetStart()).isEqualTo(start.plus(Duration.ofDays(7)));
+    }
+
+    @Test
+    void insertingTheSameSlotTwice_failsOnTheUniqueKey_andLeavesTheFirstRowIntact() {
+        Instant start = slotStart();
+        Long recurrenceId = savedRecurrence(start);
+        LocalDate date = LocalDate.ofInstant(start, ZoneOffset.UTC);
+
+        queueWriter.insert(recurrenceId, date, start, Instant.now());
+
+        assertThatThrownBy(() -> queueWriter.insert(recurrenceId, date, start, Instant.now()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(queueRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    void twoPlannersQueueingTheSameSlotAtOnce_bothFinish_andOneRowResults() throws Exception {
+        Instant start = slotStart();
+        savedRecurrence(start);
+        CyclicBarrier together = new CyclicBarrier(2);
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            List<Future<Integer>> results = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                results.add(pool.submit(() -> {
+                    together.await(10, TimeUnit.SECONDS);
+                    return planner.enqueueAfterConfigurationChange(groupId);
+                }));
+            }
+            int total = 0;
+            for (Future<Integer> result : results) {
+                total += result.get(30, TimeUnit.SECONDS);      // a lost race must not surface as an exception
+            }
+            assertThat(total).isEqualTo(1);                      // one of them queued it
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(queueRepository.findAll()).hasSize(1);
     }
 
     @Test

@@ -13,6 +13,7 @@ import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,11 +38,16 @@ import java.util.stream.Collectors;
  * them. Only a group that has generation <b>on</b> is ever planned, and only its <b>complete</b> (non-draft) recurrences of
  * its <b>active mode</b>; so turning generation off, or a cancel while it is off, queues nothing.
  *
- * <p>Every method is its own transaction ({@code REQUIRES_NEW}) and is called after the change that asked for it has
- * committed ({@link GroupSessionGenerationListener}), so it reads the new state. Queuing is idempotent: a slot already queued
- * or already generated is left alone (a {@code FAILED} one is revived), which is what makes the startup recovery and the
- * "last session of the day" trigger safe to race (the spec's "2check"): both go through the same keys, the queue's
- * {@code (recurrence, date)} and the sessions' {@code (recurrence, date)}.
+ * <p>Called after the change that asked for it has committed ({@link GroupSessionGenerationListener}), so it reads the new state.
+ * The methods are {@code NOT_SUPPORTED}: they suspend the caller's finished transaction (whose connection stays bound until the
+ * callback returns), every read is its own short transaction with a fresh persistence context, and every write goes through
+ * {@link GroupSessionQueueWriter} in its own small transaction, one slot at a time, so a thread holds at most two connections and
+ * a conflict on one slot can never roll back the others. Queuing is idempotent and race-free (review, 2026-11-19): a slot already
+ * generated is left alone; a new slot is inserted and a unique-key violation (a concurrent planner queued it) is absorbed and
+ * logged; a {@code FAILED} or {@code IGNORED} slot is revived by an atomic compare-and-set; a {@code PENDING} slot's order key is
+ * refreshed; and the recurrence's other {@code PENDING} slots, being obsolete once this slot is authoritative, are ignored. That is
+ * what makes the startup recovery, the "last session of the day" trigger and a configuration change safe to race, on any thread
+ * or instance.
  */
 @Slf4j
 @Service
@@ -57,6 +63,7 @@ public class GroupSessionGenerationPlanner {
     private final GroupSessionGenerationQueueRepository queueRepository;
     private final SessionRepository sessionRepository;
     private final LocationService locationService;
+    private final GroupSessionQueueWriter writer;
 
     /** Replaceable in tests; not a constructor dependency. */
     Clock clock = Clock.systemUTC();
@@ -69,7 +76,7 @@ public class GroupSessionGenerationPlanner {
     }
 
     /** Startup recovery: the nearest day of every group that has generation on (the server may have been down across a slot). */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int enqueueForAllEnabledGroups() {
         List<Long> groupIds = settingsRepository.findByEnabledTrue().stream().map(GroupSessionSettings::getGroupId).toList();
         return groupIds.isEmpty() ? 0 : enqueueNearestDays(groupIds);
@@ -80,7 +87,7 @@ public class GroupSessionGenerationPlanner {
      * A day is over only when the group holds no open regular session for that local date any more; custom sessions never
      * count and never trigger.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int enqueueAfterDaysEnded(List<GroupSessionGenerationEvents.GroupDay> endedDays) {
         List<Long> groupIds = endedDays.stream().map(GroupSessionGenerationEvents.GroupDay::groupId).distinct().toList();
         if (groupIds.isEmpty()) {
@@ -102,7 +109,7 @@ public class GroupSessionGenerationPlanner {
      * have not ended yet (they are generated now, with the right status), then the nearest later day unless a regular session
      * is already open before it (that session's end will queue it, and so will today's).
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public int enqueueAfterConfigurationChange(Long groupId) {
         Instant now = clock.instant();
         List<Candidate> candidates = candidates(List.of(groupId), now).getOrDefault(groupId, List.of());
@@ -169,7 +176,14 @@ public class GroupSessionGenerationPlanner {
         return byGroup;
     }
 
-    /** Puts the slots on the queue unless already queued or generated; revives a {@code FAILED} or {@code IGNORED} one. */
+    /**
+     * Puts the slots on the queue, one at a time: unless already generated, an obsolete {@code PENDING} slot of the same
+     * recurrence is ignored, then the slot is inserted, or its {@code PENDING} order key refreshed, or its {@code FAILED} or
+     * {@code IGNORED} row revived. Each write is atomic, so a race with another planner changes nothing it should not; a lost race
+     * is logged at INFO with the marker {@code queue race absorbed}.
+     *
+     * @return how many slots were queued or revived
+     */
     private int queue(List<Candidate> candidates, Instant now) {
         if (candidates.isEmpty()) {
             return 0;
@@ -182,37 +196,43 @@ public class GroupSessionGenerationPlanner {
                 .map((Session s) -> key(s.getRecurrenceId(), s.getOccurrenceDate()))
                 .collect(Collectors.toSet());
 
-        List<GroupSessionGenerationItem> changed = new ArrayList<>();
+        int changed = 0;
         Set<String> inThisCall = new HashSet<>();
         for (Candidate candidate : candidates) {
-            String key = key(candidate.recurrence().getId(), candidate.slot().date());
+            Long recurrenceId = candidate.recurrence().getId();
+            LocalDate date = candidate.slot().date();
+            Instant start = candidate.slot().start();
+            String key = key(recurrenceId, date);
             if (generated.contains(key) || !inThisCall.add(key)) {
                 continue;
             }
             GroupSessionGenerationItem existing = queued.get(key);
+            if (existing != null && existing.getStatus() == GroupSessionGenerationItem.Status.DONE) {
+                continue;
+            }
+            // This slot is the recurrence's authoritative one: any other PENDING slot of it is obsolete.
+            writer.supersedeOthers(recurrenceId, date, now);
             if (existing == null) {
-                changed.add(GroupSessionGenerationItem.builder()
-                        .recurrenceId(candidate.recurrence().getId())
-                        .occurrenceDate(candidate.slot().date())
-                        .targetStart(candidate.slot().start())
-                        .nextAttemptAt(now)
-                        .build());
-            } else if (existing.getStatus() == GroupSessionGenerationItem.Status.FAILED
-                    || existing.getStatus() == GroupSessionGenerationItem.Status.IGNORED) {
-                existing.setStatus(GroupSessionGenerationItem.Status.PENDING);
-                existing.setAttempts(0);
-                existing.setLastError(null);
-                existing.setIgnoredReason(null);
-                existing.setNextAttemptAt(now);
-                existing.setTargetStart(candidate.slot().start());
-                changed.add(existing);
+                try {
+                    writer.insert(recurrenceId, date, start, now);
+                    changed++;
+                } catch (DataIntegrityViolationException race) {
+                    log.info("queue race absorbed: recurrence {} on {} was queued by a concurrent planner", recurrenceId, date);
+                }
+            } else if (existing.getStatus() == GroupSessionGenerationItem.Status.PENDING) {
+                if (!start.equals(existing.getTargetStart())) {
+                    writer.refreshTarget(recurrenceId, date, start, now);
+                }
+            } else if (writer.revive(recurrenceId, date, start, now) > 0) {   // FAILED or IGNORED
+                changed++;
+            } else {
+                log.info("queue race absorbed: recurrence {} on {} was revived by a concurrent planner", recurrenceId, date);
             }
         }
-        queueRepository.saveAll(changed);
-        if (!changed.isEmpty()) {
-            log.info("Queued {} regular session slot(s) for generation", changed.size());
+        if (changed > 0) {
+            log.info("Queued {} regular session slot(s) for generation", changed);
         }
-        return changed.size();
+        return changed;
     }
 
     private static String key(Long recurrenceId, LocalDate date) {

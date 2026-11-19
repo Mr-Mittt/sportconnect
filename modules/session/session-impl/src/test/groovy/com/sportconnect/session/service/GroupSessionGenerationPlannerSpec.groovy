@@ -12,6 +12,7 @@ import com.sportconnect.session.repository.GroupSessionGenerationQueueRepository
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository
 import com.sportconnect.session.repository.GroupSessionSettingsRepository
 import com.sportconnect.session.repository.SessionRepository
+import org.springframework.dao.DataIntegrityViolationException
 import spock.lang.Specification
 import spock.lang.Subject
 
@@ -35,16 +36,19 @@ class GroupSessionGenerationPlannerSpec extends Specification {
     GroupSessionGenerationQueueRepository queueRepository = Mock()
     SessionRepository sessionRepository = Mock()
     LocationService locationService = Mock()
+    GroupSessionQueueWriter writer = Mock()
 
     @Subject
     GroupSessionGenerationPlanner planner = new GroupSessionGenerationPlanner(
-            settingsRepository, recurrenceRepository, queueRepository, sessionRepository, locationService)
+            settingsRepository, recurrenceRepository, queueRepository, sessionRepository, locationService, writer)
 
     def setup() {
         planner.clock = Clock.fixed(NOW, ZoneOffset.UTC)
         locationService.getLocationsByIds(_) >> [9L: LocationResponse.builder().id(9L).timezone("UTC").build()]
         queueRepository.findByRecurrenceIdIn(_) >> []
         sessionRepository.findByRecurrenceIdInAndOccurrenceDateGreaterThanEqual(_, _) >> []
+        writer.supersedeOthers(*_) >> 0
+        writer.revive(*_) >> 1
     }
 
     private static GroupSessionSettings on(Long groupId, RecurrenceMode mode = RecurrenceMode.WEEKLY) {
@@ -57,10 +61,14 @@ class GroupSessionGenerationPlannerSpec extends Specification {
                 .durationMinutes(90).locationId(9L).draft(false).build()
     }
 
-    private List queued
+    private List queued = []
 
+    /** What the planner inserts, as items (PENDING, due now, no attempts, as the writer builds them). */
     private void captureQueue() {
-        queueRepository.saveAll(_) >> { List args -> queued = args[0]; args[0] }
+        writer.insert(_, _, _, _) >> { Long recurrenceId, LocalDate date, Instant start, Instant now ->
+            queued << GroupSessionGenerationItem.builder().recurrenceId(recurrenceId).occurrenceDate(date).targetStart(start)
+                    .nextAttemptAt(now).build()
+        }
     }
 
     // ---- startup recovery -------------------------------------------------------------------------------------------
@@ -139,10 +147,10 @@ class GroupSessionGenerationPlannerSpec extends Specification {
 
     // ---- idempotence -------------------------------------------------------------------------------------------------
 
-    def "a slot already queued (PENDING or DONE) or already generated is left alone; a FAILED or IGNORED one is revived"() {
+    def "a slot already queued (PENDING or DONE) or already generated is left alone; a FAILED or IGNORED one is revived by a compare-and-set"() {
         given:
         def pending = GroupSessionGenerationItem.builder().id(1L).recurrenceId(1L).occurrenceDate(TODAY)
-                .status(GroupSessionGenerationItem.Status.PENDING).nextAttemptAt(NOW).targetStart(NOW).build()
+                .status(GroupSessionGenerationItem.Status.PENDING).nextAttemptAt(NOW).targetStart(Instant.parse("2026-11-18T18:00:00Z")).build()
         def done = GroupSessionGenerationItem.builder().id(2L).recurrenceId(2L).occurrenceDate(TODAY)
                 .status(GroupSessionGenerationItem.Status.DONE).nextAttemptAt(NOW).targetStart(NOW).build()
         def failed = GroupSessionGenerationItem.builder().id(3L).recurrenceId(3L).occurrenceDate(TODAY)
@@ -151,6 +159,7 @@ class GroupSessionGenerationPlannerSpec extends Specification {
                 .status(GroupSessionGenerationItem.Status.IGNORED).ignoredReason(GroupSessionGenerationItem.IgnoredReason.GENERATION_OFF)
                 .nextAttemptAt(NOW.minusSeconds(999)).targetStart(NOW).build()
         def session = Session.builder().id(7L).recurrenceId(4L).occurrenceDate(TODAY).build()
+        def slot = Instant.parse("2026-11-18T18:00:00Z")
 
         when:
         def count = planner.enqueueForAllEnabledGroups()
@@ -161,13 +170,87 @@ class GroupSessionGenerationPlannerSpec extends Specification {
         1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> [rec(1L, 10L, 3), rec(2L, 10L, 3), rec(3L, 10L, 3), rec(4L, 10L, 3), rec(5L, 10L, 3)]
         1 * queueRepository.findByRecurrenceIdIn(_) >> [pending, done, failed, ignored]
         1 * sessionRepository.findByRecurrenceIdInAndOccurrenceDateGreaterThanEqual(_, TODAY) >> [session]
-        1 * queueRepository.saveAll({ List l ->
-            l.size() == 2 && l.any { it.is(failed) } && l.any { it.is(ignored) } &&
-                    failed.status == GroupSessionGenerationItem.Status.PENDING &&
-                    failed.attempts == 0 && failed.lastError == null && failed.nextAttemptAt == NOW &&
-                    ignored.status == GroupSessionGenerationItem.Status.PENDING && ignored.ignoredReason == null &&
-                    ignored.nextAttemptAt == NOW })
+        1 * writer.revive(3L, TODAY, slot, NOW) >> 1
+        1 * writer.revive(5L, TODAY, slot, NOW) >> 1
+        0 * writer.insert(*_)
+        0 * writer.refreshTarget(*_)        // the pending row already has the slot's instant
         count == 2
+    }
+
+    def "a slot that is already PENDING gets its order key refreshed when the recurrence's time moved (a same-day edit reuses the row)"() {
+        given:
+        def stale = GroupSessionGenerationItem.builder().id(1L).recurrenceId(1L).occurrenceDate(TODAY)
+                .status(GroupSessionGenerationItem.Status.PENDING).nextAttemptAt(NOW).targetStart(Instant.parse("2026-11-18T17:00:00Z")).build()
+
+        when:
+        def count = planner.enqueueAfterConfigurationChange(10L)
+
+        then:
+        1 * settingsRepository.findByGroupIdInAndEnabledTrue([10L]) >> [on(10L)]
+        1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> [rec(1L, 10L, 3, "18:00")]
+        1 * queueRepository.findByRecurrenceIdIn(_) >> [stale]
+        1 * writer.refreshTarget(1L, TODAY, Instant.parse("2026-11-18T18:00:00Z"), NOW)
+        0 * writer.insert(*_)
+        0 * writer.revive(*_)
+        count == 0
+    }
+
+    // ---- races (SESSION-GROUP-5 review): a lost race is absorbed, never fatal ----------------------------------------------
+
+    def "a unique-key violation on insert (a concurrent planner queued the slot) is absorbed, and the other slots are still queued"() {
+        given:
+        captureQueue()
+
+        when:
+        def count = planner.enqueueForAllEnabledGroups()
+
+        then:
+        1 * settingsRepository.findByEnabledTrue() >> [on(10L), on(11L)]
+        1 * settingsRepository.findByGroupIdInAndEnabledTrue(_) >> [on(10L), on(11L)]
+        1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> [rec(1L, 10L, 3), rec(2L, 11L, 3)]
+        1 * writer.insert(1L, TODAY, _, NOW) >> { throw new DataIntegrityViolationException("unique_group_session_queue_item") }
+        noExceptionThrown()
+        count == 1
+        queued*.recurrenceId == [2L]
+    }
+
+    def "a revive that changes no row (another planner revived it first) is absorbed and not counted"() {
+        given:
+        def failed = GroupSessionGenerationItem.builder().id(3L).recurrenceId(1L).occurrenceDate(TODAY)
+                .status(GroupSessionGenerationItem.Status.FAILED).attempts(5).nextAttemptAt(NOW).targetStart(NOW).build()
+
+        when:
+        def count = planner.enqueueAfterConfigurationChange(10L)
+
+        then:
+        1 * settingsRepository.findByGroupIdInAndEnabledTrue([10L]) >> [on(10L)]
+        1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> [rec(1L, 10L, 3)]
+        1 * queueRepository.findByRecurrenceIdIn(_) >> [failed]
+        1 * writer.revive(1L, TODAY, _, NOW) >> 0
+        noExceptionThrown()
+        count == 0
+    }
+
+    def "before a slot is queued, the recurrence's other PENDING slots are superseded, once per slot, never for a slot already generated or DONE"() {
+        given:
+        captureQueue()
+        def done = GroupSessionGenerationItem.builder().id(2L).recurrenceId(2L).occurrenceDate(TODAY)
+                .status(GroupSessionGenerationItem.Status.DONE).nextAttemptAt(NOW).targetStart(NOW).build()
+        def session = Session.builder().id(7L).recurrenceId(3L).occurrenceDate(TODAY).build()
+
+        when:
+        def count = planner.enqueueAfterConfigurationChange(10L)
+
+        then:
+        1 * settingsRepository.findByGroupIdInAndEnabledTrue([10L]) >> [on(10L)]
+        1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> [rec(1L, 10L, 3), rec(2L, 10L, 3), rec(3L, 10L, 3)]
+        1 * queueRepository.findByRecurrenceIdIn(_) >> [done]
+        1 * sessionRepository.findByRecurrenceIdInAndOccurrenceDateGreaterThanEqual(_, TODAY) >> [session]
+        1 * writer.supersedeOthers(1L, TODAY, NOW) >> 1
+        0 * writer.supersedeOthers(2L, *_)
+        0 * writer.supersedeOthers(3L, *_)
+        count == 1
+        queued*.recurrenceId == [1L]
     }
 
     // ---- a regular session ended -------------------------------------------------------------------------------------
@@ -210,7 +293,7 @@ class GroupSessionGenerationPlannerSpec extends Specification {
         1 * sessionRepository.findOpenRegularDays(_, _) >> []
         1 * settingsRepository.findByGroupIdInAndEnabledTrue([10L]) >> []
         0 * recurrenceRepository._
-        0 * queueRepository.saveAll(_)
+        0 * writer.insert(*_)
         count == 0
     }
 
@@ -261,7 +344,7 @@ class GroupSessionGenerationPlannerSpec extends Specification {
         then:
         1 * settingsRepository.findByGroupIdInAndEnabledTrue([10L]) >> [on(10L)]
         1 * recurrenceRepository.findByGroupIdInAndDraftFalse(_) >> []
-        0 * queueRepository.saveAll(_)
+        0 * writer.insert(*_)
         count == 0
     }
 }
