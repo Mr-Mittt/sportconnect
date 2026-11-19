@@ -44,10 +44,8 @@ import com.sportconnect.session.api.event.SessionShareCreatedEvent;
 import com.sportconnect.session.api.event.SessionUpdatedEvent;
 import com.sportconnect.session.api.service.SessionService;
 import com.sportconnect.session.entity.Session;
-import com.sportconnect.session.entity.SessionAudienceMember;
 import com.sportconnect.session.entity.SessionOutboxEvent;
 import com.sportconnect.session.entity.SessionParticipant;
-import com.sportconnect.session.repository.SessionAudienceMemberRepository;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
@@ -103,7 +101,6 @@ public class SessionServiceImpl implements SessionService {
 
     private final SessionRepository sessionRepository;
     private final SessionParticipantRepository sessionParticipantRepository;
-    private final SessionAudienceMemberRepository sessionAudienceMemberRepository;
     // SESSION-38: as of GroupServiceImpl's new (@Lazy) sessionService field, this IS one side of a
     // real bidirectional dependency (GroupServiceImpl -> SessionService -> SessionServiceImpl ->
     // GroupService -> GroupServiceImpl) — same shape as postService below. @Lazy isn't needed on
@@ -283,6 +280,8 @@ public class SessionServiceImpl implements SessionService {
                 .feeAmountVnd(feeAmountVnd)
                 .autoApprove(autoApprove)
                 .groupAudience(audience)
+                // SESSION-GROUP-1: a SPECIFIC audience is kept on the session (read again at a cancel); unique, enforced by the converter.
+                .groupAudienceUserIds(specificAudience.isEmpty() ? null : specificAudience)
                 .initialSlot(initialSlot)
                 .maleSlots(request.getMaleSlots())
                 .femaleSlots(request.getFemaleSlots())
@@ -327,14 +326,9 @@ public class SessionServiceImpl implements SessionService {
             sessionOutboxEventRepository.saveAll(inviteOutboxEvents);
         }
         if (groupId != null) {
-            // SESSION-GROUP-1: tell the audience. A SPECIFIC audience is stored (it is read again at a cancel); the
-            // notification is session.group.created, one row per member, in this transaction (a failure rolls back the
-            // session too). No INVITED row: every member can see and join, the audience only decides who is notified.
-            if (!specificAudience.isEmpty()) {
-                sessionAudienceMemberRepository.saveAll(specificAudience.stream()
-                        .map(memberId -> SessionAudienceMember.builder().sessionId(saved.getId()).userId(memberId).build())
-                        .toList());
-            }
+            // SESSION-GROUP-1: tell the audience. The notification is session.group.created, one row per member, in this
+            // transaction (a failure rolls back the session too). No INVITED row: every member can see and join and has to
+            // click Join to become a participant; the audience only decides who is notified.
             List<UUID> recipients = groupRecipients.of(saved, userId, false);
             if (!recipients.isEmpty()) {
                 sessionOutboxEventRepository.saveAll(recipients.stream()

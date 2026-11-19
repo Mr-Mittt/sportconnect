@@ -258,5 +258,7 @@
     <include file="db/changelog/changes/V096__group_session_generation_queue.sql" relativeToChangelogFile="false"/>
     <!-- GROUP-1: drops groups.recurrence_* and group_settings.auto_generate_sessions (the old single weekly rule; DESTRUCTIVE) -->
     <include file="db/changelog/changes/V097__drop_old_group_recurrence_rule.sql" relativeToChangelogFile="false"/>
+    <!-- Review: a SPECIFIC group-session audience moves from session_audience_members (dropped) to sessions.group_audience_user_ids -->
+    <include file="db/changelog/changes/V098__group_session_audience_on_session.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

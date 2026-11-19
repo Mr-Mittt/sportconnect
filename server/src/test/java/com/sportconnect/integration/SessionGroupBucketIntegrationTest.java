@@ -9,7 +9,6 @@ import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.Session;
-import com.sportconnect.session.repository.SessionAudienceMemberRepository;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
@@ -48,7 +47,6 @@ class SessionGroupBucketIntegrationTest extends RedisBaseIT {
 
     @Autowired private SessionRepository sessionRepository;
     @Autowired private SessionParticipantRepository participantRepository;
-    @Autowired private SessionAudienceMemberRepository audienceRepository;
     @Autowired private SessionOutboxEventRepository outboxRepository;
     @Autowired private GroupRepository groupRepository;
     @Autowired private GroupMemberRepository groupMemberRepository;
@@ -91,7 +89,6 @@ class SessionGroupBucketIntegrationTest extends RedisBaseIT {
         // Other test classes share this database and some leave rows that point at sessions: remove them first.
         outboxRepository.deleteAll();
         commentRepository.deleteAll();
-        audienceRepository.deleteAll();
         participantRepository.deleteAll();
         sessionRepository.deleteAll();
         groupMemberRepository.deleteAll();

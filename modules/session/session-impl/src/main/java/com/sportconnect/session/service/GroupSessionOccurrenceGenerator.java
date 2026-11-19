@@ -13,12 +13,10 @@ import com.sportconnect.session.entity.GroupSessionRecurrence;
 import com.sportconnect.session.entity.GroupSessionRecurrenceMember;
 import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.entity.Session;
-import com.sportconnect.session.entity.SessionAudienceMember;
 import com.sportconnect.session.repository.GroupSessionGenerationQueueRepository;
 import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
-import com.sportconnect.session.repository.SessionAudienceMemberRepository;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.social.post.api.service.PostService;
@@ -60,7 +58,6 @@ public class GroupSessionOccurrenceGenerator {
     private final GroupSessionSettingsRepository settingsRepository;
     private final GroupSessionRecurrenceMemberRepository recurrenceMemberRepository;
     private final SessionRepository sessionRepository;
-    private final SessionAudienceMemberRepository audienceRepository;
     private final SessionOutboxEventRepository outboxRepository;
     private final SessionOutboxWriter outboxWriter;
     private final GroupService groupService;
@@ -118,6 +115,11 @@ public class GroupSessionOccurrenceGenerator {
         // SESSION-10/A17: every session needs its companion SESSION_POST, created first in the same transaction.
         Long postId = postService.createSessionPost(ownerId, "Session: " + title);
 
+        // The audience is snapshotted onto the session (a later edit of the recurrence must not change who is told of a cancel).
+        List<UUID> chosenMembers = recurrence.getAudience() == GroupAudience.SPECIFIC
+                ? recurrenceMemberRepository.findByRecurrenceId(recurrence.getId()).stream()
+                        .map(GroupSessionRecurrenceMember::getUserId).distinct().toList()
+                : null;
         Session session = Session.builder()
                 .groupId(groupId)
                 .isPublic(false)
@@ -138,18 +140,12 @@ public class GroupSessionOccurrenceGenerator {
                 .gameMood(recurrence.getGameMood())
                 .attributes(recurrence.getAttributes())
                 .groupAudience(recurrence.getAudience())
+                .groupAudienceUserIds(chosenMembers)
                 .recurrenceId(recurrence.getId())
                 .occurrenceDate(item.getOccurrenceDate())
                 .build();
         Session saved = sessionRepository.save(session);
 
-        // The audience is snapshotted onto the session (a later edit of the recurrence must not change who is told of a cancel).
-        if (recurrence.getAudience() == GroupAudience.SPECIFIC) {
-            audienceRepository.saveAll(recurrenceMemberRepository.findByRecurrenceId(recurrence.getId()).stream()
-                    .map(GroupSessionRecurrenceMember::getUserId)
-                    .map(userId -> SessionAudienceMember.builder().sessionId(saved.getId()).userId(userId).build())
-                    .toList());
-        }
         List<UUID> toTell = recipients.of(saved, ownerId, false);
         if (!toTell.isEmpty()) {
             outboxRepository.saveAll(toTell.stream()

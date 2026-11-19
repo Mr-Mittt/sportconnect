@@ -5,6 +5,7 @@ import com.sportconnect.session.api.dto.GroupAudience;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -25,6 +26,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -162,10 +164,17 @@ public class Session {
 
     /** SESSION-GROUP-1 — who a group session was made for (it decides only who is notified, never who can see or join).
      * Null for a standalone session and for a group session created before this column; read as ALL_MEMBERS. The members
-     * of a SPECIFIC audience are the {@code session_audience_members} rows. */
+     * of a SPECIFIC audience are {@link #groupAudienceUserIds}. */
     @Enumerated(EnumType.STRING)
     @Column(name = "group_audience", length = 20)
     private GroupAudience groupAudience;
+
+    /** The members a {@code SPECIFIC} audience chose, kept on the session itself as comma-separated UUIDs (see
+     * {@link UuidListConverter}; unique, enforced in Java before the save). Read only when the session is cancelled. Null or empty
+     * for {@code ALL_MEMBERS}, for a standalone session and for a group session created before V098 whose audience was empty. */
+    @Convert(converter = UuidListConverter.class)
+    @Column(name = "group_audience_user_ids", columnDefinition = "TEXT")
+    private List<UUID> groupAudienceUserIds;
 
     /** SESSION-GROUP-5 — the recurrence configuration this regular group session was generated from; null for a custom
      * session and for one generated before this column. No FK: a deleted recurrence leaves its sessions. */

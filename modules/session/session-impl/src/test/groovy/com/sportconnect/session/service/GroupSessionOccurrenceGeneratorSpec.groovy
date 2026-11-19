@@ -20,7 +20,6 @@ import com.sportconnect.session.repository.GroupSessionGenerationQueueRepository
 import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository
 import com.sportconnect.session.repository.GroupSessionSettingsRepository
-import com.sportconnect.session.repository.SessionAudienceMemberRepository
 import com.sportconnect.session.repository.SessionOutboxEventRepository
 import com.sportconnect.session.repository.SessionRepository
 import com.sportconnect.social.post.api.service.PostService
@@ -48,7 +47,6 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
     GroupSessionSettingsRepository settingsRepository = Mock()
     GroupSessionRecurrenceMemberRepository recurrenceMemberRepository = Mock()
     SessionRepository sessionRepository = Mock()
-    SessionAudienceMemberRepository audienceRepository = Mock()
     SessionOutboxEventRepository outboxRepository = Mock()
     SessionOutboxWriter outboxWriter = Mock()
     GroupService groupService = Mock()
@@ -60,7 +58,7 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
     @Subject
     GroupSessionOccurrenceGenerator generator = new GroupSessionOccurrenceGenerator(
             queueRepository, recurrenceRepository, settingsRepository, recurrenceMemberRepository, sessionRepository,
-            audienceRepository, outboxRepository, outboxWriter, groupService, locationService, postService, userService, recipients)
+            outboxRepository, outboxWriter, groupService, locationService, postService, userService, recipients)
 
     UUID owner = UUID.randomUUID()
 
@@ -212,7 +210,8 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         1 * recurrenceMemberRepository.findByRecurrenceId(5L) >> [
                 GroupSessionRecurrenceMember.builder().recurrenceId(5L).userId(a).build(),
                 GroupSessionRecurrenceMember.builder().recurrenceId(5L).userId(b).build()]
-        1 * audienceRepository.saveAll({ List l -> (l*.userId as Set) == ([a, b] as Set) && l.every { it.sessionId == 55L } })
+        // Snapshotted onto the session itself, distinct.
+        1 * sessionRepository.save(_ as Session) >> { Session s -> built = s; s.id = 55L; s }
         1 * recipients.of({ Session s -> s.id == 55L && s.groupAudience == GroupAudience.SPECIFIC }, owner, false) >> [a]
         1 * outboxWriter.build("session.group.created", _) >> { String type, Object payload -> told << payload; new SessionOutboxEvent() }
         1 * outboxRepository.saveAll({ List l -> l.size() == 1 })
@@ -222,17 +221,19 @@ class GroupSessionOccurrenceGeneratorSpec extends Specification {
         told[0].actorId == owner
         told[0].recipientUserId == a
         told[0].groupId == 10L
+        built.groupAudienceUserIds == [a, b]
     }
 
-    def "an ALL_MEMBERS slot stores no audience rows; nobody to tell writes no events"() {
+    def "an ALL_MEMBERS slot stores no chosen members; nobody to tell writes no events"() {
         when:
         generator.generate(1L)
 
         then:
         0 * recurrenceMemberRepository._
-        0 * audienceRepository.saveAll(_)
+        1 * sessionRepository.save(_ as Session) >> { Session s -> built = s; s.id = 55L; s }
         1 * recipients.of(_, owner, false) >> []
         0 * outboxRepository.saveAll(_)
+        built.groupAudienceUserIds == null
     }
 
     def "a failure while generating propagates (the caller records it) and leaves the row PENDING"() {

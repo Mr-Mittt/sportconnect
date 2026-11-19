@@ -15,7 +15,6 @@ import com.sportconnect.session.repository.GroupSessionGenerationQueueRepository
 import com.sportconnect.session.repository.GroupSessionRecurrenceMemberRepository;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
-import com.sportconnect.session.repository.SessionAudienceMemberRepository;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
@@ -73,7 +72,6 @@ class RegularSessionCancelIntegrationTest extends RedisBaseIT {
     @Autowired private GroupSessionGenerationQueueRepository queueRepository;
     @Autowired private SessionRepository sessionRepository;
     @Autowired private SessionParticipantRepository participantRepository;
-    @Autowired private SessionAudienceMemberRepository audienceRepository;
     @Autowired private SessionOutboxEventRepository outboxRepository;
     @Autowired private GroupRepository groupRepository;
     @Autowired private GroupMemberRepository groupMemberRepository;
@@ -121,7 +119,6 @@ class RegularSessionCancelIntegrationTest extends RedisBaseIT {
     private void clearAll() {
         outboxRepository.deleteAll();
         commentRepository.deleteAll();
-        audienceRepository.deleteAll();
         participantRepository.deleteAll();
         sessionRepository.deleteAll();
         queueRepository.deleteAll();

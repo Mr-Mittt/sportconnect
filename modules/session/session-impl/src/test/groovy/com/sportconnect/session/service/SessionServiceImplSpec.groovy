@@ -40,7 +40,6 @@ import com.sportconnect.session.api.event.SessionParticipantLeftEvent
 import com.sportconnect.session.entity.Session
 import com.sportconnect.session.entity.SessionOutboxEvent
 import com.sportconnect.session.entity.SessionParticipant
-import com.sportconnect.session.repository.SessionAudienceMemberRepository
 import com.sportconnect.session.repository.SessionOutboxEventRepository
 import com.sportconnect.session.repository.SessionParticipantRepository
 import com.sportconnect.session.repository.SessionRepository
@@ -76,7 +75,6 @@ class SessionServiceImplSpec extends Specification {
 
     SessionRepository sessionRepository = Mock()
     SessionParticipantRepository sessionParticipantRepository = Mock()
-    SessionAudienceMemberRepository sessionAudienceMemberRepository = Mock()
     GroupService groupService = Mock()
     LocationService locationService = Mock()
     UserService userService = Mock()
@@ -98,11 +96,11 @@ class SessionServiceImplSpec extends Specification {
 
     @Subject
     SessionServiceImpl sessionService = new SessionServiceImpl(
-            sessionRepository, sessionParticipantRepository, sessionAudienceMemberRepository, groupService, locationService, userService,
+            sessionRepository, sessionParticipantRepository, groupService, locationService, userService,
             userFriendService, sportService, userSportProfileService, postService, commentService, sessionGate,
             sessionDetailGate, sessionShareGate, sessionOutboxEventRepository, sessionOutboxWriter,
             new SessionAttributeResolver(sportService, objectMapper),
-            new GroupSessionRecipients(groupService, sessionAudienceMemberRepository, sessionParticipantRepository, userService),
+            new GroupSessionRecipients(groupService, sessionParticipantRepository, userService),
             eventPublisher)
 
     def basketballLocation = LocationResponse.builder().id(1L).sportId(1L).name("Court").build()
@@ -424,10 +422,10 @@ class SessionServiceImplSpec extends Specification {
 
     // -- SESSION-GROUP-1: a member creates a custom group session, with an audience ---------------------------------------
 
-    private Session savedGroupSession(UUID creator, GroupAudience audience, Long groupId = 5L) {
+    private Session savedGroupSession(UUID creator, GroupAudience audience, Long groupId = 5L, List<UUID> chosen = null) {
         Session.builder().id(2L).groupId(groupId).sessionType(SessionType.GROUP_RECURRING).createdBy(creator)
                 .sportId(1L).locationId(1L).scheduledStart(Instant.now().plusSeconds(86400))
-                .status(SessionStatus.SCHEDULED).groupAudience(audience).build()
+                .status(SessionStatus.SCHEDULED).groupAudience(audience).groupAudienceUserIds(chosen).build()
     }
 
     private CreateSessionRequest.CreateSessionRequestBuilder groupRequest() {
@@ -517,7 +515,7 @@ class SessionServiceImplSpec extends Specification {
         1 * groupService.isGroupMember(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
         1 * locationService.getLocation(1L) >> basketballLocation
-        1 * sessionRepository.save({ Session s -> s.groupAudience == GroupAudience.ALL_MEMBERS }) >> saved
+        1 * sessionRepository.save({ Session s -> s.groupAudience == GroupAudience.ALL_MEMBERS && s.groupAudienceUserIds == null }) >> saved
         1 * groupService.getMemberUserIds(5L) >> [userId, a, b, deactivated]
         1 * userService.getActiveUserIds({ Collection c -> (c as Set) == ([a, b, deactivated] as Set) }) >> ([a, b] as Set)
         1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e ->
@@ -525,7 +523,6 @@ class SessionServiceImplSpec extends Specification {
         1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e ->
             e.sessionId == 2L && e.actorId == userId && e.recipientUserId == b && e.groupId == 5L }) >> new SessionOutboxEvent()
         1 * sessionOutboxEventRepository.saveAll({ List l -> l.size() == 2 })
-        0 * sessionAudienceMemberRepository.saveAll(_)
         0 * sessionParticipantRepository.saveAll({ List l -> l.any { it.status == ParticipantStatus.INVITED } })
         interaction { stubBatchEnrichment() }
     }
@@ -536,7 +533,7 @@ class SessionServiceImplSpec extends Specification {
         def a = UUID.randomUUID()
         def b = UUID.randomUUID()
         def other = UUID.randomUUID()
-        def saved = savedGroupSession(userId, GroupAudience.SPECIFIC)
+        def saved = savedGroupSession(userId, GroupAudience.SPECIFIC, 5L, [a, b])
         def request = groupRequest().audience(GroupAudience.SPECIFIC).audienceUserIds([a, b, a, userId]).build()
 
         when:
@@ -547,10 +544,8 @@ class SessionServiceImplSpec extends Specification {
         1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
         1 * locationService.getLocation(1L) >> basketballLocation
         2 * groupService.getMemberUserIds(5L) >> [userId, a, b, other]
-        1 * sessionRepository.save({ Session s -> s.groupAudience == GroupAudience.SPECIFIC }) >> saved
-        1 * sessionAudienceMemberRepository.saveAll({ List l ->
-            l.size() == 2 && (l*.userId as Set) == ([a, b] as Set) && l.every { it.sessionId == 2L } })
-        1 * sessionAudienceMemberRepository.findUserIdsBySessionId(2L) >> [a, b]
+        // The chosen members go on the session itself: distinct, without the creator, in the order given.
+        1 * sessionRepository.save({ Session s -> s.groupAudience == GroupAudience.SPECIFIC && s.groupAudienceUserIds == [a, b] }) >> saved
         1 * userService.getActiveUserIds({ Collection c -> (c as Set) == ([a, b] as Set) }) >> ([a, b] as Set)
         1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e -> e.recipientUserId == a }) >> new SessionOutboxEvent()
         1 * sessionOutboxWriter.build("session.group.created", { SessionGroupCreatedEvent e -> e.recipientUserId == b }) >> new SessionOutboxEvent()
@@ -615,9 +610,7 @@ class SessionServiceImplSpec extends Specification {
         1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
         1 * locationService.getLocation(1L) >> basketballLocation
         2 * groupService.getMemberUserIds(5L) >> ([userId] + chosen)
-        1 * sessionRepository.save(_ as Session) >> savedGroupSession(userId, GroupAudience.SPECIFIC)
-        1 * sessionAudienceMemberRepository.saveAll({ List l -> l.size() == 60 })
-        1 * sessionAudienceMemberRepository.findUserIdsBySessionId(2L) >> chosen
+        1 * sessionRepository.save({ Session s -> s.groupAudienceUserIds.size() == 60 }) >> savedGroupSession(userId, GroupAudience.SPECIFIC, 5L, chosen)
         interaction { stubBatchEnrichment() }
         noExceptionThrown()
     }
@@ -634,8 +627,7 @@ class SessionServiceImplSpec extends Specification {
         1 * groupService.isGroupMember(5L, userId) >> true
         1 * groupService.getGroup(5L, userId) >> GroupResponse.builder().id(5L).sportId(1L).build()
         1 * locationService.getLocation(1L) >> basketballLocation
-        1 * sessionRepository.save(_ as Session) >> savedGroupSession(userId, GroupAudience.ALL_MEMBERS)
-        0 * sessionAudienceMemberRepository.saveAll(_)
+        1 * sessionRepository.save({ Session s -> s.groupAudienceUserIds == null }) >> savedGroupSession(userId, GroupAudience.ALL_MEMBERS)
         interaction { stubBatchEnrichment() }
 
         when: "a standalone session with an audience"
@@ -644,10 +636,9 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * locationService.getLocation(1L) >> basketballLocation
-        1 * sessionRepository.save({ Session s -> s.groupAudience == null }) >> Session.builder().id(3L).sessionType(SessionType.STANDALONE)
+        1 * sessionRepository.save({ Session s -> s.groupAudience == null && s.groupAudienceUserIds == null }) >> Session.builder().id(3L).sessionType(SessionType.STANDALONE)
                 .createdBy(userId).sportId(1L).locationId(1L).scheduledStart(Instant.now()).status(SessionStatus.SCHEDULED).build()
         0 * groupService._
-        0 * sessionAudienceMemberRepository._
         interaction { stubBatchEnrichment() }
     }
 
@@ -741,7 +732,7 @@ class SessionServiceImplSpec extends Specification {
         def left = UUID.randomUUID()
         def notChosen = UUID.randomUUID()
         def session = Session.builder().id(1L).groupId(5L).createdBy(actor).status(SessionStatus.SCHEDULED)
-                .groupAudience(GroupAudience.SPECIFIC).build()
+                .groupAudience(GroupAudience.SPECIFIC).groupAudienceUserIds([stays, left]).build()
 
         when:
         sessionService.cancelSession(1L, actor, null)
@@ -751,7 +742,6 @@ class SessionServiceImplSpec extends Specification {
         1 * groupService.isGroupMember(5L, actor) >> true
         1 * sessionRepository.save(_ as Session) >> { Session s -> s }
         1 * groupService.getMemberUserIds(5L) >> [actor, stays, notChosen]
-        1 * sessionAudienceMemberRepository.findUserIdsBySessionId(1L) >> [stays, left]
         1 * sessionParticipantRepository.findBySessionIdAndStatusIn(1L, [ParticipantStatus.JOINED]) >> []
         1 * userService.getActiveUserIds({ Collection c -> (c as Set) == ([stays] as Set) }) >> ([stays] as Set)
         1 * sessionOutboxWriter.build("session.group.cancelled", { SessionGroupCancelledEvent e -> e.recipientUserId == stays }) >> new SessionOutboxEvent()

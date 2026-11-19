@@ -4,7 +4,6 @@ import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.session.api.dto.GroupAudience;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.entity.Session;
-import com.sportconnect.session.repository.SessionAudienceMemberRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.user.api.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +28,6 @@ import java.util.UUID;
 public class GroupSessionRecipients {
 
     private final GroupService groupService;
-    private final SessionAudienceMemberRepository sessionAudienceMemberRepository;
     private final SessionParticipantRepository sessionParticipantRepository;
     private final UserService userService;
 
@@ -37,9 +35,11 @@ public class GroupSessionRecipients {
         Set<UUID> members = new HashSet<>(groupService.getMemberUserIds(session.getGroupId()));
         Set<UUID> ids = new LinkedHashSet<>();
         if (session.getGroupAudience() == GroupAudience.SPECIFIC) {
-            sessionAudienceMemberRepository.findUserIdsBySessionId(session.getId()).stream()
-                    .filter(members::contains)
-                    .forEach(ids::add);
+            // The chosen members are kept on the session itself; a chosen member who has left the group is dropped here.
+            List<UUID> chosen = session.getGroupAudienceUserIds();
+            if (chosen != null) {
+                chosen.stream().filter(members::contains).forEach(ids::add);
+            }
         } else {
             ids.addAll(members);
         }

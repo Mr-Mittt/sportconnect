@@ -11,7 +11,6 @@ import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionType;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionOutboxEvent;
-import com.sportconnect.session.repository.SessionAudienceMemberRepository;
 import com.sportconnect.session.repository.SessionOutboxEventRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
@@ -58,7 +57,6 @@ class SessionGroupCustomSessionIntegrationTest extends RedisBaseIT {
 
     @Autowired private SessionRepository sessionRepository;
     @Autowired private SessionParticipantRepository participantRepository;
-    @Autowired private SessionAudienceMemberRepository audienceRepository;
     @Autowired private SessionOutboxEventRepository outboxRepository;
     @Autowired private GroupRepository groupRepository;
     @Autowired private GroupMemberRepository groupMemberRepository;
@@ -109,7 +107,6 @@ class SessionGroupCustomSessionIntegrationTest extends RedisBaseIT {
     private void clearAll() {
         outboxRepository.deleteAll();
         commentRepository.deleteAll();
-        audienceRepository.deleteAll();
         participantRepository.deleteAll();
         sessionRepository.deleteAll();
         groupMemberRepository.deleteAll();
@@ -239,7 +236,7 @@ class SessionGroupCustomSessionIntegrationTest extends RedisBaseIT {
         }
         // Only a notification: nobody is made a participant or an invitee.
         assertThat(participantRepository.findAll()).extracting(p -> p.getUserId()).containsExactly(creatorId);
-        assertThat(audienceRepository.count()).isZero();
+        assertThat(sessionRepository.findById(id).orElseThrow().getGroupAudienceUserIds()).isNullOrEmpty();
     }
 
     @Test
@@ -248,7 +245,7 @@ class SessionGroupCustomSessionIntegrationTest extends RedisBaseIT {
                 .audienceUserIds(List.of(memberA, memberA, creatorId)).build());
 
         assertThat(sessionRepository.findById(id).orElseThrow().getGroupAudience()).isEqualTo(GroupAudience.SPECIFIC);
-        assertThat(audienceRepository.findUserIdsBySessionId(id)).containsExactly(memberA);
+        assertThat(sessionRepository.findById(id).orElseThrow().getGroupAudienceUserIds()).containsExactly(memberA);
         assertThat(recipients(CREATED)).containsExactly(memberA);
         assertThat(participantRepository.findAll()).allMatch(p -> p.getStatus() == ParticipantStatus.JOINED);
     }
@@ -287,7 +284,7 @@ class SessionGroupCustomSessionIntegrationTest extends RedisBaseIT {
         Long id = createdIdBy(creatorId, body().audience(GroupAudience.SPECIFIC).audienceUserIds(chosen).build());
         long millis = (System.nanoTime() - started) / 1_000_000;
 
-        assertThat(audienceRepository.findUserIdsBySessionId(id)).hasSize(120);
+        assertThat(sessionRepository.findById(id).orElseThrow().getGroupAudienceUserIds()).hasSize(120).doesNotHaveDuplicates();
         assertThat(count(CREATED)).isEqualTo(120);
         System.out.println("SESSION-GROUP-1: a SPECIFIC audience of 120 created and notified in " + millis + " ms");
     }

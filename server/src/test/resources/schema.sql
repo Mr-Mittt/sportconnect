@@ -404,19 +404,12 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at TIMESTAMP,
     -- SESSION-GROUP-1 (V094): who a group session was made for; the unique (group_id, scheduled_start) key is gone.
     group_audience VARCHAR(20),
+    -- Review (V098): the chosen members of a SPECIFIC audience, comma-separated UUIDs (session_audience_members is gone).
+    group_audience_user_ids TEXT,
     -- SESSION-GROUP-5 (V096): the recurrence and local date a regular session was generated for (NULLs never collide).
     recurrence_id BIGINT,
     occurrence_date DATE,
     CONSTRAINT unique_session_recurrence_occurrence UNIQUE (recurrence_id, occurrence_date)
-);
-
--- SESSION-GROUP-1 (V094): the chosen members of a SPECIFIC audience (they decide only who is notified).
-CREATE TABLE IF NOT EXISTS session_audience_members (
-    id BIGSERIAL PRIMARY KEY,
-    session_id BIGINT NOT NULL,
-    user_id UUID NOT NULL,
-    FOREIGN KEY (session_id) REFERENCES sessions(id),
-    CONSTRAINT unique_session_audience_member UNIQUE (session_id, user_id)
 );
 
 -- SESSION-GROUP-4 (V095): a group's regular-session settings and recurrence configurations. H2 JSON stands in for JSONB.
