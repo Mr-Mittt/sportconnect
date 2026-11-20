@@ -29,7 +29,7 @@ A group session is **never public**: only members can read it (`SessionDetailGat
 5. **Generation trigger:** the last *regular* session of a day completes or is cancelled. A custom session never triggers generation. Cancelling while generation is OFF never regenerates.
 6. **Time:** a configuration is a wall-clock slot (a weekday or month day, a local start time, a duration) read in the **location's timezone**; the session is stored as a UTC instant. "Today", "nearest day" and "already ended" are judged on that wall clock.
 7. **Audience** (all members, or chosen members, no cap) decides **only who is notified**, at creation and at generation (`session.group.created`) and at cancel (`session.group.cancelled`). Every member can still see and join; a member becomes a participant by clicking Join. No `INVITED` row is made.
-8. A group's `PREPARING` sessions are their own bucket, never mixed into `SCHEDULED`.
+8. A group's `PREPARING` sessions are never mixed into `SCHEDULED` (the lists filter by the statuses the caller asks for; SESSION-GROUP-12).
 9. A configuration is a **draft** when it lacks a location, a duration, or (for a `FIXED` fee) the amount. A day and a start time are required.
 10. Editing a configuration changes only **future** generation; generated sessions keep their values.
 11. Every change of the group's session rules writes a **group system post**, authored as the current owner (the B9 rule).
@@ -72,18 +72,23 @@ The standalone request plus:
 
 The creator is `JOINED` at creation. The answer is the usual `SessionResponse`, which does **not** carry the audience. The audience is notified (`session.group.created`, section 7).
 
-### 4.2 A group's sessions by bucket: `GET /api/sessions/group/{groupId}?bucket=&page=&size=`
-Member only (`403 SESSION_GROUP_MEMBER_REQUIRED`, one answer for a non-member).
+### 4.2 A group's sessions by status: `/today`, `/later`, `/history/dates`, `/history` (SESSION-GROUP-12)
+SESSION-GROUP-2's `?bucket=` is **gone** (SESSION-GROUP-12, owner 2026-11-20): one status per call could not serve the Sessions tab. The plain `GET /api/sessions/group/{groupId}` (every status, the caller's own paging and sort) stays.
 
-| `bucket` | Statuses | Order |
-|---|---|---|
-| `ONGOING` | `ONGOING` | start time, soonest first |
-| `SCHEDULED` | `SCHEDULED` | start time, soonest first |
-| `PREPARING` | `PREPARING` | start time, soonest first |
-| `HISTORY` | `COMPLETED`, `CANCELLED` | start time, newest first |
-| omitted | every status, as before | |
+All four are for members only (`403 SESSION_GROUP_MEMBER_REQUIRED`, the same answer for a non-member and for a missing or inactive group, checked before any other validation inside the service). Common parameters: **`viewerZoneId`** (required, an IANA zone; "today", the end date and the windows are all read in it, like the history of "My sessions") and a **repeatable `status`** (required, not empty; also accepted comma-separated; a status the endpoint does not serve, an unknown one, or a missing one is an **un-coded** `400`). Answers are pages of `SessionResponse` except the dates. The caller's own `sort` is ignored everywhere.
 
-The caller's own `sort` is ignored. An unknown `bucket` is an **un-coded** `400`. The answer is a page of `SessionResponse`. The client hides the taken and open slot information for a group session itself.
+| Endpoint | Which sessions | Allowed `status` | Order |
+|---|---|---|---|
+| `GET .../{groupId}/today` | playing time overlaps today: the start is before the end of today and the end (a session with no end ends at its start) is not before the start of today. A session that began yesterday and ends today or tomorrow is in; one that ended exactly at midnight is "today" | all five | ONGOING, SCHEDULED, PREPARING, COMPLETED, CANCELLED, then start, then id; page size 50, at most 100 |
+| `GET .../{groupId}/later?page=&size=` | start from the start of tomorrow on | PREPARING, SCHEDULED, CANCELLED | start, then id |
+| `GET .../{groupId}/history/dates?before=&days=30` | the distinct **end dates** of the finished sessions, in a window of `days` calendar days (default 30, at most 90) ending the day before `before` (omitted = today, so the first window ends yesterday; a later `before` is read as today) | COMPLETED, CANCELLED | date, newest first |
+| `GET .../{groupId}/history?date=&page=&size=` | one end date's sessions; `date` must be before today (today's are in `/today`) | COMPLETED, CANCELLED | end time, newest first, then id |
+
+**`history/dates` answer:** `{ dates: [{ date, count }], hasMore, nextBefore }`. `nextBefore` is the window's first day: pass it as `before` for the window before it. `hasMore` is true when a session matching the status filter ends before this window. The window is a fixed span of days, so it can hold **no date** while older sessions exist: the client keeps offering the next window while `hasMore` is true (CLIENT-GROUP-SESSION-2 asks again by itself when a window is empty).
+
+**The end of a session** is `scheduledEndAt`, or its start when it has none (a session without a duration). Every cancel path now sets the end to the start when there is none (`Session.endAtStartIfMissing`: `cancelSession`, the automatic cancel of an unprepared draft, `RegularSessionCanceller`; V101 backfills the rows cancelled before), so a cancelled draft is placed by its start; a `COMPLETED` session without a duration is read the same way by the queries. The partition is exact: today = end not before the start of today and start before the end of today; later = start from the start of tomorrow; history = end before the start of today.
+
+**The caller's own lists** (`GET /api/sessions/upcoming`, `/requested`, `/history` and its date counts) now show a group session only while the caller is a member of that **active** group (`GroupService.getActiveGroupIdsForMember`, once per request): leaving a group, or the group being deleted, takes its sessions off those lists although the participant rows stay (they come back if the person rejoins).
 
 ### 4.3 Change, cancel, schedule, share
 - `PUT /api/sessions/{id}`, `POST .../schedule`, `POST .../cancel`: the creator **while still a member**, or the group's owner or admin; otherwise `403 SESSION_GROUP_ADMIN_REQUIRED`. Unchanged rules for `PREPARING`.
@@ -160,7 +165,7 @@ Written as `GROUP_SYSTEM` posts, authored as the current owner, with the English
 
 ## 9. Error codes the client needs copy for (en and vi, `errors:codes`)
 
-`SESSION_GROUP_MEMBER_REQUIRED`, `SESSION_GROUP_ADMIN_REQUIRED`, `SESSION_AUDIENCE_REQUIRED`, `SESSION_AUDIENCE_NOT_MEMBER {count}`, `SESSION_RECURRENCE_DAY_INVALID {mode}`, `SESSION_RECURRENCE_START_REQUIRED`, `SESSION_RECURRENCE_DAY_LIMIT {limit}`, `SESSION_RECURRENCE_NOT_FOUND`, `GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH`, `GROUP_NOT_FOUND`, `SESSION_SPORT_REQUIRED`, `SESSION_SHARE_NOT_ALLOWED`. Meanings and params: `documentation/md/ERROR_CODES.md`. A bad `bucket` is deliberately un-coded.
+`SESSION_GROUP_MEMBER_REQUIRED`, `SESSION_GROUP_ADMIN_REQUIRED`, `SESSION_AUDIENCE_REQUIRED`, `SESSION_AUDIENCE_NOT_MEMBER {count}`, `SESSION_RECURRENCE_DAY_INVALID {mode}`, `SESSION_RECURRENCE_START_REQUIRED`, `SESSION_RECURRENCE_DAY_LIMIT {limit}`, `SESSION_RECURRENCE_NOT_FOUND`, `GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH`, `GROUP_NOT_FOUND`, `SESSION_SPORT_REQUIRED`, `SESSION_SHARE_NOT_ALLOWED`. Meanings and params: `documentation/md/ERROR_CODES.md`. The validation of `status` and `viewerZoneId` on the group lists is deliberately un-coded.
 
 ## 10. Deactivated accounts
 
@@ -182,8 +187,8 @@ Statuses: `PENDING` (waits to be generated), `DONE` (**a session exists**), `FAI
 - **5 per day is not locked.** Two admins adding to the same day at the same moment (each sees 4) can both succeed and leave 6. Generation copes with any number; further adds are refused. To be closed by `SESSION-GROUP-11` part 1.
 - **A deactivated owner still authors generated sessions.** The author is the member with the owner role; nothing checks that account is active. Generation continues in their name (their real name is shown); only the other admins can manage those sessions. To be closed by `SESSION-GROUP-11` part 2: an owner must transfer the group before deactivating.
 - **A mode switch with `cancelScheduled` cancels all** the group's scheduled regular sessions, including any that belong to the mode being switched **to** (it can have some left from an earlier switch where the owner chose "leave it there"); a cancelled slot is not regenerated. This is what the specification says ("all scheduled"); the owner wants only the left mode's cancelled, `SESSION-GROUP-11` part 3 (it changes the count scope the client uses in `CLIENT-GROUP-SESSION-6`).
-- Assumptions the owner accepted: the creator is `JOINED`; every cancel of a group session notifies its audience; a bad `bucket` is an un-coded 400; a non-member who shares gets `SESSION_GROUP_MEMBER_REQUIRED`.
-- **Not verified:** the migrations V094 to V100 and the lock statement on PostgreSQL (the integration tests run H2), two real instances, a live server with the worker and the safety net on, the full `:server:test`, and the plan of the bucket query on real data.
+- Assumptions the owner accepted: the creator is `JOINED`; every cancel of a group session notifies its audience; a bad `status` on a group list is an un-coded 400; a non-member who shares gets `SESSION_GROUP_MEMBER_REQUIRED`.
+- **Not verified:** the migrations V094 to V100 and the lock statement on PostgreSQL (the integration tests run H2), two real instances, a live server with the worker and the safety net on, the full `:server:test`, and the plan of the group list queries on real data.
 
 ## 13. Client tickets and the contract they use
 
