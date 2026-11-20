@@ -66,6 +66,11 @@ Visual regression no longer runs per PR: it is the manual workflow `client-visua
 | `session-detail-approval-queue-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-1 | changed: "Ladder night" is a group session hosted by the test user (and owned by them), so the footer gains the "Cancel session" button |
 | `home-feed-*`, `groups-*` (all six states), `profile-*` | CLIENT-GROUP-SESSION-1 | probably changed, to confirm in the `client-visual` run: the right-rail "Upcoming" card of a group session reads "N joined" instead of "N participants" (a group session shows the joined count only) |
 | `create-session-*` | CLIENT-GROUP-SESSION-1 | unchanged: the standalone form is untouched (the group mode has no visual spec) |
+| `groups-owner-posts-*`, `groups-member-posts-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-2 | changed: the group tab nav gains the "Sessions" tab between Posts and Chat, and the "Today's session" header gains the right-aligned "See all" link; the shortcut stays the empty plus row because both specs now call `seedEmptyGroupSessionsOnNextLoad` (the mock lays the group lists out around the real today, which the frozen clock cannot match) |
+| `groups-members-tab-*`, `groups-settings-tab-*`, `groups-chat-tab-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-2 | changed: the vertical tab nav shown on every group tab gains the "Sessions" row |
+| `groups-discovery-*` | CLIENT-GROUP-SESSION-2 | unchanged: no group is selected, so there is no tab nav |
+| the Sessions tab itself | CLIENT-GROUP-SESSION-2 | no visual spec added: its content is dated around the real today and the specs freeze the browser clock (stories cover the states); add one in a baseline ticket once the mock can serve fixed dates |
+| `session-detail-*`, `home-feed-*`, `profile-*` | CLIENT-GROUP-SESSION-2 | unchanged: no fixture session has an end equal to its start (the cancelled fixture has no end), so the end rule shows nothing new |
 
 The SESSION-49 row comes from its diff (locale strings, the pre-filled title, the MSW handlers), not from a rendered comparison: nothing was rendered for it. `/updatebaseline` Phase 3 derives the real set from `git diff master...HEAD -- client/` and shows it to the owner.
 
