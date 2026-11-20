@@ -43,20 +43,30 @@ describe('SessionStartTimePicker', () => {
   });
 
   describe('disallowPast (the start picker)', () => {
-    const optionState = (select: HTMLElement) =>
-      Array.from(select.querySelectorAll('option')).filter((option) => option.value !== '').map((option) => [option.value, option.disabled] as const);
+    const optionValues = (select: HTMLElement) =>
+      Array.from(select.querySelectorAll('option'))
+        .filter((option) => option.value !== '')
+        .map((option) => option.value);
 
-    it('disables the hours before the current one when the date is today', () => {
+    it('lists only the hours from the current one on when the date is today (the earlier ones are removed, not disabled)', () => {
       render(<SessionStartTimePicker value="2026-08-03T14:30" onChange={vi.fn()} now={now} disallowPast />);
-      const hours = optionState(screen.getByLabelText('Hour'));
-      expect(hours.filter(([, disabled]) => disabled).map(([hour]) => hour)).toEqual(['00', '01', '02', '03', '04', '05', '06', '07', '08', '09']);
-      expect(hours.find(([hour]) => hour === '10')?.[1]).toBe(false);
+      const hours = optionValues(screen.getByLabelText('Hour'));
+      expect(hours).toEqual(Array.from({ length: 14 }, (_, i) => String(i + 10).padStart(2, '0')));
+      expect(hours).not.toContain('09');
+      expect(Array.from(screen.getByLabelText('Hour').querySelectorAll('option')).some((option) => option.disabled && option.value !== '')).toBe(false);
     });
 
-    it('in the current hour also disables the minutes before the current one', () => {
+    it('in the current hour lists only the minutes from the current one on', () => {
       render(<SessionStartTimePicker value="2026-08-03T10:30" onChange={vi.fn()} now={new Date('2026-08-03T10:15:40')} disallowPast />);
-      const minutes = optionState(screen.getByLabelText('Minute'));
-      expect(minutes.filter(([, disabled]) => disabled).map(([minute]) => minute)).toEqual(Array.from({ length: 15 }, (_, i) => String(i).padStart(2, '0')));
+      const minutes = optionValues(screen.getByLabelText('Minute'));
+      expect(minutes[0]).toBe('15');
+      expect(minutes).toHaveLength(45);
+      expect(minutes).not.toContain('14');
+    });
+
+    it('lists every minute in an hour after the current one', () => {
+      render(<SessionStartTimePicker value="2026-08-03T11:30" onChange={vi.fn()} now={new Date('2026-08-03T10:15:40')} disallowPast />);
+      expect(optionValues(screen.getByLabelText('Minute'))).toHaveLength(60);
     });
 
     function Controlled({ start, at, disallowPast = true }: { start: string; at: Date; disallowPast?: boolean }) {
@@ -105,12 +115,25 @@ describe('SessionStartTimePicker', () => {
       expect(screen.getByLabelText('Minute')).toHaveValue('25');
     });
 
-    it('disables nothing on a later day, nor without the prop', () => {
+    it('removes nothing on a later day, nor without the prop', () => {
       const { unmount } = render(<SessionStartTimePicker value="2026-08-04T01:00" onChange={vi.fn()} now={now} disallowPast />);
-      expect(optionState(screen.getByLabelText('Hour')).some(([, disabled]) => disabled)).toBe(false);
+      expect(optionValues(screen.getByLabelText('Hour'))).toHaveLength(24);
       unmount();
       render(<SessionStartTimePicker value="2026-08-03T14:30" onChange={vi.fn()} now={now} />);
-      expect(optionState(screen.getByLabelText('Hour')).some(([, disabled]) => disabled)).toBe(false);
+      expect(optionValues(screen.getByLabelText('Hour'))).toHaveLength(24);
+    });
+
+    it('switching the date to today with an earlier hour picked moves the hour to the current one', async () => {
+      const user = userEvent.setup();
+      render(<Controlled start="2026-08-04T08:00" at={new Date('2026-08-03T10:10:00')} />);
+      await user.selectOptions(screen.getByLabelText('Date'), 'Today');
+      expect(screen.getByLabelText('Hour')).toHaveValue('10');
+      expect(screen.getByLabelText('Minute')).toHaveValue('25');
+    });
+
+    it('keeps an hour it already holds in its list even when that hour has passed (a stored start), so the select is not blank', () => {
+      render(<SessionStartTimePicker value="2026-08-03T08:30" onChange={vi.fn()} now={now} disallowPast />);
+      expect(screen.getByLabelText('Hour')).toHaveValue('08');
     });
   });
 

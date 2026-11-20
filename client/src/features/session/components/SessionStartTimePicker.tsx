@@ -22,7 +22,9 @@ interface SessionStartTimePickerProps {
    * (or the duration) fills it, instead of pushing the "now + 1h" default up on mount. */
   prefillWhenEmpty?: boolean;
   /** CLIENT-GL-38: the start picker never offers a time earlier than now: when the date is today, the hours before the
-   * current one (and, in the current hour, the minutes before the current one) are disabled. */
+   * current one (and, in the current hour, the minutes before the current one) are left out of the lists (owner,
+   * 2026-11-20: removed, no longer shown disabled). Moving to today with an earlier hour picked moves the hour to the
+   * current one. */
   disallowPast?: boolean;
   /** CLIENT-SESSION-50: `yyyy-MM-dd`. While `value` is empty the date part is set to it on mount and every time it
    * changes (the "Ends at" picker follows the start's date while the duration is missing). A date picked by hand
@@ -132,11 +134,14 @@ export function SessionStartTimePicker({
   const CURRENT_HOUR_MINUTE_LEAD = 15;
 
   const commit = (nextDate: string, rawHour: string, rawMinute: string) => {
+    // Today with an hour that has passed (the date was switched to today): the hours before now are not offered, so the
+    // hour moves to the current one.
+    const currentHourKey = String(now.getHours()).padStart(2, '0');
+    const nextHour =
+      disallowPast && nextDate === todayKey && rawHour !== '' && Number(rawHour) < now.getHours() ? currentHourKey : rawHour;
     // CLIENT-GL-38: landing on today's current hour with a minute that has already passed (or none yet) sets the
     // minute to now + 15, or :59 when that would roll into the next hour, so the pick is never a past time.
-    const landsOnCurrentHour =
-      disallowPast && nextDate === todayKey && rawHour === String(now.getHours()).padStart(2, '0');
-    const nextHour = rawHour;
+    const landsOnCurrentHour = disallowPast && nextDate === todayKey && nextHour === currentHourKey;
     const nextMinute =
       landsOnCurrentHour && (rawMinute === '' || Number(rawMinute) < now.getMinutes())
         ? String(Math.min(now.getMinutes() + CURRENT_HOUR_MINUTE_LEAD, 59)).padStart(2, '0')
@@ -162,9 +167,21 @@ export function SessionStartTimePicker({
 
   const isToday = disallowPast && datePart === todayKey;
   const isCurrentHour = isToday && hourPart === String(now.getHours()).padStart(2, '0');
-  const hourOptions = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
-  const minuteOptions = Array.from({ length: 60 / MINUTE_STEP }, (_, i) =>
-    String(i * MINUTE_STEP).padStart(2, '0'),
+  // Only what can still be picked is listed. The value the picker already holds is kept in its list (a stored start
+  // that is already past, adopted from outside), so the select never shows blank for a value it has.
+  const keepHeld = (options: string[], held: string) =>
+    held !== '' && !options.includes(held) ? [...options, held].sort() : options;
+  const hourOptions = keepHeld(
+    Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0')).filter(
+      (hour) => !isToday || Number(hour) >= now.getHours(),
+    ),
+    hourPart,
+  );
+  const minuteOptions = keepHeld(
+    Array.from({ length: 60 / MINUTE_STEP }, (_, i) => String(i * MINUTE_STEP).padStart(2, '0')).filter(
+      (minute) => !isCurrentHour || Number(minute) >= now.getMinutes(),
+    ),
+    minutePart,
   );
 
   return (
@@ -207,7 +224,7 @@ export function SessionStartTimePicker({
             {t('time.hour')}
           </option>
           {hourOptions.map((hour) => (
-            <option key={hour} value={hour} disabled={isToday && Number(hour) < now.getHours()}>
+            <option key={hour} value={hour}>
               {hour}
             </option>
           ))}
@@ -223,7 +240,7 @@ export function SessionStartTimePicker({
             {t('time.minuteShort')}
           </option>
           {minuteOptions.map((minute) => (
-            <option key={minute} value={minute} disabled={isCurrentHour && Number(minute) < now.getMinutes()}>
+            <option key={minute} value={minute}>
               {minute}
             </option>
           ))}

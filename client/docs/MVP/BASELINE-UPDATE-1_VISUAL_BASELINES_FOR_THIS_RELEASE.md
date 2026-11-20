@@ -62,6 +62,10 @@ Visual regression no longer runs per PR: it is the manual workflow `client-visua
 | `session-detail-{not-joined, discussion, cancelled, preparing}-*` and `session-results-section-*` at 375, 768, 1280 | CLIENT-SESSION-52 | changed again (they already changed for CLIENT-SESSION-49): the collapsed "Session information" summary (read-only states) or the Who summary (`preparing`) gains `Visibility: Public`; these are the standalone-session fixtures. The group-session states (`already-joined`, `invited`, `requested`, `approval-queue`) show no Visibility line and stay unchanged |
 | none | CLIENT-SESSION-52 (the Who editor's switch and warning, the thread text) | no change: no visual spec opens the Who editor or switches the visibility, and no fixture has a `SESSION_VISIBILITY_CHANGED` comment |
 | every other baseline | all | byte-identical; a diff there is a regression, not an update |
+| `groups-owner-posts-*`, `groups-member-posts-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-1 | changed: the Posts tab gains the collapsible "Today's session" section under the composer (under the frozen clock no fixture session is "today", so it shows the dashed "+" row) |
+| `session-detail-approval-queue-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-1 | changed: "Ladder night" is a group session hosted by the test user (and owned by them), so the footer gains the "Cancel session" button |
+| `home-feed-*`, `groups-*` (all six states), `profile-*` | CLIENT-GROUP-SESSION-1 | probably changed, to confirm in the `client-visual` run: the right-rail "Upcoming" card of a group session reads "N joined" instead of "N participants" (a group session shows the joined count only) |
+| `create-session-*` | CLIENT-GROUP-SESSION-1 | unchanged: the standalone form is untouched (the group mode has no visual spec) |
 
 The SESSION-49 row comes from its diff (locale strings, the pre-filled title, the MSW handlers), not from a rendered comparison: nothing was rendered for it. `/updatebaseline` Phase 3 derives the real set from `git diff master...HEAD -- client/` and shows it to the owner.
 
@@ -76,3 +80,4 @@ Exactly the expected files changed or new; the `client-visual` diff run passes a
 **Out of scope:** regenerating on Windows; changing any spec; a new visual state (a scrolled or collapsed-section state is its own ticket).
 
 **Tests:** none to write; the `client-visual` run is the check.
+| `session-detail-{not-joined, already-joined, invited, requested, approval-queue, discussion, cancelled, preparing}-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-1 (round 3) | changed: the creator line reads "Created by {name}" (the approval mode left it), and a session the caller can still join (`not-joined`) shows "Auto approval" / "Need host approval" next to the Join button |

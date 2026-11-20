@@ -3,6 +3,7 @@ import type { Group, GroupInfo, GroupSettings, UpdateGroupSettingsPayload } from
 import { Button } from '@/shared/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible';
 import { Label } from '@/shared/ui/label';
+import { isGroupManager } from '@/shared/lib/groupRole';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Textarea } from '@/shared/ui/textarea';
 
@@ -180,8 +181,7 @@ export function GroupSettingsTab({
 }: GroupSettingsTabProps) {
   const t = useOverridableText('groups', i18nOverridePrefix);
   const isOwner = currentUserRole === 'group_owner';
-  const isAdmin = currentUserRole === 'group_admin';
-  const canEdit = isOwner || isAdmin;
+  const canEdit = isGroupManager(currentUserRole);
 
   const [isGeneralOpen, setIsGeneralOpen] = useState(true);
   const [isPermissionOpen, setIsPermissionOpen] = useState(true);

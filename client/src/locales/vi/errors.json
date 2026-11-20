@@ -151,6 +151,8 @@
     "SESSION_FORBIDDEN": "Bạn không có quyền truy cập buổi chơi này.",
     "SESSION_GROUP_MEMBER_REQUIRED": "Chỉ thành viên của nhóm này mới làm được việc đó. Hãy tham gia nhóm trước.",
     "SESSION_GROUP_ADMIN_REQUIRED": "Chỉ chủ nhóm hoặc quản trị viên mới làm được việc này.",
+    "SESSION_AUDIENCE_REQUIRED": "Hãy chọn ít nhất một thành viên cho buổi chơi dành cho một số thành viên.",
+    "SESSION_AUDIENCE_NOT_MEMBER": "{{count}} người bạn chọn không còn là thành viên của nhóm này. Hãy bỏ họ ra và thử lại.",
     "SESSION_CREATOR_REQUIRED": "Chỉ người tạo buổi chơi mới làm được việc này.",
     "SESSION_CANCELLED": "Buổi chơi này đã bị hủy.",
     "SESSION_NOT_CANCELLABLE": "Buổi chơi này đã kết thúc hoặc đã bị hủy.",

@@ -16,11 +16,18 @@ export type {
   StartTimeFilter,
 } from '@/shared/types/session';
 
+/** Who a group session is for (`GroupSessionAudience` on the server). */
+export type GroupSessionAudience = 'ALL_MEMBERS' | 'SPECIFIC';
+
 export interface CreateSessionPayload {
-  /** Omitted = standalone. Set = group-linked, gated on canManageMembers backend-side. */
+  /** Omitted = standalone. Set = a group session: any member of the group may create one (`403 SESSION_GROUP_MEMBER_REQUIRED` otherwise). */
   groupId?: number;
-  /** Required when groupId is omitted; inherited from the group otherwise. */
+  /** Required when groupId is omitted; a group session takes the group's sport and ignores this. */
   sportId?: number;
+  /** CLIENT-GROUP-SESSION-1: a group session only. `ALL_MEMBERS` (the server's default) or `SPECIFIC`, which needs `audienceUserIds`. Who is told; every member can still see and join. */
+  audience?: GroupSessionAudience;
+  /** With `SPECIFIC`: the other members to tell, at least one, no upper limit (`400 SESSION_AUDIENCE_REQUIRED`, `400 SESSION_AUDIENCE_NOT_MEMBER`). */
+  audienceUserIds?: string[];
   title?: string;
   description?: string;
   /** SESSION-24: omitted -> the session is created PREPARING instead of SCHEDULED (CLIENT-SESSION-21). */

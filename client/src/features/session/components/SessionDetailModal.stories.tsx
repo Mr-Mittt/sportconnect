@@ -317,6 +317,20 @@ export const GroupLinked: Story = {
   args: { session: makeSession({ groupId: 5, sessionType: 'GROUP_RECURRING' }) },
 };
 
+/** CLIENT-GROUP-SESSION-1: the host (or a group owner or admin) of a group session that has not ended gets "Cancel session". */
+export const GroupSessionHostCanCancel: Story = {
+  args: { canManage: true, session: makeSession({ groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false }) },
+};
+
+/** CLIENT-GROUP-SESSION-1: the confirmation, with the optional reason. */
+export const GroupSessionCancelConfirm: Story = {
+  args: { canManage: true, session: makeSession({ groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false }) },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole('button', { name: 'Cancel session' }));
+  },
+};
+
 export const Ongoing: Story = {
   args: { session: makeSession({ status: 'ONGOING' }) },
 };

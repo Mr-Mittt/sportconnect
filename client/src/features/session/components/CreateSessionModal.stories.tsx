@@ -205,3 +205,33 @@ export const WithSessionAttributes: Story = {
     sessionAttributeValues: { 'match/racketBrand': 'Yonex Astrox 88D', 'match/format': 'Doubles' },
   },
 };
+
+/** CLIENT-GROUP-SESSION-1: the form of a group session: the group's sport (no select), no slots or visibility switch, auto approve on, and "All members". */
+export const GroupMode: Story = {
+  args: {
+    group: { id: 5, sportId: 2, name: 'Saigon Tennis Club' },
+    audienceSearch: { query: '', onQueryChange: () => {}, results: [], isSearching: false, isSearchError: false },
+  },
+};
+
+/** CLIENT-GROUP-SESSION-1: "Specific members" chosen, the search typed and its results listed under the box. */
+export const GroupModeSpecificMembers: Story = {
+  args: {
+    group: { id: 5, sportId: 2, name: 'Saigon Tennis Club' },
+    audienceSearch: {
+      query: 'li',
+      onQueryChange: () => {},
+      results: [
+        { id: 'm-1', name: 'Linh Tran', avatarUrl: null },
+        { id: 'm-2', name: 'Minh Le', avatarUrl: null },
+      ],
+      isSearching: false,
+      isSearchError: false,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole('radio', { name: 'Specific members' }));
+    await userEvent.click(await body.findByRole('button', { name: /Linh Tran/ }));
+  },
+};

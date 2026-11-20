@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-18 (CLIENT-SESSION-51 done)
+**Last updated:** 2026-11-19 (CLIENT-GROUP-SESSION-1 done)
 
 ---
 
@@ -84,12 +84,11 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 18 | [CLIENT-SESSION-44](MVP/CLIENT-SESSION-44_POINT_ADJUSTMENT_SCREENS.md) | Point adjustment dialog and adjustment history | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
 | 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request`; **2026-11-18: also `matches-journey` step 8c (Discover filters, failed in two large runs, passes alone) and 7 `home-feed-journey` sign-in timeouts under load, folded in** | `TODO` |
-| 26 | [CLIENT-GROUP-SESSION-1](MVP/CLIENT-GROUP-SESSION-1_CREATE_A_SESSION_INSIDE_A_GROUP.md) | Create a session inside a group: group mode of the create form (sport locked, no visibility or slots, All members / Specific radios with a member picker, auto approve on); depends on SESSION-GROUP-1 (`modules/session/docs/BACKLOG_MVP.md`) | `TODO` |
-| 27 | [CLIENT-GROUP-SESSION-2](MVP/CLIENT-GROUP-SESSION-2_GROUP_SESSIONS_TAB.md) | The group's Sessions tab (Ongoing, Scheduled, Preparing, History collapsibles) and no slot information for a group session; depends on SESSION-GROUP-2 | `TODO` |
-| 28 | [CLIENT-GROUP-SESSION-3](MVP/CLIENT-GROUP-SESSION-3_SHARE_A_GROUP_SESSION_AND_GROUP_NOTIFICATION_TEXTS.md) | Share a group session with members, and the `session.group.created` / `session.group.cancelled` notification texts; depends on SESSION-GROUP-1 and SESSION-GROUP-3 | `TODO` |
-| 29 | [CLIENT-GROUP-SESSION-4](MVP/CLIENT-GROUP-SESSION-4_GROUP_SETTINGS_SESSIONS_CONFIGURATION_SECTION.md) | Group settings: the Sessions configuration section (ON/OFF, Weekly/Monthly, configurations grouped by day); depends on SESSION-GROUP-4 | `TODO` |
-| 30 | [CLIENT-GROUP-SESSION-5](MVP/CLIENT-GROUP-SESSION-5_RECURRENCE_CONFIGURATION_FORM.md) | The recurrence configuration form (date-less When, draft warning, saved dialog; closes GRP-12's scope); depends on SESSION-GROUP-4 | `TODO` |
-| 31 | [CLIENT-GROUP-SESSION-6](MVP/CLIENT-GROUP-SESSION-6_CANCEL_SCHEDULED_SESSIONS_CONFIRMATIONS.md) | "Cancel the scheduled sessions?" confirmations on OFF, delete and mode switch; depends on SESSION-GROUP-6 | `TODO` |
+| 26 | [CLIENT-GROUP-SESSION-2](MVP/CLIENT-GROUP-SESSION-2_GROUP_SESSIONS_TAB.md) | The group's Sessions tab (Ongoing, Scheduled, Preparing, History collapsibles) and no slot information for a group session; depends on SESSION-GROUP-2 | `TODO` |
+| 27 | [CLIENT-GROUP-SESSION-3](MVP/CLIENT-GROUP-SESSION-3_SHARE_A_GROUP_SESSION_AND_GROUP_NOTIFICATION_TEXTS.md) | Share a group session with members, and the `session.group.created` / `session.group.cancelled` notification texts; depends on SESSION-GROUP-1 and SESSION-GROUP-3 | `TODO` |
+| 28 | [CLIENT-GROUP-SESSION-4](MVP/CLIENT-GROUP-SESSION-4_GROUP_SETTINGS_SESSIONS_CONFIGURATION_SECTION.md) | Group settings: the Sessions configuration section (ON/OFF, Weekly/Monthly, configurations grouped by day); depends on SESSION-GROUP-4 | `TODO` |
+| 29 | [CLIENT-GROUP-SESSION-5](MVP/CLIENT-GROUP-SESSION-5_RECURRENCE_CONFIGURATION_FORM.md) | The recurrence configuration form (date-less When, draft warning, saved dialog; closes GRP-12's scope); depends on SESSION-GROUP-4 | `TODO` |
+| 30 | [CLIENT-GROUP-SESSION-6](MVP/CLIENT-GROUP-SESSION-6_CANCEL_SCHEDULED_SESSIONS_CONFIRMATIONS.md) | "Cancel the scheduled sessions?" confirmations on OFF, delete and mode switch; depends on SESSION-GROUP-6 | `TODO` |
 
 #### Removed / Deferred
 
@@ -147,6 +146,7 @@ every ticket (design, what was built, key decisions, verification) lives in its 
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
+| 39 | [CLIENT-GROUP-SESSION-1](MVP/CLIENT-GROUP-SESSION-1_CREATE_A_SESSION_INSIDE_A_GROUP.md) | Create a session inside a group: the form's group mode (the group's sport, no slots or visibility switch, auto approve on, All members / Specific members with a member picker), a collapsible "Today's session" shortcut on the group's Posts tab (today's ongoing and scheduled sessions and a "+" card), the host-or-owner/admin `canManage` rule with `isGroupManager`, and cancelling a group session with an optional reason. 23/23 mutants killed, Vitest 213 files / 2450 tests, new e2e 3/3; baselines pending in `BASELINE-UPDATE-1` | `DONE` (2026-11-19) |
 | 38 | [CLIENT-SESSION-52](MVP/CLIENT-SESSION-52_PUBLIC_PRIVATE_SWITCH_IN_THE_SESSION_FORMS.md) | The public / private switch in the create form footer (left, on by default, hint and warning) and the Who section (PREPARING host), `Visibility` in the summaries, no Share button for a private session, the thread text; 14 of 14 mutants killed (pair of SESSION-69) | `DONE` (2026-11-18) |
 | 37 | [CLIENT-SESSION-49](MVP/CLIENT-SESSION-49_SHARE_DIALOG_IN_THE_PLAYERS_SECTION.md) | "Share" dialog from the Players section header: friends not joined first with checkboxes, joined friends below, "Share (x)", warning at the 50-friend limit (**standalone chain**; depends on SESSION-66) | `DONE` (2026-11-18) |
 | 36 | [CLIENT-SESSION-51](MVP/CLIENT-SESSION-51_LOCALISED_FIELD_CHANGE_SYSTEM_COMMENTS.md) | Localised system comments for the fields a host changed (pair of SESSION-67): one sentence per shape (added, updated, changed, removed) from the `old`/`new` params, values in the viewer's language and zone (start, duration, fee, mood, approval), the stored English text as the fallback; 4 templates and 13 labels in en and vi; 23 of 23 mutants killed | `DONE` (2026-11-18) |

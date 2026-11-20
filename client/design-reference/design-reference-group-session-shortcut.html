@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SportHub - group session shortcut and group-mode create form (approved reference for CLIENT-GROUP-SESSION-1)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.29.0/dist/tabler-icons.min.css">
+<style>
+  :root {
+    --surface-0: #f7f7f4;
+    --surface-1: #f1efe8;
+    --surface-2: #ffffff;
+    --text-primary: #1a1a18;
+    --text-secondary: #5f5e5a;
+    --text-muted: #6e6d66;
+    --border: rgba(44,44,42,0.12);
+    --border-strong: rgba(44,44,42,0.24);
+    --border-accent: #378ADD;
+    --bg-accent: #E6F1FB;
+    --text-accent: #185FA5;
+    --text-success: #15803d;
+    --text-danger: #A32D2D;
+    --accent-solid: #185FA5;
+    --overlay: rgba(26,26,24,0.5);
+    --mood-mid: #946510;
+    --teal-50: #E1F5EE;   --teal-800: #085041;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+         font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 24px 16px 64px; }
+  button { font-family: inherit; cursor: pointer; }
+  .wrap { width: 760px; max-width: 100%; margin: 0 auto; }
+  .note { font-size: 13px; color: var(--text-secondary); background: var(--surface-1);
+          border: 0.5px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-bottom: 18px; }
+  h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+       color: var(--text-muted); margin: 34px 0 10px; }
+  .card-box { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 12px; padding: 14px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 0.5px solid var(--border); padding-bottom: 8px; margin-bottom: 14px; }
+  .tab { border: none; background: none; font-size: 13px; color: var(--text-secondary); padding: 6px 10px; border-radius: 8px; }
+  .tab.on { color: var(--text-primary); font-weight: 500; background: var(--surface-1); }
+  .composer { margin-bottom: 14px; }
+  .composer .row { display: flex; gap: 10px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--bg-accent); color: var(--text-accent);
+            display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; flex-shrink: 0; }
+  .composer .fake { flex: 1; font-size: 14px; color: var(--text-muted); padding: 8px 0; }
+  .composer .bar { display: flex; justify-content: space-between; align-items: center; border-top: 0.5px solid var(--border);
+                   padding-top: 10px; margin-top: 4px; font-size: 12px; color: var(--text-secondary); }
+  .post-btn { border: none; background: var(--border); color: var(--text-muted); font-size: 13px; font-weight: 500;
+              padding: 7px 16px; border-radius: 20px; }
+
+  /* ---- the shortcut section ---- */
+  .section { margin-bottom: 14px; }
+  .section-head { display: flex; align-items: center; gap: 8px; padding: 4px 2px; }
+  .section-title { flex: 1; text-align: left; border: none; background: none; padding: 4px 2px;
+                   font-size: 14px; font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 6px; }
+  .section-title .count { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+  .chev { transition: transform .15s; font-size: 16px; color: var(--text-secondary); }
+  .section.collapsed .chev { transform: rotate(-90deg); }
+  .section.collapsed .slider-wrap { display: none; }
+  .slider-wrap { position: relative; }
+  .slider { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 2px 10px;
+            scrollbar-width: thin; }
+  .slider:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; border-radius: 8px; }
+
+  .s-card { flex: 0 0 248px; scroll-snap-align: start; background: var(--surface-2); border: 0.5px solid var(--border);
+            border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .s-head { display: flex; align-items: center; gap: 8px; }
+  .badge { width: 24px; height: 24px; border-radius: 50%; background: var(--teal-50); color: var(--teal-800);
+           display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
+  .s-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st { font-size: 10px; font-weight: 500; text-transform: uppercase; flex-shrink: 0; }
+  .st.ongoing { color: var(--text-success); } .st.scheduled { color: var(--text-accent); }
+  .row-d { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); min-width: 0; }
+  .row-d span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-d i { font-size: 13px; flex-shrink: 0; }
+  .fee-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-muted); }
+  .fee-row .l, .fee-row .r { display: flex; align-items: center; gap: 4px; }
+  .mood { border-radius: 999px; padding: 0 6px; font-size: 10px; font-weight: 600; color: #fff; background: var(--mood-mid); }
+  .acts { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+  .acts button { flex: 1; border: 0.5px solid var(--border-strong); background: none; border-radius: 8px;
+                 padding: 5px 0; font-size: 12px; color: var(--text-primary); }
+  .acts button:focus-visible, .plus:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 1px; }
+
+  .plus { flex: 0 0 248px; scroll-snap-align: start; min-height: 150px; border: 1px dashed var(--border-strong);
+          border-radius: 12px; background: var(--surface-1); display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: 6px; color: var(--text-accent); font-size: 13px; font-weight: 500; }
+  .plus i { font-size: 26px; }
+  .plus small { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+  .plus.only { flex: 1 1 auto; min-height: 96px; flex-direction: row; justify-content: center; gap: 10px; }
+  .plus.only i { font-size: 22px; }
+
+  .skel { flex: 0 0 248px; height: 150px; border-radius: 12px; background: var(--surface-1);
+          animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+  .err { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-danger); padding: 8px 2px; }
+  .err button { border: none; background: none; color: var(--text-accent); font-size: 12px; padding: 0; text-decoration: underline; }
+
+  /* ---- create form (group mode) ---- */
+  .modal { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 14px; width: 440px; max-width: 100%;
+           padding: 18px; margin: 0 auto; }
+  .modal h3 { margin: 0 0 14px; font-size: 16px; font-weight: 500; text-align: center; }
+  .fsec { border: 0.5px solid var(--border); border-radius: 10px; margin-bottom: 10px; }
+  .fsec > .fh { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 13px; font-weight: 500; }
+  .fsec > .fb { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .field label.l { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .field .inp { border: 0.5px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; font-size: 13px;
+                color: var(--text-muted); background: var(--surface-2); }
+  .locked { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);
+            background: var(--surface-1); border-radius: 8px; padding: 6px 10px; }
+  .radios { display: flex; flex-direction: column; gap: 8px; }
+  .radios label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .picker { display: none; flex-direction: column; gap: 8px; margin-left: 24px; }
+  .picker.show { display: flex; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; background: var(--bg-accent); color: var(--text-accent);
+          border-radius: 999px; padding: 3px 6px 3px 10px; }
+  .chip button { border: none; background: none; color: inherit; padding: 0; display: flex; font-size: 13px; }
+  .results { border: 0.5px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .res { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; }
+  .res + .res { border-top: 0.5px solid var(--border); }
+  .res .avatar { width: 24px; height: 24px; font-size: 10px; }
+  .hint { font-size: 11px; color: var(--text-muted); }
+  .err-inline { font-size: 11px; color: var(--text-danger); }
+  .foot { display: flex; gap: 8px; margin-top: 12px; }
+  .foot button { flex: 1; border-radius: 10px; padding: 9px 0; font-size: 13px; }
+  .foot .ghost { border: 0.5px solid var(--border-strong); background: none; }
+  .foot .solid { border: none; background: var(--accent-solid); color: #fff; font-weight: 500; }
+  .sw { display: flex; align-items: center; justify-content: space-between; font-size: 13px; }
+  .sw .tg { width: 34px; height: 20px; border-radius: 999px; background: var(--accent-solid); position: relative; }
+  .sw .tg::after { content: ""; position: absolute; right: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+
+  @media (max-width: 480px) { .s-card, .plus, .skel { flex-basis: 78vw; } .wrap { width: 100%; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="note"><b>Approved 2026-11-19</b> as the visual reference for CLIENT-GROUP-SESSION-1 (no visual-regression spec uses it yet). Tokens and icons are the app's; the card is the standalone <code>SessionCard</code> with the joined count only. Click the section title to collapse it; pick "Specific" in the form to see the member picker. Resize to 375px to check the phone layout.</div>
+
+  <!-- ===================== 1. Posts tab, expanded ===================== -->
+  <h2>1 · Group Posts tab: shortcut expanded (default)</h2>
+  <div class="card-box">
+    <div class="tabs">
+      <button class="tab on">Posts</button><button class="tab">Chat</button><button class="tab">Members</button><button class="tab">Settings</button>
+    </div>
+
+    <div class="card-box composer">
+      <div class="row"><div class="avatar">BN</div><div class="fake">Share something with Saigon Badminton Club…</div></div>
+      <div class="bar">
+        <div style="display:flex;gap:14px;"><span><i class="ti ti-photo"></i> Photo</span><span><i class="ti ti-map-pin"></i> Location</span></div>
+        <button class="post-btn" disabled>Post</button>
+      </div>
+    </div>
+
+    <div class="section" id="sec1">
+      <div class="section-head">
+        <button class="section-title" aria-expanded="true" onclick="toggle('sec1', this)">
+          <i class="ti ti-chevron-down chev" aria-hidden="true"></i>Session <span class="count">· today</span>
+        </button>
+      </div>
+      <div class="slider-wrap">
+        <div class="slider" tabindex="0" role="list" aria-label="Today's group sessions">
+          <div class="s-card" role="listitem">
+            <div class="s-head"><span class="badge"><i class="ti ti-badminton" aria-hidden="true"></i></span>
+              <div class="s-title">Tuesday evening play</div><span class="st ongoing">Ongoing</span></div>
+            <div class="row-d"><i class="ti ti-clock" aria-hidden="true"></i><span>18:00 – 20:00</span></div>
+            <div class="row-d"><i class="ti ti-map-pin" aria-hidden="true"></i><span>Tan Binh Sports Hall, Court 3</span></div>
+            <div class="fee-row"><div class="l"><i class="ti ti-coin" aria-hidden="true"></i>50,000 ₫</div>
+              <div class="r"><span class="l"><i class="ti ti-users" aria-hidden="true"></i>9 joined</span><span class="mood">5</span></div></div>
+            <div class="acts"><button>View details</button><button>Leave</button></div>
+          </div>
+          <div class="s-card" role="listitem">
+            <div class="s-head"><span class="badge"><i class="ti ti-badminton" aria-hidden="true"></i></span>
+              <div class="s-title">Late doubles</div><span class="st scheduled">Scheduled</span></div>
+            <div class="row-d"><i class="ti ti-clock" aria-hidden="true"></i><span>20:30 – 22:00</span></div>
+            <div class="row-d"><i class="ti ti-map-pin" aria-hidden="true"></i><span>Tan Binh Sports Hall, Court 3</span></div>
+            <div class="fee-row"><div class="l"><i class="ti ti-coin" aria-hidden="true"></i>Free</div>
+              <div class="r"><span class="l"><i class="ti ti-users" aria-hidden="true"></i>4 joined</span><span class="mood">7</span></div></div>
+            <div class="acts"><button>View details</button><button>Join</button></div>
+          </div>
+          <div class="s-card" role="listitem">
+            <div class="s-head"><span class="badge"><i class="ti ti-badminton" aria-hidden="true"></i></span>
+              <div class="s-title">Beginners welcome</div><span class="st scheduled">Scheduled</span></div>
+            <div class="row-d"><i class="ti ti-clock" aria-hidden="true"></i><span>21:00 – 22:30</span></div>
+            <div class="row-d"><i class="ti ti-map-pin" aria-hidden="true"></i><span>Location to be decided</span></div>
+            <div class="fee-row"><div class="l"><i class="ti ti-coin" aria-hidden="true"></i>30,000 ₫</div>
+              <div class="r"><span class="l"><i class="ti ti-users" aria-hidden="true"></i>1 joined</span><span class="mood">3</span></div></div>
+            <div class="acts"><button>View details</button><button>Join</button></div>
+          </div>
+          <button class="plus" aria-label="Create a session for this group">
+            <i class="ti ti-plus" aria-hidden="true"></i>Create a session<small>for the whole group or some members</small>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-box" style="color:var(--text-muted);font-size:13px;">(group posts feed continues here…)</div>
+  </div>
+
+  <!-- ===================== 2. states ===================== -->
+  <h2>2 · Other states</h2>
+  <div class="card-box" style="display:flex;flex-direction:column;gap:18px;">
+    <div>
+      <div class="hint" style="margin-bottom:6px;">Collapsed (state is page-local, resets on reload)</div>
+      <div class="section collapsed" id="sec2">
+        <div class="section-head"><button class="section-title" aria-expanded="false" onclick="toggle('sec2', this)">
+          <i class="ti ti-chevron-down chev" aria-hidden="true"></i>Session <span class="count">· today</span></button></div>
+        <div class="slider-wrap"></div>
+      </div>
+    </div>
+    <div>
+      <div class="hint" style="margin-bottom:6px;">Nothing ongoing or scheduled today: only the placeholder</div>
+      <div class="section"><div class="section-head"><span class="section-title"><i class="ti ti-chevron-down chev" aria-hidden="true"></i>Session <span class="count">· today</span></span></div>
+        <div class="slider-wrap"><div class="slider">
+          <button class="plus only" aria-label="Create a session for this group"><i class="ti ti-plus" aria-hidden="true"></i>No session today. Create one</button>
+        </div></div></div>
+    </div>
+    <div>
+      <div class="hint" style="margin-bottom:6px;">Loading</div>
+      <div class="section"><div class="section-head"><span class="section-title"><i class="ti ti-chevron-down chev" aria-hidden="true"></i>Session</span></div>
+        <div class="slider-wrap"><div class="slider" aria-busy="true"><div class="skel"></div><div class="skel"></div></div></div></div>
+    </div>
+    <div>
+      <div class="hint" style="margin-bottom:6px;">Load failed (the "+" stays usable)</div>
+      <div class="section"><div class="section-head"><span class="section-title"><i class="ti ti-chevron-down chev" aria-hidden="true"></i>Session</span></div>
+        <div class="err"><i class="ti ti-alert-circle" aria-hidden="true"></i>Couldn't load today's sessions. <button>Try again</button></div>
+        <div class="slider-wrap"><div class="slider"><button class="plus only" aria-label="Create a session for this group"><i class="ti ti-plus" aria-hidden="true"></i>Create a session</button></div></div></div>
+    </div>
+  </div>
+
+  <!-- ===================== 3. create form ===================== -->
+  <h2>3 · Create form in group mode (opens from the "+" card)</h2>
+  <div class="modal">
+    <h3>Create a session</h3>
+
+    <div class="fsec"><div class="fh">Overview <i class="ti ti-chevron-up" aria-hidden="true"></i></div>
+      <div class="fb">
+        <div class="locked"><i class="ti ti-users-group" aria-hidden="true"></i>For the group <b>Saigon Badminton Club</b> · Badminton</div>
+        <div class="field"><label class="l">Title (optional)</label><div class="inp">Tuesday evening play</div></div>
+      </div></div>
+
+    <div class="fsec"><div class="fh">When <i class="ti ti-chevron-down" aria-hidden="true"></i></div></div>
+    <div class="fsec"><div class="fh">Where <i class="ti ti-chevron-down" aria-hidden="true"></i></div></div>
+
+    <div class="fsec"><div class="fh">Who <i class="ti ti-chevron-up" aria-hidden="true"></i></div>
+      <div class="fb">
+        <div class="radios" role="radiogroup" aria-label="Who is this session for">
+          <label><input type="radio" name="aud" checked onchange="aud(false)"> All members</label>
+          <label><input type="radio" name="aud" onchange="aud(true)"> Specific members</label>
+        </div>
+        <div class="picker" id="picker">
+          <div class="chips">
+            <span class="chip">Linh Tran <button aria-label="Remove Linh Tran"><i class="ti ti-x"></i></button></span>
+            <span class="chip">Minh Le <button aria-label="Remove Minh Le"><i class="ti ti-x"></i></button></span>
+          </div>
+          <div class="field"><div class="inp"><i class="ti ti-search" aria-hidden="true"></i> Search members by name</div></div>
+          <div class="results">
+            <div class="res"><div class="avatar">AN</div>An Nguyen</div>
+            <div class="res"><div class="avatar">AP</div>Anh Pham</div>
+          </div>
+          <div class="hint">Every member can still see and join this session; only the ones you pick are notified.</div>
+          <div class="err-inline" style="display:none;">Pick at least one member.</div>
+        </div>
+        <div class="sw"><span>Auto approve join requests</span><span class="tg" aria-hidden="true"></span></div>
+        <div class="hint">A group session is never public. No slot counts are shown for a group session.</div>
+      </div></div>
+
+    <div class="foot"><button class="ghost">Cancel</button><button class="solid">Create session</button></div>
+  </div>
+</div>
+
+<script>
+  function toggle(id, btn) {
+    var s = document.getElementById(id);
+    var collapsed = s.classList.toggle('collapsed');
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  }
+  function aud(show) { document.getElementById('picker').classList.toggle('show', show); }
+</script>
+</body>
+</html>

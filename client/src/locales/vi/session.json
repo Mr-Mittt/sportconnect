@@ -32,7 +32,9 @@
     "participants_one": "{{count}} người tham gia",
     "participants_other": "{{count}} người tham gia",
     "participantsOfCapacity_one": "{{count}}/{{capacity}} người tham gia",
-    "participantsOfCapacity_other": "{{count}}/{{capacity}} người tham gia"
+    "participantsOfCapacity_other": "{{count}}/{{capacity}} người tham gia",
+    "joined_one": "{{count}} người đã tham gia",
+    "joined_other": "{{count}} người đã tham gia"
   },
   "countdown": {
     "span": "{{time}}",
@@ -260,7 +262,7 @@
       "confirmReject": "Xác nhận từ chối",
       "neverMind": "Thôi bỏ qua"
     },
-    "approvalCreatedBy": "{{approval}}. Tạo bởi {{name}}",
+    "createdBy": "Tạo bởi {{name}}",
     "like": "Thích",
     "unlike": "Bỏ thích",
     "actionError": "Không thể hoàn tất thao tác đó. Vui lòng thử lại.",
@@ -320,8 +322,24 @@
       "yes": "Có",
       "no": "Không",
       "fee": "Phí",
-      "feeNote": "Ghi chú phí"
-    }
+      "feeNote": "Ghi chú phí",
+      "audience": "Dành cho",
+      "audienceAll": "Tất cả thành viên",
+      "audienceSpecific_one": "{{count}} thành viên",
+      "audienceSpecific_other": "{{count}} thành viên",
+      "joined": "Đã tham gia"
+    },
+    "cancelSessionConfirm": {
+      "title": "Hủy buổi chơi này?",
+      "body": "Các thành viên của nhóm sẽ được báo là buổi chơi đã bị hủy. Không thể hoàn tác.",
+      "reasonPlaceholder": "Lý do (không bắt buộc)",
+      "reasonLabel": "Lý do hủy",
+      "cancel": "Hủy buổi chơi",
+      "cancelling": "Đang hủy…",
+      "keep": "Giữ buổi chơi"
+    },
+    "cancelSessionError": "Không hủy được buổi chơi này. Vui lòng thử lại.",
+    "cancelSession": "Hủy buổi chơi"
   },
   "create": {
     "title": "Tạo buổi chơi của bạn",
@@ -333,7 +351,8 @@
     "titleField": {
       "label": "Tên buổi chơi",
       "placeholder": "VD: Giao lưu Chủ nhật",
-      "default": "Trận đấu của {{firstName}}"
+      "default": "Trận đấu của {{firstName}}",
+      "groupDefault": "Buổi chơi của nhóm {{groupName}}"
     },
     "location": {
       "label": "Địa điểm",
@@ -378,7 +397,8 @@
       "openSlot": "Vui lòng nhập số chỗ trống.",
       "startInPast": "Thời gian bắt đầu không được ở trong quá khứ.",
       "endAfterStart": "Giờ kết thúc phải sau giờ bắt đầu.",
-      "genderOverOpen": "Số chỗ cho nam và nữ không được vượt quá số chỗ trống."
+      "genderOverOpen": "Số chỗ cho nam và nữ không được vượt quá số chỗ trống.",
+      "audience": "Hãy chọn ít nhất một thành viên."
     },
     "invite": {
       "label": "Mời bạn bè",
@@ -428,7 +448,15 @@
       "body": "Buổi chơi này chưa được tạo. Nếu rời đi bây giờ, những gì bạn đã nhập sẽ bị mất.",
       "stay": "Tiếp tục chỉnh sửa",
       "leave": "Rời đi"
-    }
+    },
+    "audience": {
+      "label": "Buổi chơi này dành cho ai?",
+      "allMembers": "Tất cả thành viên",
+      "specific": "Một số thành viên",
+      "hint": "Mọi thành viên vẫn xem và tham gia được; chỉ những người bạn chọn được báo."
+    },
+    "groupTitle": "Tạo buổi chơi",
+    "groupIntro": "Buổi chơi này dành cho thành viên nhóm của bạn. Bạn có thể mở cho người ngoài nhóm sau nếu cần thêm người chơi."
   },
   "attributes": {
     "heading": "Chi tiết buổi chơi",

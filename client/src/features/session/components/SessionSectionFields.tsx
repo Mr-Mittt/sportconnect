@@ -33,6 +33,10 @@ interface OverviewFieldsProps extends CommonProps {
   showTitleError?: boolean;
   /** The sport control — a select in the create form; the detail modal passes none (sport is fixed). */
   sportField?: ReactNode;
+  /** A full-width line above the title row (the group-session form's "this session is for your group members"). */
+  intro?: ReactNode;
+  /** The label and the input side by side on one row (the group-session form), instead of the label above the input. */
+  titleInline?: boolean;
 }
 
 /** The Overview section: the sport (create only) and the title, which every session needs (SESSION-49). */
@@ -41,25 +45,31 @@ export function OverviewFields({
   onTitleChange,
   showTitleError = false,
   sportField,
+  intro,
+  titleInline = false,
   idPrefix,
   i18nOverridePrefix,
 }: OverviewFieldsProps) {
   const t = useOverridableText('session', i18nOverridePrefix);
   return (
     <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-10">
+      {intro !== undefined && <div className="sm:col-span-10">{intro}</div>}
       {sportField !== undefined && <div className="sm:col-span-3">{sportField}</div>}
       <div className={sportField !== undefined ? 'sm:col-span-7' : 'sm:col-span-10'}>
-        <Label htmlFor={`${idPrefix}-title`}>
-          {t('create.titleField.label')}
-          <RequiredMark />
-        </Label>
-        <Input
-          id={`${idPrefix}-title`}
-          value={title}
-          onChange={(event) => onTitleChange(event.target.value)}
-          placeholder={t('create.titleField.placeholder')}
-          aria-invalid={showTitleError || undefined}
-        />
+        <div className={titleInline ? 'flex items-center gap-3' : undefined}>
+          <Label htmlFor={`${idPrefix}-title`} className={titleInline ? 'mb-0 shrink-0' : undefined}>
+            {t('create.titleField.label')}
+            <RequiredMark />
+          </Label>
+          <Input
+            id={`${idPrefix}-title`}
+            className={titleInline ? 'min-w-0 flex-1' : undefined}
+            value={title}
+            onChange={(event) => onTitleChange(event.target.value)}
+            placeholder={t('create.titleField.placeholder')}
+            aria-invalid={showTitleError || undefined}
+          />
+        </div>
         {showTitleError && <p className="mt-1 text-2xs text-text-danger">{t('create.validation.title')}</p>}
       </div>
     </div>
@@ -244,6 +254,10 @@ interface WhoFieldsProps extends CommonProps {
   visibility?: { isPublic: boolean; onChange: (next: boolean) => void };
   /** Create-only extras under the checkbox (the invite-friends field). */
   extra?: ReactNode;
+  /** CLIENT-GROUP-SESSION-1: a group session shows no slot information, so the Taken / Open slot inputs and the "Who can join" radios are not rendered. */
+  hideSlots?: boolean;
+  /** CLIENT-GROUP-SESSION-1: shown first, in place of the slots (the audience radios and member picker of a group session). */
+  audienceField?: ReactNode;
   /** `{taken}/{capacity}` helper line under the two slot inputs (create form). */
   slotsSummary?: string;
 }
@@ -278,6 +292,8 @@ export function WhoFields({
   onAutoApproveChange,
   visibility,
   extra,
+  hideSlots = false,
+  audienceField,
   slotsSummary,
   idPrefix,
   i18nOverridePrefix,
@@ -286,7 +302,9 @@ export function WhoFields({
   const byGender = whoCanJoin === 'BY_GENDER';
   return (
     <div className="flex flex-col gap-3.5">
+      {audienceField}
       {/* "Who can join" sits to the right of Open slot on one row (it wraps under them on a narrow screen). */}
+      {!hideSlots && (
       <div className="flex flex-wrap items-start gap-x-8 gap-y-3.5">
         <div>
           <div className="flex gap-3.5">
@@ -394,6 +412,7 @@ export function WhoFields({
       </fieldset>
 
       </div>
+      )}
 
       <div>
         <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">

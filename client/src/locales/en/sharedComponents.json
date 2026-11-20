@@ -152,6 +152,15 @@
     "selectedPosition": "{{label}} (selected, position {{index}})",
     "nothingOnProfile": "Nothing on your profile to pick from — use “Other…”."
   },
+  "memberPicker": {
+    "selectedLabel": "Picked members",
+    "remove": "Remove {{name}}",
+    "placeholder": "Search members by name",
+    "searchLabel": "Search members",
+    "searching": "Searching…",
+    "noResults": "No members found.",
+    "error": "Couldn't search members. Try again."
+  },
   "mention": {
     "chipLabel": "Mention: {{name}}",
     "lengthCounter": "{{count}} / {{max}}"

@@ -8,6 +8,7 @@ import { useLocationPickerData } from '@/features/location/useLocationPickerData
 import { useSessionAttributeSchema } from '@/shared/hooks/useSessionAttributeSchema';
 import { useRawMySportProfiles } from '@/shared/hooks/useRawMySportProfiles';
 import { useSportAttributeSchema } from '@/shared/hooks/useSportAttributeSchema';
+import { getApiError } from '@/shared/lib/apiError';
 import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import type { Location } from '@/shared/types/location';
 import { useFriends } from '@/features/friends/hooks/useFriends';
@@ -25,17 +26,17 @@ import { useRecordCommands } from './hooks/useRecordCommands';
 import { useSessionResultData } from './hooks/useSessionResultData';
 import { useUnlikeSession } from './hooks/useUnlikeSession';
 import { useUpdateSession } from './hooks/useUpdateSession';
+import { isGroupManager } from '@/shared/lib/groupRole';
 import { missingForSession } from './sessionReadiness';
 import { isSessionDialogError, useCloseOnSessionErrorDismissal, useSessionErrorGuard } from './sessionErrors';
 import type { SessionShareData, UpdateSessionPayload } from './types';
 import { useSessionCommentsData } from './useSessionCommentsData';
 
-const CAN_MANAGE_ROLES = new Set(['group_owner', 'group_admin']);
 const NO_FRIENDS: never[] = [];
 
 /**
  * The full `SessionDetailModal` data slice for one selected session — session/participants
- * queries, real `canManage` (creator for a standalone session, owner/admin role for a
+ * queries, real `canManage` (the host, plus the owner/admin role for a
  * group-linked one, resolved from the caller's own groups), join/leave/cancel, the
  * canManage-gated approval queue, likes, and the Discussion section. Extracted so
  * `useMatchesPageData` (the Matches page's own detail dialog) and every rail-hosting page's
@@ -63,13 +64,24 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
 
   const groupsQuery = useUserGroups(currentUserId);
   const groups = useMemo(() => groupsQuery.data?.content ?? [], [groupsQuery.data]);
+
+  // The caller lost access (left the group, session deleted): TanStack Query keeps the last good `data` when a refetch
+  // fails, so a cached session would still be rendered under the "no access" message. A 403 / 404 means nothing of the
+  // session may be shown, so the cached copy is ignored (other failures keep it: a network blip is not a loss of access).
+  const loadCategory = sessionQuery.isError ? getApiError(sessionQuery.error).category : undefined;
+  const hasLostAccess = loadCategory === 'FORBIDDEN' || loadCategory === 'NOT_FOUND';
+  const sessionData = hasLostAccess ? undefined : sessionQuery.data;
+
   const canManage = useMemo(() => {
-    const session = sessionQuery.data;
+    const session = sessionData;
     if (session === undefined || currentUserId === undefined) return false;
-    if (session.groupId === null) return session.createdBy === currentUserId;
+    // The host always manages their own session. A group session is also managed by the group's owner and admins
+    // (the server's rule, GROUP_SESSION_DESIGN.md 4.3). A standalone session has no group to ask.
+    if (session.createdBy === currentUserId) return true;
+    if (session.groupId === null) return false;
     const group = groups.find((candidate) => candidate.id === session.groupId);
-    return group?.currentUserRole !== null && CAN_MANAGE_ROLES.has(group?.currentUserRole ?? '');
-  }, [sessionQuery.data, currentUserId, groups]);
+    return isGroupManager(group?.currentUserRole);
+  }, [sessionData, currentUserId, groups]);
 
   // CLIENT-SESSION-30: a join from inside the detail doesn't offer "Open session" on its pop-up.
   const { joinMutation, leaveMutation } = useSessionParticipationAction({ offerOpenSession: false });
@@ -126,7 +138,7 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
   // edits it section by section in the detail modal (`SessionDetailSections`). The Where editor's
   // location picking reuses the exact same LocationPicker + favorites plumbing CreateSessionModal
   // already owns, just scoped to this already-known session (the sport never changes here).
-  const sessionSportId = sessionQuery.data?.sportId;
+  const sessionSportId = sessionData?.sportId;
   const [selectedCompletionLocation, setSelectedCompletionLocation] = useState<Location | null>(null);
   const [isCompletionLocationPickerOpen, setIsCompletionLocationPickerOpen] = useState(false);
   const completionFavoriteLocationsQuery = useFavoriteLocations(
@@ -183,7 +195,7 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
    */
   const onUpdateSession = (payload: UpdateSessionPayload, onDone: () => void) => {
     if (sessionId === null) return;
-    const hadMissing = sessionQuery.data !== undefined && missingForSession(sessionQuery.data).length > 0;
+    const hadMissing = sessionData !== undefined && missingForSession(sessionData).length > 0;
     updateSessionMutation.mutate(
       { sessionId, payload },
       {
@@ -212,15 +224,15 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
   // sport's sessions carry no attributes; also `null` while the session query is still resolving
   // its `sportId`. `SessionAttributesSummary` renders nothing when there is nothing to show, so
   // the modal mounts it unconditionally.
-  const sessionAttributeSchema = useSessionAttributeSchema(sessionQuery.data?.sportId).data;
+  const sessionAttributeSchema = useSessionAttributeSchema(sessionData?.sportId).data;
   // SPORT-16: the sport's *profile* schema — the base a `#ref` node inherits its read-view
   // `layout` from. Shares the `['sportAttributeSchema', sportId]` query cache; `null` until it
   // settles (or when the sport has no profile schema) → no inheritance, defaults render.
-  const refBaseSchema = useSportAttributeSchema(sessionQuery.data?.sportId).data;
+  const refBaseSchema = useSportAttributeSchema(sessionData?.sportId).data;
 
   // CLIENT-GL-38: the Result section (the sport's record schema, who may edit, the saved records).
-  const participantRows = participantsQuery.data?.content;
-  const result = useSessionResultData(sessionQuery.data, sessionId, useMemo(() => participantRows ?? [], [participantRows]));
+  const participantRows = hasLostAccess ? undefined : participantsQuery.data?.content;
+  const result = useSessionResultData(sessionData, sessionId, useMemo(() => participantRows ?? [], [participantRows]));
 
   // CLIENT-GL-39: record commands typed in the comment box (only for someone who can log results).
   const recordCommands = useRecordCommands(sessionId, result);
@@ -253,7 +265,7 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
     },
     /** CLIENT-SESSION-49: the Share button and dialog's slice. */
     share,
-    selectedSession: sessionQuery.data,
+    selectedSession: sessionData,
     isSessionLoading: sessionQuery.isLoading,
     isSessionError: sessionQuery.isError,
     /** CLIENT-ERR-7: the raw detail-load failure, so the modal can pick the not-found / no-access state. */
@@ -261,7 +273,7 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
     sessionAttributeSchema,
     // SPORT-16: profile schema for `#ref`→base `layout` inheritance in the read view.
     refBaseSchema,
-    participants: participantsQuery.data?.content ?? [],
+    participants: participantRows ?? [],
     /** CLIENT-GL-38: the Result section's data slice. */
     result,
     /** CLIENT-GL-39: the record commands of the comment box; `undefined` = every text is a normal comment. */
@@ -304,7 +316,7 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
     isCancelError: cancelMutation.isError && !isSessionDialogError(cancelMutation.error),
     onToggleLike: () => {
       if (sessionId === null) return;
-      if (sessionQuery.data?.isLikedByCurrentUser) {
+      if (sessionData?.isLikedByCurrentUser) {
         unlikeMutation.mutate(sessionId);
       } else {
         likeMutation.mutate(sessionId);

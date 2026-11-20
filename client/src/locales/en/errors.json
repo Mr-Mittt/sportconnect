@@ -151,6 +151,8 @@
     "SESSION_FORBIDDEN": "You don't have access to this session.",
     "SESSION_GROUP_MEMBER_REQUIRED": "Only members of this group can do that. Join the group first.",
     "SESSION_GROUP_ADMIN_REQUIRED": "Only the group owner or an admin can do that.",
+    "SESSION_AUDIENCE_REQUIRED": "Pick at least one member for a session that is for specific members.",
+    "SESSION_AUDIENCE_NOT_MEMBER": "{{count}} of the people you picked are no longer members of this group. Remove them and try again.",
     "SESSION_CREATOR_REQUIRED": "Only the session's creator can do that.",
     "SESSION_CANCELLED": "This session has been cancelled.",
     "SESSION_NOT_CANCELLABLE": "This session has already ended or been cancelled.",

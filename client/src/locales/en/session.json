@@ -32,7 +32,9 @@
     "participants_one": "{{count}} participant",
     "participants_other": "{{count}} participants",
     "participantsOfCapacity_one": "{{count}}/{{capacity}} participant",
-    "participantsOfCapacity_other": "{{count}}/{{capacity}} participants"
+    "participantsOfCapacity_other": "{{count}}/{{capacity}} participants",
+    "joined_one": "{{count}} joined",
+    "joined_other": "{{count}} joined"
   },
   "countdown": {
     "span": "{{time}}",
@@ -260,7 +262,7 @@
       "confirmReject": "Confirm reject",
       "neverMind": "Never mind"
     },
-    "approvalCreatedBy": "{{approval}}. Created by {{name}}",
+    "createdBy": "Created by {{name}}",
     "like": "Like",
     "unlike": "Unlike",
     "actionError": "Couldn't complete that action. Try again.",
@@ -320,8 +322,24 @@
       "yes": "Yes",
       "no": "No",
       "fee": "Fee",
-      "feeNote": "Fee note"
-    }
+      "feeNote": "Fee note",
+      "audience": "Who",
+      "audienceAll": "All members",
+      "audienceSpecific_one": "{{count}} member",
+      "audienceSpecific_other": "{{count}} members",
+      "joined": "Joined"
+    },
+    "cancelSessionConfirm": {
+      "title": "Cancel this session?",
+      "body": "The members of the group are told that it is cancelled. This cannot be undone.",
+      "reasonPlaceholder": "Reason (optional)",
+      "reasonLabel": "Reason for cancelling",
+      "cancel": "Cancel session",
+      "cancelling": "Cancelling…",
+      "keep": "Keep session"
+    },
+    "cancelSessionError": "Couldn't cancel this session. Please try again.",
+    "cancelSession": "Cancel session"
   },
   "create": {
     "title": "Create your session",
@@ -333,7 +351,8 @@
     "titleField": {
       "label": "Session title",
       "placeholder": "e.g. Sunday pickup run",
-      "default": "{{firstName}}'s session"
+      "default": "{{firstName}}'s session",
+      "groupDefault": "{{groupName}}'s session"
     },
     "location": {
       "label": "Location",
@@ -378,7 +397,8 @@
       "openSlot": "Open slot is required.",
       "endAfterStart": "The end must be after the start.",
       "startInPast": "The start time can't be in the past.",
-      "genderOverOpen": "Male and female slots can't be more than the open slots."
+      "genderOverOpen": "Male and female slots can't be more than the open slots.",
+      "audience": "Pick at least one member."
     },
     "invite": {
       "label": "Invite your friend",
@@ -428,7 +448,15 @@
       "body": "This session has not been created yet. If you leave now, what you entered will be lost.",
       "stay": "Keep editing",
       "leave": "Leave"
-    }
+    },
+    "audience": {
+      "label": "Who is this session for?",
+      "allMembers": "All members",
+      "specific": "Specific members",
+      "hint": "Every member can still see and join this session; only the ones you pick are told about it."
+    },
+    "groupTitle": "Create session",
+    "groupIntro": "This session is for your group members. You can open it to non-members later if you need more players."
   },
   "attributes": {
     "heading": "Session detail",

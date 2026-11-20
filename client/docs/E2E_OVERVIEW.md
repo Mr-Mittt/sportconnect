@@ -221,6 +221,7 @@ e2e/
     feed-groups-journey.spec.ts # FEED-10, CLIENT-MODAL-1
     group-settings.spec.ts
     group-members.spec.ts
+    group-session-shortcut.spec.ts # CLIENT-GROUP-SESSION-1
     group-invitations.spec.ts
     friends-journey.spec.ts
     msw-setup.spec.ts
@@ -566,6 +567,30 @@ approve"; `mockFriend` is neither a member nor already invited to `mockOwnedGrou
 `group_member` there), opens Members tab, confirms "Group administrator" renders but "Waiting for
 group approve" does not — the parent hook never even fires that request for a non-manager (the real
 endpoint 400s for one).
+
+### `e2e/flows/group-session-shortcut.spec.ts` (CLIENT-GROUP-SESSION-1, 3 `test()`s)
+
+Uses `mockOwnedGroup` ("Weekend Tennis Ladder": the test user is its owner and the host of "Ladder night") and `mockGroup`
+("Friday Night Football": a plain member). The shortcut lists only **today's** sessions, and every fixture session has a fixed
+date, so the `GET /sessions/group/:groupId` mock re-times the owned group's "Ladder night" to noon today whenever `bucket` is
+sent (the browser and the mock server share a machine). The mock also filters by `bucket` and `size`, answers 403
+`SESSION_GROUP_MEMBER_REQUIRED` for a group the caller is not in, and `POST /sessions` honours `groupId`, `audience` and
+`audienceUserIds` (the two 400 audience codes) and joins the creator.
+
+**Test 1 — the "Today's session" shortcut lists today, collapses, and its plus opens the group-mode form** (4 steps):
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. today's session is a card with the joined count only | "Ladder night" in the "Today's group sessions" region, "5 joined" and no "participants", the "+" card present | the fixture's 4 joined plus the caller's own row |
+| 2. it collapses and expands from its title | the list region disappears and comes back | state is local, resets on reload |
+| 3. the plus opens the form for this group | dialog "Create session", the group-members intro line, title pre-filled "Weekend Tennis Ladder's session" (label and input side by side, under the hint), no "Who is this session for?" text, no Sport select, no Open slot, no switch, "All members" checked, auto approve checked | |
+| 4. creating for specific members sends the right request | pick Sam Ito through the member search, create (the "Create preparing session" path), the new session's detail opens, and the POST body has `groupId: 3`, `audience: SPECIFIC`, `audienceUserIds: [Sam Ito's id]`, `capacity: 9999`, `autoApprove: true` and no `sportId` or `isPublic` | request captured with `page.waitForRequest` |
+
+**Test 2 — a group with nothing on today shows only the plus row, and Specific members needs someone picked:** "Friday Night Football"
+has one session on a fixed past date, which is not listed; the form refuses "Specific members" with nobody picked ("Pick at least one member.") and does not open the readiness popup.
+
+**Test 3 — the host cancels a group session with a reason and it leaves the shortcut:** card "View details", "Cancel session", the
+confirmation (members are told), a reason, confirm; the detail then shows "Reason: Court closed" and no cancel button, and after closing it the card is gone from the shortcut.
 
 ### `e2e/flows/group-invitations.spec.ts` (GRP-7, GRP-8, 5 `test()`s)
 

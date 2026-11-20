@@ -41,11 +41,12 @@ import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/shared/ui/dia
 import { Input } from '@/shared/ui/input';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { Location } from '@/shared/types/location';
-import type { Session, SessionParticipant, SessionShareData, UpdateSessionPayload } from '../types';
+import type { Session, SessionParticipant, SessionStatus, SessionShareData, UpdateSessionPayload } from '../types';
 import type { MentionSource } from '@/shared/components/MentionInput';
 import { SessionCommentSection } from './SessionCommentSection';
 import {
   ConfirmCancelRequestDialog,
+  ConfirmCancelSessionDialog,
   ConfirmLeaveDialog,
   SessionReadinessDialog,
 } from './SessionConfirmDialogs';
@@ -59,6 +60,9 @@ import type { RecordCommandsData } from '../hooks/useRecordCommands';
 import type { SessionResultData } from '../hooks/useSessionResultData';
 import { missingForSession } from '../sessionReadiness';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
+
+/** A group session can be cancelled until it ends (the server answers `409 SESSION_NOT_CANCELLABLE` for COMPLETED and CANCELLED). */
+const CANCELLABLE_STATUSES: ReadonlySet<SessionStatus> = new Set<SessionStatus>(['PREPARING', 'SCHEDULED', 'ONGOING']);
 
 interface SessionDetailModalProps {
   /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
@@ -212,7 +216,8 @@ function PlayersMeter({
   session: Session;
   rampColor: Parameters<typeof getRampFillClass>[0];
 }) {
-  if (session.capacity === UNCAPPED_CAPACITY) return null;
+  // A group session shows no capacity (as on its card): no bar either.
+  if (session.capacity === UNCAPPED_CAPACITY || session.groupId !== null) return null;
   return (
     <div className="h-1.25 overflow-hidden rounded-full bg-surface-1">
       <div
@@ -365,7 +370,10 @@ function ActionButtonContent({
  * it. `onConfirmCancel`/`isCancelling`/`isCancelError` stay in the prop contract unused, rather
  * than rippling the removal through `useSessionDetailModalData` and all 6 render sites, since only
  * the button's presence in this modal was asked to go, not the capability. `canManage` itself is
- * no longer unused as of CLIENT-SESSION-21 — it now also gates `SessionPreparingCompletion`.)
+ * no longer unused as of CLIENT-SESSION-21 — it now also gates `SessionPreparingCompletion`.
+ * CLIENT-GROUP-SESSION-1 brings cancelling back for a **group** session only: `canManage` (the host or a group owner/admin)
+ * sees "Cancel session" while it is PREPARING, SCHEDULED or ONGOING, and `onConfirmCancel`/`isCancelling`/`isCancelError`
+ * are used for it; a standalone session still has no cancel button.)
  *
  * CLIENT-SESSION-9 replaced the old "isJoined" derivation (`participants.some(...JOINED)` — a
  * false negative for anyone INVITED/REQUESTED, since `participants` only ever holds JOINED rows
@@ -431,6 +439,9 @@ export function SessionDetailModal({
   recordCommands,
   currentUserId,
   canManage,
+  onConfirmCancel,
+  isCancelling,
+  isCancelError,
   sportsByKey,
   sessionAttributeSchema,
   refBaseSchema,
@@ -495,7 +506,7 @@ export function SessionDetailModal({
   /** CLIENT-GL-38: the record dialog, a sibling Dialog of this one (a nested popup misbehaves here). */
   const [isResultDialogOpen, setIsResultDialogOpen] = useState(false);
   /** CLIENT-GL-51: which participation confirmation is open (leaving, or withdrawing a join request). */
-  const [confirming, setConfirming] = useState<'leave' | 'cancel' | null>(null);
+  const [confirming, setConfirming] = useState<'leave' | 'cancel' | 'cancelSession' | null>(null);
   // Ticks once a second while the start is still ahead: it drives the header countdown and makes the Leave
   // button disappear by itself at the cutoff (SESSION-65). A session that has begun needs no timer.
   const isStartAhead =
@@ -553,7 +564,7 @@ export function SessionDetailModal({
       ? ''
       : t('detail.players.heading', {
           value:
-            session.capacity === UNCAPPED_CAPACITY
+            session.capacity === UNCAPPED_CAPACITY || session.groupId !== null
               ? session.participantCount
               : `${session.participantCount}/${session.capacity}`,
         });
@@ -940,7 +951,7 @@ export function SessionDetailModal({
                         <IconUsers className="size-4 shrink-0" aria-hidden="true" />
                         {t('detail.players.heading', {
                           value:
-                            session.capacity === UNCAPPED_CAPACITY
+                            session.capacity === UNCAPPED_CAPACITY || session.groupId !== null
                               ? session.participantCount
                               : `${session.participantCount}/${session.capacity}`,
                         })}
@@ -997,12 +1008,7 @@ export function SessionDetailModal({
 
                 <div className="flex items-center gap-2 self-end">
                   <span className="text-2xs text-text-muted">
-                    {t('detail.approvalCreatedBy', {
-                      approval: session.autoApprove
-                        ? i18next.t('enums:sessionApproval.auto')
-                        : i18next.t('enums:sessionApproval.hostApproval'),
-                      name: session.createdByFullName,
-                    })}
+                    {t('detail.createdBy', { name: session.createdByFullName })}
                   </span>
                   {!isCommentsForbidden && (
                     <button
@@ -1069,6 +1075,25 @@ export function SessionDetailModal({
                   </Button>
                 </div>
               )}
+              {/* CLIENT-GROUP-SESSION-1: the host, or the group's owner or admin, can cancel a group session that has not ended. */}
+              {canManage && session.groupId !== null && CANCELLABLE_STATUSES.has(session.status) && (
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isCancelling}
+                    onClick={() => setConfirming('cancelSession')}
+                    className="border-text-danger text-text-danger hover:bg-bg-accent"
+                  >
+                    {t('detail.cancelSession')}
+                  </Button>
+                </div>
+              )}
+              {isCancelError && (
+                <p role="alert" className="text-2sm text-text-danger">
+                  {t('detail.cancelSessionError')}
+                </p>
+              )}
               {isJoinError && (
                 <p role="alert" className="text-2sm text-text-danger">
                   {t('detail.actionError')}
@@ -1086,6 +1111,15 @@ export function SessionDetailModal({
                     // CLIENT-SESSION-30: REQUESTED → the one action is Cancel; say why it's still pending.
                     <p className="self-center text-2xs text-text-muted">
                       {t('detail.waitingForHost')}
+                    </p>
+                  )}
+                  {participationAction.kind === 'JOIN' && (
+                    // How a join is decided ("Auto approval" / "Need host approval"), shown only to someone who can
+                    // still join: it moved here from the creator line (owner, 2026-11-20).
+                    <p className="self-center text-2xs text-text-muted">
+                      {session.autoApprove
+                        ? i18next.t('enums:sessionApproval.auto')
+                        : i18next.t('enums:sessionApproval.hostApproval')}
                     </p>
                   )}
                   {participationAction.kind === 'LEAVE' && (
@@ -1136,6 +1170,16 @@ export function SessionDetailModal({
             onConfirm={() => {
               setConfirming(null);
               onLeave();
+            }}
+          />
+          <ConfirmCancelSessionDialog
+            i18nOverridePrefix={i18nOverridePrefix}
+            isOpen={confirming === 'cancelSession'}
+            isCancelling={isCancelling}
+            onKeep={() => setConfirming(null)}
+            onConfirm={(reason) => {
+              setConfirming(null);
+              onConfirmCancel(reason);
             }}
           />
           <ConfirmCancelRequestDialog

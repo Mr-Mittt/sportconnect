@@ -152,6 +152,15 @@
     "selectedPosition": "{{label}} (đã chọn, vị trí {{index}})",
     "nothingOnProfile": "Hồ sơ của bạn chưa có gì để chọn — hãy dùng “Khác…”."
   },
+  "memberPicker": {
+    "selectedLabel": "Thành viên đã chọn",
+    "remove": "Bỏ {{name}}",
+    "placeholder": "Tìm thành viên theo tên",
+    "searchLabel": "Tìm thành viên",
+    "searching": "Đang tìm…",
+    "noResults": "Không tìm thấy thành viên.",
+    "error": "Không tìm được thành viên. Hãy thử lại."
+  },
   "mention": {
     "chipLabel": "Nhắc đến: {{name}}",
     "lengthCounter": "{{count}} / {{max}}"

@@ -1,6 +1,6 @@
 # Group sessions: design and server contract
 
-**Status:** server side built and reviewed (2026-11-19); client side not started (`CLIENT-GROUP-SESSION-1` to `6`).
+**Status:** server side built and reviewed (2026-11-19); client side: `CLIENT-GROUP-SESSION-1` done (2026-11-19), `2` to `6` not started.
 **What to build (the owner's words):** `modules/session/docs/GROUP_SESSION_SPECIFICATION.md`. This document is **how it was built** and **what the client can rely on**. When this document and a ticket disagree, this document wins (it was written after the review, `SESSION-GROUP-10`).
 **Tickets:** server `SESSION-GROUP-1` to `6`, `GROUP-1` (group backlog), `SESSION-GROUP-10` (review); follow-ups `SESSION-GROUP-7`, `8`, `9` (TODO); client `CLIENT-GROUP-SESSION-1` to `6`.
 **Where the rest lives:** rules 15 to 18 in `modules/session/session-impl/CLAUDE.md` (the server rules, the most exact), `documentation/md/ERROR_CODES.md` (codes), `documentation/md/NOTIFICATION_USE_CASES.md` (NOTIF-14, 15), `PROGRESS.md` (history), `documentation/release-notes/SERVER.md` (deploy notes).
@@ -189,7 +189,7 @@ Statuses: `PENDING` (waits to be generated), `DONE` (**a session exists**), `FAI
 
 | Ticket | Uses | Localize (en and vi) |
 |---|---|---|
-| `CLIENT-GROUP-SESSION-1` create a session in a group | 4.1; the member picker uses the group member search (`GET /api/groups/{id}/members/search`, B23) | errors `SESSION_GROUP_MEMBER_REQUIRED`, `SESSION_AUDIENCE_REQUIRED`, `SESSION_AUDIENCE_NOT_MEMBER` |
+| `CLIENT-GROUP-SESSION-1` create a session in a group (**done 2026-11-19**: also the Posts-tab "Session" shortcut, the host-or-owner/admin `canManage`, and cancelling a group session from the detail, 4.3) | 4.1, 4.2 (`ONGOING` and `SCHEDULED` buckets for the shortcut), 4.3 (cancel); the member picker uses the group member search (`GET /api/groups/{id}/members/search`, B23); `capacity` is mandatory, a group session sends 9999 | errors `SESSION_GROUP_MEMBER_REQUIRED`, `SESSION_AUDIENCE_REQUIRED`, `SESSION_AUDIENCE_NOT_MEMBER`, `SESSION_NOT_CANCELLABLE` |
 | `CLIENT-GROUP-SESSION-2` Sessions tab | 4.2; hides taken and open slots itself; no regular or custom field | tab and bucket titles, empty states |
 | `CLIENT-GROUP-SESSION-3` share and notification texts | 4.3, 7 | `session.group.created` and `session.group.cancelled` texts, `SESSION_GROUP_MEMBER_REQUIRED` for a share |
 | `CLIENT-GROUP-SESSION-4` settings section | 4.4, 4.5 (list), 5, 6 (asynchronous), 8 | the six `GROUP_SESSION_*` post texts, errors of 4.4 and 4.5 |

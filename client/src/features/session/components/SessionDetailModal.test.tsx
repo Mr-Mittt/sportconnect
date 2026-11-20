@@ -272,15 +272,36 @@ describe('SessionDetailModal', () => {
     // Collapsed Where summary: "Location: Riverside Courts".
     expect(screen.getByText('Riverside Courts')).toBeInTheDocument();
     expect(screen.queryByText('Casual 5v5, all levels welcome.')).not.toBeInTheDocument();
-    // CLIENT-SESSION-30: the approval mode leads the creator line (makeSession → autoApprove false).
-    expect(screen.getByText('Need host approval. Created by Jordan Lee')).toBeInTheDocument();
+    // The creator line is just the creator; the approval mode is next to the Join button (see below).
+    expect(screen.getByText('Created by Jordan Lee')).toBeInTheDocument();
   });
 
-  it('shows "Auto approval" ahead of the creator for an auto-approve session', () => {
-    render(<SessionDetailModal {...baseProps} session={makeSession({ autoApprove: true })} />);
-    expect(screen.getByText('Auto approval. Created by Jordan Lee')).toBeInTheDocument();
+  it('shows how a join is decided next to the Join button, for someone who can join', () => {
+    const { rerender } = render(<SessionDetailModal {...baseProps} session={makeSession({ autoApprove: true })} />);
+    expect(screen.getByText('Auto approval')).toBeInTheDocument();
     expect(screen.queryByText(/Need host approval/)).not.toBeInTheDocument();
+    rerender(<SessionDetailModal {...baseProps} session={makeSession({ autoApprove: false })} />);
+    expect(screen.getByText('Need host approval')).toBeInTheDocument();
+    expect(screen.queryByText('Auto approval')).not.toBeInTheDocument();
   });
+
+  it('keeps the approval hint off the creator line', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ autoApprove: true })} />);
+    expect(screen.queryByText(/Auto approval\. Created by/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/approval\. Created by/)).not.toBeInTheDocument();
+  });
+
+  it.each(['JOINED', 'REQUESTED', 'INVITED'] as const)('shows no approval hint to someone who is %s: they cannot join', (status) => {
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ autoApprove: true, callerParticipation: makeCallerParticipation(status) })}
+      />,
+    );
+    expect(screen.queryByText('Auto approval')).not.toBeInTheDocument();
+    expect(screen.queryByText('Need host approval')).not.toBeInTheDocument();
+  });
+
 
   it('shows the end time in the header when the session has one (same day)', () => {
     render(<SessionDetailModal {...baseProps} session={makeSession({ scheduledEndAt: '2026-08-01T21:00:00' })} />);
@@ -1208,7 +1229,9 @@ describe('SessionDetailModal', () => {
         const user = userEvent.setup();
         render(<SessionDetailModal {...baseProps} canManage session={groupSession} />);
         await user.click(screen.getAllByRole('button', { name: 'Edit' })[3]);
-        expect(screen.getByLabelText('Taken slot')).toBeInTheDocument();
+        // The Who editor is open (auto approve is there); a group session offers no slots and no visibility switch.
+        expect(screen.getByRole('checkbox', { name: /Auto approve/i })).toBeInTheDocument();
+        expect(screen.queryByLabelText('Taken slot')).not.toBeInTheDocument();
         expect(screen.queryByRole('switch', { name: 'Public session' })).not.toBeInTheDocument();
       });
 
@@ -1596,5 +1619,129 @@ describe('SessionDetailModal: countdown, leave rule and confirmations (CLIENT-GL
       render(<SessionDetailModal {...baseProps} session={requested()} />);
       expect(screen.queryByText(/You can leave only until/)).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('SessionDetailModal: cancelling a group session (CLIENT-GROUP-SESSION-1)', () => {
+  const groupSession = (overrides: Partial<Session> = {}) =>
+    makeSession({ groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false, ...overrides });
+
+  it('offers "Cancel session" to someone who manages a group session that has not ended', () => {
+    render(<SessionDetailModal {...baseProps} session={groupSession()} canManage />);
+    expect(screen.getByRole('button', { name: 'Cancel session' })).toBeInTheDocument();
+  });
+
+  it.each(['PREPARING', 'SCHEDULED', 'ONGOING'] as const)('offers it while the session is %s', (status) => {
+    render(<SessionDetailModal {...baseProps} session={groupSession({ status })} canManage />);
+    expect(screen.getByRole('button', { name: 'Cancel session' })).toBeInTheDocument();
+  });
+
+  it.each(['COMPLETED', 'CANCELLED'] as const)('does not offer it once the session is %s', (status) => {
+    render(<SessionDetailModal {...baseProps} session={groupSession({ status })} canManage />);
+    expect(screen.queryByRole('button', { name: 'Cancel session' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer it to a member who does not manage the session', () => {
+    render(<SessionDetailModal {...baseProps} session={groupSession()} canManage={false} />);
+    expect(screen.queryByRole('button', { name: 'Cancel session' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer it for a standalone session, even to its host', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ groupId: null })} canManage />);
+    expect(screen.queryByRole('button', { name: 'Cancel session' })).not.toBeInTheDocument();
+  });
+
+  it('asks first and cancels with the typed reason, trimmed', async () => {
+    const user = userEvent.setup();
+    const onConfirmCancel = vi.fn();
+    render(<SessionDetailModal {...baseProps} session={groupSession()} canManage onConfirmCancel={onConfirmCancel} />);
+
+    await user.click(screen.getByRole('button', { name: 'Cancel session' }));
+    const dialog = screen.getByRole('dialog', { name: 'Cancel this session?' });
+    expect(onConfirmCancel).not.toHaveBeenCalled();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Reason for cancelling' }), '  Court closed  ');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel session' }));
+
+    expect(onConfirmCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirmCancel).toHaveBeenCalledWith('Court closed');
+  });
+
+  it('cancels with an empty reason when none is typed', async () => {
+    const user = userEvent.setup();
+    const onConfirmCancel = vi.fn();
+    render(<SessionDetailModal {...baseProps} session={groupSession()} canManage onConfirmCancel={onConfirmCancel} />);
+    await user.click(screen.getByRole('button', { name: 'Cancel session' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Cancel this session?' })).getByRole('button', { name: 'Cancel session' }));
+    expect(onConfirmCancel).toHaveBeenCalledWith('');
+  });
+
+  it('keeps the session when the host chooses "Keep session"', async () => {
+    const user = userEvent.setup();
+    const onConfirmCancel = vi.fn();
+    render(<SessionDetailModal {...baseProps} session={groupSession()} canManage onConfirmCancel={onConfirmCancel} />);
+    await user.click(screen.getByRole('button', { name: 'Cancel session' }));
+    await user.click(screen.getByRole('button', { name: 'Keep session' }));
+    expect(onConfirmCancel).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Cancel this session?' })).not.toBeInTheDocument();
+  });
+
+  it('forgets a reason typed before "Keep session" the next time the dialog opens', async () => {
+    const user = userEvent.setup();
+    render(<SessionDetailModal {...baseProps} session={groupSession()} canManage />);
+    await user.click(screen.getByRole('button', { name: 'Cancel session' }));
+    await user.type(screen.getByRole('textbox', { name: 'Reason for cancelling' }), 'draft reason');
+    await user.click(screen.getByRole('button', { name: 'Keep session' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel session' }));
+    expect(screen.getByRole('textbox', { name: 'Reason for cancelling' })).toHaveValue('');
+  });
+
+  it('shows the failure line when the cancel failed, and disables the button while cancelling', () => {
+    const { rerender } = render(<SessionDetailModal {...baseProps} session={groupSession()} canManage isCancelError />);
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't cancel this session. Please try again.");
+    rerender(<SessionDetailModal {...baseProps} session={groupSession()} canManage isCancelling />);
+    expect(screen.getByRole('button', { name: 'Cancel session' })).toBeDisabled();
+  });
+});
+
+describe('SessionDetailModal: a group session shows the joined count, not slots (CLIENT-GROUP-SESSION-1)', () => {
+  const groupSession = (overrides: Partial<Session> = {}) =>
+    makeSession({ groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false, participantCount: 7, capacity: 12, initialSlot: 0, ...overrides });
+
+  it('replaces the Taken and Open rows with one Joined count', () => {
+    render(<SessionDetailModal {...baseProps} session={groupSession()} />);
+    expect(screen.getAllByText(/^Joined\b/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^Taken\b/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Open\b/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the Taken and Open rows for a standalone session', () => {
+    render(<SessionDetailModal {...baseProps} session={makeSession({ groupId: null, capacity: 12 })} />);
+    expect(screen.getAllByText(/^Taken\b/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Open\b/).length).toBeGreaterThan(0);
+  });
+
+  it('shows the Players count without a capacity for a group session, and with one for a standalone session', () => {
+    const { rerender } = render(<SessionDetailModal {...baseProps} session={groupSession()} />);
+    expect(screen.getByText('Players (7)')).toBeInTheDocument();
+    expect(screen.queryByText('Players (7/12)')).not.toBeInTheDocument();
+    rerender(<SessionDetailModal {...baseProps} session={makeSession({ groupId: null, participantCount: 7, capacity: 12 })} />);
+    expect(screen.getByText('Players (7/12)')).toBeInTheDocument();
+  });
+
+  it('offers no Taken, Open or gender inputs when the host edits the Who section of a group draft', async () => {
+    const user = userEvent.setup();
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        canManage
+        session={groupSession({ status: 'PREPARING', location: null, feeType: null })}
+      />,
+    );
+    const edits = screen.getAllByRole('button', { name: 'Edit' });
+    await user.click(edits[3]);
+    expect(screen.queryByLabelText(/Taken/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Open slot/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Who can join/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Auto approve/i })).toBeInTheDocument();
   });
 });
