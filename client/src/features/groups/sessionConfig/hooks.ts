@@ -4,6 +4,7 @@ import { feedKeys } from '@/features/feed/queryKeys';
 import { sessionKeys } from '@/features/session/queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 import { sessionConfigKeys } from './queryKeys';
+import type { RecurrencePayload } from './recurrenceForm';
 import type { GroupSessionRecurrence, GroupSessionSettings, UpdateGroupSessionSettingsPayload } from './types';
 
 /**
@@ -79,6 +80,48 @@ export function useDeleteGroupSessionRecurrence() {
         list?.filter((recurrence) => recurrence.id !== recurrenceId),
       );
       void queryClient.invalidateQueries({ queryKey: feedKeys.groupFeed(groupId) });
+    },
+  });
+}
+
+/** How long after a save the group's sessions are read again: the server generates the slot a change causes in the background, a moment after it answers. */
+export const GENERATION_REFRESH_DELAY_MS = 3000;
+
+interface SaveRecurrenceVariables {
+  groupId: number;
+  /** Set = replace that configuration (`PUT`), unset = add one (`POST`, in the group's current mode). */
+  recurrenceId?: number;
+  payload: RecurrencePayload;
+}
+
+/**
+ * CLIENT-GROUP-SESSION-5: `POST` / `PUT /api/sessions/group/{groupId}/recurrences[/{id}]` (owner or admin). The saved configuration goes straight
+ * into the list (added, or replacing the old one) and the group's feed is refreshed (every change writes a group post). Generation is
+ * asynchronous, so the answer never holds the session the change causes: the group's sessions are read again at once and once more a few
+ * seconds later.
+ */
+export function useSaveGroupSessionRecurrence() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { errorDisplay: 'inline' },
+    mutationFn: async ({ groupId, recurrenceId, payload }: SaveRecurrenceVariables) => {
+      const url = `/sessions/group/${groupId}/recurrences`;
+      const response =
+        recurrenceId === undefined
+          ? await apiClient.post<ApiResponse<GroupSessionRecurrence>>(url, payload)
+          : await apiClient.put<ApiResponse<GroupSessionRecurrence>>(`${url}/${recurrenceId}`, payload);
+      return response.data.data;
+    },
+    onSuccess: (saved, { groupId }) => {
+      queryClient.setQueryData<GroupSessionRecurrence[]>(sessionConfigKeys.recurrences(groupId), (list) => [
+        ...(list ?? []).filter((recurrence) => recurrence.id !== saved.id),
+        saved,
+      ]);
+      void queryClient.invalidateQueries({ queryKey: feedKeys.groupFeed(groupId) });
+      void queryClient.invalidateQueries({ queryKey: sessionKeys.groupSessions(groupId) });
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: sessionKeys.groupSessions(groupId) });
+      }, GENERATION_REFRESH_DELAY_MS);
     },
   });
 }

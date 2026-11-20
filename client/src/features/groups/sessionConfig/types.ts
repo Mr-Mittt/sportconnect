@@ -26,6 +26,13 @@ export interface UpdateGroupSessionSettingsPayload {
 /** What a configuration still lacks to generate a session; a configuration that lacks any is a draft. */
 export type RecurrenceMissingField = 'locationId' | 'durationMinutes' | 'feeAmountVnd';
 
+/** One member of a `SPECIFIC` audience as the server resolves it: the picker's `{id, name, avatarUrl}`. */
+export interface GroupSessionAudienceMember {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
 /** One recurrence configuration (`GET .../recurrences` answers every configuration of both modes). */
 export interface GroupSessionRecurrence {
   id: number;
@@ -41,7 +48,8 @@ export interface GroupSessionRecurrence {
   location: Location | null;
   locationNote: string | null;
   audience: GroupSessionAudience;
-  audienceUserIds: string[];
+  /** The chosen members of a `SPECIFIC` audience, named by the server (CLIENT-GROUP-SESSION-5; it replaces the bare ids), in the order they were picked. */
+  audienceMembers: GroupSessionAudienceMember[];
   feeType: FeeType;
   feeAmountVnd: number | null;
   feeNote: string | null;

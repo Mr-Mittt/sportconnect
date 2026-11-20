@@ -14,6 +14,8 @@ interface ChoiceDialogProps {
   isOpen: boolean;
   title: string;
   body: string;
+  /** A short list shown under the body (what is missing, for example). */
+  items?: string[];
   /** In reading order; a dialog with more than two choices stacks them so long labels stay readable at 375px. */
   choices: DialogChoice[];
   /** Escape, the close X and a click outside: always the safe way out (nothing changes). */
@@ -27,13 +29,20 @@ interface ChoiceDialogProps {
  * off, switch the recurrence, delete a configuration, leave the group). Presentational: the caller owns what each choice does. Like
  * `SettingsUnsavedChangesDialog`: the header bar with its close X, the body, the buttons on the right (stacked when there are more than two).
  */
-export function ChoiceDialog({ isOpen, title, body, choices, onClose, errorText }: ChoiceDialogProps) {
+export function ChoiceDialog({ isOpen, title, body, items, choices, onClose, errorText }: ChoiceDialogProps) {
   const isStacked = choices.length > 2;
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="p-4">
         <DialogHeader title={title} className="mb-3" />
         <p className="mb-3 text-2sm text-text-secondary">{body}</p>
+        {items !== undefined && items.length > 0 && (
+          <ul className="mb-3 list-disc pl-5 text-2sm text-text-primary">
+            {items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        )}
         {errorText !== undefined && (
           <p role="alert" className="mb-2 text-2sm text-text-danger">
             {errorText}

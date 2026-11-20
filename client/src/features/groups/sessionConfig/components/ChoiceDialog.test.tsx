@@ -77,6 +77,15 @@ describe('ChoiceDialog', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('lists items under the body, and no list without any', () => {
+    const { unmount } = render(<ChoiceDialog isOpen title="Sure?" body="Body" items={['Location', 'Duration']} choices={choices()} onClose={vi.fn()} />);
+    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Location', 'Duration']);
+    unmount();
+
+    render(<ChoiceDialog isOpen title="Sure?" body="Body" items={[]} choices={choices()} onClose={vi.fn()} />);
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+  });
+
   it('shows a failure of the chosen action as an alert', () => {
     render(<ChoiceDialog isOpen title="Sure?" body="Body" choices={choices()} onClose={vi.fn()} errorText="That did not work." />);
     expect(screen.getByRole('alert')).toHaveTextContent('That did not work.');

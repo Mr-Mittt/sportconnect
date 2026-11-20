@@ -355,7 +355,7 @@ export function GroupSettingsTab({
           <span className="text-sm font-semibold text-text-primary">{t('settings.sessions.title')}</span>
         </CollapsibleTrigger>
         <CollapsibleContent className="flex flex-col gap-4 pt-3">
-          <GroupSessionsConfigSection canEdit={canEdit} data={sessionsConfig} i18nOverridePrefix={i18nOverridePrefix} />
+          <GroupSessionsConfigSection canEdit={canEdit} data={sessionsConfig} groupName={group.groupName} i18nOverridePrefix={i18nOverridePrefix} />
         </CollapsibleContent>
       </Collapsible>
 

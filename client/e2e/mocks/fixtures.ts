@@ -607,7 +607,7 @@ function mockRecurrence(overrides: Partial<GroupSessionRecurrence>): GroupSessio
     location: mockLocation,
     locationNote: null,
     audience: 'ALL_MEMBERS',
-    audienceUserIds: [],
+    audienceMembers: [],
     feeType: 'FREE',
     feeAmountVnd: null,
     feeNote: null,

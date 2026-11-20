@@ -5,6 +5,7 @@ import {
   useGroupSessionSettings,
   useUpdateGroupSessionSettings,
 } from './hooks';
+import { useRecurrenceFormData, type RecurrenceFormData } from './useRecurrenceFormData';
 import type { GroupSessionRecurrence, GroupSessionSettings, RecurrenceMode } from './types';
 
 /** What the group settings' Sessions section reads and does (CLIENT-GROUP-SESSION-4). Undefined data while loading, like every `use...Data` hook. */
@@ -27,6 +28,8 @@ export interface GroupSessionsConfigData {
   isDeleteError: boolean;
   deleteErrorText?: string;
   isBusy: boolean;
+  /** The recurrence form behind Add and Edit (CLIENT-GROUP-SESSION-5). */
+  recurrenceForm: RecurrenceFormData;
 }
 
 /**
@@ -34,11 +37,17 @@ export interface GroupSessionsConfigData {
  * (ON/OFF, the mode, delete). Fetches only while the Settings tab is open (`enabled`). Each action saves at once; this is not part of the
  * settings tab's draft/Save/unsaved-changes guard.
  */
-export function useGroupSessionsConfigData(groupId: number | undefined, enabled: boolean): GroupSessionsConfigData {
+export function useGroupSessionsConfigData(
+  groupId: number | undefined,
+  enabled: boolean,
+  /** The group's sport: the recurrence form's location, favourites and attributes are scoped to it. */
+  sportId?: number,
+): GroupSessionsConfigData {
   const settingsQuery = useGroupSessionSettings(groupId, enabled);
   const recurrencesQuery = useGroupSessionRecurrences(groupId, enabled);
   const updateMutation = useUpdateGroupSessionSettings();
   const deleteMutation = useDeleteGroupSessionRecurrence();
+  const recurrenceForm = useRecurrenceFormData(groupId, sportId);
 
   return {
     settings: settingsQuery.data,
@@ -67,5 +76,6 @@ export function useGroupSessionsConfigData(groupId: number | undefined, enabled:
     isDeleteError: deleteMutation.isError,
     deleteErrorText: getCodedErrorMessage(deleteMutation.error),
     isBusy: updateMutation.isPending || deleteMutation.isPending,
+    recurrenceForm,
   };
 }

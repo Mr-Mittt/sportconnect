@@ -210,7 +210,42 @@
         "confirm": "Delete"
       },
       "slotAt": "{{day}} at {{time}}",
-      "locationUnavailable": "Location unavailable"
+      "locationUnavailable": "Location unavailable",
+      "form": {
+        "titleAdd": "Add a regular session",
+        "titleEdit": "Edit regular session",
+        "intro": "A regular session of {{group}}, created automatically on this day and time.",
+        "day": "Day",
+        "dayOfWeek": "Day of the week",
+        "dayOfMonth": "Day of the month",
+        "endInvalid": "The end must differ from the start and the session must be shorter than a day.",
+        "save": "Save",
+        "saving": "Saving…",
+        "saveError": "Couldn't save this configuration. Try again.",
+        "missing": {
+          "title": "Your recurrence session is missing information",
+          "body": "This configuration is missing the information below. It will be saved as a DRAFT and cannot be used to generate your group sessions until you complete it.",
+          "keepEditing": "Keep editing",
+          "saveDraft": "Save as draft",
+          "location": "Location",
+          "duration": "Duration",
+          "feeAmount": "Fee amount"
+        },
+        "saved": {
+          "title": "Regular session saved",
+          "bodyOn": "Your scheduled regular session is saved. Its next regular session will be created soon. Do you want to schedule another regular session?",
+          "bodyOff": "Your scheduled regular session is saved. Regular session generation is OFF, so no session is generated automatically until you turn it on. Do you want to schedule another regular session?",
+          "no": "No",
+          "more": "Create more",
+          "bodyDraft": "Your regular session configuration is saved as a DRAFT. It cannot be used to generate your group sessions until you complete it. Do you want to schedule another regular session?"
+        },
+        "leaveDialog": {
+          "title": "Discard this configuration?",
+          "body": "You have entries that are not saved. If you leave now they are lost.",
+          "stay": "Keep editing",
+          "leave": "Discard"
+        }
+      }
     },
     "leaveDialog": {
       "title": "Leave this group?",

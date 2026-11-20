@@ -178,17 +178,17 @@ test('Settings tab — Leave Group asks first: Stay leaves nothing, Leave leaves
 
 /*
  * CLIENT-GROUP-SESSION-4: the Sessions section. The owner turns regular-session generation on and off (each with a confirmation), picks the recurrence
- * mode (a confirmation while configurations exist), and sees the configurations of the current mode grouped by day; Delete asks first. Add and Edit are
- * disabled until CLIENT-GROUP-SESSION-5 builds the form.
+ * mode (a confirmation while configurations exist), and sees the configurations of the current mode grouped by day; Delete asks first. Add and Edit open
+ * the recurrence form (CLIENT-GROUP-SESSION-5, covered by group-recurrence-form.spec.ts).
  */
 test('Sessions section — the list: configurations by day, collapsed, with their location, times and what they lack', async ({ page }) => {
   await openSettings(page, OWNED);
   await page.getByRole('button', { name: 'Sessions', exact: true }).click();
 
-  await test.step('1. the switch, the mode and a disabled Add', async () => {
+  await test.step('1. the switch, the mode and an Add button', async () => {
     await expect(page.getByRole('button', { name: 'Regular sessions: On' })).toBeVisible();
     await expect(page.getByLabel('Recurrence')).toHaveValue('WEEKLY');
-    await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeEnabled();
   });
 
   await test.step('2. one collapsed section per day of the current mode, with its count; the monthly one is not listed', async () => {
@@ -206,10 +206,10 @@ test('Sessions section — the list: configurations by day, collapsed, with thei
     await expect(page.getByText('No duration')).toBeVisible();
   });
 
-  await test.step('4. a day opened shows Edit (disabled) and Delete on each slot', async () => {
+  await test.step('4. a day opened shows Edit and Delete on each slot', async () => {
     await page.getByRole('button', { name: /Tuesday \(2\)/ }).click();
     await expect(page.getByRole('button', { name: /Tuesday \(2\)/ })).toHaveAttribute('data-state', 'open');
-    await expect(page.getByRole('button', { name: 'Edit Tuesday at 18:00' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Edit Tuesday at 18:00' })).toBeEnabled();
     await expect(page.getByRole('button', { name: 'Delete Tuesday at 18:00' })).toBeEnabled();
     await expect(page.getByText('12 River Rd').first()).toBeVisible();
   });

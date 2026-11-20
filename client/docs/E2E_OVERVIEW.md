@@ -220,6 +220,7 @@ e2e/
     auth-journey.spec.ts
     feed-groups-journey.spec.ts # FEED-10, CLIENT-MODAL-1
     group-settings.spec.ts
+    group-recurrence-form.spec.ts # CLIENT-GROUP-SESSION-5
     group-members.spec.ts
     group-session-shortcut.spec.ts # CLIENT-GROUP-SESSION-1
     group-sessions-tab.spec.ts # CLIENT-GROUP-SESSION-2
@@ -536,7 +537,7 @@ The group Settings tab: three collapsible sections (General, Permission, Session
 | Permission Save, rules on blur, the guard (5 steps) | 1. Save is inside Permission, disabled until a toggle changes, and sends only `{ allowMemberInvites: true }`. 2. Rules: filling then Tab sends the partial `{ rules }` to `generalData` (no Save button), persists across a reload. 3. Typing and switching tab at once saves the field and raises no dialog. 4. A forced 403 on the rules save shows "Only the group owner or an admin can do this." under the field, keeps the text, and leaving then asks Discard/Save (Discard reverts). 5. In-app navigation with an unsaved Permission toggle is blocked by the dialog, "Save changes" saves and proceeds to `/` |
 | a member sees no Save | General and Permission opened as a member: no Save, no editable Rules, no toggles, "Only the owner can change these." |
 | Leave Group asks first | The click alone sends nothing; the dialog "Leave this group?" with its body; Stay and Escape send nothing; "Leave" sends `DELETE .../leave` once |
-| Sessions: the list | The pill reads "Regular sessions: On", the recurrence is Weekly, Add is disabled; one collapsed section per weekday with its count ("Tuesday (2)", "Friday (1)"), the monthly 15th not listed; collapsed slots read "18:00–19:30" and "20:00–21:00" with "Riverside Courts", the draft shows "Draft", "No location", "No duration"; a day opened shows a disabled Edit and an enabled Delete per slot |
+| Sessions: the list | The pill reads "Regular sessions: On", the recurrence is Weekly, Add is enabled; one collapsed section per weekday with its count ("Tuesday (2)", "Friday (1)"), the monthly 15th not listed; collapsed slots read "18:00–19:30" and "20:00–21:00" with "Riverside Courts", the draft shows "Draft", "No location", "No duration"; a day opened shows a disabled Edit and an enabled Delete per slot |
 | Sessions: delete | The dialog names the slot ("The session on Tuesday at 20:00 ..."); "Keep it" sends nothing; "Delete" sends `DELETE .../recurrences/2` and leaves "Tuesday (1)" with only the 18:00 slot |
 | Sessions: the mode | Choosing Monthly asks ("not usable until you switch back"); Stay keeps Weekly; "Got it" sends `{ mode: 'MONTHLY' }`, and the list becomes "15th (1)" with no Tuesday |
 | Sessions: ON and OFF | OFF shows its three choices and "Hold on" sends nothing; "No, cancel the remaining sessions and turn off" sends `{ enabled: false, cancelScheduled: true }` and hides the recurrence, Add and the list; ON asks too, "Let me check again" sends nothing, "Got it, turn on" sends `{ enabled: true }` and the list returns; "Yes, keep them and turn off" sends `{ enabled: false, cancelScheduled: false }` |
@@ -544,6 +545,21 @@ The group Settings tab: three collapsible sections (General, Permission, Session
 | Sessions: failures | A forced 403 `SESSION_GROUP_ADMIN_REQUIRED` on the switch shows "Only the group owner or an admin can do that." (no server prose) and the switch stays On; a forced 404 `SESSION_RECURRENCE_NOT_FOUND` on a delete shows "This configuration no longer exists." and the list is unchanged |
 
 **Not covered here** (see `useSettingsUnsavedGuard.test.tsx` / `GroupSettingsTab.test.tsx` / `GroupSessionsConfigSection.test.tsx`): the guard's third trigger (`beforeunload`, the browser's own prompt), a cancel that really removes sessions from the Sessions tab (the mock has no regular sessions; `useGroupSessionsConfigData.test.tsx` covers the refresh), and the Add and Edit forms (CLIENT-GROUP-SESSION-5).
+
+### `e2e/flows/group-recurrence-form.spec.ts` (CLIENT-GROUP-SESSION-5, 6 `test()`s)
+
+The recurrence configuration form behind the Sessions section's Add and Edit, against `mockOwnedGroup` ("Weekend Tennis Ladder", Pickleball, generation ON, weekly). The mock server answers `POST` and `PUT .../recurrences` like the real one: a draft when the location, the duration or a fixed amount is missing, 5 per day, the audience members named.
+
+| Test | What it checks |
+|---|---|
+| Add: a draft, then a complete one, Create more (5 steps) | 1. The form opens on Monday 18:00, free, for everyone, with no date picker. 2. Save with no location and no duration shows "Your recurrence session is missing information" with the DRAFT text and the list Location, Duration; Keep editing returns. 3. Save as draft sends `{ dayKey: 1, startTime: '18:00', audience: 'ALL_MEMBERS', feeType: 'FREE', gameMood: 5 }` with no `locationId` or `durationMinutes`, and the saved dialog says it is saved as a DRAFT (no "created soon"). 4. Create more brings back a blank form; Wednesday, 90 minutes and Riverside Courts save with no warning (`dayKey: 3`, `durationMinutes: 90`, `locationId`), and its saved dialog says the next regular session will be created soon. 5. "Monday (1)" and "Wednesday (1)" are in the list, the draft labelled |
+| Edit | The form opens filled (Tuesday, 18, 90 minutes, end 19:30, Riverside Courts); changing the duration to 120 moves the end to 20:00 and "Save" sends a `PUT .../recurrences/1` with the whole configuration; the list shows 18:00-20:00 |
+| Specific members | Save with nobody picked is refused ("Pick at least one member."); a member found by name and picked is sent as `audienceUserIds`; Edit of that configuration shows the radio on Specific and the member's name (from `audienceMembers`) |
+| a refused save | A forced 409 `SESSION_RECURRENCE_DAY_LIMIT` (`limit` 5) shows "A day can have up to 5 configurations." in the form, no saved dialog, the form still open |
+| closing | Nothing entered closes at once; with an entry, "Discard this configuration?" appears: Keep editing stays, Discard closes |
+| a member | A plain member of the group sees no Add and no Edit |
+
+**Not covered here** (see `RecurrenceConfigModal.test.tsx`, `useRecurrenceFormData.test.tsx`): the saved dialog's generation-OFF text (the Sessions list is hidden while generation is OFF, so the form cannot be open then), the second delayed refresh of the group's sessions, a configuration with session attributes.
 
 ### `e2e/flows/group-members.spec.ts` (GRP-3, GRP-4, 2 `test()`s)
 

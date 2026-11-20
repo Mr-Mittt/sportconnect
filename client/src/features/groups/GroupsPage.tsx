@@ -263,7 +263,11 @@ export function GroupsPage() {
     activeGroupTab === 'settings',
   );
   // CLIENT-GROUP-SESSION-4: the Sessions section of the settings tab (regular sessions ON/OFF, the mode, the configurations); each action saves at once.
-  const sessionsConfig = useGroupSessionsConfigData(selectedGroupId ?? undefined, activeGroupTab === 'settings');
+  const sessionsConfig = useGroupSessionsConfigData(
+    selectedGroupId ?? undefined,
+    activeGroupTab === 'settings',
+    data.groups.find((group) => group.id === selectedGroupId)?.sportId,
+  );
   const guardedSetActiveGroupTab = (tab: GroupTabKey) =>
     settingsGuard.guard(() => setActiveGroupTab(tab));
   const guardedSelectGroupAndShowPosts = (groupId: number | null, groupSportId?: number | null) =>

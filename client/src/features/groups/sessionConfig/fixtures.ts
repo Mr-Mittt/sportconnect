@@ -1,5 +1,7 @@
 import type { Location } from '@/shared/types/location';
+import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import type { GroupSessionsConfigData } from './useGroupSessionsConfigData';
+import type { RecurrenceFormData } from './useRecurrenceFormData';
 import type { GroupSessionRecurrence, GroupSessionSettings } from './types';
 
 /** Builders for the stories and tests of the group settings' Sessions section (CLIENT-GROUP-SESSION-4). */
@@ -36,7 +38,7 @@ export function makeRecurrence(overrides: Partial<GroupSessionRecurrence> = {}):
     location: makeLocation(),
     locationNote: null,
     audience: 'ALL_MEMBERS',
-    audienceUserIds: [],
+    audienceMembers: [],
     feeType: 'FREE',
     feeAmountVnd: null,
     feeNote: null,
@@ -54,6 +56,76 @@ export function makeSettings(overrides: Partial<GroupSessionSettings> = {}): Gro
   return { groupId: 1, enabled: true, mode: 'WEEKLY', cancelledSessions: 0, ...overrides };
 }
 
+/** A location picker that is closed and does nothing. */
+export const idleLocationPicker: LocationPickerProps = {
+  isOpen: false,
+  onClose: () => {},
+  mode: 'search',
+  onSwitchToCreate: () => {},
+  onSwitchToSearch: () => {},
+  inputValue: '',
+  onInputChange: () => {},
+  onSearch: () => {},
+  results: [],
+  isSearching: false,
+  isSearchError: false,
+  onSelectResult: () => {},
+  favoriteLocationIds: new Set<number>(),
+  onToggleFavorite: () => {},
+  isTogglingFavorite: false,
+  onOpenGoogleMaps: () => {},
+  mapsUrlInput: '',
+  onMapsUrlChange: () => {},
+  onResolveUrl: () => {},
+  isResolving: false,
+  isResolveError: false,
+  resolvedNoCoordinates: false,
+  coordinates: null,
+  mapSeed: 0,
+  onMovePin: () => {},
+  name: '',
+  onNameChange: () => {},
+  address: '',
+  onAddressChange: () => {},
+  canSave: false,
+  onSave: () => {},
+  isSaving: false,
+  isSaveError: false,
+};
+
+/** The recurrence form's data, closed, with every action a no-op; override what a story or a test cares about (CLIENT-GROUP-SESSION-5). */
+export function makeRecurrenceFormData(overrides: Partial<RecurrenceFormData> = {}): RecurrenceFormData {
+  return {
+    isOpen: false,
+    editing: null,
+    formKey: 1,
+    openAdd: () => {},
+    openEdit: () => {},
+    close: () => {},
+    selectedLocation: null,
+    onOpenLocationPicker: () => {},
+    locationPicker: idleLocationPicker,
+    favoriteLocations: [],
+    isFavoriteLocationsLoading: false,
+    onSelectLocation: () => {},
+    audienceSearch: { query: '', onQueryChange: () => {}, results: [], isSearching: false, isSearchError: false },
+    sessionAttributeSchema: null,
+    sessionAttributeValues: {},
+    onSessionAttributeChange: () => {},
+    refChoiceSource: null,
+    refDraftOptions: {},
+    onAddRefDraftOption: () => {},
+    refBaseSchema: null,
+    save: () => {},
+    isSaving: false,
+    isSaveError: false,
+    isSaved: false,
+    isSavedDraft: false,
+    onCreateMore: () => {},
+    ...overrides,
+  };
+}
+
 /** The section's data with every action a no-op; override what a story or a test cares about. */
 export function makeSessionsConfigData(overrides: Partial<GroupSessionsConfigData> = {}): GroupSessionsConfigData {
   return {
@@ -69,6 +141,7 @@ export function makeSessionsConfigData(overrides: Partial<GroupSessionsConfigDat
     isUpdateError: false,
     isDeleteError: false,
     isBusy: false,
+    recurrenceForm: makeRecurrenceFormData(),
     ...overrides,
   };
 }
