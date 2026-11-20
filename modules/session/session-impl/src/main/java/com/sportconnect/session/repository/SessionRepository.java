@@ -21,12 +21,88 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
 
     Page<Session> findByGroupId(Long groupId, Pageable pageable);
 
-    /** SESSION-GROUP-2 — a group's sessions in the given statuses, soonest start first (the ordering is part of the name, so
-     * the caller's own Pageable sort must be stripped). Served by {@code idx_sessions_group_scheduled_start}. */
-    Page<Session> findByGroupIdAndStatusInOrderByScheduledStartAsc(Long groupId, Collection<SessionStatus> statuses, Pageable pageable);
+    /**
+     * SESSION-GROUP-12 — a group's sessions whose playing time overlaps today, in the given statuses: the start is before the
+     * end of the day and the end (a session with none ends at its start) is not before the start of the day, so a session
+     * that began yesterday and ends today or tomorrow is included, and one that ended exactly at midnight is "today" (it is
+     * not in the history, which stops at the day before). Order: ONGOING, SCHEDULED, PREPARING, COMPLETED, CANCELLED, then
+     * start, then id (the caller's own sort is stripped by the service). {@code dayStart}/{@code dayEnd} are the viewer's day
+     * as instants.
+     */
+    @Query("SELECT s FROM Session s WHERE s.groupId = :groupId AND s.status IN :statuses "
+            + "AND s.scheduledStart < :dayEnd AND COALESCE(s.scheduledEndAt, s.scheduledStart) >= :dayStart "
+            + "ORDER BY CASE WHEN s.status = :ongoingStatus THEN 0 WHEN s.status = :scheduledStatus THEN 1 "
+            + "WHEN s.status = :preparingStatus THEN 2 WHEN s.status = :completedStatus THEN 3 ELSE 4 END ASC, "
+            + "s.scheduledStart ASC, s.id ASC")
+    Page<Session> findGroupSessionsToday(
+            @Param("groupId") Long groupId,
+            @Param("statuses") Collection<SessionStatus> statuses,
+            @Param("dayStart") Instant dayStart,
+            @Param("dayEnd") Instant dayEnd,
+            @Param("ongoingStatus") SessionStatus ongoingStatus,
+            @Param("scheduledStatus") SessionStatus scheduledStatus,
+            @Param("preparingStatus") SessionStatus preparingStatus,
+            @Param("completedStatus") SessionStatus completedStatus,
+            Pageable pageable);
 
-    /** SESSION-GROUP-2 — the same, newest start first (the History bucket). */
-    Page<Session> findByGroupIdAndStatusInOrderByScheduledStartDesc(Long groupId, Collection<SessionStatus> statuses, Pageable pageable);
+    /**
+     * SESSION-GROUP-12 — a group's sessions starting from {@code from} (the start of tomorrow in the viewer's zone) on, in the
+     * given statuses, soonest start first, then id. Served by {@code idx_sessions_group_scheduled_start}.
+     */
+    @Query("SELECT s FROM Session s WHERE s.groupId = :groupId AND s.status IN :statuses AND s.scheduledStart >= :from "
+            + "ORDER BY s.scheduledStart ASC, s.id ASC")
+    Page<Session> findGroupSessionsLater(
+            @Param("groupId") Long groupId,
+            @Param("statuses") Collection<SessionStatus> statuses,
+            @Param("from") Instant from,
+            Pageable pageable);
+
+    /**
+     * SESSION-GROUP-12 — one end date's sessions of a group ({@code [dayStart, dayEnd)}, the viewer's day as instants), the
+     * end being {@code COALESCE(scheduledEndAt, scheduledStart)}, newest end first, then id. A half-open instant range, not a
+     * date cast (see the note on {@link #findHistoryDateCounts}).
+     */
+    @Query("SELECT s FROM Session s WHERE s.groupId = :groupId AND s.status IN :statuses "
+            + "AND COALESCE(s.scheduledEndAt, s.scheduledStart) >= :dayStart "
+            + "AND COALESCE(s.scheduledEndAt, s.scheduledStart) < :dayEnd "
+            + "ORDER BY COALESCE(s.scheduledEndAt, s.scheduledStart) DESC, s.id DESC")
+    Page<Session> findGroupSessionsEndingOn(
+            @Param("groupId") Long groupId,
+            @Param("statuses") Collection<SessionStatus> statuses,
+            @Param("dayStart") Instant dayStart,
+            @Param("dayEnd") Instant dayEnd,
+            Pageable pageable);
+
+    /**
+     * SESSION-GROUP-12 — the distinct end dates of a group's sessions in {@code [windowStart, windowEnd)} (instants, the
+     * viewer's days), each with its count, newest date first. Native for the {@code AT TIME ZONE} conversion, in the exact
+     * shape of {@link #findHistoryDateCounts} ({@code TO_CHAR} then {@code CAST}, {@code GROUP BY 1}: the H2 and Postgres
+     * notes there apply). The window is bounded by instants in the {@code WHERE}; the date is only the grouping key.
+     * {@code statuses} are enum names (a native query binds no Java enum).
+     */
+    @Query(value = "SELECT CAST(TO_CHAR(COALESCE(s.scheduled_end_at, s.scheduled_start) AT TIME ZONE :zoneId, 'YYYY-MM-DD') AS date) "
+            + "    AS sessionDate, COUNT(*) AS count "
+            + "FROM sessions s "
+            + "WHERE s.group_id = :groupId AND s.status IN (:statuses) "
+            + "AND COALESCE(s.scheduled_end_at, s.scheduled_start) >= :windowStart "
+            + "AND COALESCE(s.scheduled_end_at, s.scheduled_start) < :windowEnd "
+            + "GROUP BY 1 "
+            + "ORDER BY sessionDate DESC",
+            nativeQuery = true)
+    List<SessionDateCountProjection> findGroupHistoryDateCounts(
+            @Param("groupId") Long groupId,
+            @Param("statuses") List<String> statuses,
+            @Param("zoneId") String zoneId,
+            @Param("windowStart") Instant windowStart,
+            @Param("windowEnd") Instant windowEnd);
+
+    /** SESSION-GROUP-12 — whether a group has a session in the given statuses ending before {@code before}: the history's {@code hasMore}. */
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM Session s WHERE s.groupId = :groupId "
+            + "AND s.status IN :statuses AND COALESCE(s.scheduledEndAt, s.scheduledStart) < :before")
+    boolean existsGroupSessionEndingBefore(
+            @Param("groupId") Long groupId,
+            @Param("statuses") Collection<SessionStatus> statuses,
+            @Param("before") Instant before);
 
     boolean existsByGroupIdAndScheduledStart(Long groupId, Instant scheduledStart);
 
@@ -371,6 +447,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
      */
     @Query("SELECT s FROM Session s WHERE s.status IN :statuses "
             + "AND (CAST(:sportId AS long) IS NULL OR s.sportId = :sportId) "
+            + "AND (s.groupId IS NULL OR s.groupId IN :groupIds) "
             + "AND s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
             + "    WHERE sp.userId = :userId AND sp.status IN :participantStatuses) "
             + "ORDER BY s.scheduledStart ASC, "
@@ -382,6 +459,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("preparingStatus") SessionStatus preparingStatus,
             @Param("scheduledStatus") SessionStatus scheduledStatus,
             @Param("sportId") Long sportId,
+            @Param("groupIds") List<Long> groupIds,
             Pageable pageable);
 
     /** Same as {@link #findUpcomingSessions} narrowed to one calendar day
@@ -390,6 +468,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     @Query("SELECT s FROM Session s WHERE s.status IN :statuses "
             + "AND s.scheduledStart >= :dayStart AND s.scheduledStart < :dayEnd "
             + "AND (CAST(:sportId AS long) IS NULL OR s.sportId = :sportId) "
+            + "AND (s.groupId IS NULL OR s.groupId IN :groupIds) "
             + "AND s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
             + "    WHERE sp.userId = :userId AND sp.status IN :participantStatuses) "
             + "ORDER BY s.scheduledStart ASC, "
@@ -403,6 +482,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("dayStart") Instant dayStart,
             @Param("dayEnd") Instant dayEnd,
             @Param("sportId") Long sportId,
+            @Param("groupIds") List<Long> groupIds,
             Pageable pageable);
 
     /**
@@ -418,6 +498,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     @Query("SELECT s FROM Session s WHERE s.status IN :statuses "
             + "AND s.scheduledStart >= :dayStart AND s.scheduledStart < :dayEnd "
             + "AND s.sportId = :sportId "
+            + "AND (s.groupId IS NULL OR s.groupId IN :groupIds) "
             + "AND s.id IN (SELECT sp.sessionId FROM SessionParticipant sp "
             + "    WHERE sp.userId = :userId AND sp.status = :joinedStatus) "
             + "ORDER BY s.scheduledStart DESC")
@@ -428,6 +509,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("dayStart") Instant dayStart,
             @Param("dayEnd") Instant dayEnd,
             @Param("sportId") Long sportId,
+            @Param("groupIds") List<Long> groupIds,
             Pageable pageable);
 
     /**
@@ -482,6 +564,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             + "FROM sessions s "
             + "WHERE s.status IN (:statuses) "
             + "AND s.sport_id = :sportId "
+            + "AND (s.group_id IS NULL OR s.group_id IN (:groupIds)) "
             + "AND s.id IN (SELECT sp.session_id FROM session_participants sp "
             + "    WHERE sp.user_id = :userId AND sp.status = :joinedStatus) "
             + "AND (CAST(:before AS date) IS NULL OR "
@@ -498,6 +581,7 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
             @Param("before") LocalDate before,
             @Param("zoneId") String zoneId,
             @Param("sportId") Long sportId,
+            @Param("groupIds") List<Long> groupIds,
             @Param("limit") int limit);
 
     interface SessionDateCountProjection {

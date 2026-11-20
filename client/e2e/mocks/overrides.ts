@@ -29,6 +29,10 @@ export interface SessionOverrides {
    * section) — needed to reach `UpcomingMatches`' empty-state "Join a match" CTA in e2e, since the
    * default fixture user always has real upcoming sessions otherwise. */
   sessionsEmpty: boolean;
+  /** CLIENT-GROUP-SESSION-2: the group session lists (`/today`, `/later`, `/history/dates`, `/history`) answer empty. Their fixtures are
+   * laid out around the real today, which a frozen-clock visual spec cannot match, so those specs switch them off to keep the Posts-tab
+   * shortcut empty, as it was before the server decided what "today" is. */
+  groupSessionsEmpty: boolean;
   /** CLIENT-SESSION-23: `GET /sessions/history` also returns 22 synthetic history dates (the newest
    * holding 23 sessions) for the requested sport — enough to reach both "Load more" levels
    * (dates past `dateCount=20`, sessions past a date's page size of 20). */
@@ -57,6 +61,7 @@ function defaultOverrides(): SessionOverrides {
     createPostFailOnce: false,
     notificationsEmpty: false,
     sessionsEmpty: false,
+    groupSessionsEmpty: false,
     historyVolume: false,
     discoverVolume: false,
     emailUnverified: false,

@@ -222,6 +222,7 @@ e2e/
     group-settings.spec.ts
     group-members.spec.ts
     group-session-shortcut.spec.ts # CLIENT-GROUP-SESSION-1
+    group-sessions-tab.spec.ts # CLIENT-GROUP-SESSION-2
     group-invitations.spec.ts
     friends-journey.spec.ts
     msw-setup.spec.ts
@@ -572,9 +573,9 @@ endpoint 400s for one).
 
 Uses `mockOwnedGroup` ("Weekend Tennis Ladder": the test user is its owner and the host of "Ladder night") and `mockGroup`
 ("Friday Night Football": a plain member). The shortcut lists only **today's** sessions, and every fixture session has a fixed
-date, so the `GET /sessions/group/:groupId` mock re-times the owned group's "Ladder night" to noon today whenever `bucket` is
-sent (the browser and the mock server share a machine). The mock also filters by `bucket` and `size`, answers 403
-`SESSION_GROUP_MEMBER_REQUIRED` for a group the caller is not in, and `POST /sessions` honours `groupId`, `audience` and
+date, so the group list mock (`groupSessionsFor`, CLIENT-GROUP-SESSION-2) re-times the owned group's "Ladder night" to noon today (the
+browser and the mock server share a machine). The shortcut calls `GET /sessions/group/:groupId/today` (the `bucket` mock is gone); the mocks
+answer 403 `SESSION_GROUP_MEMBER_REQUIRED` for a group the caller is not in, and `POST /sessions` honours `groupId`, `audience` and
 `audienceUserIds` (the two 400 audience codes) and joins the creator.
 
 **Test 1 — the "Today's session" shortcut lists today, collapses, and its plus opens the group-mode form** (4 steps):
@@ -591,6 +592,36 @@ has one session on a fixed past date, which is not listed; the form refuses "Spe
 
 **Test 3 — the host cancels a group session with a reason and it leaves the shortcut:** card "View details", "Cancel session", the
 confirmation (members are told), a reason, confirm; the detail then shows "Reason: Court closed" and no cancel button, and after closing it the card is gone from the shortcut.
+
+### `e2e/flows/group-sessions-tab.spec.ts` (CLIENT-GROUP-SESSION-2, 4 `test()`s)
+
+Uses `mockOwnedGroup` ("Weekend Tennis Ladder") and `mockGroup` ("Friday Night Football"). The group list mocks (`/today`, `/later`,
+`/history/dates`, `/history`, in `handlers/sessions.ts`) lay sessions out around the real today for the owned group: an ongoing "Night
+ladder" (started yesterday, ends tomorrow), "Ladder night" (scheduled, noon today), "Early drills" (completed today), "Cancelled today";
+"Tomorrow doubles", "Cancelled tomorrow", "Next week draft"; yesterday's "Yesterday evening" and "Yesterday morning" (completed) and
+"Cancelled yesterday"; "Last week play" 6 days ago; "Long ago play" 40 days ago (outside the first 30-day window). They apply the same
+rules as the server (member gate 403, `viewerZoneId` and `status` 400, overlap, end dates, windows) and honour `groupSessionsEmpty`.
+
+**Test 1 — See all, the three sections, their filters, the history dates and Create session** (9 steps):
+
+| Step | What it checks | Notes |
+|---|---|---|
+| 1. "See all" opens the Sessions tab | the link in the Posts shortcut header reads "See all", sits to the right of the title, and selecting it makes the Sessions tab selected | a tab switch, not a route |
+| 2. Today's lists what overlaps today, ongoing first | "Night ladder" then "Ladder night"; "Early drills" and "Cancelled today" are not in the defaults | defaults ONGOING, SCHEDULED, PREPARING |
+| 3. Today's filter | ticking Completed and Cancelled adds those, button reads "Status (5)", order Night ladder, Ladder night, Early drills, Cancelled today | the server's status order |
+| 4. Other sessions starts collapsed | collapsed with nothing listed; opening it lists "Tomorrow doubles" and "Next week draft", not "Cancelled tomorrow" until Cancelled is ticked | defaults PREPARING, SCHEDULED |
+| 5. History: a row for each of the 30 days | 30 rows, 28 of them "(0)"; the "(2)" row (yesterday) is expanded with "Yesterday evening" then "Yesterday morning" (newest end first); the "(1)" row is collapsed and loads "Last week play" when opened; a "(0)" row opens to "No session on this day." | zero days are rows too (owner, 2026-11-20) |
+| 6. History: Load the previous 30 days | "Long ago play" is not there until the button adds 30 more rows (60 in all) and the "(1)" row is opened; the button then disappears | window of 30 days |
+| 7. History filter | ticking Cancelled makes yesterday's row "(3)" with "Cancelled yesterday" | |
+| 8. filters stay | switching to Posts and back keeps "Status (5)" on Today's and "Status (2)" on History | `sessionStorage` store |
+| 9. Create session | opens the group-mode form pre-filled "Weekend Tennis Ladder's session" | |
+
+**Test 2 — a section with no status asks for one and sends no request:** unticking History's only status shows "Select at least one
+status." and no date row, and no `/history` request is made afterwards.
+
+**Test 3 — a group with no session shows the empty hint today and a row for each of the 30 days in History:** "Friday Night Football" shows "No session today."; History has 30 rows, all "(0)", yesterday open with "No session on this day.", and no Load more.
+
+**Test 4 — the group tab survives a reload:** on "Weekend Tennis Ladder" the Sessions tab stays selected after `page.reload()` (`groupsPageStore` persists `activeGroupTab`).
 
 ### `e2e/flows/group-invitations.spec.ts` (GRP-7, GRP-8, 5 `test()`s)
 

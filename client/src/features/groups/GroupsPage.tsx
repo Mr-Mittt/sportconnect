@@ -59,6 +59,7 @@ import { GroupMembersTab } from './components/GroupMembersTab';
 import { GroupSettingsTab } from './components/GroupSettingsTab';
 import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
 import { GroupSessionShortcut } from './components/GroupSessionShortcut';
+import { GroupSessionsTab } from './components/GroupSessionsTab';
 import { GroupTabs, type GroupTabKey } from './components/GroupTabs';
 import { InviteFriendModal } from './components/InviteFriendModal';
 import { JoinGroupModal } from './components/JoinGroupModal';
@@ -148,11 +149,11 @@ export function GroupsPage() {
   // ref, same as useJoinGroupModalData) — no more key-remount trick.
   const [isInviteFriendOpen, setIsInviteFriendOpen] = useState(false);
   const [inviteFriendQuery, setInviteFriendQuery] = useState('');
-  // GRP-1: which of the per-group tabs is showing. Reset to 'posts' at every
-  // point that changes `selectedGroupId` (see `selectGroupAndShowPosts`
-  // below) rather than via an effect, per React's own guidance to avoid
-  // synchronous setState-in-effect.
-  const [activeGroupTab, setActiveGroupTab] = useState<GroupTabKey>('posts');
+  // GRP-1: which of the per-group tabs is showing. Kept in `groupsPageStore` (persisted to `sessionStorage`, so a reload stays on
+  // the same tab) and reset to 'posts' by the store whenever `selectedGroupId` changes (`selectGroup`, via
+  // `selectGroupAndShowPosts` below), rather than via an effect, per React's own guidance to avoid synchronous setState-in-effect.
+  const activeGroupTab = useGroupsPageStore((state) => state.activeGroupTab);
+  const setActiveGroupTab = useGroupsPageStore((state) => state.setActiveGroupTab);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   // CLIENT-ERR-5: the failure of a join-request / invitation list action (accept, decline, approve,
   // reject, cancel), shown in GroupActionErrorDialog. Held as the raw error and localized at render
@@ -736,6 +737,7 @@ export function GroupsPage() {
                             name: selectedGroup.groupName,
                           })
                         }
+                        onSeeAll={() => guardedSetActiveGroupTab('sessions')}
                         sportsByKey={sportsByKey}
                         currentUserId={user.id}
                         onViewDetails={discoverModalData.onViewDetails}
@@ -765,6 +767,24 @@ export function GroupsPage() {
                         isLoadMoreError={isLoadMorePostsError}
                       />
                     </div>
+                  )}
+                  {activeGroupTab === 'sessions' && (
+                    <GroupSessionsTab
+                      key={selectedGroup.id}
+                      groupId={selectedGroup.id}
+                      onCreate={() =>
+                        createSessionModalData.openCreateGroupSessionModal({
+                          id: selectedGroup.id,
+                          sportId: selectedGroup.sportId,
+                          name: selectedGroup.groupName,
+                        })
+                      }
+                      sportsByKey={sportsByKey}
+                      currentUserId={user.id}
+                      onViewDetails={discoverModalData.onViewDetails}
+                      onParticipationAction={discoverModalData.onParticipationAction}
+                      isParticipationActionPending={discoverModalData.isParticipationActionPending}
+                    />
                   )}
                   {activeGroupTab === 'chat' && (
                     <GroupChatTab

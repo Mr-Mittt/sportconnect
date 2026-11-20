@@ -14,6 +14,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Posts: Story = {};
+export const Sessions: Story = { args: { activeTab: 'sessions' } };
 export const Chat: Story = { args: { activeTab: 'chat' } };
 export const Members: Story = { args: { activeTab: 'members' } };
 export const Settings: Story = { args: { activeTab: 'settings' } };

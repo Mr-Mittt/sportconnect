@@ -3,7 +3,7 @@ import { useGroupsPageStore } from './groupsPageStore';
 
 describe('groupsPageStore', () => {
   beforeEach(() => {
-    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: null, selectedGroupSportId: null });
+    useGroupsPageStore.setState({ activeSport: 'all', selectedGroupId: null, selectedGroupSportId: null, activeGroupTab: 'posts' });
   });
 
   it('starts with "all" active sport and no group selected', () => {
@@ -59,5 +59,52 @@ describe('groupsPageStore', () => {
     useGroupsPageStore.getState().setActiveSport('all');
     expect(useGroupsPageStore.getState().selectedGroupId).toBe(7);
     expect(useGroupsPageStore.getState().selectedGroupSportId).toBe(5);
+  });
+  // CLIENT-GROUP-SESSION-2 (owner, 2026-11-20): the group tab survives a reload.
+  describe('the active group tab', () => {
+    it('starts on Posts and is set by setActiveGroupTab', () => {
+      expect(useGroupsPageStore.getState().activeGroupTab).toBe('posts');
+      useGroupsPageStore.getState().setActiveGroupTab('sessions');
+      expect(useGroupsPageStore.getState().activeGroupTab).toBe('sessions');
+    });
+
+    it('goes back to Posts whenever the selected group changes, including to "All"', () => {
+      useGroupsPageStore.getState().selectGroup(42, 5);
+      useGroupsPageStore.getState().setActiveGroupTab('members');
+      useGroupsPageStore.getState().selectGroup(43, 5);
+      expect(useGroupsPageStore.getState().activeGroupTab).toBe('posts');
+
+      useGroupsPageStore.getState().setActiveGroupTab('chat');
+      useGroupsPageStore.getState().selectGroup(null);
+      expect(useGroupsPageStore.getState().activeGroupTab).toBe('posts');
+    });
+
+    it('is written to sessionStorage with the selected group', () => {
+      useGroupsPageStore.getState().selectGroup(42, 5);
+      useGroupsPageStore.getState().setActiveGroupTab('sessions');
+      const stored = JSON.parse(sessionStorage.getItem('groups-page-storage') as string) as { state: Record<string, unknown> };
+      expect(stored.state.activeGroupTab).toBe('sessions');
+      expect(stored.state.selectedGroupId).toBe(42);
+    });
+
+    it('is restored on a reload (rehydration) without being reset by the restored group', async () => {
+      sessionStorage.setItem(
+        'groups-page-storage',
+        JSON.stringify({ state: { activeSport: 'football', selectedGroupId: 42, selectedGroupSportId: 5, activeGroupTab: 'sessions' }, version: 0 }),
+      );
+      await useGroupsPageStore.persist.rehydrate();
+      expect(useGroupsPageStore.getState().selectedGroupId).toBe(42);
+      expect(useGroupsPageStore.getState().activeGroupTab).toBe('sessions');
+    });
+
+    it('falls back to Posts for a stored state that predates the tab', async () => {
+      sessionStorage.setItem(
+        'groups-page-storage',
+        JSON.stringify({ state: { activeSport: 'all', selectedGroupId: 7, selectedGroupSportId: null }, version: 0 }),
+      );
+      await useGroupsPageStore.persist.rehydrate();
+      expect(useGroupsPageStore.getState().selectedGroupId).toBe(7);
+      expect(useGroupsPageStore.getState().activeGroupTab).toBe('posts');
+    });
   });
 });

@@ -1,5 +1,9 @@
 package com.sportconnect.integration;
 
+import com.sportconnect.group.entity.Group;
+import com.sportconnect.group.entity.GroupMember;
+import com.sportconnect.group.repository.GroupMemberRepository;
+import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -53,6 +57,15 @@ class SessionListingIntegrationTest extends BaseIT {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private GroupRepository groupRepository;
+
+    @Autowired
+    private GroupMemberRepository groupMemberRepository;
+
+    /** SESSION-GROUP-12: the active group the caller belongs to, created on the first group-linked fixture of a test. */
+    private Long callerGroupId;
+
     private final AtomicLong postIdSeq = new AtomicLong(1);
 
     private UUID callerId;
@@ -68,6 +81,9 @@ class SessionListingIntegrationTest extends BaseIT {
     void cleanup() {
         sessionParticipantRepository.deleteAll();
         sessionRepository.deleteAll();
+        groupMemberRepository.deleteAll();
+        groupRepository.deleteAll();
+        callerGroupId = null;
         userRepository.deleteAll();
     }
 
@@ -140,13 +156,25 @@ class SessionListingIntegrationTest extends BaseIT {
         return sessionRepository.save(session).getId();
     }
 
-    /** Same shape as {@link #createSession}, but group-linked — no FK to a real {@code Group} row
-     * since SESSION-11 dropped cross-domain FKs on session tables, so a synthetic id is enough to
-     * prove {@code /upcoming}/{@code /history} include a group-linked session exactly like a
-     * standalone one (neither endpoint filters on {@code groupId}). */
+    /** SESSION-GROUP-12: the lists show a group session only while the caller is a member of the active group, so
+     * a group-linked fixture needs a real group the caller belongs to (it used to be a synthetic id, 999, when
+     * the lists did not look at the group at all). */
+    private Long callerGroupId() {
+        if (callerGroupId == null) {
+            callerGroupId = groupRepository.save(Group.builder().groupName("listing " + UUID.randomUUID())
+                    .createdBy(callerId).isPrivate(true).isActive(true).sportId(1L).build()).getId();
+            groupMemberRepository.save(GroupMember.builder().groupId(callerGroupId).userId(callerId).roleId(3).build());
+        }
+        return callerGroupId;
+    }
+
+    /** Same shape as {@link #createSession}, but group-linked, in a real group the caller is a member of
+     * ({@code /upcoming}, {@code /requested} and {@code /history} include a group-linked session exactly like a
+     * standalone one while the caller is a member; a group they left is covered by
+     * {@code SessionGroupListsIntegrationTest}). */
     private Long createGroupLinkedSession(SessionStatus status, LocalDateTime scheduledStart) {
         Session session = Session.builder().title("Test session")
-                .groupId(999L)
+                .groupId(callerGroupId())
                 .isPublic(false)
                 .postId(postIdSeq.getAndIncrement())
                 .sessionType(SessionType.GROUP_RECURRING)

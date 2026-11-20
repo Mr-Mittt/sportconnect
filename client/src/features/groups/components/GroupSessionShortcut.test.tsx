@@ -24,6 +24,7 @@ function renderShortcut(overrides: Partial<Props> = {}) {
     isError: false,
     onRetry: vi.fn(),
     onCreate: vi.fn(),
+    onSeeAll: vi.fn(),
     sportsByKey,
     currentUserId: 'user-9',
     onViewDetails: vi.fn(),
@@ -99,5 +100,30 @@ describe('GroupSessionShortcut (CLIENT-GROUP-SESSION-1)', () => {
     expect(props.onRetry).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole('button', { name: 'Create a session for this group' }));
     expect(props.onCreate).toHaveBeenCalledTimes(1);
+  });
+  // CLIENT-GROUP-SESSION-2 (owner, 2026-11-20): a "See all" link, right-aligned in the header, opens the Sessions tab.
+  it('has a right-aligned "See all" link in the header that calls onSeeAll', async () => {
+    const props = renderShortcut();
+    const link = screen.getByRole('button', { name: "See all of this group's sessions" });
+    expect(link).toHaveTextContent('See all');
+    await userEvent.setup().click(link);
+    expect(props.onSeeAll).toHaveBeenCalledTimes(1);
+
+    // Same row as the title toggle, after it (the row is a space-between flex row, so the link sits at the right).
+    const title = screen.getByRole('button', { name: "Today's session" });
+    expect(title.parentElement).toBe(link.parentElement);
+    expect(title.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(link.parentElement?.className).toContain('justify-between');
+  });
+
+  it('keeps the "See all" link while the section is collapsed, and clicking it does not toggle the section', async () => {
+    const user = userEvent.setup();
+    const props = renderShortcut();
+    await user.click(screen.getByRole('button', { name: "Today's session" }));
+    expect(screen.queryByRole('region', { name: "Today's group sessions" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: "See all of this group's sessions" }));
+    expect(props.onSeeAll).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: "Today's session" })).toHaveAttribute('aria-expanded', 'false');
   });
 });

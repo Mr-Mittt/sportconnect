@@ -147,6 +147,7 @@ GET    /api/groups/{groupId}/permissions/user-role
 
 - `Group.schedule` is free-text, owner-editable prose. The structured `recurrence*` rule that used to sit beside it (and `GroupSettings.autoGenerateSessions`) was removed by GROUP-1 (V097, destructive); nothing in this module knows about session generation any more.
 - `getGroupOwnerId(groupId)` (SESSION-GROUP-4) is the public form of `resolveGroupOwnerId`: the group's *current* owner, for another domain that must author a server-written group post as the owner or create a session as the owner; no access check of its own. The group-session configuration (settings, recurrences, generation; `modules/session`) does not live in this module.
+- `getActiveGroupIdsForMember(userId)` (SESSION-GROUP-12) is the batch form of `isGroupMember`: the ids of the **active** groups a user belongs to, one ids-only query (`findActiveGroupIdsByUserId`). `getGroupIdsForMember` (the feed's) deliberately still includes inactive groups; do not swap one for the other.
 - Role names are plain strings — always use the exact values `"group_owner"`, `"group_admin"`, `"group_member"` when querying or comparing.
 - `canManagePosts()` is defined in `GroupServiceImpl` but not called anywhere — placeholder for the future post-approval flow.
 - `GroupMember.joinedAt` is set by `@PrePersist` — do not set it manually.

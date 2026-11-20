@@ -6,7 +6,7 @@ import { SportAttributesFields } from '@/shared/components/SportAttributesFields
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { directionsUrl } from '@/shared/lib/mapsLinks';
 import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
-import { formatSessionHeaderDateTime, formatStartTime } from '@/shared/lib/startTime';
+import { distinctEnd, formatSessionHeaderDateTime, formatStartTime } from '@/shared/lib/startTime';
 import { cn } from '@/shared/lib/utils';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import type { Location } from '@/shared/types/location';
@@ -151,6 +151,12 @@ function OverviewSection(props: SectionProps) {
 
 /* ---------------------------------------------------------------------- When */
 
+/** The "Ends" text, or null when there is none to show: a cancelled session without a duration ends where it starts (SESSION-GROUP-12), which is no end. */
+function sessionEndText(session: Session): string | null {
+  const end = distinctEnd(session.scheduledStart, session.scheduledEndAt);
+  return end === null ? null : formatStartTime(end);
+}
+
 function sessionDuration(session: Session): string {
   if (session.scheduledEndAt === null) return '';
   const minutes = differenceInMinutes(new Date(session.scheduledEndAt), new Date(session.scheduledStart));
@@ -191,7 +197,7 @@ function WhenSection(props: SectionProps) {
           items={[
             { label: t('detail.summary.starts'), value: formatStartTime(session.scheduledStart) },
             { label: t('detail.summary.duration'), value: duration === '' ? null : t('detail.summary.minutes', { count: Number(duration) }) },
-            { label: t('detail.summary.ends'), value: session.scheduledEndAt === null ? null : formatStartTime(session.scheduledEndAt) },
+            { label: t('detail.summary.ends'), value: sessionEndText(session) },
           ]}
         />
       }
@@ -210,7 +216,7 @@ function WhenSection(props: SectionProps) {
             {duration === '' ? '...' : t('detail.summary.minutes', { count: Number(duration) })}
           </ViewRow>
           <ViewRow label={t('detail.summary.ends')}>
-            {session.scheduledEndAt === null ? '...' : formatStartTime(session.scheduledEndAt)}
+            {sessionEndText(session) ?? '...'}
           </ViewRow>
         </>
       )}
@@ -616,7 +622,7 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
     [
       { label: t('detail.summary.starts'), value: formatStartTime(session.scheduledStart) },
       { label: t('detail.summary.duration'), value: durationText },
-      { label: t('detail.summary.ends'), value: session.scheduledEndAt === null ? null : formatStartTime(session.scheduledEndAt) },
+      { label: t('detail.summary.ends'), value: sessionEndText(session) },
     ],
     [
       { label: t('detail.summary.location'), value: location?.name },
@@ -656,7 +662,7 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
       <ViewRow label={t('detail.summary.starts')}>{formatSessionHeaderDateTime(session.scheduledStart, null)}</ViewRow>
       <ViewRow label={t('detail.summary.duration')}>{durationText ?? '...'}</ViewRow>
       <ViewRow label={t('detail.summary.ends')}>
-        {session.scheduledEndAt === null ? '...' : formatStartTime(session.scheduledEndAt)}
+        {sessionEndText(session) ?? '...'}
       </ViewRow>
       <ViewRow label={t('detail.summary.location')}>
         <div className="flex flex-col gap-1">

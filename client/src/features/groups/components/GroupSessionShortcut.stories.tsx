@@ -47,6 +47,7 @@ const meta = {
     isError: false,
     onRetry: () => {},
     onCreate: () => {},
+    onSeeAll: () => {},
     sportsByKey,
     currentUserId: 'user-9',
     onViewDetails: () => {},

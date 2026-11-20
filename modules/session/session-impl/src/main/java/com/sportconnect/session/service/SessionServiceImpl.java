@@ -15,7 +15,7 @@ import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.GroupAudience;
-import com.sportconnect.session.api.dto.GroupSessionBucket;
+import com.sportconnect.session.api.dto.GroupSessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
 import com.sportconnect.session.api.dto.SessionDiscoverDateCount;
@@ -148,6 +148,16 @@ public class SessionServiceImpl implements SessionService {
             List.of(SessionStatus.CANCELLED, SessionStatus.COMPLETED);
     private static final List<String> HISTORY_SESSION_STATUS_NAMES =
             List.of(SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name());
+    /** SESSION-GROUP-12 — what each group list may be asked for (any other status is a 400). */
+    private static final List<SessionStatus> GROUP_LATER_STATUSES =
+            List.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.CANCELLED);
+    /** SESSION-GROUP-12 — the longest history window a caller may ask for, in days (the default is the client's 30). */
+    static final int GROUP_HISTORY_MAX_DAYS = 90;
+    /** SESSION-GROUP-12 — the largest page of {@code /today} (a group has a handful of sessions a day). */
+    static final int GROUP_TODAY_MAX_PAGE_SIZE = 100;
+    /** SESSION-GROUP-12 — stands for "no group" in an {@code IN :groupIds} clause (an empty list is not portable JPQL/SQL):
+     * a real group id is never negative. */
+    private static final List<Long> NO_GROUP_IDS = List.of(-1L);
     /** SESSION-42 — {@code /requested}'s own participant-status population, reusing {@link
      * #UPCOMING_SESSION_STATUSES} for the session-status side (same PREPARING/SCHEDULED/ONGOING
      * set as {@code /upcoming} — a REQUESTED row isn't auto-cleared when a session starts, so it
@@ -380,17 +390,124 @@ public class SessionServiceImpl implements SessionService {
      */
     @Override
     @Transactional(readOnly = true)
-    public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, GroupSessionBucket bucket, Pageable pageable) {
-        if (!groupService.isGroupMember(groupId, currentUserId)) {
+    public Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable) {
+        requireGroupMember(groupId, currentUserId);
+        return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
+    }
+
+    /**
+     * SESSION-GROUP-12 — the group gate every group list shares: {@code isGroupMember} is false for a non-member and for a
+     * missing or inactive group alike, and all of them answer the same 403 (a missing group is not told apart, so its
+     * existence does not leak).
+     */
+    private void requireGroupMember(Long groupId, UUID userId) {
+        if (!groupService.isGroupMember(groupId, userId)) {
             throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can view this group's sessions", null);
         }
-        if (bucket == null) {
-            return toResponsePage(sessionRepository.findByGroupId(groupId, pageable), currentUserId);
+    }
+
+    /**
+     * SESSION-GROUP-12 — the statuses a group list was asked for: not empty, every one in {@code allowed}; duplicates are
+     * dropped. Checked after the gate, so a non-member learns nothing from a 400.
+     *
+     * @throws BadRequestException when the list is empty or holds a status the list does not serve
+     */
+    private List<SessionStatus> requireStatuses(List<SessionStatus> statuses, List<SessionStatus> allowed) {
+        if (statuses == null || statuses.isEmpty()) {
+            throw new BadRequestException("status is required");
         }
-        Pageable fixedOrder = unsorted(pageable);
-        Page<Session> page = bucket.newestFirst()
-                ? sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(groupId, bucket.statuses(), fixedOrder)
-                : sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(groupId, bucket.statuses(), fixedOrder);
+        if (!allowed.containsAll(statuses)) {
+            throw new BadRequestException("status must be one of " + allowed);
+        }
+        return statuses.stream().distinct().toList();
+    }
+
+    /** The viewer's today in {@code zone}, from the (replaceable) clock. */
+    private LocalDate todayIn(ZoneId zone) {
+        return LocalDate.now(clock.withZone(zone));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: gate, statuses, then the viewer's day as two instants ({@code atStartOfDay}, so a daylight-saving day is the
+     * 23 or 25 hours it really is) and one query; the page is capped at {@link #GROUP_TODAY_MAX_PAGE_SIZE} and the caller's
+     * own sort is ignored (the order is fixed in the query).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> getGroupTodaySessions(
+            Long groupId, UUID currentUserId, List<SessionStatus> statuses, String viewerZoneId, Pageable pageable) {
+        requireGroupMember(groupId, currentUserId);
+        List<SessionStatus> wanted = requireStatuses(statuses, List.of(SessionStatus.values()));
+        ZoneId zone = resolveZone(viewerZoneId);
+        LocalDate today = todayIn(zone);
+        Pageable fixed = PageRequest.of(pageable.getPageNumber(), Math.min(pageable.getPageSize(), GROUP_TODAY_MAX_PAGE_SIZE));
+        Page<Session> page = sessionRepository.findGroupSessionsToday(groupId, wanted,
+                today.atStartOfDay(zone).toInstant(), today.plusDays(1).atStartOfDay(zone).toInstant(),
+                SessionStatus.ONGOING, SessionStatus.SCHEDULED, SessionStatus.PREPARING, SessionStatus.COMPLETED, fixed);
+        return toResponsePage(page, currentUserId);
+    }
+
+    /** {@inheritDoc} Flow: gate, statuses (PREPARING, SCHEDULED, CANCELLED), the start of tomorrow in the viewer's zone, one query. */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> getGroupLaterSessions(
+            Long groupId, UUID currentUserId, List<SessionStatus> statuses, String viewerZoneId, Pageable pageable) {
+        requireGroupMember(groupId, currentUserId);
+        List<SessionStatus> wanted = requireStatuses(statuses, GROUP_LATER_STATUSES);
+        ZoneId zone = resolveZone(viewerZoneId);
+        Instant tomorrow = todayIn(zone).plusDays(1).atStartOfDay(zone).toInstant();
+        return toResponsePage(sessionRepository.findGroupSessionsLater(groupId, wanted, tomorrow, unsorted(pageable)), currentUserId);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: gate, statuses (COMPLETED, CANCELLED), {@code days} (not positive: 400; above {@link #GROUP_HISTORY_MAX_DAYS}:
+     * cut to it), the window {@code [before - days, before)} with {@code before} at most today, the date counts of the
+     * window (one native query), and one existence query for {@code hasMore}. The window is bounded by instants; the date is
+     * only the grouping key, in the viewer's zone, like the history of "My sessions".
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public GroupSessionHistoryDatesResponse getGroupHistoryDates(
+            Long groupId, UUID currentUserId, List<SessionStatus> statuses, LocalDate before, int days, String viewerZoneId) {
+        requireGroupMember(groupId, currentUserId);
+        List<SessionStatus> wanted = requireStatuses(statuses, HISTORY_SESSION_STATUSES);
+        if (days <= 0) {
+            throw new BadRequestException("days must be positive");
+        }
+        ZoneId zone = resolveZone(viewerZoneId);
+        LocalDate today = todayIn(zone);
+        LocalDate windowEndDay = before == null || before.isAfter(today) ? today : before;
+        LocalDate windowStartDay = windowEndDay.minusDays(Math.min(days, GROUP_HISTORY_MAX_DAYS));
+        Instant windowStart = windowStartDay.atStartOfDay(zone).toInstant();
+        List<SessionDateCountProjection> rows = sessionRepository.findGroupHistoryDateCounts(groupId,
+                wanted.stream().map(SessionStatus::name).toList(), zone.getId(), windowStart,
+                windowEndDay.atStartOfDay(zone).toInstant());
+        return GroupSessionHistoryDatesResponse.builder()
+                .dates(rows.stream()
+                        .map(row -> SessionHistoryDateCount.builder().date(row.getSessionDate()).count(row.getCount()).build())
+                        .toList())
+                .hasMore(sessionRepository.existsGroupSessionEndingBefore(groupId, wanted, windowStart))
+                .nextBefore(windowStartDay)
+                .build();
+    }
+
+    /** {@inheritDoc} Flow: gate, statuses, {@code date} before today (a finished session of today is in /today), one query on the day's instants. */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SessionResponse> getGroupHistorySessions(
+            Long groupId, UUID currentUserId, LocalDate date, List<SessionStatus> statuses, String viewerZoneId, Pageable pageable) {
+        requireGroupMember(groupId, currentUserId);
+        List<SessionStatus> wanted = requireStatuses(statuses, HISTORY_SESSION_STATUSES);
+        ZoneId zone = resolveZone(viewerZoneId);
+        if (!date.isBefore(todayIn(zone))) {
+            throw new BadRequestException("date must be before today");
+        }
+        Page<Session> page = sessionRepository.findGroupSessionsEndingOn(groupId, wanted,
+                date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant(), unsorted(pageable));
         return toResponsePage(page, currentUserId);
     }
 
@@ -420,11 +537,11 @@ public class SessionServiceImpl implements SessionService {
             sessions = sessionRepository.findUpcomingSessionsByDate(UPCOMING_SESSION_STATUSES, userId,
                     UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                     date.atStartOfDay(zone).toInstant(),
-                    date.plusDays(1).atStartOfDay(zone).toInstant(), sportId, effectivePageable);
+                    date.plusDays(1).atStartOfDay(zone).toInstant(), sportId, memberGroupIds(userId), effectivePageable);
         } else {
             sessions = sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
                     UPCOMING_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                    sportId, effectivePageable);
+                    sportId, memberGroupIds(userId), effectivePageable);
         }
         return toResponsePage(sessions, userId);
     }
@@ -450,7 +567,7 @@ public class SessionServiceImpl implements SessionService {
     public Page<SessionResponse> getRequestedSessions(UUID userId, Pageable pageable) {
         Page<Session> sessions = sessionRepository.findUpcomingSessions(UPCOMING_SESSION_STATUSES, userId,
                 REQUESTED_PARTICIPANT_STATUSES, SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                null, unsorted(pageable));
+                null, memberGroupIds(userId), unsorted(pageable));
         return toResponsePage(sessions, userId);
     }
 
@@ -474,7 +591,7 @@ public class SessionServiceImpl implements SessionService {
         Instant dayEnd = date.plusDays(1).atStartOfDay(zone).toInstant();
         Page<Session> sessions = sessionRepository.findHistorySessionsByDate(
                 HISTORY_SESSION_STATUSES, userId, ParticipantStatus.JOINED, dayStart, dayEnd, sportId,
-                unsorted(pageable));
+                memberGroupIds(userId), unsorted(pageable));
         return toResponsePage(sessions, userId);
     }
 
@@ -522,7 +639,7 @@ public class SessionServiceImpl implements SessionService {
         String zoneId = resolveZone(viewerZoneId).getId();
         List<SessionDateCountProjection> rows = sessionRepository.findHistoryDateCounts(
                 HISTORY_SESSION_STATUS_NAMES, userId, ParticipantStatus.JOINED.name(), before, zoneId,
-                sportId, dateCount + 1);
+                sportId, memberGroupIds(userId), dateCount + 1);
         boolean hasMore = rows.size() > dateCount;
         List<SessionHistoryDateCount> dates = rows.stream()
                 .limit(dateCount)
@@ -532,6 +649,18 @@ public class SessionServiceImpl implements SessionService {
                         .build())
                 .collect(Collectors.toList());
         return SessionHistoryDatesResponse.builder().dates(dates).hasMore(hasMore).build();
+    }
+
+    /**
+     * SESSION-GROUP-12 — the groups whose sessions a list may show for {@code userId}: the active groups they belong to (one
+     * ids-only query through {@code group-api}, once per request, never per row). A standalone session has no group and is
+     * always listed; a group session is listed only while the caller is a member, so a group left (or deleted) takes its
+     * sessions off the Upcoming, Requested and History lists even though the participant rows stay. Never empty: no group
+     * is {@link #NO_GROUP_IDS}, which matches nothing.
+     */
+    private List<Long> memberGroupIds(UUID userId) {
+        List<Long> ids = groupService.getActiveGroupIdsForMember(userId);
+        return ids == null || ids.isEmpty() ? NO_GROUP_IDS : ids;
     }
 
     /** SESSION-27 — strips any client-supplied {@code Sort} down to just {@code page}/{@code size}.
@@ -786,6 +915,7 @@ public class SessionServiceImpl implements SessionService {
         session.setCancelReason(request != null ? request.getReason() : null);
         session.setCancelledBy(userId);
         session.setCancelledAt(LocalDateTime.now());
+        session.endAtStartIfMissing();
         Session saved = sessionRepository.save(session);
 
         if (saved.getGroupId() != null) {

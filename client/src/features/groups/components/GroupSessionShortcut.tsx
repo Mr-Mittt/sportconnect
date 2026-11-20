@@ -17,6 +17,8 @@ interface GroupSessionShortcutProps {
   onRetry: () => void;
   /** The "+" card: opens the create form in group mode. */
   onCreate: () => void;
+  /** The "See all" link in the header: opens the group's Sessions tab (CLIENT-GROUP-SESSION-2). */
+  onSeeAll: () => void;
   sportsByKey: Record<SportKey, SportProfile>;
   currentUserId: string;
   onViewDetails: (sessionId: number) => void;
@@ -40,6 +42,7 @@ export function GroupSessionShortcut({
   isError,
   onRetry,
   onCreate,
+  onSeeAll,
   sportsByKey,
   currentUserId,
   onViewDetails,
@@ -54,19 +57,30 @@ export function GroupSessionShortcut({
 
   return (
     <section aria-label={t('sessionShortcut.title')}>
-      <button
-        type="button"
-        aria-expanded={isOpen}
-        aria-controls={contentId}
-        onClick={() => setIsOpen((open) => !open)}
-        className="flex cursor-pointer items-center gap-1.5 rounded-md p-1 text-sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
-      >
-        <IconChevronDown
-          className={cn('size-4 text-text-secondary transition-transform', !isOpen && '-rotate-90')}
-          aria-hidden="true"
-        />
-        {t('sessionShortcut.title')}
-      </button>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          aria-controls={contentId}
+          onClick={() => setIsOpen((open) => !open)}
+          className="flex cursor-pointer items-center gap-1.5 rounded-md p-1 text-sm font-medium text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+        >
+          <IconChevronDown
+            className={cn('size-4 text-text-secondary transition-transform', !isOpen && '-rotate-90')}
+            aria-hidden="true"
+          />
+          {t('sessionShortcut.title')}
+        </button>
+        {/* Right-aligned, always visible (also while collapsed): a link to the Sessions tab, which is a tab switch, not a route. */}
+        <button
+          type="button"
+          aria-label={t('sessionShortcut.seeAllLabel')}
+          onClick={onSeeAll}
+          className="cursor-pointer rounded-md p-1 text-2sm font-medium text-text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent"
+        >
+          {t('sessionShortcut.seeAll')}
+        </button>
+      </div>
 
       {isOpen && (
         <div id={contentId} className="mt-1.5">

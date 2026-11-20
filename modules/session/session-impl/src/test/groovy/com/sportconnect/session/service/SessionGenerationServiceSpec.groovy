@@ -232,6 +232,27 @@ class SessionGenerationServiceSpec extends Specification {
         })
     }
 
+    // SESSION-GROUP-12: a cancelled session always has an end time (its start when it had none).
+    def "cancelUnpreparedSessions gives a cancelled draft without a duration an end equal to its start, and keeps an end it has"() {
+        given:
+        def pageable = PageRequest.of(0, 200)
+        def start1 = Instant.parse("2026-11-10T10:00:00Z")
+        def start2 = Instant.parse("2026-11-11T10:00:00Z")
+        def end2 = Instant.parse("2026-11-11T12:00:00Z")
+        def noEnd = Session.builder().id(1L).status(SessionStatus.PREPARING).scheduledStart(start1).build()
+        def withEnd = Session.builder().id(2L).status(SessionStatus.PREPARING).scheduledStart(start2).scheduledEndAt(end2).build()
+
+        when:
+        service.cancelUnpreparedSessions()
+
+        then:
+        1 * sessionRepository.findUnpreparedSessionsToCancel(SessionStatus.PREPARING, _ as Instant, pageable) >>
+                new PageImpl([noEnd, withEnd], pageable, 2)
+        1 * sessionRepository.saveAll(_)
+        noEnd.scheduledEndAt == start1
+        withEnd.scheduledEndAt == end2
+    }
+
     def "cancelUnpreparedSessions does nothing when no PREPARING session is past its start time"() {
         given:
         def pageable = PageRequest.of(0, 200)

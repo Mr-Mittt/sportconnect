@@ -156,6 +156,7 @@ public class SessionGenerationService {
                 s.setStatus(SessionStatus.CANCELLED);
                 s.setCancelReason(UNPREPARED_CANCEL_REASON);
                 s.setCancelledAt(cancelledAt);
+                s.endAtStartIfMissing();
             });
             sessionRepository.saveAll(sessions);
             log.info("Auto-cancelled {} unprepared session(s)", sessions.size());

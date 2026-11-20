@@ -28,6 +28,7 @@
   "tabs": {
     "ariaLabel": "Group sections",
     "posts": "Posts",
+    "sessions": "Sessions",
     "chat": "Chat",
     "members": "Members",
     "settings": "Settings"
@@ -191,7 +192,9 @@
     "createToday": "No session today. Create one",
     "loading": "Loading today's sessions",
     "error": "Couldn't load today's sessions.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "seeAll": "See all",
+    "seeAllLabel": "See all of this group's sessions"
   },
   "page": {
     "title": "Groups"
@@ -199,5 +202,34 @@
   "actionError": {
     "title": "Couldn't complete that",
     "gotIt": "Got it"
+  },
+  "sessionsTab": {
+    "create": "Create session",
+    "today": {
+      "title": "Today's sessions",
+      "empty": "No session today."
+    },
+    "others": {
+      "title": "Other sessions",
+      "empty": "No upcoming session.",
+      "loadMore": "Load more sessions"
+    },
+    "history": {
+      "title": "History",
+      "dateError": "Couldn't load these sessions.",
+      "loadMoreForDate": "Load more sessions for {{label}}",
+      "loadMore": "Load the previous 30 days",
+      "expand": "Expand {{label}}",
+      "collapse": "Collapse {{label}}",
+      "emptyDate": "No session on this day."
+    },
+    "filter": {
+      "label": "Filter {{section}} by status",
+      "button": "Status ({{count}})"
+    },
+    "noStatus": "Select at least one status.",
+    "loading": "Loading sessions…",
+    "error": "Couldn't load these sessions.",
+    "retry": "Try again"
   }
 }

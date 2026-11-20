@@ -137,6 +137,108 @@ function dateInZone(scheduledStart: string, zone: string): string {
   }).format(new Date(scheduledStart));
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// CLIENT-GROUP-SESSION-2 (backend SESSION-GROUP-12): a group's sessions by status. `/today`, `/later`, `/history/dates` and
+// `/history`, member only, with a required `viewerZoneId` and a repeatable / comma-separated `status`. The day boundaries are
+// read in this Node process's own zone, which a default Playwright browser context shares (see `dateInZone`), so the
+// `viewerZoneId` the client sends is validated for presence but not used to move a boundary.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const GROUP_LATER_STATUSES: ReadonlyArray<Session['status']> = ['PREPARING', 'SCHEDULED', 'CANCELLED'];
+/** `/today`'s order: ONGOING, SCHEDULED, PREPARING, COMPLETED, CANCELLED, then start. */
+const TODAY_STATUS_RANK: Record<string, number> = { ONGOING: 0, SCHEDULED: 1, PREPARING: 2, COMPLETED: 3, CANCELLED: 4 };
+
+/** Local midnight `offsetDays` from today. */
+function localDayStart(offsetDays = 0): Date {
+  const day = new Date();
+  day.setHours(0, 0, 0, 0);
+  day.setDate(day.getDate() + offsetDays);
+  return day;
+}
+
+/** Local `hour`:00 on the day `offsetDays` from today, as the fixtures' offset-less wall-clock string would mean it. */
+function localTime(offsetDays: number, hour: number): string {
+  const day = localDayStart(offsetDays);
+  day.setHours(hour, 0, 0, 0);
+  return day.toISOString();
+}
+
+/** The end of a session as the server reads it: its end time, or its start when it has none. */
+function effectiveEnd(candidate: Session): Date {
+  return new Date(candidate.scheduledEndAt ?? candidate.scheduledStart);
+}
+
+/**
+ * The sessions the mock group list endpoints draw from: the group's stored sessions (the owned group's "Ladder night" is
+ * re-timed to noon today, as the Posts-tab shortcut needs) plus, for the owned group only, a spread of sessions laid out
+ * relative to today so the Sessions tab has every section to show: ongoing, completed and cancelled today; scheduled, cancelled
+ * and draft ones from tomorrow on; and finished ones yesterday, last week and 40 days ago (outside the first 30-day window).
+ * Not in `sessionsState`, so they have no detail route; nothing opens them.
+ */
+function groupSessionsFor(session: SessionsSession, groupId: number): Session[] {
+  const stored = session.sessionsState
+    .filter((candidate) => candidate.groupId === groupId)
+    .map((candidate) => (candidate.id === mockOwnedGroupSession.id ? { ...candidate, scheduledStart: localTime(0, 12) } : candidate));
+  if (groupId !== mockOwnedGroup.id) return stored;
+  const make = (id: number, title: string, status: Session['status'], start: string, end: string | null): Session => ({
+    ...mockOwnedGroupSession,
+    id,
+    title,
+    status,
+    scheduledStart: start,
+    scheduledEndAt: end,
+    participantCount: 3,
+    callerParticipation: null,
+    cancelledAt: status === 'CANCELLED' ? start : null,
+    cancelReason: null,
+  });
+  return [
+    ...stored,
+    make(9001, 'Night ladder', 'ONGOING', localTime(-1, 22), localTime(1, 6)),
+    make(9002, 'Early drills', 'COMPLETED', localTime(0, 0), localTime(0, 1)),
+    make(9003, 'Cancelled today', 'CANCELLED', localTime(0, 9), localTime(0, 9)),
+    make(9004, 'Tomorrow doubles', 'SCHEDULED', localTime(1, 18), localTime(1, 20)),
+    make(9005, 'Cancelled tomorrow', 'CANCELLED', localTime(1, 19), localTime(1, 19)),
+    make(9006, 'Next week draft', 'PREPARING', localTime(5, 18), null),
+    make(9007, 'Yesterday evening', 'COMPLETED', localTime(-1, 18), localTime(-1, 20)),
+    make(9008, 'Yesterday morning', 'COMPLETED', localTime(-1, 8), localTime(-1, 9)),
+    make(9009, 'Cancelled yesterday', 'CANCELLED', localTime(-1, 10), localTime(-1, 10)),
+    make(9010, 'Last week play', 'COMPLETED', localTime(-6, 18), localTime(-6, 19)),
+    make(9011, 'Long ago play', 'COMPLETED', localTime(-40, 18), localTime(-40, 19)),
+  ];
+}
+
+interface GroupListRequest {
+  groupId: number;
+  statuses: Session['status'][];
+  url: URL;
+}
+
+/** The checks every group list shares, in the server's order: auth, member (403), then `viewerZoneId` and `status` (400). */
+function readGroupListRequest(
+  request: Request,
+  groupIdParam: string,
+  allowed: ReadonlyArray<Session['status']>,
+  allowedText: string,
+): GroupListRequest | Response {
+  const unauthorized = requireAuth(request);
+  if (unauthorized) return unauthorized;
+  const groupId = Number(groupIdParam);
+  if (![mockGroup.id, mockOwnedGroup.id].includes(groupId)) {
+    return HttpResponse.json(apiError('Only members of this group can do that', 'SESSION_GROUP_MEMBER_REQUIRED'), { status: 403 });
+  }
+  const url = new URL(request.url);
+  if (!url.searchParams.get('viewerZoneId')) return HttpResponse.json(apiError('viewerZoneId is required'), { status: 400 });
+  const statuses = url.searchParams
+    .getAll('status')
+    .flatMap((value) => value.split(','))
+    .filter((value) => value !== '') as Session['status'][];
+  if (statuses.length === 0 || !statuses.every((status) => allowed.includes(status))) {
+    return HttpResponse.json(apiError(`status must be one of ${allowedText}`), { status: 400 });
+  }
+  return { groupId, statuses, url };
+}
+
 /** The caller's own participant row on a session, or undefined — every "mine" list below is
  * scoped by this, exactly like the real `/upcoming`/`/history` (backend SESSION-27). */
 function callerRow(session: SessionsSession, sessionId: number): SessionParticipant | undefined {
@@ -783,6 +885,7 @@ export const sessionHandlers: HttpHandler[] = [
     return HttpResponse.json(apiResponse(created, 'Session created successfully'), { status: 201 });
   }),
 
+  // The plain list (every status of the group, the caller's own paging). SESSION-GROUP-12 removed the `bucket` parameter.
   http.get('/api/sessions/group/:groupId', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -792,37 +895,112 @@ export const sessionHandlers: HttpHandler[] = [
     }
     const groupId = Number(params.groupId);
     const session = sessionsSessions.get(sessionId);
-    // SESSION-GROUP-2: `bucket` is one status group (`HISTORY` = completed and cancelled); a caller who is not in the group is 403.
-    const url = new URL(request.url);
-    const bucket = url.searchParams.get('bucket');
-    const size = Number(url.searchParams.get('size') ?? 20) || 20;
-    const bucketStatuses: Record<string, Session['status'][]> = {
-      ONGOING: ['ONGOING'],
-      SCHEDULED: ['SCHEDULED'],
-      PREPARING: ['PREPARING'],
-      HISTORY: ['COMPLETED', 'CANCELLED'],
-    };
-    if (bucket !== null && bucketStatuses[bucket.toUpperCase()] === undefined) {
-      return HttpResponse.json(apiError('bucket must be one of ONGOING, SCHEDULED, PREPARING, HISTORY'), { status: 400 });
-    }
     if (![mockGroup.id, mockOwnedGroup.id].includes(groupId)) {
       return HttpResponse.json(apiError('Only members of this group can do that', 'SESSION_GROUP_MEMBER_REQUIRED'), { status: 403 });
     }
-    // The fixture sessions carry fixed dates, so none of them is "today": the owned group's fixture session is re-timed to
-    // noon today (the browser and this server share a machine) for the Posts-tab shortcut, which only lists today's sessions.
-    const noonToday = new Date();
-    noonToday.setHours(12, 0, 0, 0);
     const results = session.sessionsState
       .filter((candidate) => candidate.groupId === groupId)
-      .filter((candidate) => bucket === null || bucketStatuses[bucket.toUpperCase()].includes(candidate.status))
-      .map((candidate) =>
-        bucket !== null && candidate.id === mockOwnedGroupSession.id
-          ? { ...candidate, scheduledStart: noonToday.toISOString() }
-          : candidate,
-      )
-      .map((candidate) => withCallerParticipation(session, candidate))
-      .slice(0, size);
+      .map((candidate) => withCallerParticipation(session, candidate));
     return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
+  }),
+
+  // SESSION-GROUP-12: sessions whose playing time overlaps today, in the given statuses; ONGOING, SCHEDULED, PREPARING, COMPLETED,
+  // CANCELLED, then start; page 50.
+  http.get('/api/sessions/group/:groupId/today', ({ request, params }) => {
+    const read = readGroupListRequest(request, String(params.groupId), ['PREPARING', 'SCHEDULED', 'ONGOING', 'COMPLETED', 'CANCELLED'], 'PREPARING, SCHEDULED, ONGOING, COMPLETED, CANCELLED');
+    if (read instanceof Response) return read;
+    const sessionId = sessionIdFromRequest(request);
+    if (getOverrides(sessionId).sessionsEmpty || getOverrides(sessionId).groupSessionsEmpty) {
+      return HttpResponse.json(apiResponse(mockPageResponse([])));
+    }
+    const session = sessionsSessions.get(sessionId);
+    const dayStart = localDayStart(0).getTime();
+    const dayEnd = localDayStart(1).getTime();
+    const results = groupSessionsFor(session, read.groupId)
+      .filter((candidate) => read.statuses.includes(candidate.status))
+      .filter((candidate) => new Date(candidate.scheduledStart).getTime() < dayEnd && effectiveEnd(candidate).getTime() >= dayStart)
+      .sort(
+        (a, b) =>
+          TODAY_STATUS_RANK[a.status] - TODAY_STATUS_RANK[b.status] ||
+          new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime() ||
+          a.id - b.id,
+      )
+      .map((candidate) => withCallerParticipation(session, candidate));
+    if (!read.url.searchParams.has('size')) read.url.searchParams.set('size', '50');
+    return HttpResponse.json(apiResponse(slicePage(results, read.url), 'Sessions retrieved successfully'));
+  }),
+
+  // SESSION-GROUP-12: sessions starting from tomorrow on (PREPARING, SCHEDULED, CANCELLED), soonest start first, paged.
+  http.get('/api/sessions/group/:groupId/later', ({ request, params }) => {
+    const read = readGroupListRequest(request, String(params.groupId), GROUP_LATER_STATUSES, 'PREPARING, SCHEDULED, CANCELLED');
+    if (read instanceof Response) return read;
+    const sessionId = sessionIdFromRequest(request);
+    if (getOverrides(sessionId).sessionsEmpty || getOverrides(sessionId).groupSessionsEmpty) {
+      return HttpResponse.json(apiResponse(mockPageResponse([])));
+    }
+    const session = sessionsSessions.get(sessionId);
+    const from = localDayStart(1).getTime();
+    const results = groupSessionsFor(session, read.groupId)
+      .filter((candidate) => read.statuses.includes(candidate.status))
+      .filter((candidate) => new Date(candidate.scheduledStart).getTime() >= from)
+      .sort((a, b) => new Date(a.scheduledStart).getTime() - new Date(b.scheduledStart).getTime() || a.id - b.id)
+      .map((candidate) => withCallerParticipation(session, candidate));
+    return HttpResponse.json(apiResponse(slicePage(results, read.url), 'Sessions retrieved successfully'));
+  }),
+
+  // SESSION-GROUP-12: the end dates of the finished sessions in a window of `days` days ending the day before `before`
+  // (default today), newest first, with `hasMore` and `nextBefore` (the window's first day).
+  http.get('/api/sessions/group/:groupId/history/dates', ({ request, params }) => {
+    const read = readGroupListRequest(request, String(params.groupId), HISTORY_STATUSES, 'COMPLETED, CANCELLED');
+    if (read instanceof Response) return read;
+    const listSessionId = sessionIdFromRequest(request);
+    const session = sessionsSessions.get(listSessionId);
+    const days = Number(read.url.searchParams.get('days') ?? 30);
+    if (!(days > 0)) return HttpResponse.json(apiError('days must be positive'), { status: 400 });
+    const beforeParam = read.url.searchParams.get('before');
+    const today = localDayStart(0);
+    let windowEnd = beforeParam === null ? today : new Date(`${beforeParam}T00:00:00`);
+    if (windowEnd.getTime() > today.getTime()) windowEnd = today;
+    const windowStart = new Date(windowEnd);
+    windowStart.setDate(windowStart.getDate() - Math.min(days, 90));
+    const zone = read.url.searchParams.get('viewerZoneId')!;
+    const matching = getOverrides(listSessionId).groupSessionsEmpty
+      ? []
+      : groupSessionsFor(session, read.groupId).filter((candidate) => read.statuses.includes(candidate.status));
+    const counts = new Map<string, number>();
+    for (const candidate of matching) {
+      const end = effectiveEnd(candidate).getTime();
+      if (end >= windowStart.getTime() && end < windowEnd.getTime()) {
+        const date = dateInZone(effectiveEnd(candidate).toISOString(), zone);
+        counts.set(date, (counts.get(date) ?? 0) + 1);
+      }
+    }
+    const dates = [...counts.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([date, count]) => ({ date, count }));
+    const hasMore = matching.some((candidate) => effectiveEnd(candidate).getTime() < windowStart.getTime());
+    return HttpResponse.json(
+      apiResponse({ dates, hasMore, nextBefore: dateInZone(windowStart.toISOString(), zone) }, 'History dates retrieved successfully'),
+    );
+  }),
+
+  // SESSION-GROUP-12: one end date's finished sessions, newest end first, paged; `date` must be before today.
+  http.get('/api/sessions/group/:groupId/history', ({ request, params }) => {
+    const read = readGroupListRequest(request, String(params.groupId), HISTORY_STATUSES, 'COMPLETED, CANCELLED');
+    if (read instanceof Response) return read;
+    const historySessionId = sessionIdFromRequest(request);
+    const session = sessionsSessions.get(historySessionId);
+    const date = read.url.searchParams.get('date');
+    const zone = read.url.searchParams.get('viewerZoneId')!;
+    if (date === null || date >= dateInZone(new Date().toISOString(), zone)) {
+      return HttpResponse.json(apiError('date must be before today'), { status: 400 });
+    }
+    const results = (getOverrides(historySessionId).groupSessionsEmpty ? [] : groupSessionsFor(session, read.groupId))
+      .filter((candidate) => read.statuses.includes(candidate.status))
+      .filter((candidate) => dateInZone(effectiveEnd(candidate).toISOString(), zone) === date)
+      .sort((a, b) => effectiveEnd(b).getTime() - effectiveEnd(a).getTime() || b.id - a.id)
+      .map((candidate) => withCallerParticipation(session, candidate));
+    return HttpResponse.json(apiResponse(slicePage(results, read.url), 'Sessions retrieved successfully'));
   }),
 
   // CLIENT-SESSION-23 — `GET /sessions/upcoming` (backend SESSION-27/43), replacing the removed

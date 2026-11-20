@@ -203,6 +203,19 @@ public class Session {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    /**
+     * SESSION-GROUP-12: a cancelled session always has an end. A session without a duration (a {@code PREPARING} draft, or any
+     * session created without one) has no {@code scheduledEndAt}; when it is cancelled the end becomes its start, so a list
+     * ordered or grouped by end time can place it. A session that has an end keeps it. Called by every path that cancels:
+     * {@code SessionServiceImpl.cancelSession}, {@code SessionGenerationService.cancelUnpreparedSessions} and
+     * {@code RegularSessionCanceller}.
+     */
+    public void endAtStartIfMissing() {
+        if (scheduledEndAt == null) {
+            scheduledEndAt = scheduledStart;
+        }
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

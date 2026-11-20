@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { sportKeyForId } from '@/features/feed/sportIdMap';
+import type { GroupTabKey } from '@/features/groups/components/GroupTabs';
 import type { SportKey } from '@/shared/types/sport';
 
 interface GroupsPageState {
@@ -22,6 +23,13 @@ interface GroupsPageState {
   /** The selected group's own sportId, tracked alongside its id — null
    * whenever `selectedGroupId` is null. */
   selectedGroupSportId: number | null;
+  /**
+   * Which of the selected group's tabs is showing (Posts, Sessions, Chat, Members, Settings). Kept here, not in the page's local
+   * state, so a reload brings the viewer back to the tab they were on (owner, 2026-11-20); it is reset to `'posts'` whenever the
+   * selected group changes (`selectGroup`), so a different group never opens on the previous group's tab.
+   */
+  activeGroupTab: GroupTabKey;
+  setActiveGroupTab: (tab: GroupTabKey) => void;
   /** Just sets this page's own `activeSport`. `GroupsPage.tsx` additionally
    * decides, on its own, whether a sport switch should also deselect the
    * currently open group (`guardedSetActiveSport`) — that decision lives in
@@ -63,6 +71,8 @@ export const useGroupsPageStore = create<GroupsPageState>()(
       activeSport: 'all',
       selectedGroupId: null,
       selectedGroupSportId: null,
+      activeGroupTab: 'posts',
+      setActiveGroupTab: (tab) => set({ activeGroupTab: tab }),
       setActiveSport: (sport) => set({ activeSport: sport }),
       selectGroup: (groupId, groupSportId = null) =>
         set((state) => {
@@ -70,6 +80,7 @@ export const useGroupsPageStore = create<GroupsPageState>()(
           return {
             selectedGroupId: groupId,
             selectedGroupSportId: groupId === null ? null : groupSportId,
+            activeGroupTab: 'posts' as GroupTabKey,
             activeSport: sportKey ?? state.activeSport,
           };
         }),
@@ -81,6 +92,7 @@ export const useGroupsPageStore = create<GroupsPageState>()(
         activeSport: state.activeSport,
         selectedGroupId: state.selectedGroupId,
         selectedGroupSportId: state.selectedGroupSportId,
+        activeGroupTab: state.activeGroupTab,
       }),
     },
   ),

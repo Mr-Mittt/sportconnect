@@ -25,6 +25,17 @@ export function formatStartTime(iso: string, now: Date = new Date()): string {
 }
 
 /**
+ * CLIENT-GROUP-SESSION-2 (SESSION-GROUP-12): the end of a session worth showing, or `null`. A session cancelled without a
+ * duration has its end set to its start (the server's rule, so a history can place it), which is "no end" for a reader: an end
+ * that is not after the start is dropped, so a cancelled draft shows "19:00", never "19:00 – 19:00". Applies to every session,
+ * standalone or group.
+ */
+export function distinctEnd(startIso: string, endIso: string | null): string | null {
+  if (endIso === null) return null;
+  return new Date(endIso).getTime() > new Date(startIso).getTime() ? endIso : null;
+}
+
+/**
  * CLIENT-SESSION-30: a session card's time line — `formatStartTime` for the start, then
  * " – " and the end. Same calendar day as the start → just the end's clock time
  * ("Today, 15:00 – 17:00"); a different day → the end date too ("Today, 22:00 – Sep 25, 01:00"), so
@@ -37,8 +48,9 @@ export function formatSessionTimeRange(
   now: Date = new Date(),
 ): string {
   const start = formatStartTime(startIso, now);
-  if (endIso === null) return start;
-  const endDate = new Date(endIso);
+  const shownEnd = distinctEnd(startIso, endIso);
+  if (shownEnd === null) return start;
+  const endDate = new Date(shownEnd);
   const end = isSameDay(new Date(startIso), endDate) ? format(endDate, 'HH:mm') : formatLocalized(endDate, 'monthDayTime');
   return `${start} – ${end}`;
 }
@@ -58,7 +70,8 @@ export function formatSessionTimeRange(
 export function formatSessionHeaderDateTime(iso: string, endIso: string | null = null): string {
   const start = new Date(iso);
   const startLabel = formatLocalized(start, 'weekdayMonthDayTime');
-  if (endIso === null) return startLabel;
-  const end = new Date(endIso);
+  const shownEnd = distinctEnd(iso, endIso);
+  if (shownEnd === null) return startLabel;
+  const end = new Date(shownEnd);
   return `${startLabel} – ${isSameDay(start, end) ? format(end, 'HH:mm') : formatLocalized(end, 'weekdayMonthDayTime')}`;
 }
