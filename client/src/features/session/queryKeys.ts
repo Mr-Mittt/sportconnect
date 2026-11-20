@@ -41,6 +41,8 @@ export const sessionKeys = {
     [...sessionKeys.all, 'discover', 'date', date, serializeDiscoverFilters(filters)] as const,
   /** CLIENT-GROUP-SESSION-2 (SESSION-GROUP-12) — a group's Sessions tab and its Posts-tab shortcut. All under `[...all, 'group', groupId]`, so every
    * session write invalidates them. `statuses` (an ordered array) and the viewer's zone are part of each key: they change what the server answers. */
+  /** CLIENT-GROUP-SESSION-4: the prefix of every group-sessions key below, for invalidating them all (a cancel of the scheduled regular sessions). */
+  groupSessions: (groupId: number) => [...sessionKeys.all, 'group', groupId] as const,
   groupSessionsToday: (groupId: number, statuses: readonly string[], viewerZoneId: string) =>
     [...sessionKeys.all, 'group', groupId, 'today', statuses, viewerZoneId] as const,
   groupSessionsLater: (groupId: number, statuses: readonly string[], viewerZoneId: string) =>

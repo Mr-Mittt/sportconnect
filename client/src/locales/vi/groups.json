@@ -160,7 +160,64 @@
     "leave": "Rời nhóm",
     "transferOwnership": "Hãy chuyển quyền sở hữu cho một thành viên khác trước khi bạn có thể rời nhóm.",
     "leaveError": "Không thể rời nhóm. Vui lòng thử lại.",
-    "delete": "Xóa nhóm"
+    "delete": "Xóa nhóm",
+    "sessions": {
+      "title": "Buổi chơi",
+      "regular": "Buổi chơi định kỳ",
+      "regularDesc": "Tự động tạo buổi chơi từ các cấu hình lặp lại của nhóm.",
+      "recurrence": "Chu kỳ lặp",
+      "weekly": "Hằng tuần",
+      "monthly": "Hằng tháng",
+      "add": "Thêm",
+      "loadError": "Không tải được cài đặt buổi chơi.",
+      "listError": "Không tải được các cấu hình.",
+      "empty": "Chưa có cấu hình nào.",
+      "dayTitle": "{{day}} ({{count}})",
+      "monthDay": "Ngày {{ordinal}}",
+      "draft": "Bản nháp",
+      "noLocation": "Chưa có địa điểm",
+      "noDuration": "Chưa có thời lượng",
+      "noFee": "Chưa có mức phí",
+      "edit": "Sửa",
+      "delete": "Xóa",
+      "editLabel": "Sửa {{slot}}",
+      "deleteLabel": "Xóa {{slot}}",
+      "toggleError": "Không cập nhật được cài đặt buổi chơi. Vui lòng thử lại.",
+      "deleteError": "Không xóa được cấu hình này. Vui lòng thử lại.",
+      "onDialog": {
+        "title": "Bật buổi chơi định kỳ?",
+        "body": "Khi bật tính năng này, các buổi chơi định kỳ sẽ được tạo tự động theo các cấu hình lặp lại của nhóm. Bạn đã sẵn sàng chưa?",
+        "back": "Để tôi kiểm tra lại",
+        "confirm": "Đã rõ, bật"
+      },
+      "offDialog": {
+        "title": "Tắt buổi chơi định kỳ?",
+        "body": "Khi tắt tính năng này, các buổi chơi định kỳ sẽ ngừng được tạo tự động. Những buổi đã lên lịch vẫn được giữ lại. Bạn đồng ý chứ?",
+        "hold": "Khoan, đừng tắt",
+        "cancelAndOff": "Không, hủy các buổi còn lại và tắt",
+        "keepAndOff": "Đồng ý, giữ lại và tắt"
+      },
+      "modeDialog": {
+        "title": "Đổi chu kỳ lặp?",
+        "body": "Khi đổi chu kỳ lặp, các cấu hình hiện tại sẽ không dùng được cho đến khi bạn đổi lại.",
+        "stay": "Ở lại",
+        "confirm": "Đã rõ"
+      },
+      "deleteDialog": {
+        "title": "Xóa cấu hình này?",
+        "body": "Buổi chơi vào {{slot}} sẽ không được tạo nữa. Các buổi đã được tạo vẫn được giữ lại.",
+        "cancel": "Giữ lại",
+        "confirm": "Xóa"
+      },
+      "slotAt": "{{day}} lúc {{time}}",
+      "locationUnavailable": "Địa điểm không còn khả dụng"
+    },
+    "leaveDialog": {
+      "title": "Rời khỏi nhóm này?",
+      "body": "Bạn sẽ không còn thấy bài viết và buổi chơi của nhóm.",
+      "stay": "Ở lại",
+      "confirm": "Rời nhóm"
+    }
   },
   "chat": {
     "loading": "Đang tải…",

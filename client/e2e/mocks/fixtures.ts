@@ -14,6 +14,7 @@ import type {
   Post,
 } from '../../src/features/feed/types.ts';
 import type { FriendRequest, FriendUser, UserSearchResult } from '../../src/features/friends/types.ts';
+import type { GroupSessionRecurrence, GroupSessionSettings } from '../../src/features/groups/sessionConfig/types.ts';
 import type { UserResponse } from '../../src/features/profile/types.ts';
 import { hoursAgo, hoursFromNow } from '../../src/shared/lib/mockClock.ts';
 import type { Location } from '../../src/shared/types/location.ts';
@@ -583,6 +584,49 @@ export const mockLocation: Location = {
   createdAt: '2026-06-01T10:00:00',
   updatedAt: '2026-06-01T10:00:00',
 };
+
+// CLIENT-GROUP-SESSION-4: the regular-session settings and configurations of mockOwnedGroup (GET/PUT .../settings, GET/DELETE .../recurrences).
+// Generation is ON and weekly: Tuesday has two slots (18:00 for 90 minutes, 20:00 for 60), Friday one draft (no location, no duration), and one
+// monthly configuration (the 15th) that is not listed while the mode is weekly.
+export const mockGroupSessionSettings: GroupSessionSettings = {
+  groupId: mockOwnedGroup.id,
+  enabled: true,
+  mode: 'WEEKLY',
+  cancelledSessions: 0,
+};
+
+function mockRecurrence(overrides: Partial<GroupSessionRecurrence>): GroupSessionRecurrence {
+  return {
+    id: 1,
+    groupId: mockOwnedGroup.id,
+    mode: 'WEEKLY',
+    dayKey: 2,
+    startTime: '18:00:00',
+    durationMinutes: 90,
+    locationId: mockLocation.id,
+    location: mockLocation,
+    locationNote: null,
+    audience: 'ALL_MEMBERS',
+    audienceUserIds: [],
+    feeType: 'FREE',
+    feeAmountVnd: null,
+    feeNote: null,
+    gameMood: 5,
+    attributes: null,
+    draft: false,
+    missing: [],
+    createdAt: '2026-11-01T10:00:00',
+    updatedAt: '2026-11-01T10:00:00',
+    ...overrides,
+  };
+}
+
+export const mockGroupSessionRecurrences: GroupSessionRecurrence[] = [
+  mockRecurrence({ id: 1 }),
+  mockRecurrence({ id: 2, startTime: '20:00:00', durationMinutes: 60 }),
+  mockRecurrence({ id: 3, dayKey: 5, startTime: '19:00:00', durationMinutes: null, locationId: null, location: null, draft: true, missing: ['locationId', 'durationMinutes'] }),
+  mockRecurrence({ id: 4, mode: 'MONTHLY', dayKey: 15 }),
+];
 
 // CLIENT-SESSION-17: a Badminton (sportId 1) location — `/api/locations/search` filters by
 // sportId, so the create-session `#ref` e2e (which must pick Badminton to get a session schema

@@ -61,6 +61,20 @@
       "SESSION_FEMALE_SLOTS_CHANGED": "female slots",
       "SESSION_GAME_MOOD_CHANGED": "game mood",
       "SESSION_VISIBILITY_CHANGED": "visibility"
+    },
+    "GROUP_SESSION_RECURRENCE_ADDED": "{{name}} added a {{mode}} session on {{day}} at {{time}}",
+    "GROUP_SESSION_RECURRENCE_UPDATED": "{{name}} changed the {{mode}} session on {{day}} at {{time}}",
+    "GROUP_SESSION_RECURRENCE_DELETED": "{{name}} deleted the {{mode}} session on {{day}} at {{time}}",
+    "GROUP_SESSION_GENERATION_ON": "{{name}} turned on regular sessions ({{mode}})",
+    "GROUP_SESSION_GENERATION_OFF": "{{name}} turned off regular sessions",
+    "GROUP_SESSION_MODE_CHANGED": "{{name}} changed the recurrence to {{mode}}",
+    "modeWord": {
+      "WEEKLY": "weekly",
+      "MONTHLY": "monthly"
+    },
+    "dayPhrase": {
+      "WEEKLY": "{{day}}",
+      "MONTHLY": "the {{day}}"
     }
   },
   "notifications": {

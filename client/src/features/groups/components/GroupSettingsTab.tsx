@@ -6,44 +6,10 @@ import { Label } from '@/shared/ui/label';
 import { isGroupManager } from '@/shared/lib/groupRole';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { Textarea } from '@/shared/ui/textarea';
-
-interface ToggleFieldRowProps {
-  label: string;
-  description: string;
-  value: boolean;
-  canEdit: boolean;
-  onChange: (value: boolean) => void;
-  t: ReturnType<typeof useOverridableText>;
-}
-
-/** One `GroupSettings` boolean row — same visual shape as the Privacy row below. */
-function ToggleFieldRow({ label, description, value, canEdit, onChange, t }: ToggleFieldRowProps) {
-  return (
-    <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
-      <div>
-        <div className="text-2sm font-medium text-text-primary">{label}</div>
-        <div className="text-2xs text-text-muted">{description}</div>
-      </div>
-      {canEdit ? (
-        <button
-          type="button"
-          onClick={() => onChange(!value)}
-          aria-pressed={value}
-          aria-label={`${label}: ${value ? t('settings.on') : t('settings.off')}`}
-          className={`cursor-pointer rounded-full px-3 py-1.5 text-2sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border-accent ${
-            value
-              ? 'border-2 border-border-accent font-medium text-text-primary'
-              : 'border-hairline border-border bg-surface-1 text-text-secondary'
-          }`}
-        >
-          {value ? t('settings.on') : t('settings.off')}
-        </button>
-      ) : (
-        <span className="text-2sm text-text-secondary">{value ? t('settings.on') : t('settings.off')}</span>
-      )}
-    </div>
-  );
-}
+import { ToggleFieldRow } from './ToggleFieldRow';
+import { ChoiceDialog } from '../sessionConfig/components/ChoiceDialog';
+import { GroupSessionsConfigSection } from '../sessionConfig/components/GroupSessionsConfigSection';
+import type { GroupSessionsConfigData } from '../sessionConfig/useGroupSessionsConfigData';
 
 interface TextFieldRowProps {
   id: string;
@@ -54,10 +20,14 @@ interface TextFieldRowProps {
   isError: boolean;
   emptyText: string;
   onChange: (value: string) => void;
+  /** Fired when the field loses focus: the caller saves the draft. */
+  onBlur: () => void;
+  /** The failure of this field's last save; absent when there is none. */
+  errorText?: string;
   t: ReturnType<typeof useOverridableText>;
 }
 
-/** One `GroupInfo` free-text row (rules/schedule) — draft-based, shares the Save button below. */
+/** One `GroupInfo` free-text row (rules/schedule): typing is a draft, leaving the field saves it (CLIENT-GROUP-SESSION-4), a failure shows under the field. */
 function TextFieldRow({
   id,
   label,
@@ -67,6 +37,8 @@ function TextFieldRow({
   isError,
   emptyText,
   onChange,
+  onBlur,
+  errorText,
   t,
 }: TextFieldRowProps) {
   return (
@@ -79,7 +51,14 @@ function TextFieldRow({
           {t('settings.loadError')}
         </p>
       ) : canEdit ? (
-        <Textarea id={id} value={value} onChange={(event) => onChange(event.target.value)} />
+        <>
+          <Textarea id={id} value={value} onChange={(event) => onChange(event.target.value)} onBlur={onBlur} />
+          {errorText !== undefined && (
+            <p role="alert" className="mt-1 text-2xs text-text-danger">
+              {errorText}
+            </p>
+          )}
+        </>
       ) : (
         <p className="text-2sm text-text-secondary">{value !== '' ? value : emptyText}</p>
       )}
@@ -114,12 +93,17 @@ interface GroupSettingsTabProps {
   isGroupInfoLoading: boolean;
   isGroupInfoError: boolean;
   onUpdateGroupInfoField: (key: 'rules' | 'schedule', value: string) => void;
-  /** True if either the Permission toggles or the General rules/schedule fields are dirty. */
-  hasUnsavedSettingsChanges: boolean;
-  onSaveSettings: () => void;
-  isSavingSettings: boolean;
-  isSaveSettingsError: boolean;
-  saveSettingsErrorText?: string;
+  /** Leaving a rules/schedule field saves it (CLIENT-GROUP-SESSION-4); `groupInfoFieldError` is the last failed one, shown under that field. */
+  onCommitGroupInfoField: (key: 'rules' | 'schedule') => void;
+  groupInfoFieldError: { key: 'rules' | 'schedule'; text?: string } | null;
+  /** True while a Permission toggle is dirty (owner only): the Save button of the Permission section. */
+  hasUnsavedPermissionChanges: boolean;
+  onSavePermission: () => void;
+  isSavingPermission: boolean;
+  isSavePermissionError: boolean;
+  savePermissionErrorText?: string;
+  /** CLIENT-GROUP-SESSION-4: the Sessions section's data and actions. */
+  sessionsConfig: GroupSessionsConfigData;
   /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -130,21 +114,26 @@ interface GroupSettingsTabProps {
  * The Notifications toggle shown in the reference has no backing endpoint
  * anywhere and stays out of scope.
  *
- * Two collapsible sections, both default-expanded (no design reference for
- * this split — it's a GRP-2 request, not a mockup):
+ * Three collapsible sections, all collapsed by default (CLIENT-GROUP-SESSION-4; no design
+ * reference for this split — it's a GRP-2 request, not a mockup):
  * - **General** ("group properties"): group name/description (read-only
  *   display), Privacy, rules/schedule, and the read-only Group type row.
  *   Privacy applies immediately on click (GRP-1, unchanged); rules/schedule
- *   are draft-based and share the Save button below with Permission.
+ *   are typed as a draft and saved when the field loses focus (CLIENT-GROUP-SESSION-4;
+ *   a failed save keeps the draft and shows under the field).
  * - **Permission** ("group settings"): the three `GroupSettings` toggles.
  *   Owner-only edit (B7's real `updateGroupSettings` gating — stricter than
  *   Privacy/rules/schedule's owner+admin `updateGroup`); admin and member
  *   see the current value as plain text.
  *
- * One shared Save button (visible to owner+admin — whoever can edit
- * *something* draft-based) covers both sections' pending edits; disabled
- * until `hasUnsavedSettingsChanges`. Leaving the tab/group/page with a
- * pending draft is guarded by the parent's `useSettingsUnsavedGuard`.
+ * - **Sessions** (CLIENT-GROUP-SESSION-4): regular-session generation, its
+ *   recurrence mode and the configurations; each action saves at once.
+ *
+ * The Permission section has its own Save button (owner only, since only the
+ * owner edits the toggles), disabled until a toggle is dirty. Leaving the
+ * tab/group/page with a pending draft (a toggle, or a rules/schedule save that
+ * failed) is guarded by the parent's `useSettingsUnsavedGuard`. Leave Group asks
+ * for confirmation first.
  *
  * Member: no Delete button. Admin: no Delete button. Owner: Delete Group
  * button at the very bottom (`DELETE /api/groups/{groupId}` is owner-only).
@@ -172,19 +161,25 @@ export function GroupSettingsTab({
   isGroupInfoLoading,
   isGroupInfoError,
   onUpdateGroupInfoField,
-  hasUnsavedSettingsChanges,
-  onSaveSettings,
-  isSavingSettings,
-  isSaveSettingsError,
-  saveSettingsErrorText,
+  onCommitGroupInfoField,
+  groupInfoFieldError,
+  hasUnsavedPermissionChanges,
+  onSavePermission,
+  isSavingPermission,
+  isSavePermissionError,
+  savePermissionErrorText,
+  sessionsConfig,
   i18nOverridePrefix,
 }: GroupSettingsTabProps) {
   const t = useOverridableText('groups', i18nOverridePrefix);
   const isOwner = currentUserRole === 'group_owner';
   const canEdit = isGroupManager(currentUserRole);
 
-  const [isGeneralOpen, setIsGeneralOpen] = useState(true);
-  const [isPermissionOpen, setIsPermissionOpen] = useState(true);
+  // Every section starts collapsed (owner, 2026-11-20, CLIENT-GROUP-SESSION-4).
+  const [isGeneralOpen, setIsGeneralOpen] = useState(false);
+  const [isPermissionOpen, setIsPermissionOpen] = useState(false);
+  const [isSessionsOpen, setIsSessionsOpen] = useState(false);
+  const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
@@ -257,6 +252,8 @@ export function GroupSettingsTab({
             isError={isGroupInfoError}
             emptyText={t('settings.rulesEmpty')}
             onChange={(value) => onUpdateGroupInfoField('rules', value)}
+            onBlur={() => onCommitGroupInfoField('rules')}
+            errorText={groupInfoFieldError?.key === 'rules' ? (groupInfoFieldError.text ?? t('settings.saveError')) : undefined}
           />
 
           <TextFieldRow
@@ -269,6 +266,8 @@ export function GroupSettingsTab({
             isError={isGroupInfoError}
             emptyText={t('settings.scheduleEmpty')}
             onChange={(value) => onUpdateGroupInfoField('schedule', value)}
+            onBlur={() => onCommitGroupInfoField('schedule')}
+            errorText={groupInfoFieldError?.key === 'schedule' ? (groupInfoFieldError.text ?? t('settings.saveError')) : undefined}
           />
 
           <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
@@ -327,33 +326,41 @@ export function GroupSettingsTab({
               {!isOwner && (
                 <p className="-mt-2.5 text-2xs text-text-muted">{t('settings.ownerOnly')}</p>
               )}
+              {isOwner && (
+                <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
+                  {isSavePermissionError ? (
+                    <p role="alert" className="text-2xs text-text-danger">
+                      {savePermissionErrorText ?? t('settings.saveError')}
+                    </p>
+                  ) : (
+                    <span />
+                  )}
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={onSavePermission}
+                    disabled={!hasUnsavedPermissionChanges || isSavingPermission}
+                  >
+                    {isSavingPermission ? t('settings.saving') : t('settings.save')}
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </CollapsibleContent>
       </Collapsible>
 
-      {canEdit && (
-        <div className="border-hairline-t flex items-center justify-between border-border pt-3.5">
-          {isSaveSettingsError ? (
-            <p role="alert" className="text-2xs text-text-danger">
-              {saveSettingsErrorText ?? t('settings.saveError')}
-            </p>
-          ) : (
-            <span />
-          )}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onSaveSettings}
-            disabled={!hasUnsavedSettingsChanges || isSavingSettings}
-          >
-            {isSavingSettings ? t('settings.saving') : t('settings.save')}
-          </Button>
-        </div>
-      )}
+      <Collapsible open={isSessionsOpen} onOpenChange={setIsSessionsOpen}>
+        <CollapsibleTrigger>
+          <span className="text-sm font-semibold text-text-primary">{t('settings.sessions.title')}</span>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="flex flex-col gap-4 pt-3">
+          <GroupSessionsConfigSection canEdit={canEdit} data={sessionsConfig} i18nOverridePrefix={i18nOverridePrefix} />
+        </CollapsibleContent>
+      </Collapsible>
 
       <div className="border-hairline-t border-border pt-3.5">
-        <Button variant="outline" size="sm" onClick={onLeave} disabled={isOwner || isLeaving}>
+        <Button variant="outline" size="sm" onClick={() => setIsLeaveConfirmOpen(true)} disabled={isOwner || isLeaving}>
           {isLeaving ? t('settings.leaving') : t('settings.leave')}
         </Button>
         {isOwner && (
@@ -367,6 +374,25 @@ export function GroupSettingsTab({
           </p>
         )}
       </div>
+
+      <ChoiceDialog
+        isOpen={isLeaveConfirmOpen}
+        title={t('settings.leaveDialog.title')}
+        body={t('settings.leaveDialog.body')}
+        onClose={() => setIsLeaveConfirmOpen(false)}
+        choices={[
+          { key: 'stay', label: t('settings.leaveDialog.stay'), variant: 'outline', onSelect: () => setIsLeaveConfirmOpen(false) },
+          {
+            key: 'leave',
+            label: t('settings.leaveDialog.confirm'),
+            variant: 'danger',
+            onSelect: () => {
+              setIsLeaveConfirmOpen(false);
+              onLeave();
+            },
+          },
+        ]}
+      />
 
       {isOwner && (
         <div className="border-hairline-t border-border pt-3.5">

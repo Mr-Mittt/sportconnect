@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { userEvent, within } from 'storybook/test';
 import type { Group, GroupInfo, GroupSettings } from '@/features/feed/types';
+import { makeRecurrence, makeSessionsConfigData } from '../sessionConfig/fixtures';
 import { GroupSettingsTab } from './GroupSettingsTab';
 
 const group: Group = {
@@ -64,31 +66,52 @@ const meta = {
     isGroupInfoLoading: false,
     isGroupInfoError: false,
     onUpdateGroupInfoField: () => {},
-    hasUnsavedSettingsChanges: false,
-    onSaveSettings: () => {},
-    isSavingSettings: false,
-    isSaveSettingsError: false,
+    onCommitGroupInfoField: () => {},
+    groupInfoFieldError: null,
+    hasUnsavedPermissionChanges: false,
+    onSavePermission: () => {},
+    isSavingPermission: false,
+    isSavePermissionError: false,
+    sessionsConfig: makeSessionsConfigData({
+      recurrences: [makeRecurrence(), makeRecurrence({ id: 2, startTime: '20:00:00' }), makeRecurrence({ id: 3, dayKey: 5, draft: true, missing: ['locationId'], locationId: null, location: null })],
+    }),
   },
 } satisfies Meta<typeof GroupSettingsTab>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** Every section starts collapsed; the stories that show a section's content open it first. */
+const openSections =
+  (...names: string[]): NonNullable<Story['play']> =>
+  async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    for (const name of names) await userEvent.click(canvas.getByRole('button', { name }));
+  };
+
+/** The default view: General, Permission and Sessions all collapsed. */
+export const AllCollapsed: Story = {
+  args: { currentUserRole: 'group_owner' },
+};
+
 /** Member: everything read-only, no Delete button, toggles/group type read-only. */
-export const AsMember: Story = {};
+export const AsMember: Story = { play: openSections('General', 'Permission', 'Sessions') };
 
 /** Admin: can edit Privacy, no Delete button; the three GroupSettings toggles stay read-only (owner-only). */
 export const AsAdmin: Story = {
   args: { currentUserRole: 'group_admin' },
+  play: openSections('General', 'Permission', 'Sessions'),
 };
 
 /** Owner: can edit Privacy and the three toggles, Delete Group at the bottom, Leave disabled. */
 export const AsOwner: Story = {
   args: { currentUserRole: 'group_owner' },
+  play: openSections('General', 'Permission', 'Sessions'),
 };
 
 export const PrivacyUpdateError: Story = {
   args: { currentUserRole: 'group_owner', isUpdatePrivacyError: true },
+  play: openSections('General'),
 };
 
 export const LeaveError: Story = {
@@ -99,43 +122,64 @@ export const LeaveError: Story = {
 export const CodedErrors: Story = {
   args: {
     currentUserRole: 'group_admin',
-    hasUnsavedSettingsChanges: true,
+    hasUnsavedPermissionChanges: true,
     isUpdatePrivacyError: true,
     privacyErrorText: 'Only the group owner or an admin can do this.',
-    isSaveSettingsError: true,
-    saveSettingsErrorText: 'Only the group owner can do this.',
     isLeaveError: true,
     leaveErrorText: "The owner can't leave the group. Transfer ownership first.",
+    groupInfoFieldError: { key: 'rules', text: 'Only the group owner or an admin can do this.' },
   },
+  play: openSections('General'),
 };
 
 export const SettingsLoading: Story = {
   args: { currentUserRole: 'group_owner', isSettingsLoading: true },
+  play: openSections('General', 'Permission'),
 };
 
 export const SettingsLoadError: Story = {
   args: { currentUserRole: 'group_owner', isSettingsError: true },
+  play: openSections('General', 'Permission'),
 };
 
-/** Owner has toggled a setting — Save button enables. */
-export const UnsavedSettingsChanges: Story = {
-  args: { currentUserRole: 'group_owner', hasUnsavedSettingsChanges: true },
+/** Owner has toggled a setting — the Save button of the Permission section enables. */
+export const UnsavedPermissionChanges: Story = {
+  args: { currentUserRole: 'group_owner', hasUnsavedPermissionChanges: true },
+  play: openSections('Permission'),
 };
 
-export const SavingSettings: Story = {
-  args: { currentUserRole: 'group_owner', hasUnsavedSettingsChanges: true, isSavingSettings: true },
+export const SavingPermission: Story = {
+  args: { currentUserRole: 'group_owner', hasUnsavedPermissionChanges: true, isSavingPermission: true },
+  play: openSections('Permission'),
 };
 
-export const SaveSettingsError: Story = {
-  args: { currentUserRole: 'group_owner', hasUnsavedSettingsChanges: true, isSaveSettingsError: true },
+export const SavePermissionError: Story = {
+  args: { currentUserRole: 'group_owner', hasUnsavedPermissionChanges: true, isSavePermissionError: true },
+  play: openSections('Permission'),
+};
+
+/** A rules/schedule field whose save (on blur) failed: the error shows under it. */
+export const RulesSaveError: Story = {
+  args: { currentUserRole: 'group_admin', groupInfoFieldError: { key: 'rules' } },
+  play: openSections('General'),
 };
 
 export const GroupInfoLoading: Story = {
   args: { currentUserRole: 'group_owner', isGroupInfoLoading: true },
+  play: openSections('General'),
 };
 
 export const GroupInfoLoadError: Story = {
   args: { currentUserRole: 'group_owner', isGroupInfoError: true },
+  play: openSections('General'),
+};
+
+/** Leave Group opens the confirmation (Stay / Leave). */
+export const LeaveConfirmation: Story = {
+  args: { currentUserRole: 'group_member' },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Leave Group' }));
+  },
 };
 
 /** No rules/schedule set yet — member view shows the empty-state copy. */
@@ -144,4 +188,5 @@ export const EmptyGroupInfo: Story = {
     currentUserRole: 'group_member',
     groupInfo: { ...groupInfo, rules: null, schedule: null },
   },
+  play: openSections('General'),
 };

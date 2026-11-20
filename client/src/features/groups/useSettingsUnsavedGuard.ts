@@ -5,10 +5,19 @@ import { useGroupSettings } from '@/features/feed/hooks/useGroupSettings';
 import { useUpdateGroupGeneralData } from '@/features/feed/hooks/useUpdateGroupGeneralData';
 import { useUpdateGroupSettings } from '@/features/feed/hooks/useUpdateGroupSettings';
 import type { UpdateGroupSettingsPayload } from '@/features/feed/types';
+import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 
 interface GroupInfoDraft {
   rules?: string;
   schedule?: string;
+}
+
+type GroupInfoKey = keyof GroupInfoDraft;
+
+function without(draft: GroupInfoDraft, key: GroupInfoKey): GroupInfoDraft {
+  const next = { ...draft };
+  delete next[key];
+  return next;
 }
 
 /**
@@ -20,8 +29,10 @@ interface GroupInfoDraft {
  * separate from Privacy's own `updateGroup`/PUT /{groupId} call elsewhere on
  * the page, which stays immediate-apply, untouched, since a toggle click
  * isn't the same UX problem a free-text field commit-per-keystroke would
- * be). One shared draft/Save/dialog for both sections — editing either
- * marks the whole tab dirty.
+ * be). Since CLIENT-GROUP-SESSION-4 the two sections save differently: the Permission toggles have their own Save button (`saveSettings`), and a
+ * rules/schedule field is saved when it loses focus (`commitInfoField`). A field being saved is shown from `pendingInfo` and is not dirty (leaving
+ * the tab right after typing must not raise the dialog); a failed save puts the text back into the draft, so it is dirty again, guarded, and the
+ * dialog's Save retries it. The dialog's `save()` still saves every dirty draft.
  *
  * "Leaving" while dirty is caught three ways:
  * - In-page tab/group switches — callers wrap their switch handlers in
@@ -44,6 +55,8 @@ export function useSettingsUnsavedGuard(
 ) {
   const [settingsDraft, setSettingsDraft] = useState<UpdateGroupSettingsPayload>({});
   const [infoDraft, setInfoDraft] = useState<GroupInfoDraft>({});
+  const [pendingInfo, setPendingInfo] = useState<GroupInfoDraft>({});
+  const [failedInfoField, setFailedInfoField] = useState<GroupInfoKey | null>(null);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   // A stale draft from a previously viewed group must not bleed into the
   // next one — adjusted during render (React's own documented pattern, same
@@ -55,6 +68,8 @@ export function useSettingsUnsavedGuard(
     setLastGroupId(groupId);
     setSettingsDraft({});
     setInfoDraft({});
+    setPendingInfo({});
+    setFailedInfoField(null);
   }
 
   const settingsQuery = useGroupSettings(groupId, isSettingsTabActive);
@@ -113,6 +128,38 @@ export function useSettingsUnsavedGuard(
     setInfoDraft((prev) => ({ ...prev, [key]: value }));
   }
 
+  /** A rules/schedule field lost focus: save its draft on its own (a partial `PUT .../generalData`), unless it did not change. */
+  function commitInfoField(key: GroupInfoKey) {
+    const value = infoDraft[key];
+    if (groupId === undefined || value === undefined) return;
+    if (value === (savedInfo?.[key] ?? '')) {
+      setInfoDraft((prev) => without(prev, key));
+      return;
+    }
+    setInfoDraft((prev) => without(prev, key));
+    setPendingInfo((prev) => ({ ...prev, [key]: value }));
+    setFailedInfoField(null);
+    updateGeneralDataMutation.mutateAsync({ groupId, payload: { [key]: value } }).then(
+      () => setPendingInfo((prev) => without(prev, key)),
+      () => {
+        setPendingInfo((prev) => without(prev, key));
+        setInfoDraft((prev) => ({ ...prev, [key]: value }));
+        setFailedInfoField(key);
+      },
+    );
+  }
+
+  /** The Permission section's Save: only the toggles (a rules/schedule draft that failed to save is left for the dialog's Save). */
+  function saveSettings() {
+    if (groupId === undefined || !hasSettingsChanges) return;
+    updateSettingsMutation.mutateAsync({ groupId, payload: settingsDraft }).then(
+      () => setSettingsDraft({}),
+      () => {
+        // The failure shows through `settingsSaveError`; the draft stays so the user can retry.
+      },
+    );
+  }
+
   function discard() {
     setSettingsDraft({});
     setInfoDraft({});
@@ -169,10 +216,20 @@ export function useSettingsUnsavedGuard(
     isSettingsLoading: settingsQuery.isLoading,
     isSettingsError: settingsQuery.isError,
     updateSettingField,
-    info: savedInfo !== undefined ? { ...savedInfo, ...infoDraft } : undefined,
+    info: savedInfo !== undefined ? { ...savedInfo, ...pendingInfo, ...infoDraft } : undefined,
     isInfoLoading: infoQuery.isLoading,
     isInfoError: infoQuery.isError,
     updateInfoField,
+    commitInfoField,
+    /** The last rules/schedule field whose save failed, with its coded text; null when there is none. */
+    infoFieldError:
+      failedInfoField !== null ? { key: failedInfoField, text: getCodedErrorMessage(updateGeneralDataMutation.error) } : null,
+    /** A Permission toggle is dirty (the Permission Save button). */
+    hasSettingsChanges,
+    saveSettings,
+    isSavingSettings: updateSettingsMutation.isPending,
+    isSettingsSaveError: updateSettingsMutation.isError,
+    settingsSaveError: updateSettingsMutation.error,
     hasUnsavedChanges,
     save,
     isSaving: updateSettingsMutation.isPending || updateGeneralDataMutation.isPending,

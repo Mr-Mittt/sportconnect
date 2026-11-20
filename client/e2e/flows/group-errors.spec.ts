@@ -179,6 +179,7 @@ test('Delete group without being the owner shows the specific error in the dialo
 test('Settings save shows the specific error and keeps the draft', async ({ page }) => {
   await forceFailure(page, /\/api\/groups\/\d+\/settings$/, 'PUT', 403, 'GROUP_OWNER_REQUIRED');
   await openMembersTab(page, 'Settings');
+  await page.getByRole('button', { name: 'Permission', exact: true }).click(); // CLIENT-GROUP-SESSION-4: sections start collapsed
 
   const inviteToggle = page.getByRole('button', { name: /Allow member invites/ });
   await inviteToggle.click();
@@ -191,6 +192,7 @@ test('Settings save shows the specific error and keeps the draft', async ({ page
 test('Privacy toggle failure shows the specific error', async ({ page }) => {
   await forceFailure(page, /\/api\/groups\/\d+$/, 'PUT', 403, 'GROUP_ADMIN_REQUIRED');
   await openMembersTab(page, 'Settings');
+  await page.getByRole('button', { name: 'General', exact: true }).click(); // CLIENT-GROUP-SESSION-4: sections start collapsed
 
   await page.getByRole('button', { name: 'Private', exact: true }).click();
 
@@ -207,6 +209,8 @@ test('Leave group failure shows the specific error on the tab', async ({ page })
   await page.getByRole('tab', { name: 'Settings' }).click();
 
   await page.getByRole('button', { name: 'Leave Group' }).click();
+  // CLIENT-GROUP-SESSION-4: Leave Group asks first.
+  await page.getByRole('dialog', { name: 'Leave this group?' }).getByRole('button', { name: 'Leave', exact: true }).click();
 
   await expect(page.getByRole('alert').filter({ hasText: "can't leave" })).toHaveText(
     "The owner can't leave the group. Transfer ownership first.",
