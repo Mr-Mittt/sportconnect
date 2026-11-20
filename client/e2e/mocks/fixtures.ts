@@ -1136,6 +1136,15 @@ export async function seedEmptyUpcomingMatchesOnNextLoad(sessionId: string): Pro
 }
 
 /**
+ * CLIENT-GROUP-SESSION-2 — makes the group session lists (`/today`, `/later`, `/history/dates`, `/history`) answer empty. The mock
+ * lays their fixtures out around the real today; a visual spec with a frozen browser clock cannot match that, so it calls this to
+ * keep the Posts-tab "Today's session" shortcut empty.
+ */
+export async function seedEmptyGroupSessionsOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/groupSessionsEmpty');
+}
+
+/**
  * CLIENT-SESSION-23 — makes `GET /sessions/history` return 22 synthetic history dates (the newest
  * with 23 sessions) on top of the fixtures, so an e2e run can reach both History "Load more"
  * levels: paging further back past `dateCount=20`, and a single date past its own page size of 20.

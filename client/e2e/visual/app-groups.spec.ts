@@ -1,5 +1,5 @@
 import { installFakeChatSocket } from '../mocks/fakeChatSocket.ts';
-import { seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import { seedAuthenticatedSession, seedEmptyGroupSessionsOnNextLoad } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -33,6 +33,9 @@ import { expect, test } from '../mocks/test.ts';
  *    persisted, same "seed live through the real UI" pattern as FEED-11's
  *    reply) for a populated bubble instead of screenshotting an empty
  *    thread.
+ *
+ * CLIENT-GROUP-SESSION-2: the two Posts-tab states switch the group session lists off (`seedEmptyGroupSessionsOnNextLoad`): the
+ * mock lays those out around the real today, which a frozen browser clock cannot match, and the shortcut stays the empty plus row.
  *
  * Clock frozen at the same instant as every other visual-regression spec in
  * this suite, purely for consistency — this page renders no message
@@ -82,9 +85,10 @@ for (const width of breakpoints) {
     await expect(page).toHaveScreenshot(`groups-discovery-${width}.png`, { fullPage: true });
   });
 
-  test(`groups — owner-posts (Broadcast toggle on) @ ${width}px`, async ({ page }) => {
+  test(`groups — owner-posts (Broadcast toggle on) @ ${width}px`, async ({ page, mockSessionId }) => {
     await page.clock.setFixedTime(FROZEN_TIME);
     await page.setViewportSize({ width, height: 900 });
+    await seedEmptyGroupSessionsOnNextLoad(mockSessionId);
     await seedAuthenticatedSession(page, '/groups');
 
     await openGroup(page, 'Weekend Tennis Ladder');
@@ -99,9 +103,10 @@ for (const width of breakpoints) {
     await expect(page).toHaveScreenshot(`groups-owner-posts-${width}.png`, { fullPage: true });
   });
 
-  test(`groups — member-posts @ ${width}px`, async ({ page }) => {
+  test(`groups — member-posts @ ${width}px`, async ({ page, mockSessionId }) => {
     await page.clock.setFixedTime(FROZEN_TIME);
     await page.setViewportSize({ width, height: 900 });
+    await seedEmptyGroupSessionsOnNextLoad(mockSessionId);
     await seedAuthenticatedSession(page, '/groups');
 
     await openGroup(page, 'Friday Night Football');

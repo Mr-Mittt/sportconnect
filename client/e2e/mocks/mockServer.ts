@@ -170,6 +170,7 @@ const OVERRIDE_NAMES: ReadonlySet<keyof SessionOverrides> = new Set([
   'createPostFailOnce',
   'notificationsEmpty',
   'sessionsEmpty',
+  'groupSessionsEmpty',
   'historyVolume',
   'discoverVolume',
   'emailUnverified',
