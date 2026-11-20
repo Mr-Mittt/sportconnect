@@ -42,6 +42,7 @@
 | 21 | [SESSION-GROUP-8](MVP/SESSION-GROUP-8_PRUNE_OLD_GENERATION_QUEUE_ROWS.md) | Prune the finished (`DONE`, `IGNORED`) rows of `group_session_generation_queue` after about 30 days; they are kept for ever today (depends on SESSION-GROUP-5) | `TODO` |
 | 22 | [SESSION-GROUP-9](MVP/SESSION-GROUP-9_SCALE_THE_GENERATION_RUNNERS_WITH_THE_BACKLOG.md) | Scale the generation runners with the backlog: the fixed single worker starts more runners when the queue is crowded, up to a configured maximum in parallel (depends on SESSION-GROUP-5's hardening) | `TODO` |
 | 23 | [SESSION-GROUP-11](MVP/SESSION-GROUP-11_SOLID_FIVE_PER_DAY_LIMIT_TRANSFER_HOST_BEFORE_DEACTIVATING_AND_CANCEL_ONLY_THE_OLD_MODE.md) | Close the three known limits of the group-session chain: a 5-per-day limit that holds under a race, transfer the group before the host deactivates, and a mode switch that cancels only the old mode's scheduled sessions (client contract change for CLIENT-GROUP-SESSION-6) | `TODO` |
+| 24 | [SESSION-GROUP-12](MVP/SESSION-GROUP-12_SESSION_LISTS_HIDE_THE_GROUP_SESSIONS_OF_A_GROUP_THE_CALLER_LEFT.md) | The Upcoming, Requested and History session lists keep the group sessions of a group the caller has left (they select by the caller's participant row only; opening one answers 403): list a group session only while the caller is an active-group member (found in use during CLIENT-GROUP-SESSION-1) | `TODO` |
 
 ---
 
