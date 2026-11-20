@@ -1,3 +1,4 @@
+import { IconCheck } from '@tabler/icons-react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as React from 'react';
 import { cn } from '@/shared/lib/utils';
@@ -69,4 +70,44 @@ function DropdownMenuSeparator({
   );
 }
 
-export { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator };
+/**
+ * A menu row that is a checkbox (CLIENT-GROUP-SESSION-2's status filters). Radix owns the `role="menuitemcheckbox"`, the
+ * `aria-checked` state and the keyboard; the check mark shows only while checked, never colour alone. A caller that wants the
+ * menu to stay open while ticking several rows passes `onSelect={(event) => event.preventDefault()}`.
+ */
+function DropdownMenuCheckboxItem({
+  className,
+  children,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      data-slot="dropdown-menu-checkbox-item"
+      className={cn(
+        'flex w-full cursor-pointer items-center gap-2.5 rounded-[7px] px-2 py-2 text-2sm font-medium text-text-primary outline-none select-none',
+        'data-[highlighted]:bg-surface-1',
+        className,
+      )}
+      {...props}
+    >
+      <span
+        aria-hidden="true"
+        className="border-hairline flex size-4 shrink-0 items-center justify-center rounded border-border-strong bg-surface-2"
+      >
+        <DropdownMenuPrimitive.ItemIndicator>
+          <IconCheck className="size-3 text-text-accent" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}
+
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+};

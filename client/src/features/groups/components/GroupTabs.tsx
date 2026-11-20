@@ -1,9 +1,9 @@
-import { IconMessage2, IconMessages, IconSettings, IconUsers } from '@tabler/icons-react';
+import { IconCalendarEvent, IconMessage2, IconMessages, IconSettings, IconUsers } from '@tabler/icons-react';
 import { useRef } from 'react';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { cn } from '@/shared/lib/utils';
 
-export type GroupTabKey = 'posts' | 'chat' | 'members' | 'settings';
+export type GroupTabKey = 'posts' | 'sessions' | 'chat' | 'members' | 'settings';
 
 interface GroupTabsProps {
   activeTab: GroupTabKey;
@@ -14,6 +14,8 @@ interface GroupTabsProps {
 
 const TABS: { key: GroupTabKey; Icon: typeof IconMessage2 }[] = [
   { key: 'posts', Icon: IconMessage2 },
+  // CLIENT-GROUP-SESSION-2
+  { key: 'sessions', Icon: IconCalendarEvent },
   { key: 'chat', Icon: IconMessages },
   // GRP-3
   { key: 'members', Icon: IconUsers },

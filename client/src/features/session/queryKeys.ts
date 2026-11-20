@@ -39,10 +39,16 @@ export const sessionKeys = {
    * instead of serving yesterday's results — same reasoning the pre-22 single-date key had. */
   discoverDate: (date: string, filters: DiscoverFilters) =>
     [...sessionKeys.all, 'discover', 'date', date, serializeDiscoverFilters(filters)] as const,
-  /** CLIENT-GROUP-SESSION-1 — `GET /sessions/group/{groupId}?bucket=` (SESSION-GROUP-2): one status bucket of a group's sessions, the
-   * Posts-tab shortcut reads `ONGOING`, `SCHEDULED` and `PREPARING`. Under `all`, so every session write invalidates it. */
-  groupSessions: (groupId: number, bucket: 'ONGOING' | 'SCHEDULED' | 'PREPARING') =>
-    [...sessionKeys.all, 'group', groupId, bucket] as const,
+  /** CLIENT-GROUP-SESSION-2 (SESSION-GROUP-12) — a group's Sessions tab and its Posts-tab shortcut. All under `[...all, 'group', groupId]`, so every
+   * session write invalidates them. `statuses` (an ordered array) and the viewer's zone are part of each key: they change what the server answers. */
+  groupSessionsToday: (groupId: number, statuses: readonly string[], viewerZoneId: string) =>
+    [...sessionKeys.all, 'group', groupId, 'today', statuses, viewerZoneId] as const,
+  groupSessionsLater: (groupId: number, statuses: readonly string[], viewerZoneId: string) =>
+    [...sessionKeys.all, 'group', groupId, 'later', statuses, viewerZoneId] as const,
+  groupHistoryDates: (groupId: number, statuses: readonly string[], viewerZoneId: string) =>
+    [...sessionKeys.all, 'group', groupId, 'history', 'dates', statuses, viewerZoneId] as const,
+  groupHistoryDate: (groupId: number, date: string, statuses: readonly string[], viewerZoneId: string) =>
+    [...sessionKeys.all, 'group', groupId, 'history', 'date', date, statuses, viewerZoneId] as const,
   detail: (sessionId: number) => [...sessionKeys.all, 'detail', sessionId] as const,
   participants: (sessionId: number) => [...sessionKeys.all, 'participants', sessionId] as const,
   /** Separate cache entry from `participants` above — that one is always JOINED-only (the public

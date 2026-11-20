@@ -28,6 +28,7 @@
   "tabs": {
     "ariaLabel": "Các mục của nhóm",
     "posts": "Bài viết",
+    "sessions": "Buổi chơi",
     "chat": "Trò chuyện",
     "members": "Thành viên",
     "settings": "Cài đặt"
@@ -194,10 +195,41 @@
     "createToday": "Hôm nay chưa có buổi chơi. Tạo một buổi",
     "loading": "Đang tải các buổi chơi hôm nay",
     "error": "Không tải được các buổi chơi hôm nay.",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "seeAll": "Xem tất cả",
+    "seeAllLabel": "Xem tất cả buổi chơi của nhóm này"
   },
   "actionError": {
     "title": "Không thể hoàn tất thao tác",
     "gotIt": "Đã hiểu"
+  },
+  "sessionsTab": {
+    "create": "Tạo buổi chơi",
+    "today": {
+      "title": "Buổi chơi hôm nay",
+      "empty": "Hôm nay chưa có buổi chơi nào."
+    },
+    "others": {
+      "title": "Các buổi chơi khác",
+      "empty": "Chưa có buổi chơi sắp tới.",
+      "loadMore": "Tải thêm buổi chơi"
+    },
+    "history": {
+      "title": "Lịch sử",
+      "dateError": "Không tải được các buổi chơi này.",
+      "loadMoreForDate": "Tải thêm buổi chơi của {{label}}",
+      "loadMore": "Tải 30 ngày trước đó",
+      "expand": "Mở rộng {{label}}",
+      "collapse": "Thu gọn {{label}}",
+      "emptyDate": "Ngày này không có buổi chơi nào."
+    },
+    "filter": {
+      "label": "Lọc {{section}} theo trạng thái",
+      "button": "Trạng thái ({{count}})"
+    },
+    "noStatus": "Hãy chọn ít nhất một trạng thái.",
+    "loading": "Đang tải các buổi chơi…",
+    "error": "Không tải được các buổi chơi.",
+    "retry": "Thử lại"
   }
 }

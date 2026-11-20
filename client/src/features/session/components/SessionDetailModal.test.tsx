@@ -517,6 +517,32 @@ describe('SessionDetailModal', () => {
     expect(screen.getByText('Reason: Court unavailable.')).toBeInTheDocument();
   });
 
+  // CLIENT-GROUP-SESSION-2 (SESSION-GROUP-12): every cancel sets an end equal to the start when there was none (standalone or group).
+  it('a cancelled session without a duration (its end set to its start) shows no end in the header and no "Ends" value', () => {
+    const start = '2026-07-20T19:00:00';
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ status: 'CANCELLED', groupId: null, scheduledStart: start, scheduledEndAt: start, cancelledAt: '2026-07-15T09:00:00' })}
+      />,
+    );
+    expect(screen.getByText(/Jul 20 · 19:00$/)).toBeInTheDocument();
+    expect(screen.queryByText(/19:00 – 19:00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ – /)).not.toBeInTheDocument();
+    // The When section's summary shows the start once: "Ends" has no value (it would read the same time as "Starts").
+    expect(screen.getAllByText('Jul 20, 19:00')).toHaveLength(1);
+  });
+
+  it('a cancelled session that had an end keeps it in the header', () => {
+    render(
+      <SessionDetailModal
+        {...baseProps}
+        session={makeSession({ status: 'CANCELLED', scheduledStart: '2026-07-20T19:00:00', scheduledEndAt: '2026-07-20T21:00:00', cancelledAt: '2026-07-15T09:00:00' })}
+      />,
+    );
+    expect(screen.getByText(/19:00 – 21:00/)).toBeInTheDocument();
+  });
+
   // CLIENT-SESSION-37: the system's cancel has no canceller.
   it('an auto-cancelled session reads "Auto-cancelled on <time>", with client copy for the reason, never "unknown"', () => {
     render(

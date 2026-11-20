@@ -147,6 +147,17 @@ export interface SessionHistoryDatesResponse {
   hasMore: boolean;
 }
 
+/** CLIENT-GROUP-SESSION-2 — `GET /sessions/group/{groupId}/history/dates` response body (`GroupSessionHistoryDatesResponse`,
+ * SESSION-GROUP-12): the end dates of a group's finished sessions inside one window of days (newest first), each with its count.
+ * The window is a fixed span, so `dates` can be empty while older sessions exist: `hasMore` says to ask again with
+ * `before=nextBefore` (the window's first day). */
+export interface GroupSessionHistoryDatesResponse {
+  dates: SessionHistoryDate[];
+  hasMore: boolean;
+  /** `yyyy-MM-dd` — the first day of this window; the next call's `before`. */
+  nextBefore: string;
+}
+
 /** CLIENT-GL-50 — one person of `GET /sessions/{id}/thread-people` (SESSION-GL-64): someone who can see the session's
  * discussion thread. Typed 1:1 against `ThreadPersonResponse`; nothing else is ever sent (no email, no status). */
 export interface ThreadPerson {

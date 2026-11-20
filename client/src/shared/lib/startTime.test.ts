@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatSessionHeaderDateTime, formatSessionTimeRange, formatStartTime } from './startTime';
+import { distinctEnd, formatSessionHeaderDateTime, formatSessionTimeRange, formatStartTime } from './startTime';
 
 describe('formatStartTime', () => {
   // Local-time fixtures on purpose: the formatter renders in the viewer's
@@ -85,5 +85,39 @@ describe('formatSessionHeaderDateTime with an end', () => {
 
   it('treats a null end like an omitted one', () => {
     expect(formatSessionHeaderDateTime(on(6, 18, 0), null)).toBe('Mon, Jul 6 · 18:00');
+  });
+});
+
+// CLIENT-GROUP-SESSION-2 (SESSION-GROUP-12): a session cancelled without a duration has its end set to its start; that is "no end".
+describe('distinctEnd', () => {
+  const on = (hour: number, minute = 0) => new Date(2026, 6, 6, hour, minute).toISOString();
+
+  it('keeps an end that is after the start', () => {
+    expect(distinctEnd(on(18), on(20))).toBe(on(20));
+  });
+
+  it('drops an end equal to the start, and one before it, and a null one', () => {
+    expect(distinctEnd(on(18), on(18))).toBeNull();
+    expect(distinctEnd(on(18), on(17))).toBeNull();
+    expect(distinctEnd(on(18), null)).toBeNull();
+  });
+
+  it('compares instants, not the way the two strings are written', () => {
+    expect(distinctEnd('2026-07-06T11:00:00Z', '2026-07-06T18:00:00+07:00')).toBeNull();
+    expect(distinctEnd('2026-07-06T11:00:00Z', '2026-07-06T19:00:00+07:00')).toBe('2026-07-06T19:00:00+07:00');
+  });
+});
+
+describe('a cancelled session without a duration (end = start) shows no end', () => {
+  const now = new Date(2026, 6, 6, 12, 0);
+  const at = (hour: number) => new Date(2026, 6, 6, hour, 0).toISOString();
+
+  it('formatSessionTimeRange shows the start only', () => {
+    expect(formatSessionTimeRange(at(19), at(19), now)).toBe('Today, 19:00');
+    expect(formatSessionTimeRange(at(19), at(20), now)).toBe('Today, 19:00 – 20:00');
+  });
+
+  it('formatSessionHeaderDateTime shows the start only', () => {
+    expect(formatSessionHeaderDateTime(at(19), at(19))).toBe('Mon, Jul 6 · 19:00');
   });
 });

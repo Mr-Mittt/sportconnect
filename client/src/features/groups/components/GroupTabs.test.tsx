@@ -27,23 +27,46 @@ describe('GroupTabs', () => {
 
     screen.getByRole('tab', { name: 'Posts' }).focus();
     await user.keyboard('{ArrowDown}');
-    expect(onChange).toHaveBeenCalledWith('chat');
+    expect(onChange).toHaveBeenCalledWith('sessions');
 
     await user.keyboard('{ArrowUp}');
     expect(onChange).toHaveBeenLastCalledWith('posts');
   });
 
-  // GRP-3
+  // GRP-3, CLIENT-GROUP-SESSION-2
   it('renders a Members tab between Chat and Settings and calls onChange when clicked', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<GroupTabs activeTab="posts" onChange={onChange} />);
 
     const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent);
-    expect(tabs).toEqual(['Posts', 'Chat', 'Members', 'Settings']);
+    expect(tabs).toEqual(['Posts', 'Sessions', 'Chat', 'Members', 'Settings']);
 
     await user.click(screen.getByRole('tab', { name: 'Members' }));
     expect(onChange).toHaveBeenCalledWith('members');
+  });
+
+  // CLIENT-GROUP-SESSION-2
+  it('renders a Sessions tab between Posts and Chat and calls onChange when clicked', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<GroupTabs activeTab="posts" onChange={onChange} />);
+
+    await user.click(screen.getByRole('tab', { name: 'Sessions' }));
+    expect(onChange).toHaveBeenCalledWith('sessions');
+  });
+
+  it('wraps the arrow keys over the five tabs, Sessions included', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<GroupTabs activeTab="settings" onChange={onChange} />);
+    screen.getByRole('tab', { name: 'Settings' }).focus();
+    await user.keyboard('{ArrowDown}');
+    expect(onChange).toHaveBeenLastCalledWith('posts');
+    await user.keyboard('{End}');
+    expect(onChange).toHaveBeenLastCalledWith('settings');
+    await user.keyboard('{Home}');
+    expect(onChange).toHaveBeenLastCalledWith('posts');
   });
 
   // CLIENT-I18N-7: set and restore the locale explicitly — don't rely on a global reset.
@@ -51,6 +74,7 @@ describe('GroupTabs', () => {
     await i18n.changeLanguage('vi');
     render(<GroupTabs activeTab="posts" onChange={() => {}} />);
     expect(screen.getByRole('tablist', { name: 'Các mục của nhóm' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Buổi chơi' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Trò chuyện' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Cài đặt' })).toBeInTheDocument();
     await i18n.changeLanguage('en');
