@@ -526,25 +526,24 @@ user does not already hold. Each was confirmed to fail with the fix reverted.
 | a failed create-group does not reappear when the modal is reopened | Same cycle on `CreateGroupModal` | `GroupsPage` resets this one inline in JSX with no hook to unit-test, and **no RTL test in this repo renders `GroupsPage`** — so this e2e case is its only regression coverage. No group selected here, so `lockedSport` is null and the Sport select *is* rendered (unlike the main journey's step 6) |
 | a failed delete-group does not reappear when the dialog is reopened | Same cycle on `DeleteGroupConfirmDialog`, reached through the owner-only Danger zone | Same inline-JSX reason as create-group. Selects "Weekend Tennis Ladder" first — the Settings tab only exists once a group is selected, same entry `group-settings.spec.ts` uses |
 
-### `e2e/flows/group-settings.spec.ts` (GRP-2, one `test()` with 4 steps)
+### `e2e/flows/group-settings.spec.ts` (GRP-2, CLIENT-GROUP-SESSION-4, 10 `test()`s)
 
-Uses `mockOwnedGroup` ("Weekend Tennis Ladder") — the only fixture group where the test user is
-`group_owner`, required for General's Privacy/rules/schedule (owner+admin) and Permission's three
-toggles (owner-only) to all be editable.
+The group Settings tab: three collapsible sections (General, Permission, Sessions), all collapsed by default; Permission has its own Save; Rules and Schedule save when the field loses focus; Leave Group asks first; the Sessions section (regular-session generation). Uses `mockOwnedGroup` ("Weekend Tennis Ladder", the test user is `group_owner`) and `mockGroup` ("Friday Night Football", they only belong to it). Their mock session settings are generation ON, weekly; the owned group has Tuesday 18:00 (90 min) and 20:00 (60 min), a Friday draft (no location, no duration) and a monthly configuration on the 15th (not listed while weekly); the member group has one Tuesday slot.
 
-| Step | What it checks | Notes |
-|---|---|---|
-| 1. sections default-expanded | `General`/`Permission` both `data-state="open"`; collapsing one (General) hides its content but leaves the other's visible | Verifies the two-collapsible-section split, added when this ticket was extended mid-session |
-| 2. edit General (rules) + Permission (a toggle), one shared Save, persists both | Rules textarea + "Allow member invites" toggle both edited → one Save enables/persists both → reload + re-select group + re-open Settings → both still set | Confirms real server round trips via `PUT /api/groups/:groupId` (rules — no handler existed for this endpoint before this ticket, Privacy's own e2e coverage never exercised it either) and `PUT /api/groups/:groupId/settings` (toggle) |
-| 3. tab-switch guard, Discard | Rules edited further (unsaved) → click Posts tab → Discard/Save dialog appears → Discard → lands on Posts tab; re-opening Settings shows step 2's saved value untouched | Covers the guard's in-page tab-switch trigger, now from a General-section edit rather than Permission |
-| 4. in-app-nav guard, Save | Toggle off again (unsaved) → click Home in `NavTabs` → dialog appears, URL still `/groups` (blocked) → Save changes → proceeds to `/` | Covers the `useBlocker`-backed in-app-navigation trigger (requires the data router, ROUTER-1) |
+| Test | What it checks |
+|---|---|
+| every section starts collapsed | `General`, `Permission` and `Sessions` are `data-state="closed"`, none of their content shows, Leave/Delete (outside the sections) do; opening General leaves Permission closed; opening it again collapses it |
+| Permission Save, rules on blur, the guard (5 steps) | 1. Save is inside Permission, disabled until a toggle changes, and sends only `{ allowMemberInvites: true }`. 2. Rules: filling then Tab sends the partial `{ rules }` to `generalData` (no Save button), persists across a reload. 3. Typing and switching tab at once saves the field and raises no dialog. 4. A forced 403 on the rules save shows "Only the group owner or an admin can do this." under the field, keeps the text, and leaving then asks Discard/Save (Discard reverts). 5. In-app navigation with an unsaved Permission toggle is blocked by the dialog, "Save changes" saves and proceeds to `/` |
+| a member sees no Save | General and Permission opened as a member: no Save, no editable Rules, no toggles, "Only the owner can change these." |
+| Leave Group asks first | The click alone sends nothing; the dialog "Leave this group?" with its body; Stay and Escape send nothing; "Leave" sends `DELETE .../leave` once |
+| Sessions: the list | The pill reads "Regular sessions: On", the recurrence is Weekly, Add is disabled; one collapsed section per weekday with its count ("Tuesday (2)", "Friday (1)"), the monthly 15th not listed; collapsed slots read "18:00–19:30" and "20:00–21:00" with "Riverside Courts", the draft shows "Draft", "No location", "No duration"; a day opened shows a disabled Edit and an enabled Delete per slot |
+| Sessions: delete | The dialog names the slot ("The session on Tuesday at 20:00 ..."); "Keep it" sends nothing; "Delete" sends `DELETE .../recurrences/2` and leaves "Tuesday (1)" with only the 18:00 slot |
+| Sessions: the mode | Choosing Monthly asks ("not usable until you switch back"); Stay keeps Weekly; "Got it" sends `{ mode: 'MONTHLY' }`, and the list becomes "15th (1)" with no Tuesday |
+| Sessions: ON and OFF | OFF shows its three choices and "Hold on" sends nothing; "No, cancel the remaining sessions and turn off" sends `{ enabled: false, cancelScheduled: true }` and hides the recurrence, Add and the list; ON asks too, "Let me check again" sends nothing, "Got it, turn on" sends `{ enabled: true }` and the list returns; "Yes, keep them and turn off" sends `{ enabled: false, cancelScheduled: false }` |
+| Sessions: a member | Plain text instead of the switch and the mode, no Add, the hint, the list readable, no Edit or Delete |
+| Sessions: failures | A forced 403 `SESSION_GROUP_ADMIN_REQUIRED` on the switch shows "Only the group owner or an admin can do that." (no server prose) and the switch stays On; a forced 404 `SESSION_RECURRENCE_NOT_FOUND` on a delete shows "This configuration no longer exists." and the list is unchanged |
 
-**Not covered here** (see `useSettingsUnsavedGuard.test.tsx`/`GroupSettingsTab.test.tsx` for these instead):
-the guard's third trigger (`beforeunload` on browser close/refresh/typed-URL nav) — that can only ever
-show the browser's own native prompt, nothing a Playwright assertion can meaningfully exercise; admin/
-member read-only rendering of the three toggles and rules/schedule (pure component-level concern, no
-real navigation involved); independent single-section saves (rules-only, toggle-only) — covered at the
-hook level in `useSettingsUnsavedGuard.test.tsx` instead of duplicating here.
+**Not covered here** (see `useSettingsUnsavedGuard.test.tsx` / `GroupSettingsTab.test.tsx` / `GroupSessionsConfigSection.test.tsx`): the guard's third trigger (`beforeunload`, the browser's own prompt), a cancel that really removes sessions from the Sessions tab (the mock has no regular sessions; `useGroupSessionsConfigData.test.tsx` covers the refresh), and the Add and Edit forms (CLIENT-GROUP-SESSION-5).
 
 ### `e2e/flows/group-members.spec.ts` (GRP-3, GRP-4, 2 `test()`s)
 
@@ -1234,9 +1233,9 @@ The group module's coded errors (A11) localized from the error code. Each server
 | Join Group modal | Request to join with a forced 409 `GROUP_JOIN_REQUEST_ALREADY_PENDING`: the error pop-up reads "You've already asked to join this group. It's waiting for approval.", "Got it" closes it, and the Join Group modal stays open with no inline alert. The sport filter is narrowed to Pickleball first, because the MSW search reads a single `sportId`. |
 | Create group, name taken | Forced 409 `GROUP_NAME_TAKEN`: the form alert reads "A group with this name already exists. Pick another name." and the typed name is kept. |
 | Delete group | Forced 403 `GROUP_OWNER_REQUIRED`: the confirm dialog's alert reads "Only the group owner can do this." and the dialog stays open. |
-| Settings save | Toggle a permission, Save with a forced 403 `GROUP_OWNER_REQUIRED`: the save alert reads "Only the group owner can do this." and the toggle stays pressed (draft kept). |
-| Privacy toggle | Forced 403 `GROUP_ADMIN_REQUIRED`: the privacy alert reads "Only the group owner or an admin can do this." |
-| Leave group | As a plain member, Leave with a forced 400 `GROUP_OWNER_CANNOT_LEAVE`: the tab's alert reads "The owner can't leave the group. Transfer ownership first." |
+| Settings save | Open Permission (sections start collapsed), toggle a permission, Save with a forced 403 `GROUP_OWNER_REQUIRED`: the save alert reads "Only the group owner can do this." and the toggle stays pressed (draft kept). |
+| Privacy toggle | Open General first, then a forced 403 `GROUP_ADMIN_REQUIRED`: the privacy alert reads "Only the group owner or an admin can do this." |
+| Leave group | As a plain member, Leave Group, then "Leave" in the confirmation, with a forced 400 `GROUP_OWNER_CANNOT_LEAVE`: the tab's alert reads "The owner can't leave the group. Transfer ownership first." |
 | Decline a join request | Forced 404 `GROUP_JOIN_REQUEST_NOT_FOUND`: the error dialog reads "This join request no longer exists.", no toast; "Got it" closes it. |
 | Withdraw a sent invitation | Forced 403 `GROUP_INVITER_ONLY`: the error dialog reads "You can only cancel invitations you sent." |
 | Accept an invitation, group full | Forced 400 `GROUP_MEMBER_CAPACITY_REACHED` with `{max: 30}`: the error dialog reads "This group is full (up to 30 members)." |
