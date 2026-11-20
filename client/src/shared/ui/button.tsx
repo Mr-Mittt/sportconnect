@@ -21,9 +21,9 @@ const buttonVariants = cva(
         primary: 'bg-accent-solid text-white hover:opacity-90',
       },
       size: {
-        default: 'h-9 px-3',
+        default: 'h-8 px-3',
         sm: 'h-8 px-2',
-        icon: 'size-9',
+        icon: 'size-8',
       },
     },
     defaultVariants: {
