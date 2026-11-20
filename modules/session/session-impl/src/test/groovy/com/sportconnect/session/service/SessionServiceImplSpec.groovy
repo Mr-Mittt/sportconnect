@@ -18,7 +18,6 @@ import com.sportconnect.session.access.SessionShareGate
 import com.sportconnect.session.api.dto.CancelSessionRequest
 import com.sportconnect.session.api.dto.CreateSessionRequest
 import com.sportconnect.session.api.dto.FeeType
-import com.sportconnect.session.api.dto.GroupSessionBucket
 import com.sportconnect.session.api.dto.GroupAudience
 import com.sportconnect.session.api.dto.ParticipantStatus
 import com.sportconnect.session.api.dto.RejectParticipantRequest
@@ -941,7 +940,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.getGroupSessions(5L, userId, null, pageable)
+        sessionService.getGroupSessions(5L, userId, pageable)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> true
@@ -954,7 +953,7 @@ class SessionServiceImplSpec extends Specification {
         def pageable = PageRequest.of(0, 10)
 
         when:
-        sessionService.getGroupSessions(5L, userId, null, pageable)
+        sessionService.getGroupSessions(5L, userId, pageable)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> false
@@ -963,59 +962,310 @@ class SessionServiceImplSpec extends Specification {
         0 * sessionRepository.findByGroupId(*_)
     }
 
-    // -- SESSION-GROUP-2: a group's sessions by bucket ---------------------------------------------------------------
+    // -- SESSION-GROUP-12: a group's sessions by status (today, later, history) --------------------------------------
 
-    def "getGroupSessions with a bucket asks only for that bucket's statuses, in the fixed order, ignoring the caller's own sort"() {
-        given:
-        def userId = UUID.randomUUID()
-        def callerPage = PageRequest.of(2, 10, Sort.by("title").descending())
-
-        when:
-        sessionService.getGroupSessions(5L, userId, bucket, callerPage)
-
-        then:
-        1 * groupService.isGroupMember(5L, userId) >> true
-        (newestFirst ? 0 : 1) * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(5L, statuses,
-                { Pageable p -> p.pageNumber == 2 && p.pageSize == 10 && p.sort.unsorted }) >> new PageImpl([])
-        (newestFirst ? 1 : 0) * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(5L, statuses,
-                { Pageable p -> p.pageNumber == 2 && p.pageSize == 10 && p.sort.unsorted }) >> new PageImpl([])
-        0 * sessionRepository.findByGroupId(*_)
-
-        where:
-        bucket                        | statuses                                          | newestFirst
-        GroupSessionBucket.ONGOING    | [SessionStatus.ONGOING]                           | false
-        GroupSessionBucket.SCHEDULED  | [SessionStatus.SCHEDULED]                         | false
-        GroupSessionBucket.PREPARING  | [SessionStatus.PREPARING]                         | false
-        GroupSessionBucket.HISTORY    | [SessionStatus.COMPLETED, SessionStatus.CANCELLED] | true
-    }
-
-    def "getGroupSessions without a bucket keeps every status and the caller's own paging and sort"() {
+    def "getGroupSessions keeps every status and the caller's own paging and sort"() {
         given:
         def userId = UUID.randomUUID()
         def pageable = PageRequest.of(0, 10, Sort.by("title"))
 
         when:
-        sessionService.getGroupSessions(5L, userId, null, pageable)
+        sessionService.getGroupSessions(5L, userId, pageable)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> true
         1 * sessionRepository.findByGroupId(5L, pageable) >> new PageImpl([])
-        0 * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartAsc(*_)
-        0 * sessionRepository.findByGroupIdAndStatusInOrderByScheduledStartDesc(*_)
     }
 
-    def "getGroupSessions with a bucket still refuses a non-member before any query"() {
+    def "the group list endpoints refuse a non-member before any query or validation"() {
         given:
         def userId = UUID.randomUUID()
 
         when:
-        sessionService.getGroupSessions(5L, userId, GroupSessionBucket.HISTORY, PageRequest.of(0, 10))
+        call.call(sessionService, userId)
 
         then:
         1 * groupService.isGroupMember(5L, userId) >> false
         def e = thrown(ForbiddenException)
         e.errorCode == 'SESSION_GROUP_MEMBER_REQUIRED'
         0 * sessionRepository._
+
+        where:
+        call << [
+                { SessionServiceImpl s, UUID u -> s.getGroupTodaySessions(5L, u, [], "UTC", PageRequest.of(0, 10)) },
+                { SessionServiceImpl s, UUID u -> s.getGroupLaterSessions(5L, u, [SessionStatus.ONGOING], "UTC", PageRequest.of(0, 10)) },
+                { SessionServiceImpl s, UUID u -> s.getGroupHistoryDates(5L, u, [], null, 0, "Not/AZone") },
+                { SessionServiceImpl s, UUID u -> s.getGroupHistorySessions(5L, u, LocalDate.now(), [], "UTC", PageRequest.of(0, 10)) }
+        ]
+    }
+
+    def "getGroupTodaySessions asks for today's [start, end of day) in the viewer's zone with the fixed order and a capped page"() {
+        given:
+        def userId = UUID.randomUUID()
+        def callerPage = PageRequest.of(1, 500, Sort.by("title").descending())
+
+        when:
+        sessionService.getGroupTodaySessions(5L, userId, [SessionStatus.ONGOING, SessionStatus.SCHEDULED], zone, callerPage)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.findGroupSessionsToday(5L, [SessionStatus.ONGOING, SessionStatus.SCHEDULED],
+                Instant.parse(dayStart), Instant.parse(dayEnd),
+                SessionStatus.ONGOING, SessionStatus.SCHEDULED, SessionStatus.PREPARING, SessionStatus.COMPLETED,
+                { Pageable p -> p.pageNumber == 1 && p.pageSize == 100 && p.sort.unsorted }) >> new PageImpl([])
+
+        where:
+        zone                | dayStart               | dayEnd
+        "UTC"               | "2026-11-17T00:00:00Z" | "2026-11-18T00:00:00Z"
+        "Asia/Ho_Chi_Minh"  | "2026-11-16T17:00:00Z" | "2026-11-17T17:00:00Z"
+    }
+
+    def "getGroupTodaySessions reads today in the viewer's zone, not the server's (it is already the 18th in Ho Chi Minh)"() {
+        given:
+        sessionService.clock = Clock.fixed(Instant.parse("2026-11-17T20:00:00Z"), ZoneOffset.UTC)
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getGroupTodaySessions(5L, userId, [SessionStatus.ONGOING], "Asia/Ho_Chi_Minh", PageRequest.of(0, 50))
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.findGroupSessionsToday(5L, _, Instant.parse("2026-11-17T17:00:00Z"),
+                Instant.parse("2026-11-18T17:00:00Z"), *_) >> new PageImpl([])
+    }
+
+    def "getGroupTodaySessions serves all five statuses and refuses none or an empty list"() {
+        given:
+        def userId = UUID.randomUUID()
+        groupService.isGroupMember(5L, userId) >> true
+
+        when:
+        sessionService.getGroupTodaySessions(5L, userId, SessionStatus.values().toList(), "UTC", PageRequest.of(0, 50))
+
+        then:
+        1 * sessionRepository.findGroupSessionsToday(5L, SessionStatus.values().toList(), *_) >> new PageImpl([])
+
+        when:
+        sessionService.getGroupTodaySessions(5L, userId, statuses, "UTC", PageRequest.of(0, 50))
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository.findGroupSessionsToday(*_)
+
+        where:
+        statuses << [null, []]
+    }
+
+    def "getGroupTodaySessions rejects an invalid viewerZoneId"() {
+        given:
+        def userId = UUID.randomUUID()
+        groupService.isGroupMember(5L, userId) >> true
+
+        when:
+        sessionService.getGroupTodaySessions(5L, userId, [SessionStatus.ONGOING], "Not/AZone", PageRequest.of(0, 50))
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository.findGroupSessionsToday(*_)
+    }
+
+    def "getGroupLaterSessions asks from the start of tomorrow in the viewer's zone, soonest first, the caller's sort ignored"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getGroupLaterSessions(5L, userId, [SessionStatus.PREPARING, SessionStatus.CANCELLED], zone,
+                PageRequest.of(2, 10, Sort.by("title")))
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.findGroupSessionsLater(5L, [SessionStatus.PREPARING, SessionStatus.CANCELLED],
+                Instant.parse(from), { Pageable p -> p.pageNumber == 2 && p.pageSize == 10 && p.sort.unsorted }) >> new PageImpl([])
+
+        where:
+        zone               | from
+        "UTC"              | "2026-11-18T00:00:00Z"
+        "Asia/Ho_Chi_Minh" | "2026-11-17T17:00:00Z"
+    }
+
+    def "getGroupLaterSessions serves only PREPARING, SCHEDULED and CANCELLED"() {
+        given:
+        def userId = UUID.randomUUID()
+        groupService.isGroupMember(5L, userId) >> true
+
+        when:
+        sessionService.getGroupLaterSessions(5L, userId, statuses, "UTC", PageRequest.of(0, 20))
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository.findGroupSessionsLater(*_)
+
+        where:
+        statuses << [null, [], [SessionStatus.ONGOING], [SessionStatus.SCHEDULED, SessionStatus.COMPLETED]]
+    }
+
+    def "getGroupHistoryDates reads the 30 days that end yesterday, groups in the viewer's zone and says what lies before"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        def result = sessionService.getGroupHistoryDates(5L, userId, [SessionStatus.COMPLETED], null, 30, zone)
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.findGroupHistoryDateCounts(5L, ["COMPLETED"], zone, Instant.parse(windowStart),
+                Instant.parse(windowEnd)) >> [stubDateCount(LocalDate.of(2026, 11, 16), 2L), stubDateCount(LocalDate.of(2026, 11, 3), 1L)]
+        1 * sessionRepository.existsGroupSessionEndingBefore(5L, [SessionStatus.COMPLETED], Instant.parse(windowStart)) >> true
+        result.dates*.date == [LocalDate.of(2026, 11, 16), LocalDate.of(2026, 11, 3)]
+        result.dates*.count == [2L, 1L]
+        result.hasMore
+        result.nextBefore == LocalDate.of(2026, 10, 18)
+
+        where:
+        zone               | windowStart            | windowEnd
+        "UTC"              | "2026-10-18T00:00:00Z" | "2026-11-17T00:00:00Z"
+        "Asia/Ho_Chi_Minh" | "2026-10-17T17:00:00Z" | "2026-11-16T17:00:00Z"
+    }
+
+    def "getGroupHistoryDates pages back from the cursor and reports an empty window with nothing older"() {
+        given:
+        def userId = UUID.randomUUID()
+        groupService.isGroupMember(5L, userId) >> true
+
+        when:
+        def result = sessionService.getGroupHistoryDates(5L, userId, [SessionStatus.COMPLETED, SessionStatus.CANCELLED],
+                LocalDate.of(2026, 10, 18), 30, "UTC")
+
+        then:
+        1 * sessionRepository.findGroupHistoryDateCounts(5L, ["COMPLETED", "CANCELLED"], "UTC",
+                Instant.parse("2026-09-18T00:00:00Z"), Instant.parse("2026-10-18T00:00:00Z")) >> []
+        1 * sessionRepository.existsGroupSessionEndingBefore(5L, _, Instant.parse("2026-09-18T00:00:00Z")) >> false
+        result.dates.isEmpty()
+        !result.hasMore
+        result.nextBefore == LocalDate.of(2026, 9, 18)
+    }
+
+    def "getGroupHistoryDates never reads past today, and cuts the window to 90 days"() {
+        given:
+        def userId = UUID.randomUUID()
+        groupService.isGroupMember(5L, userId) >> true
+
+        when:
+        sessionService.getGroupHistoryDates(5L, userId, [SessionStatus.COMPLETED], LocalDate.of(2027, 1, 1), 1000, "UTC")
+
+        then:
+        1 * sessionRepository.findGroupHistoryDateCounts(5L, _, "UTC",
+                Instant.parse("2026-08-19T00:00:00Z"), Instant.parse("2026-11-17T00:00:00Z")) >> []
+        1 * sessionRepository.existsGroupSessionEndingBefore(*_) >> false
+    }
+
+    def "getGroupHistoryDates rejects a bad status list or days"() {
+        given:
+        def userId = UUID.randomUUID()
+        groupService.isGroupMember(5L, userId) >> true
+
+        when:
+        sessionService.getGroupHistoryDates(5L, userId, statuses, null, days, "UTC")
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository.findGroupHistoryDateCounts(*_)
+
+        where:
+        statuses                                         | days
+        null                                             | 30
+        []                                               | 30
+        [SessionStatus.SCHEDULED]                        | 30
+        [SessionStatus.COMPLETED, SessionStatus.ONGOING] | 30
+        [SessionStatus.COMPLETED]                        | 0
+        [SessionStatus.COMPLETED]                        | -5
+    }
+
+    def "getGroupHistorySessions asks for one end date as the viewer's day, newest end first, the caller's sort ignored"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getGroupHistorySessions(5L, userId, LocalDate.of(2026, 11, 16), [SessionStatus.CANCELLED], zone,
+                PageRequest.of(1, 5, Sort.by("title")))
+
+        then:
+        1 * groupService.isGroupMember(5L, userId) >> true
+        1 * sessionRepository.findGroupSessionsEndingOn(5L, [SessionStatus.CANCELLED], Instant.parse(dayStart),
+                Instant.parse(dayEnd), { Pageable p -> p.pageNumber == 1 && p.pageSize == 5 && p.sort.unsorted }) >> new PageImpl([])
+
+        where:
+        zone               | dayStart               | dayEnd
+        "UTC"              | "2026-11-16T00:00:00Z" | "2026-11-17T00:00:00Z"
+        "Asia/Ho_Chi_Minh" | "2026-11-15T17:00:00Z" | "2026-11-16T17:00:00Z"
+    }
+
+    def "getGroupHistorySessions refuses today, a later date and a bad status list"() {
+        given:
+        def userId = UUID.randomUUID()
+        groupService.isGroupMember(5L, userId) >> true
+
+        when:
+        sessionService.getGroupHistorySessions(5L, userId, date, statuses, "UTC", PageRequest.of(0, 20))
+
+        then:
+        thrown(BadRequestException)
+        0 * sessionRepository.findGroupSessionsEndingOn(*_)
+
+        where:
+        date                       | statuses
+        LocalDate.of(2026, 11, 17) | [SessionStatus.COMPLETED]
+        LocalDate.of(2026, 11, 20) | [SessionStatus.COMPLETED]
+        LocalDate.of(2026, 11, 16) | []
+        LocalDate.of(2026, 11, 16) | [SessionStatus.ONGOING]
+    }
+
+    // -- SESSION-GROUP-12: a list shows a group session only while the caller is a member of the active group --------
+
+    def "the caller's own session lists are limited to their active groups, asked once per request"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        call.call(sessionService, userId)
+
+        then:
+        1 * groupService.getActiveGroupIdsForMember(userId) >> [5L, 9L]
+        1 * sessionRepository."$repoMethod"(*_) >> { args -> assert args[args.size() - 2] == [5L, 9L]; new PageImpl([]) }
+
+        where:
+        repoMethod                  | call
+        'findUpcomingSessions'      | { SessionServiceImpl s, UUID u -> s.getUpcomingSessions(u, null, null, null, PageRequest.of(0, 20)) }
+        'findUpcomingSessionsByDate' | { SessionServiceImpl s, UUID u -> s.getUpcomingSessions(u, LocalDate.of(2026, 9, 20), null, null, PageRequest.of(0, 20)) }
+        'findUpcomingSessions'      | { SessionServiceImpl s, UUID u -> s.getRequestedSessions(u, PageRequest.of(0, 20)) }
+        'findHistorySessionsByDate' | { SessionServiceImpl s, UUID u -> s.getSessionHistory(u, LocalDate.of(2026, 9, 14), null, 7L, PageRequest.of(0, 20)) }
+    }
+
+    def "getSessionHistoryDates is limited to the caller's active groups too"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getSessionHistoryDates(userId, 5, null, null, 7L)
+
+        then:
+        1 * groupService.getActiveGroupIdsForMember(userId) >> [5L, 9L]
+        1 * sessionRepository.findHistoryDateCounts(_, userId, _, _, _, 7L, [5L, 9L], 6) >> []
+    }
+
+    def "a caller in no active group gets the never-matching sentinel, not an empty IN list"() {
+        given:
+        def userId = UUID.randomUUID()
+
+        when:
+        sessionService.getUpcomingSessions(userId, null, null, null, PageRequest.of(0, 20))
+
+        then:
+        1 * groupService.getActiveGroupIdsForMember(userId) >> groupIds
+        1 * sessionRepository.findUpcomingSessions(*_) >> { args -> assert args[6] == [-1L]; new PageImpl([]) }
+
+        where:
+        groupIds << [[], null]
     }
 
     def "updateSession allows the creator of a standalone session"() {
@@ -1178,6 +1428,28 @@ class SessionServiceImplSpec extends Specification {
         interaction { stubBatchEnrichment() }
         result.status == SessionStatus.CANCELLED
         result.cancelReason == "Rained out"
+    }
+
+    // SESSION-GROUP-12: a cancelled session always has an end time (its start when it had none).
+    def "cancelSession gives a session without a duration an end equal to its start, and keeps an end it has"() {
+        given:
+        def userId = UUID.randomUUID()
+        def start = Instant.parse("2026-11-25T10:00:00Z")
+        def end = Instant.parse("2026-11-25T12:00:00Z")
+        def noEnd = Session.builder().id(1L).createdBy(userId).status(SessionStatus.PREPARING).scheduledStart(start).build()
+        def withEnd = Session.builder().id(2L).createdBy(userId).status(SessionStatus.SCHEDULED).scheduledStart(start).scheduledEndAt(end).build()
+
+        when:
+        sessionService.cancelSession(1L, userId, null)
+        sessionService.cancelSession(2L, userId, null)
+
+        then:
+        1 * sessionRepository.findById(1L) >> Optional.of(noEnd)
+        1 * sessionRepository.findById(2L) >> Optional.of(withEnd)
+        2 * sessionRepository.save(_) >> { Session s -> s }
+        interaction { stubBatchEnrichment() }
+        noEnd.scheduledEndAt == start
+        withEnd.scheduledEndAt == end
     }
 
     def "cancelSession for a group-linked session requires canManageMembers"() {
@@ -2617,7 +2889,7 @@ class SessionServiceImplSpec extends Specification {
                 userId,
                 [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                null, pageable) >> new PageImpl([])
+                null, [-1L], pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessionsByDate(*_)
     }
 
@@ -2631,7 +2903,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findUpcomingSessions(*_) >> { args ->
-            Pageable used = args[6]
+            Pageable used = args[7]
             assert used.pageNumber == 1
             assert used.pageSize == 5
             assert used.sort.isUnsorted()
@@ -2656,7 +2928,7 @@ class SessionServiceImplSpec extends Specification {
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
-                null, pageable) >> new PageImpl([])
+                null, [-1L], pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessions(*_)
     }
 
@@ -2678,7 +2950,7 @@ class SessionServiceImplSpec extends Specification {
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
-                null, pageable) >> new PageImpl([])
+                null, [-1L], pageable) >> new PageImpl([])
     }
 
     def "getUpcomingSessions rejects an invalid viewerZoneId"() {
@@ -2713,7 +2985,7 @@ class SessionServiceImplSpec extends Specification {
                 userId,
                 [ParticipantStatus.JOINED, ParticipantStatus.INVITED],
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                7L, pageable) >> new PageImpl([])
+                7L, [-1L], pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessionsByDate(*_)
     }
 
@@ -2734,7 +3006,7 @@ class SessionServiceImplSpec extends Specification {
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
-                7L, pageable) >> new PageImpl([])
+                7L, [-1L], pageable) >> new PageImpl([])
         0 * sessionRepository.findUpcomingSessions(*_)
     }
 
@@ -2759,7 +3031,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.getRequestedSessions(userId, PageRequest.of(0, 20))
 
         then:
-        1 * sessionRepository.findUpcomingSessions(_, userId, [ParticipantStatus.REQUESTED], _, _, null, _) >>
+        1 * sessionRepository.findUpcomingSessions(_, userId, [ParticipantStatus.REQUESTED], _, _, null, _, _) >>
                 new PageImpl([])
     }
 
@@ -2777,7 +3049,7 @@ class SessionServiceImplSpec extends Specification {
                 userId,
                 [ParticipantStatus.REQUESTED],
                 SessionStatus.PREPARING, SessionStatus.SCHEDULED,
-                null, pageable) >> new PageImpl([])
+                null, [-1L], pageable) >> new PageImpl([])
     }
 
     def "getRequestedSessions strips any client-supplied sort, keeping only page/size"() {
@@ -2790,7 +3062,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findUpcomingSessions(*_) >> { args ->
-            Pageable used = args[6]
+            Pageable used = args[7]
             assert used.pageNumber == 1
             assert used.pageSize == 5
             assert used.sort.isUnsorted()
@@ -2813,7 +3085,7 @@ class SessionServiceImplSpec extends Specification {
                 userId, ParticipantStatus.JOINED,
                 date.atStartOfDay(ZoneId.of("UTC")).toInstant(),
                 date.plusDays(1).atStartOfDay(ZoneId.of("UTC")).toInstant(),
-                7L, pageable) >> new PageImpl([])
+                7L, [-1L], pageable) >> new PageImpl([])
     }
 
     def "getSessionHistory with a viewerZoneId narrows to that calendar day in the given zone"() {
@@ -2832,7 +3104,7 @@ class SessionServiceImplSpec extends Specification {
                 userId, ParticipantStatus.JOINED,
                 date.atStartOfDay(zone).toInstant(),
                 date.plusDays(1).atStartOfDay(zone).toInstant(),
-                7L, pageable) >> new PageImpl([])
+                7L, [-1L], pageable) >> new PageImpl([])
     }
 
     def "getSessionHistory rejects an invalid viewerZoneId"() {
@@ -2860,7 +3132,7 @@ class SessionServiceImplSpec extends Specification {
 
         then:
         1 * sessionRepository.findHistorySessionsByDate(*_) >> { args ->
-            Pageable used = args[6]
+            Pageable used = args[7]
             assert used.pageNumber == 2
             assert used.pageSize == 10
             assert used.sort.isUnsorted()
@@ -2878,7 +3150,7 @@ class SessionServiceImplSpec extends Specification {
         then:
         1 * sessionRepository.findHistoryDateCounts(
                 [SessionStatus.CANCELLED.name(), SessionStatus.COMPLETED.name()],
-                userId, ParticipantStatus.JOINED.name(), null, "UTC", 7L, 4) >> [
+                userId, ParticipantStatus.JOINED.name(), null, "UTC", 7L, [-1L], 4) >> [
                 stubDateCount(LocalDate.of(2026, 9, 14), 2L),
                 stubDateCount(LocalDate.of(2026, 9, 10), 1L)
         ]
@@ -2896,7 +3168,7 @@ class SessionServiceImplSpec extends Specification {
         def result = sessionService.getSessionHistoryDates(userId, 2, null, null, 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, _, 7L, 3) >> [
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, _, 7L, _, 3) >> [
                 stubDateCount(LocalDate.of(2026, 9, 14), 2L),
                 stubDateCount(LocalDate.of(2026, 9, 10), 1L),
                 stubDateCount(LocalDate.of(2026, 9, 5), 1L)
@@ -2914,7 +3186,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.getSessionHistoryDates(userId, 5, before, null, 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, userId, _, before, _, 7L, 6) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, userId, _, before, _, 7L, _, 6) >> []
     }
 
     def "getSessionHistoryDates defaults to UTC when viewerZoneId is omitted"() {
@@ -2925,7 +3197,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.getSessionHistoryDates(userId, 5, null, null, 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "UTC", 7L, _) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "UTC", 7L, _, _) >> []
     }
 
     def "getSessionHistoryDates passes a valid viewerZoneId through to the repository"() {
@@ -2936,7 +3208,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.getSessionHistoryDates(userId, 5, null, "America/Los_Angeles", 7L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "America/Los_Angeles", 7L, _) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, _, _, _, "America/Los_Angeles", 7L, _, _) >> []
     }
 
     def "getSessionHistory passes the sportId through to findHistorySessionsByDate"() {
@@ -2948,7 +3220,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.getSessionHistory(userId, date, null, 42L, PageRequest.of(0, 20))
 
         then:
-        1 * sessionRepository.findHistorySessionsByDate(_, userId, _, _, _, 42L, _) >> new PageImpl([])
+        1 * sessionRepository.findHistorySessionsByDate(_, userId, _, _, _, 42L, _, _) >> new PageImpl([])
         0 * sportService._
     }
 
@@ -2960,7 +3232,7 @@ class SessionServiceImplSpec extends Specification {
         sessionService.getSessionHistoryDates(userId, 5, null, null, 42L)
 
         then:
-        1 * sessionRepository.findHistoryDateCounts(_, userId, _, _, _, 42L, _) >> []
+        1 * sessionRepository.findHistoryDateCounts(_, userId, _, _, _, 42L, _, _) >> []
         0 * sportService._
     }
 

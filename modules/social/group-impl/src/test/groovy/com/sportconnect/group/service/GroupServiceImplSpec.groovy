@@ -953,6 +953,29 @@ class GroupServiceImplSpec extends Specification {
         result == false
     }
 
+    // SESSION-GROUP-12: the batch form of isGroupMember (active groups only), used to hide a left group's sessions.
+    def "getActiveGroupIdsForMember returns the ids of the user's active groups from one repository call"() {
+        when:
+        def result = groupService.getActiveGroupIdsForMember(userId)
+
+        then: "one ids-only query for active groups; no per-group lookup, no entity load"
+        1 * groupMemberRepository.findActiveGroupIdsByUserId(userId) >> [3L, 8L]
+        0 * groupMemberRepository.findByUserId(_)
+        0 * groupRepository._
+
+        and:
+        result == [3L, 8L]
+    }
+
+    def "getActiveGroupIdsForMember is empty for a user in no active group"() {
+        when:
+        def result = groupService.getActiveGroupIdsForMember(userId)
+
+        then:
+        1 * groupMemberRepository.findActiveGroupIdsByUserId(userId) >> []
+        result == []
+    }
+
     def "getMemberUserIds returns the ids of every member of an active group in one repository call"() {
         given:
         def ids = [UUID.randomUUID(), UUID.randomUUID()]

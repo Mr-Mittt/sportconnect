@@ -5,7 +5,7 @@ import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
-import com.sportconnect.session.api.dto.GroupSessionBucket;
+import com.sportconnect.session.api.dto.GroupSessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
@@ -108,29 +108,97 @@ public class SessionController {
         return ResponseEntity.ok(ApiResponse.success("Session retrieved successfully", response));
     }
 
-    @Operation(summary = "List a group's sessions", description = "SESSION-40: member-only regardless of the group's own public/private flag (widened 2026-09-22 from the previous private-group-only gate, which left a public group's sessions listable by any authenticated user). SESSION-GROUP-2: optional bucket = ONGOING | SCHEDULED | PREPARING | HISTORY (COMPLETED and CANCELLED, newest first) narrows to that bucket's statuses in a fixed order (soonest start first); the caller's own sort is ignored when a bucket is given. Omitted = every status, as before.")
+    @Operation(summary = "List a group's sessions", description = "SESSION-40: member-only regardless of the group's own public/private flag (widened 2026-09-22 from the previous private-group-only gate, which left a public group's sessions listable by any authenticated user). Every status, in the caller's own sort. SESSION-GROUP-12: the SESSION-GROUP-2 bucket parameter is gone; the group Sessions tab reads /today, /later, /history/dates and /history below.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "bucket is not one of the four values"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not a member of this group (SESSION_GROUP_MEMBER_REQUIRED)")
     })
     @GetMapping("/group/{groupId}")
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ApiResponse<Page<SessionResponse>>> getGroupSessions(
             @PathVariable Long groupId,
-            @RequestParam(required = false) String bucket,
             Authentication authentication,
             Pageable pageable) {
-        GroupSessionBucket parsedBucket = null;
-        if (bucket != null) {
-            try {
-                parsedBucket = GroupSessionBucket.valueOf(bucket.trim().toUpperCase(java.util.Locale.ROOT));
-            } catch (IllegalArgumentException e) {
-                throw invalidRequest("bucket must be one of ONGOING, SCHEDULED, PREPARING, HISTORY");
-            }
-        }
         Page<SessionResponse> response = sessionService.getGroupSessions(
-                groupId, SecurityUtils.extractUserId(authentication), parsedBucket, pageable);
+                groupId, SecurityUtils.extractUserId(authentication), pageable);
+        return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
+    @Operation(summary = "A group's sessions playing today", description = "SESSION-GROUP-12: sessions whose playing time overlaps today in viewerZoneId (a session that started yesterday and ends today or tomorrow counts; one with no end ends at its start), filtered by the repeatable status (any of PREPARING, SCHEDULED, ONGOING, COMPLETED, CANCELLED; required). Order: ONGOING, SCHEDULED, PREPARING, COMPLETED, CANCELLED, then start; the caller's own sort is ignored; page size defaults to 50, at most 100. Members only.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "status or viewerZoneId missing or invalid"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not a member of this group (SESSION_GROUP_MEMBER_REQUIRED)")
+    })
+    @GetMapping("/group/{groupId}/today")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<SessionResponse>>> getGroupTodaySessions(
+            @PathVariable Long groupId,
+            @RequestParam List<SessionStatus> status,
+            @RequestParam String viewerZoneId,
+            Authentication authentication,
+            @PageableDefault(size = 50) Pageable pageable) {
+        Page<SessionResponse> response = sessionService.getGroupTodaySessions(
+                groupId, SecurityUtils.extractUserId(authentication), status, viewerZoneId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
+    @Operation(summary = "A group's sessions from tomorrow on", description = "SESSION-GROUP-12: sessions starting from the start of tomorrow in viewerZoneId on, filtered by the repeatable status (PREPARING, SCHEDULED or CANCELLED; required), soonest start first; the caller's own sort is ignored. Members only.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "status missing or outside PREPARING, SCHEDULED, CANCELLED, or viewerZoneId missing or invalid"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not a member of this group (SESSION_GROUP_MEMBER_REQUIRED)")
+    })
+    @GetMapping("/group/{groupId}/later")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<SessionResponse>>> getGroupLaterSessions(
+            @PathVariable Long groupId,
+            @RequestParam List<SessionStatus> status,
+            @RequestParam String viewerZoneId,
+            Authentication authentication,
+            @PageableDefault(size = 20) Pageable pageable) {
+        Page<SessionResponse> response = sessionService.getGroupLaterSessions(
+                groupId, SecurityUtils.extractUserId(authentication), status, viewerZoneId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
+    }
+
+    @Operation(summary = "The end dates of a group's finished sessions", description = "SESSION-GROUP-12: the distinct end dates (end = the end time, or the start when there is none; in viewerZoneId) of the group's COMPLETED and/or CANCELLED sessions (repeatable status, required), inside a window of days calendar days (default 30, at most 90) ending the day before before (omitted = today, so the first window ends yesterday; a later before is treated as today), newest first, each with its count. nextBefore is the window's first day: pass it as before for the window before. hasMore: a matching session ends before this window (the window itself may hold no date). Members only.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Dates (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "status missing or outside COMPLETED, CANCELLED, days not positive, or viewerZoneId missing or invalid"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not a member of this group (SESSION_GROUP_MEMBER_REQUIRED)")
+    })
+    @GetMapping("/group/{groupId}/history/dates")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<GroupSessionHistoryDatesResponse>> getGroupHistoryDates(
+            @PathVariable Long groupId,
+            @RequestParam List<SessionStatus> status,
+            @RequestParam(required = false) LocalDate before,
+            @RequestParam(defaultValue = "30") int days,
+            @RequestParam String viewerZoneId,
+            Authentication authentication) {
+        GroupSessionHistoryDatesResponse response = sessionService.getGroupHistoryDates(
+                groupId, SecurityUtils.extractUserId(authentication), status, before, days, viewerZoneId);
+        return ResponseEntity.ok(ApiResponse.success("History dates retrieved successfully", response));
+    }
+
+    @Operation(summary = "A group's finished sessions that ended on one date", description = "SESSION-GROUP-12: the group's COMPLETED and/or CANCELLED sessions (repeatable status, required) whose end (the end time, or the start when there is none) falls on date in viewerZoneId, newest end first; the caller's own sort is ignored. date must be before today (today's are in /today). Members only.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Sessions (possibly empty)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "status missing or outside COMPLETED, CANCELLED, date not before today, or viewerZoneId missing or invalid"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Caller is not a member of this group (SESSION_GROUP_MEMBER_REQUIRED)")
+    })
+    @GetMapping("/group/{groupId}/history")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<Page<SessionResponse>>> getGroupHistorySessions(
+            @PathVariable Long groupId,
+            @RequestParam LocalDate date,
+            @RequestParam List<SessionStatus> status,
+            @RequestParam String viewerZoneId,
+            Authentication authentication,
+            @PageableDefault(size = 20) Pageable pageable) {
+        Page<SessionResponse> response = sessionService.getGroupHistorySessions(
+                groupId, SecurityUtils.extractUserId(authentication), date, status, viewerZoneId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Sessions retrieved successfully", response));
     }
 

@@ -2,7 +2,7 @@ package com.sportconnect.session.api.service;
 
 import com.sportconnect.session.api.dto.CancelSessionRequest;
 import com.sportconnect.session.api.dto.CreateSessionRequest;
-import com.sportconnect.session.api.dto.GroupSessionBucket;
+import com.sportconnect.session.api.dto.GroupSessionHistoryDatesResponse;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RejectParticipantRequest;
@@ -83,10 +83,55 @@ public interface SessionService {
      * {@code GroupService.isGroupMember} returns false uniformly for all of those, and this
      * deliberately doesn't distinguish them (doesn't leak group existence to a non-member).
      *
-     * <p>SESSION-GROUP-2: {@code bucket} (nullable) narrows to ONGOING, SCHEDULED, PREPARING (its own bucket) or HISTORY
-     * (COMPLETED and CANCELLED, newest first), in a fixed order that ignores the caller's own sort; null = every status.
+     * <p>SESSION-GROUP-12: SESSION-GROUP-2's {@code bucket} parameter is gone; the group's Sessions tab reads
+     * {@link #getGroupTodaySessions}, {@link #getGroupLaterSessions}, {@link #getGroupHistoryDates} and
+     * {@link #getGroupHistorySessions}. This is the plain list, every status, in the caller's own order.
      */
-    Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, GroupSessionBucket bucket, Pageable pageable);
+    Page<SessionResponse> getGroupSessions(Long groupId, UUID currentUserId, Pageable pageable);
+
+    /**
+     * SESSION-GROUP-12 — a group's sessions whose playing time overlaps today in {@code viewerZoneId}, in {@code statuses}
+     * (any of the five): ONGOING, SCHEDULED, PREPARING, COMPLETED, CANCELLED, then start. A session that began yesterday and
+     * ends today or tomorrow is included. Member of the group only (403 {@code SESSION_GROUP_MEMBER_REQUIRED}, the same
+     * answer for a missing or inactive group).
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException for an invalid zone id or an empty status list
+     */
+    Page<SessionResponse> getGroupTodaySessions(
+            Long groupId, UUID currentUserId, List<SessionStatus> statuses, String viewerZoneId, Pageable pageable);
+
+    /**
+     * SESSION-GROUP-12 — a group's sessions starting from tomorrow on (the viewer's zone), in {@code statuses} (PREPARING,
+     * SCHEDULED, CANCELLED only), soonest start first. Same gate as {@link #getGroupTodaySessions}.
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException for an invalid zone id, an empty status list or a status
+     *         other than PREPARING, SCHEDULED, CANCELLED
+     */
+    Page<SessionResponse> getGroupLaterSessions(
+            Long groupId, UUID currentUserId, List<SessionStatus> statuses, String viewerZoneId, Pageable pageable);
+
+    /**
+     * SESSION-GROUP-12 — the distinct end dates (the end being {@code COALESCE(end, start)}, in the viewer's zone) of a
+     * group's COMPLETED and/or CANCELLED sessions, in a window of {@code days} calendar days ending the day before
+     * {@code before} (null = today, so the first window ends yesterday; a later {@code before} is treated as today), each
+     * date with its count, newest first. {@code nextBefore} is the window's first day, to pass as the next {@code before};
+     * {@code hasMore} says a matching session ends before it.
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException for an invalid zone id, an empty status list, a status
+     *         other than COMPLETED or CANCELLED, or {@code days} not positive
+     */
+    GroupSessionHistoryDatesResponse getGroupHistoryDates(
+            Long groupId, UUID currentUserId, List<SessionStatus> statuses, LocalDate before, int days, String viewerZoneId);
+
+    /**
+     * SESSION-GROUP-12 — one end date's COMPLETED and/or CANCELLED sessions of a group, newest end first. {@code date} must
+     * be before today in the viewer's zone (today's are in {@link #getGroupTodaySessions}).
+     *
+     * @throws com.sportconnect.common.exception.BadRequestException for an invalid zone id, an empty status list, a status
+     *         other than COMPLETED or CANCELLED, or a {@code date} that is not before today
+     */
+    Page<SessionResponse> getGroupHistorySessions(
+            Long groupId, UUID currentUserId, LocalDate date, List<SessionStatus> statuses, String viewerZoneId, Pageable pageable);
 
     /**
      * SESSION-27 — every session (standalone or group-linked) where the caller currently has a

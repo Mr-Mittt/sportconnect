@@ -1146,6 +1146,13 @@ public class GroupServiceImpl implements GroupService {
                 .collect(Collectors.toList());
     }
 
+    /** {@inheritDoc} */
+    @Override
+    @Transactional(readOnly = true)
+    public List<Long> getActiveGroupIdsForMember(UUID userId) {
+        return groupMemberRepository.findActiveGroupIdsByUserId(userId);
+    }
+
     // Pinned Posts
 
     @Override
