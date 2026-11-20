@@ -132,9 +132,9 @@ test('Matches journey', async ({ page }) => {
     await expect(sessionInfo).toHaveAttribute('aria-expanded', 'false');
     await expect(dialog.getByText('Jordan Lee', { exact: true })).toHaveCount(0);
     await dialog.getByRole('button', { name: /Players \(1\/10\)/ }).click();
-    // CLIENT-SESSION-30: 24h "start – end" in the header, and the approval mode ahead of the creator.
+    // CLIENT-SESSION-30: 24h "start – end" in the header; the creator line is just the creator (the approval mode is next to Join).
     await expect(dialog.getByText(/Sat, Aug 1 · 19:00 – 21:00/)).toBeVisible();
-    await expect(dialog.getByText('Auto approval. Created by Jordan Lee')).toBeVisible();
+    await expect(dialog.getByText('Created by Jordan Lee')).toBeVisible();
     await expect(dialog.getByText('Jordan Lee', { exact: true })).toBeVisible();
     // The creator doesn't get the plain participant Leave action either (CLIENT-SESSION-10
     // post-ship), so neither Join nor Leave shows.
@@ -520,7 +520,9 @@ test('Matches journey', async ({ page }) => {
     const dialog = page.getByRole('dialog', { name: 'Wednesday scrimmage' });
 
     // mockRequestedSession is autoApprove=false, and the caller's row is REQUESTED.
-    await expect(dialog.getByText(/Need host approval\. Created by/)).toBeVisible();
+    await expect(dialog.getByText(/^Created by /)).toBeVisible();
+    // Already asked to join: the approval hint (shown next to Join) is gone.
+    await expect(dialog.getByText('Need host approval', { exact: true })).toHaveCount(0);
     await expect(dialog.getByText('Waiting for host approval.')).toBeVisible();
 
     // Cancel the request → asks first (CLIENT-GL-51): Keep waiting changes nothing, Cancel withdraws it.

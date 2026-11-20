@@ -182,6 +182,17 @@
     "sending": "Sending…",
     "send": "Send"
   },
+  "sessionShortcut": {
+    "title": "Today's session",
+    "listLabel": "Today's group sessions",
+    "create": "Create a session",
+    "createHint": "for the whole group or some members",
+    "createLabel": "Create a session for this group",
+    "createToday": "No session today. Create one",
+    "loading": "Loading today's sessions",
+    "error": "Couldn't load today's sessions.",
+    "retry": "Try again"
+  },
   "page": {
     "title": "Groups"
   },

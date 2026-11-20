@@ -543,3 +543,35 @@ describe('SessionCard participation questions (CLIENT-GL-51)', () => {
     expect(screen.queryByRole('button', { name: /leave/i })).not.toBeInTheDocument();
   });
 });
+
+describe('SessionCard: a group session (CLIENT-GROUP-SESSION-1)', () => {
+  const render_ = (session: Session) =>
+    render(
+      <SessionCard
+        session={session}
+        sportsByKey={sportsByKey}
+        currentUserId="user-9"
+        onViewDetails={() => {}}
+        onParticipationAction={noopParticipationAction}
+        isParticipationActionPending={noPendingAction}
+      />,
+    );
+
+  it('shows only how many have joined: no capacity, even with a real one', () => {
+    render_(makeSession({ groupId: 5, participantCount: 7, capacity: 12 }));
+    expect(screen.getByText('7 joined')).toBeInTheDocument();
+    expect(screen.queryByText(/7\/12/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/participant/i)).not.toBeInTheDocument();
+  });
+
+  it('hides the gender split of open seats', () => {
+    render_(makeSession({ groupId: 5, maleSlots: 2, femaleSlots: 1 }));
+    expect(screen.queryByText(/Open:/)).not.toBeInTheDocument();
+  });
+
+  it('leaves a standalone session as it was: capacity and the gender split', () => {
+    render_(makeSession({ groupId: null, participantCount: 3, capacity: 10, maleSlots: 2, femaleSlots: 1 }));
+    expect(screen.getByText('3/10 participants')).toBeInTheDocument();
+    expect(screen.getByText(/Open:/)).toBeInTheDocument();
+  });
+});

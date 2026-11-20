@@ -11,9 +11,12 @@ import {
   mockCancelledSession,
   mockDiscoverableSession,
   mockFriend,
+  mockGroup,
+  mockGroupMembers,
   mockGroupSession,
   mockInvitedSession,
   mockLocation,
+  mockOwnedGroup,
   mockOwnedGroupSession,
   mockPreparingSession,
   mockRequestedSession,
@@ -625,6 +628,9 @@ export const sessionHandlers: HttpHandler[] = [
     if (unauthorized) return unauthorized;
     const body = (await request.json()) as {
       groupId?: number;
+      // CLIENT-GROUP-SESSION-1: a group session's audience (`ALL_MEMBERS` by default)
+      audience?: 'ALL_MEMBERS' | 'SPECIFIC';
+      audienceUserIds?: string[];
       sportId?: number;
       title?: string;
       description?: string;
@@ -660,6 +666,30 @@ export const sessionHandlers: HttpHandler[] = [
     if ((body.title ?? '').trim() === '') {
       return HttpResponse.json(apiError('A session needs a title', 'SESSION_TITLE_REQUIRED'), { status: 400 });
     }
+    // CLIENT-GROUP-SESSION-1 (SESSION-GROUP-1): any member may create a group session; a group the caller is not in is 403,
+    // the group's own sport is used, `SPECIFIC` needs other members of the group (the fixture group with members is the
+    // owned one; the member group of the other fixture has no member list, so its audience is not checked).
+    const callerGroups = [mockGroup, mockOwnedGroup];
+    const targetGroup = body.groupId !== undefined ? callerGroups.find((group) => group.id === body.groupId) : undefined;
+    if (body.groupId !== undefined && targetGroup === undefined) {
+      return HttpResponse.json(apiError('Only members of this group can do that', 'SESSION_GROUP_MEMBER_REQUIRED'), { status: 403 });
+    }
+    if (body.groupId !== undefined && body.audience === 'SPECIFIC') {
+      const others = [...new Set(body.audienceUserIds ?? [])].filter((id) => id !== mockUser.id);
+      if (others.length === 0) {
+        return HttpResponse.json(apiError('Pick at least one member', 'SESSION_AUDIENCE_REQUIRED'), { status: 400 });
+      }
+      if (body.groupId === mockOwnedGroup.id) {
+        const memberIds = new Set(mockGroupMembers.map((member) => member.userId));
+        const notMembers = others.filter((id) => !memberIds.has(id));
+        if (notMembers.length > 0) {
+          return HttpResponse.json(
+            apiError('Some people are not members of this group', 'SESSION_AUDIENCE_NOT_MEMBER', { count: notMembers.length }),
+            { status: 400 },
+          );
+        }
+      }
+    }
     const session = sessionsSessions.get(sessionIdFromRequest(request));
     const initialSlot = body.initialSlot ?? 0;
     const created: Session = {
@@ -668,7 +698,7 @@ export const sessionHandlers: HttpHandler[] = [
       sessionType: body.groupId !== undefined ? 'GROUP_RECURRING' : 'STANDALONE',
       createdBy: mockUser.id,
       createdByFullName: `${mockUser.firstName} ${mockUser.lastName}`,
-      sportId: body.sportId ?? mockLocation.sportId,
+      sportId: targetGroup?.sportId ?? body.sportId ?? mockLocation.sportId,
       sportName: mockLocation.sportName,
       title: body.title.trim(),
       description: body.description ?? null,
@@ -692,17 +722,16 @@ export const sessionHandlers: HttpHandler[] = [
       cancelledBy: null,
       cancelledByFullName: null,
       cancelledAt: null,
-      // Real backend: participantCount = real JOINED rows + initialSlot, and a standalone
-      // session's creator is auto-JOINED (SESSION-14 rule 8). CLIENT-SESSION-23 now simulates that
-      // (it has to: /upcoming is participant-scoped, so a freshly created session would otherwise
-      // never appear in the creator's own list) — a group-linked session's creator is not
-      // auto-joined, matching the real backend.
-      participantCount: initialSlot + (body.groupId === undefined ? 1 : 0),
+      // Real backend: participantCount = real JOINED rows + initialSlot, and the creator is auto-JOINED
+      // (SESSION-14 rule 8; since SESSION-GROUP-1 a group session's creator is JOINED too). CLIENT-SESSION-23
+      // simulates it: /upcoming is participant-scoped, so a new session would otherwise never appear in the creator's list.
+      participantCount: initialSlot + 1,
       capacity: body.capacity,
       feeType: body.feeType ?? null,
       feeAmountVnd: body.feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
       initialSlot,
-      autoApprove: body.autoApprove ?? false,
+      // A group session defaults to auto approve (SESSION-GROUP-1), a standalone one does not.
+      autoApprove: body.autoApprove ?? body.groupId !== undefined,
       isPublic: body.groupId === undefined && body.isPublic !== false,
       // SESSION-46: 0 is stored as 0 on create (the real server only clears on update).
       maleSlots: body.maleSlots ?? null,
@@ -719,20 +748,18 @@ export const sessionHandlers: HttpHandler[] = [
       updatedAt: new Date().toISOString(),
     };
     session.sessionsState = [created, ...session.sessionsState];
-    if (body.groupId === undefined) {
-      session.participantsState[created.id] = [
-        {
-          id: session.nextParticipantId++,
-          sessionId: created.id,
-          userId: mockUser.id,
-          userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
-          userAvatarUrl: mockUser.avatarUrl,
-          status: 'JOINED',
-          rejectReason: null,
-          createdAt: new Date().toISOString(),
-        },
-      ];
-    }
+    session.participantsState[created.id] = [
+      {
+        id: session.nextParticipantId++,
+        sessionId: created.id,
+        userId: mockUser.id,
+        userFullName: `${mockUser.firstName} ${mockUser.lastName}`,
+        userAvatarUrl: mockUser.avatarUrl,
+        status: 'JOINED',
+        rejectReason: null,
+        createdAt: new Date().toISOString(),
+      },
+    ];
     // SESSION-6: pre-create an INVITED row per deduped invitee id (excluding the creator's own),
     // resolved only by that user's own later joinSession call, which bypasses autoApprove entirely.
     const dedupedInviteeIds = [...new Set(body.inviteeIds ?? [])].filter((id) => id !== mockUser.id);
@@ -765,9 +792,36 @@ export const sessionHandlers: HttpHandler[] = [
     }
     const groupId = Number(params.groupId);
     const session = sessionsSessions.get(sessionId);
+    // SESSION-GROUP-2: `bucket` is one status group (`HISTORY` = completed and cancelled); a caller who is not in the group is 403.
+    const url = new URL(request.url);
+    const bucket = url.searchParams.get('bucket');
+    const size = Number(url.searchParams.get('size') ?? 20) || 20;
+    const bucketStatuses: Record<string, Session['status'][]> = {
+      ONGOING: ['ONGOING'],
+      SCHEDULED: ['SCHEDULED'],
+      PREPARING: ['PREPARING'],
+      HISTORY: ['COMPLETED', 'CANCELLED'],
+    };
+    if (bucket !== null && bucketStatuses[bucket.toUpperCase()] === undefined) {
+      return HttpResponse.json(apiError('bucket must be one of ONGOING, SCHEDULED, PREPARING, HISTORY'), { status: 400 });
+    }
+    if (![mockGroup.id, mockOwnedGroup.id].includes(groupId)) {
+      return HttpResponse.json(apiError('Only members of this group can do that', 'SESSION_GROUP_MEMBER_REQUIRED'), { status: 403 });
+    }
+    // The fixture sessions carry fixed dates, so none of them is "today": the owned group's fixture session is re-timed to
+    // noon today (the browser and this server share a machine) for the Posts-tab shortcut, which only lists today's sessions.
+    const noonToday = new Date();
+    noonToday.setHours(12, 0, 0, 0);
     const results = session.sessionsState
       .filter((candidate) => candidate.groupId === groupId)
-      .map((candidate) => withCallerParticipation(session, candidate));
+      .filter((candidate) => bucket === null || bucketStatuses[bucket.toUpperCase()].includes(candidate.status))
+      .map((candidate) =>
+        bucket !== null && candidate.id === mockOwnedGroupSession.id
+          ? { ...candidate, scheduledStart: noonToday.toISOString() }
+          : candidate,
+      )
+      .map((candidate) => withCallerParticipation(session, candidate))
+      .slice(0, size);
     return HttpResponse.json(apiResponse(mockPageResponse(results), 'Sessions retrieved successfully'));
   }),
 

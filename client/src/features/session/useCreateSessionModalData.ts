@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useAuthStore } from '@/app/authStore';
+import { useGroupMemberSearch } from '@/features/feed/hooks/useGroupMemberSearch';
+import { useDebouncedValue } from '@/shared/hooks/useDebouncedValue';
 import { useSportCatalog } from '@/shared/hooks/useSportCatalog';
 import { useFriends } from '@/features/friends/hooks/useFriends';
 import { useFavoriteLocation } from '@/features/location/hooks/useFavoriteLocation';
@@ -13,9 +16,17 @@ import { useSportCatalogStore } from '@/shared/lib/sportCatalogStore';
 import type { Location } from '@/shared/types/location';
 import type { ResolvedSportAttributeSchema } from '@/shared/types/sport';
 import { useCreateSession } from './hooks/useCreateSession';
+import { toAudienceResults } from './audienceResults';
 import { collectSchemaPaths, pickPaths } from './sessionAttributePaths';
 import { isSessionDialogError } from './sessionErrors';
-import type { CreateSessionPayload } from './types';
+import type { CreateSessionPayload, Session } from './types';
+
+/** The group a session is created for: the form's group mode (CLIENT-GROUP-SESSION-1). */
+export interface CreateSessionGroup {
+  id: number;
+  sportId: number;
+  name: string;
+}
 
 /**
  * `CreateSessionModal`'s full data boundary — modal open state, the nested `LocationPicker`
@@ -24,10 +35,16 @@ import type { CreateSessionPayload } from './types';
  * `FriendsPage`/`MatchesPage` each get their own modal instance from the exact same
  * implementation, rather than `MatchesPage` owning the only copy. Takes no arguments — every
  * piece of state here is local to one open/close cycle of the modal.
+ *
+ * CLIENT-GROUP-SESSION-1: `openCreateGroupSessionModal(group)` opens the form in group mode (`createGroup`); the member search of the
+ * "Specific members" audience (`audienceSearch`) runs only then, and never offers the caller. `onGroupSessionCreated` is
+ * called with the new session after a group-mode create succeeds (the page opens its detail).
  */
-export function useCreateSessionModalData() {
+export function useCreateSessionModalData(options: { onGroupSessionCreated?: (session: Session) => void } = {}) {
   const sportCatalog = useSportCatalog();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createGroup, setCreateGroup] = useState<CreateSessionGroup | null>(null);
+  const [audienceQuery, setAudienceQuery] = useState('');
   const [isCreateLocationPickerOpen, setIsCreateLocationPickerOpen] = useState(false);
   const [createFormSportId, setCreateFormSportId] = useState<number | null>(null);
   const [selectedLocationForCreate, setSelectedLocationForCreate] = useState<Location | null>(null);
@@ -39,7 +56,8 @@ export function useCreateSessionModalData() {
   // as `sessionAttributes`.
   const [refDraftOptions, setRefDraftOptions] = useState<Record<string, unknown[]>>({});
 
-  const openCreateModal = () => {
+  const openForm = (group: CreateSessionGroup | null) => {
+    setCreateGroup(group);
   // SPORT-5: this modal embeds the zero-sport-profile gate, which lists the catalogue the
   // same way the "Add sport" pill does — so it needs the same freshness. No pill to hang a
   // re-read on here, so opening the modal is the trigger. Fire-and-forget: the gate renders
@@ -49,8 +67,14 @@ export function useCreateSessionModalData() {
   void sportCatalog.refetch();
     setIsCreateModalOpen(true);
   };
+  /** The standalone form. Takes no argument on purpose: pages hand it straight to `onClick`, which would pass an event. */
+  const openCreateModal = () => openForm(null);
+  /** The form in group mode, for a session of this group (CLIENT-GROUP-SESSION-1). */
+  const openCreateGroupSessionModal = (group: CreateSessionGroup) => openForm(group);
   const closeCreateModal = () => {
     setIsCreateModalOpen(false);
+    setCreateGroup(null);
+    setAudienceQuery('');
     setSelectedLocationForCreate(null);
     setCreateFormSportId(null);
     // CLIENT-SESSION-15: same reason as `selectedLocationForCreate` — this draft is hook-owned,
@@ -166,16 +190,49 @@ export function useCreateSessionModalData() {
       ? pickPaths(sessionAttributes, collectSchemaPaths(sessionAttributeSchema))
       : {};
     const attributes = Object.keys(trimmed).length > 0 ? trimmed : undefined;
-    createSessionMutation.mutate({ ...payload, attributes }, { onSuccess: closeCreateModal });
+    // A group session opens in the session detail once it exists (owner, 2026-11-20); a standalone one does not.
+    const createdForGroup = createGroup !== null;
+    createSessionMutation.mutate(
+      { ...payload, attributes },
+      {
+        onSuccess: (session) => {
+          closeCreateModal();
+          if (createdForGroup) options.onGroupSessionCreated?.(session);
+        },
+      },
+    );
   };
 
   // CLIENT-SESSION-4: only needed while the create form is open — the "Invite your friend"
   // field's client-side search is a filter over this full unpaginated list, no new endpoint.
   const friendsQuery = useFriends(isCreateModalOpen);
 
+  // CLIENT-GROUP-SESSION-1: the "Specific members" picker's search over the group's members (B23), typed text debounced.
+  // Idle (no call) while the box is empty or the form is not in group mode; the caller is never offered.
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  const debouncedAudienceQuery = useDebouncedValue(audienceQuery.trim(), 200, audienceQuery.trim() === '');
+  const audienceSearchQuery = useGroupMemberSearch(
+    createGroup?.id,
+    createGroup !== null && debouncedAudienceQuery !== '' ? debouncedAudienceQuery : null,
+  );
+  const audienceResults = useMemo(
+    () => toAudienceResults(audienceSearchQuery.data, currentUserId),
+    [audienceSearchQuery.data, currentUserId],
+  );
+
   return {
     isCreateModalOpen,
     openCreateModal,
+    openCreateGroupSessionModal,
+    /** The group the open form is for, `null` for a standalone session. */
+    createGroup,
+    audienceSearch: {
+      query: audienceQuery,
+      onQueryChange: setAudienceQuery,
+      results: audienceResults,
+      isSearching: audienceSearchQuery.isFetching || audienceQuery.trim() !== debouncedAudienceQuery,
+      isSearchError: audienceSearchQuery.isError,
+    },
     closeCreateModal,
     selectedLocationForCreate,
     onOpenLocationPickerForCreate: (sportId: number) => {

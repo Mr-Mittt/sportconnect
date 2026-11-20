@@ -185,6 +185,17 @@
   "page": {
     "title": "Nhóm"
   },
+  "sessionShortcut": {
+    "title": "Buổi chơi hôm nay",
+    "listLabel": "Các buổi chơi của nhóm hôm nay",
+    "create": "Tạo buổi chơi",
+    "createHint": "cho cả nhóm hoặc một số thành viên",
+    "createLabel": "Tạo buổi chơi cho nhóm này",
+    "createToday": "Hôm nay chưa có buổi chơi. Tạo một buổi",
+    "loading": "Đang tải các buổi chơi hôm nay",
+    "error": "Không tải được các buổi chơi hôm nay.",
+    "retry": "Thử lại"
+  },
   "actionError": {
     "title": "Không thể hoàn tất thao tác",
     "gotIt": "Đã hiểu"

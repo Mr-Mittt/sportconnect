@@ -8,7 +8,7 @@ import { sportKeyForId } from '@/features/feed/sportIdMap';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { formatGameMood, GAME_MOOD_BADGE_CLASSES, getGameMoodLevel } from '@/shared/lib/gameMood';
 import { getRampBadgeClasses } from '@/shared/lib/rampStyles';
-import { formatParticipantCount } from '@/shared/lib/sessionCapacity';
+import { formatJoinedCount, formatParticipantCount } from '@/shared/lib/sessionCapacity';
 import { genderSplitText } from '@/shared/lib/sessionSlots';
 import type { ParticipationActionKind } from '@/shared/lib/sessionParticipation';
 import { getParticipationAction } from '@/shared/lib/sessionParticipation';
@@ -122,6 +122,8 @@ export function SessionCard({
     female: t('card.female'),
   });
   const timeRange = formatSessionTimeRange(session.scheduledStart, session.scheduledEndAt);
+  /** CLIENT-GROUP-SESSION-1: a group session shows no slot information, only how many have joined. */
+  const isGroupSession = session.groupId !== null;
 
   return (
     // The questions are siblings of the card, not inside it: a dialog's clicks bubble through the React tree and would
@@ -170,7 +172,9 @@ export function SessionCard({
           <div className="flex items-center gap-1.5">
             <span className="flex items-center gap-1">
               {s.showParticipantIcon && <IconUsers className={s.detailIcon} aria-hidden="true" />}
-              {formatParticipantCount(session.participantCount, session.capacity)}
+              {isGroupSession
+                ? formatJoinedCount(session.participantCount)
+                : formatParticipantCount(session.participantCount, session.capacity)}
             </span>
             {/* CLIENT-SESSION-34 (SESSION-46): the game mood — the number is the signal, the colour an
                 accent; the full wording ("5 · Normal") is the tooltip and the accessible name. */}
@@ -187,7 +191,7 @@ export function SessionCard({
           </div>
         </div>
         {/* The gender split of the open seats, only when the host set one (and only on the roomy card). */}
-        {size === 'full' && genderSplit !== '' && (
+        {size === 'full' && !isGroupSession && genderSplit !== '' && (
           <div className="text-2xs text-text-muted">{t('card.genderSplit', { split: genderSplit })}</div>
         )}
 

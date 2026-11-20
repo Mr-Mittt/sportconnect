@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/app/apiClient';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
+import { sessionKeys } from '@/features/session/queryKeys';
 import { feedKeys } from '../queryKeys';
 import type { ApiResponse } from '@/shared/types/api';
 import type { Group, PageResponse } from '../types';
@@ -34,6 +35,13 @@ export function useLeaveGroup(currentUserId: string | undefined) {
         };
       });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: feedKeys.all }),
+    onSettled: () => {
+      // The user's sessions of the group are no longer theirs to see (the server answers 403 for them): drop the
+      // copies nothing is showing (a notification then opens a loading state, never the old session) and refresh
+      // the lists on screen (the Upcoming rail).
+      queryClient.removeQueries({ queryKey: sessionKeys.all, type: 'inactive' });
+      void queryClient.invalidateQueries({ queryKey: sessionKeys.all });
+      return queryClient.invalidateQueries({ queryKey: feedKeys.all });
+    },
   });
 }

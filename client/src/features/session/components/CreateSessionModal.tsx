@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { sportIdForKey } from '@/features/feed/sportIdMap';
+import { sportIdForKey, sportKeyForId } from '@/features/feed/sportIdMap';
 import type { FriendUser } from '@/features/friends/types';
 import type { LocationPickerProps } from '@/features/location/components/LocationPicker';
 import { LocationPicker } from '@/features/location/components/LocationPicker';
@@ -20,6 +20,8 @@ import { SportAttributesFields } from '@/shared/components/SportAttributesFields
 import { hasEditedAttributeValues } from '@/shared/components/attributeFields/defaults';
 import type { ResumablePrevious } from '@/shared/hooks/useResumableSports';
 import { matchesName } from '@/shared/lib/nameMatch';
+import { UNCAPPED_CAPACITY } from '@/shared/lib/sessionCapacity';
+import type { PickerMember } from '@/shared/components/MemberPicker';
 import { toOffsetAwareIso } from '@/shared/lib/scheduledStart';
 import { formatFeeDisplay } from '@/shared/lib/feeType';
 import { formatGameMood, GAME_MOOD_DEFAULT } from '@/shared/lib/gameMood';
@@ -29,13 +31,15 @@ import { buildAttributeSummary } from '../sessionAttributeSummary';
 import { firstMissingInFormOrder, focusFieldById, missingFieldId, missingFieldSection } from '../sessionFormFocus';
 import { missingForScheduling } from '../sessionReadiness';
 import { useSessionTimeFields } from '../sessionFormTime';
-import type { CreateSessionPayload } from '../types';
+import type { CreateSessionPayload, GroupSessionAudience } from '../types';
+import type { CreateSessionGroup } from '../useCreateSessionModalData';
 import { useSessionWhoFields } from '../useSessionWhoFields';
 import { useAuthStore } from '@/app/authStore';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { AutoApproveConfirmDialog, LeaveWithoutSavingDialog, SessionReadinessDialog } from './SessionConfirmDialogs';
 import { SessionVisibilitySwitch, SessionVisibilityWarning } from './SessionVisibility';
 import { SectionSummary, SessionFormSection, type SectionSummaryItem } from './SessionFormSection';
+import { GroupAudienceField } from './GroupAudienceField';
 import { CostFields, OverviewFields, WhenFields, WhereFields, WhoFields } from './SessionSectionFields';
 import { EmptyHint } from '@/shared/components/EmptyHint';
 
@@ -158,6 +162,18 @@ interface CreateSessionModalProps {
   onClose: () => void;
 
   sportsByKey: Record<SportKey, SportProfile>;
+  /** CLIENT-GROUP-SESSION-1: set = the form of a **group session**: the sport is the group's (no sport select, no "add a
+   * sport first" gate), no slot information, no visibility switch, auto approve on by default, and the Who section asks
+   * for an audience (all members, or specific ones from `audienceSearch`). */
+  group?: CreateSessionGroup;
+  /** The "Specific members" picker's search (the group member search), owned by `useCreateSessionModalData`. */
+  audienceSearch?: {
+    query: string;
+    onQueryChange: (query: string) => void;
+    results: PickerMember[];
+    isSearching: boolean;
+    isSearchError: boolean;
+  };
   /** The hosting page's active `SportSwitcher` pill, when it has one (`FriendsPage` doesn't) —
    * pre-selects the sport field. `'all'`/`undefined` fall through to the caller's-sole-profile
    * rule below. */
@@ -254,6 +270,8 @@ export function CreateSessionModal({
   isOpen,
   onClose,
   sportsByKey,
+  group,
+  audienceSearch,
   activeSport,
   selectedLocation,
   onOpenLocationPicker,
@@ -287,8 +305,10 @@ export function CreateSessionModal({
   const sportKeys = Object.keys(sportsByKey) as SportKey[];
   // Prefers the hosting page's active SportSwitcher pill; otherwise falls back to the caller's
   // first sport profile (in sportsByKey's own order). Only stays blank when the caller has none.
-  const initialSport: SportKey | '' =
-    activeSport !== undefined && activeSport !== 'all'
+  const isGroup = group !== undefined;
+  const initialSport: SportKey | '' = isGroup
+    ? (sportKeyForId(group.sportId) ?? '')
+    : activeSport !== undefined && activeSport !== 'all'
       ? activeSport
       : sportKeys.length > 0
         ? sportKeys[0]
@@ -302,7 +322,10 @@ export function CreateSessionModal({
   // SESSION-49: the title is required and starts as "<first name>'s session" (en) / "Trận đấu của <first name>" (vi).
   // The account's first name is assumed present (making it required is auth A38 / client ACCOUNT-8).
   const firstName = useAuthStore((state) => state.user?.firstName ?? '');
-  const defaultTitle = t('create.titleField.default', { firstName });
+  // A group session is named after its group ("{group}'s session"), a standalone one after its host.
+  const defaultTitle = isGroup
+    ? t('create.titleField.groupDefault', { groupName: group.name })
+    : t('create.titleField.default', { firstName });
   const [title, setTitle] = useState(defaultTitle);
   const [locationNote, setLocationNote] = useState('');
   const time = useSessionTimeFields({ start: '', duration: '' });
@@ -312,9 +335,13 @@ export function CreateSessionModal({
     maleSlots: null,
     femaleSlots: null,
     gameMood: GAME_MOOD_DEFAULT,
-    autoApprove: false,
+    // A group session is auto approve by default (the server's default too), a standalone one is not.
+    autoApprove: isGroup,
     isPublic: true,
   });
+  // CLIENT-GROUP-SESSION-1: who a group session is for; `selectedAudience` is only read while it is `SPECIFIC`.
+  const [audience, setAudience] = useState<GroupSessionAudience>('ALL_MEMBERS');
+  const [selectedAudience, setSelectedAudience] = useState<PickerMember[]>([]);
   // CLIENT-SESSION-21: no default — undefined means "not picked yet", a valid choice (PREPARING).
   const [feeType, setFeeType] = useState<FeeType | undefined>(undefined);
   const [feeAmountVnd, setFeeAmountVnd] = useState('');
@@ -328,7 +355,7 @@ export function CreateSessionModal({
    * field shows its own message for as long as it stays unfilled (recomputed every render). */
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
-  const effectiveSportId = displaySport !== '' ? sportIdForKey(displaySport) : undefined;
+  const effectiveSportId = isGroup ? group.sportId : displaySport !== '' ? sportIdForKey(displaySport) : undefined;
 
   // CLIENT-SESSION-15 (scope change): a Sport change resets the whole form, as if reopened for the new
   // sport. Keyed on the sport *key* string, not `effectiveSportId` (which flickers to `undefined`
@@ -346,8 +373,10 @@ export function CreateSessionModal({
     who.setOpen('');
     who.setWhoCanJoin('ANYONE');
     who.setGameMood(GAME_MOOD_DEFAULT);
-    who.setAutoApprove(false);
+    who.setAutoApprove(isGroup);
     who.setIsPublic(true);
+    setAudience('ALL_MEMBERS');
+    setSelectedAudience([]);
     setFeeType(undefined);
     setFeeAmountVnd('');
     setFeeNote('');
@@ -363,6 +392,9 @@ export function CreateSessionModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveSportId]);
 
+  // The "add a sport first" gate: only a standalone session needs a sport of the caller's own; a group session has the group's.
+  const isGated = !isGroup && sportKeys.length === 0;
+
   const isFeeAmountRequired = feeType === 'FIXED';
 
   // Anything entered that "Create session" has not sent yet. The start time is not counted: it is
@@ -376,8 +408,10 @@ export function CreateSessionModal({
     who.open !== '' ||
     who.whoCanJoin !== 'ANYONE' ||
     who.gameMood !== GAME_MOOD_DEFAULT ||
-    who.autoApprove ||
+    who.autoApprove !== isGroup ||
     !who.isPublic ||
+    audience !== 'ALL_MEMBERS' ||
+    selectedAudience.length > 0 ||
     feeType !== undefined ||
     feeAmountVnd !== '' ||
     feeNote.trim() !== '' ||
@@ -391,7 +425,8 @@ export function CreateSessionModal({
     effectiveSportId !== undefined &&
     title.trim() !== '' &&
     time.start !== '' &&
-    who.open !== '' &&
+    (isGroup || who.open !== '') &&
+    (audience !== 'SPECIFIC' || selectedAudience.length > 0) &&
     !time.isEndInvalid &&
     !time.isStartInPast &&
     !who.genderOverOpen;
@@ -427,15 +462,27 @@ export function CreateSessionModal({
       { label: t('detail.summary.location'), value: selectedLocation?.name },
       { label: t('detail.summary.note'), value: locationNote.trim() },
     ],
-    who: [
-      { label: t('detail.summary.taken'), value: String(who.effectiveTaken) },
-      {
-        label: t('detail.summary.open'),
-        value: who.open === '' ? null : `${who.openCount} (${split === '' ? t('detail.summary.anyone') : split})`,
-      },
-      { label: t('detail.summary.mood'), value: formatGameMood(who.gameMood) },
-      { label: t('detail.summary.autoApprove'), value: who.autoApprove ? yes : t('detail.summary.no') },
-    ],
+    who: isGroup
+      ? [
+          {
+            label: t('detail.summary.audience'),
+            value:
+              audience === 'SPECIFIC'
+                ? t('detail.summary.audienceSpecific', { count: selectedAudience.length })
+                : t('detail.summary.audienceAll'),
+          },
+          { label: t('detail.summary.mood'), value: formatGameMood(who.gameMood) },
+          { label: t('detail.summary.autoApprove'), value: who.autoApprove ? yes : t('detail.summary.no') },
+        ]
+      : [
+          { label: t('detail.summary.taken'), value: String(who.effectiveTaken) },
+          {
+            label: t('detail.summary.open'),
+            value: who.open === '' ? null : `${who.openCount} (${split === '' ? t('detail.summary.anyone') : split})`,
+          },
+          { label: t('detail.summary.mood'), value: formatGameMood(who.gameMood) },
+          { label: t('detail.summary.autoApprove'), value: who.autoApprove ? yes : t('detail.summary.no') },
+        ],
     cost: [
       {
         label: t('detail.summary.fee'),
@@ -462,7 +509,8 @@ export function CreateSessionModal({
   const firstInvalidFieldId = (): string | undefined => {
     if (effectiveSportId === undefined) return 'create-session-sport';
     if (title.trim() === '') return 'create-session-title';
-    if (who.open === '') return 'create-session-open-slots';
+    if (isGroup && audience === 'SPECIFIC' && selectedAudience.length === 0) return 'create-session-audience-search';
+    if (!isGroup && who.open === '') return 'create-session-open-slots';
     if (who.genderOverOpen) {
       return who.maleSlots >= who.femaleSlots ? 'create-session-male-slots' : 'create-session-female-slots';
     }
@@ -507,6 +555,27 @@ export function CreateSessionModal({
   const submit = () => {
     setIsReadinessOpen(false);
     if (effectiveSportId === undefined) return;
+    if (isGroup) {
+      // A group session: the group's sport is the server's, no slot, visibility or friend-invite fields. `capacity` is
+      // mandatory server-side and a group session has none to choose: the "uncapped" sentinel, as generated sessions use.
+      onSubmit({
+        groupId: group.id,
+        title: title.trim(),
+        locationId: selectedLocation?.id,
+        locationNote: locationNote.trim() || undefined,
+        scheduledStart: toOffsetAwareIso(time.start),
+        durationMinutes: time.duration !== '' ? Number(time.duration) : undefined,
+        capacity: UNCAPPED_CAPACITY,
+        feeType,
+        feeAmountVnd: isFeeAmountRequired ? Number(feeAmountVnd) : undefined,
+        feeNote: feeNote.trim() || undefined,
+        autoApprove: who.autoApprove,
+        gameMood: who.gameMood,
+        audience,
+        audienceUserIds: audience === 'SPECIFIC' ? selectedAudience.map((member) => member.id) : undefined,
+      });
+      return;
+    }
     onSubmit({
       sportId: effectiveSportId,
       title: title.trim(),
@@ -546,14 +615,14 @@ export function CreateSessionModal({
         {/* The gated "add a sport first" view (see sportKeys.length === 0 below) is a compact
             3-field form — sized like the standalone AddSportModal (max-w-md, shrink-to-fit). */}
         <DialogContent
-          fixedHeight={sportKeys.length > 0}
+          fixedHeight={!isGated}
           // CLIENT-SESSION-34: the sectioned form is long, so it is taller than the 60vh default (and, on a
           // page that anchors modals below its pill row, still capped by the space left below the anchor).
           fixedHeightVh={70}
-          className={sportKeys.length > 0 ? 'max-w-2xl' : 'max-w-md'}
+          className={isGated ? 'max-w-md' : 'max-w-2xl'}
         >
-          <DialogHeader title={t('create.title')} className="border-hairline-b border-border px-4 py-3" />
-          {sportKeys.length === 0 ? (
+          <DialogHeader title={isGroup ? t('create.groupTitle') : t('create.title')} className="border-hairline-b border-border px-4 py-3" />
+          {isGated ? (
             <AddSportFields
               availableSports={availableSports}
               resumableProfiles={resumableProfiles}
@@ -579,7 +648,10 @@ export function CreateSessionModal({
                     title={title}
                     onTitleChange={setTitle}
                     showTitleError={hasAttemptedSubmit && title.trim() === ''}
+                    intro={isGroup ? <p className="text-2xs text-text-muted">{t('create.groupIntro')}</p> : undefined}
+                    titleInline={isGroup}
                     sportField={
+                      isGroup ? undefined : (
                       <>
                         <Label htmlFor="create-session-sport">
                           {t('create.sport.label')}
@@ -604,6 +676,7 @@ export function CreateSessionModal({
                           <p className="mt-1 text-2xs text-text-danger">{t('create.validation.sport')}</p>
                         )}
                       </>
+                      )
                     }
                   />
                 </SessionFormSection>
@@ -653,7 +726,7 @@ export function CreateSessionModal({
                 <SessionFormSection
                   title={t('form.sections.who')}
                   open={openSections.who}
-                  missing={who.open === '' ? ['openSlot'] : []}
+                  missing={!isGroup && who.open === '' ? ['openSlot'] : []}
                   onOpenChange={(open) => setSection('who', open)}
                   summary={<SectionSummary items={summaries.who} />}
                   scrollIntoViewOnOpen
@@ -683,10 +756,36 @@ export function CreateSessionModal({
                     autoApprove={who.autoApprove}
                     // Ticking asks for confirmation first; unticking just unticks.
                     onAutoApproveChange={(next) =>
-                      next ? setIsAutoApproveConfirmOpen(true) : who.setAutoApprove(false)
+                      // A group session is auto approve by default: switching it back on needs no warning.
+                      next && !isGroup ? setIsAutoApproveConfirmOpen(true) : who.setAutoApprove(next)
+                    }
+                    hideSlots={isGroup}
+                    audienceField={
+                      isGroup && audienceSearch !== undefined ? (
+                        <GroupAudienceField
+                          i18nOverridePrefix={i18nOverridePrefix}
+                          idPrefix="create-session-audience"
+                          audience={audience}
+                          onAudienceChange={setAudience}
+                          selected={selectedAudience}
+                          results={audienceSearch.results.filter(
+                            (member) => !selectedAudience.some((picked) => picked.id === member.id),
+                          )}
+                          query={audienceSearch.query}
+                          onQueryChange={audienceSearch.onQueryChange}
+                          isSearching={audienceSearch.isSearching}
+                          isSearchError={audienceSearch.isSearchError}
+                          onSelect={(member) => setSelectedAudience((prev) => [...prev, member])}
+                          onRemove={(memberId) =>
+                            setSelectedAudience((prev) => prev.filter((member) => member.id !== memberId))
+                          }
+                          showPickError={hasAttemptedSubmit}
+                        />
+                      ) : undefined
                     }
                     slotsSummary={t('create.slotsSummary', { taken: who.effectiveTaken, capacity: who.capacity })}
                     extra={
+                      isGroup ? undefined : (
                       <div>
                         <span className="mb-1.5 block text-xs font-medium text-text-secondary select-none">
                           {t('create.invite.label')}
@@ -702,6 +801,7 @@ export function CreateSessionModal({
                           }
                         />
                       </div>
+                      )
                     }
                   />
                 </SessionFormSection>
@@ -759,15 +859,18 @@ export function CreateSessionModal({
               </div>
               <div className="border-hairline-t flex flex-col gap-2 border-border px-4 py-3">
                 {/* CLIENT-SESSION-52: while the switch is off, a warning spans the footer, above the switch and the button. */}
-                {!who.isPublic && <SessionVisibilityWarning i18nOverridePrefix={i18nOverridePrefix} />}
-                <div className="flex items-center justify-between gap-3">
-                  <SessionVisibilitySwitch
-                    i18nOverridePrefix={i18nOverridePrefix}
-                    id="create-session-visibility"
-                    isPublic={who.isPublic}
-                    onChange={who.setIsPublic}
-                    className="flex-1"
-                  />
+                {!isGroup && !who.isPublic && <SessionVisibilityWarning i18nOverridePrefix={i18nOverridePrefix} />}
+                <div className={cn('flex items-center gap-3', isGroup ? 'justify-end' : 'justify-between')}>
+                  {/* A group session is never public: no visibility switch. */}
+                  {!isGroup && (
+                    <SessionVisibilitySwitch
+                      i18nOverridePrefix={i18nOverridePrefix}
+                      id="create-session-visibility"
+                      isPublic={who.isPublic}
+                      onChange={who.setIsPublic}
+                      className="flex-1"
+                    />
+                  )}
                   <Button
                     variant="primary"
                     onClick={requestSubmit}

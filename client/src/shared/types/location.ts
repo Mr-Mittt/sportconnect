@@ -11,6 +11,8 @@ export interface Location {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** The IANA zone of the place (e.g. `Asia/Ho_Chi_Minh`); `null` when it has no coordinates or lies outside every zone. Optional: older payloads and fixtures omit it. */
+  timezone?: string | null;
   sourceMapsUrl: string | null;
   claimedByVendorId: number | null;
   createdBy: string;

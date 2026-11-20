@@ -20,6 +20,7 @@ import { SessionDetailModal } from '@/features/session/components/SessionDetailM
 import { SessionDiscoverModal } from '@/features/session/components/SessionDiscoverModal';
 import { useSessionParticipationAction } from '@/features/session/hooks/useSessionParticipationAction';
 import { useCreateSessionModalData } from '@/features/session/useCreateSessionModalData';
+import { useGroupSessionShortcutData } from '@/features/session/useGroupSessionShortcutData';
 import { useDiscoverModalData } from '@/features/session/useDiscoverModalData';
 import { AddSportIntroDialog } from '@/shared/components/AddSportIntroDialog';
 import { AddSportModal } from '@/shared/components/AddSportModal';
@@ -57,6 +58,7 @@ import { GroupActionErrorDialog } from './components/GroupActionErrorDialog';
 import { GroupMembersTab } from './components/GroupMembersTab';
 import { GroupSettingsTab } from './components/GroupSettingsTab';
 import { GroupSpaceSwitcher } from './components/GroupSpaceSwitcher';
+import { GroupSessionShortcut } from './components/GroupSessionShortcut';
 import { GroupTabs, type GroupTabKey } from './components/GroupTabs';
 import { InviteFriendModal } from './components/InviteFriendModal';
 import { JoinGroupModal } from './components/JoinGroupModal';
@@ -537,7 +539,17 @@ export function GroupsPage() {
     },
   });
 
-  const createSessionModalData = useCreateSessionModalData();
+  // A group session opens in the session detail once it is created. `discoverModalData` is declared just below: the callback
+  // only runs after a successful create, long after both exist.
+  const createSessionModalData = useCreateSessionModalData({
+    onGroupSessionCreated: (session) => discoverModalData.onViewDetails(session.id),
+  });
+  // CLIENT-GROUP-SESSION-1: today's ongoing and scheduled sessions of the selected group, for the Posts tab's shortcut. Only
+  // read while that tab shows (a member only: the groups on this page are the caller's own).
+  const groupSessionShortcut = useGroupSessionShortcutData(
+    selectedGroup?.id,
+    selectedGroup !== null && activeGroupTab === 'posts',
+  );
   const activeSessionSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   // CLIENT-SESSION-29 revision (2026-09-23) — see HomeFeedPage's identical comment.
   const firstOwnedSportId = data.sportProfiles[0]
@@ -711,6 +723,24 @@ export function GroupsPage() {
                         onTagSportClick={noop}
                         canBroadcast={canBroadcast}
                         mentionSource={composerMentionSource}
+                      />
+                      <GroupSessionShortcut
+                        sessions={groupSessionShortcut.sessions}
+                        isLoading={groupSessionShortcut.isLoading}
+                        isError={groupSessionShortcut.isError}
+                        onRetry={groupSessionShortcut.retry}
+                        onCreate={() =>
+                          createSessionModalData.openCreateGroupSessionModal({
+                            id: selectedGroup.id,
+                            sportId: selectedGroup.sportId,
+                            name: selectedGroup.groupName,
+                          })
+                        }
+                        sportsByKey={sportsByKey}
+                        currentUserId={user.id}
+                        onViewDetails={discoverModalData.onViewDetails}
+                        onParticipationAction={discoverModalData.onParticipationAction}
+                        isParticipationActionPending={discoverModalData.isParticipationActionPending}
                       />
                       <Feed
                         posts={data.posts}
@@ -1069,6 +1099,8 @@ export function GroupsPage() {
           isOpen={createSessionModalData.isCreateModalOpen}
           onClose={closeCreateSessionModal}
           sportsByKey={sportsByKey}
+          group={createSessionModalData.createGroup ?? undefined}
+          audienceSearch={createSessionModalData.audienceSearch}
           activeSport={activeSport}
           selectedLocation={createSessionModalData.selectedLocationForCreate}
           onOpenLocationPicker={createSessionModalData.onOpenLocationPickerForCreate}

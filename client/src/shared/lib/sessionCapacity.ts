@@ -5,6 +5,11 @@ import i18next from 'i18next';
  * real limit the creator chose, so read-side displays hide the denominator at this value. */
 export const UNCAPPED_CAPACITY = 9999;
 
+/** A group session shows no slot information (no capacity, no open slots): only how many have joined, `"9 joined"`. */
+export function formatJoinedCount(participantCount: number): string {
+  return i18next.t('session:capacity.joined', { count: participantCount });
+}
+
 /** `"3/10 participants"` once a real capacity was chosen, else the plain `"12 participants"`
  * (unchanged pre-SESSION-5 behavior) for the `UNCAPPED_CAPACITY` sentinel. */
 export function formatParticipantCount(participantCount: number, capacity: number): string {

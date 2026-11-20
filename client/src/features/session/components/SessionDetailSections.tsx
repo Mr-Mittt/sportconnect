@@ -313,6 +313,30 @@ function whoSummaryOpen(session: Session, t: (key: string) => string): string {
   return `${open} (${split === '' ? t('detail.summary.anyone') : split})`;
 }
 
+/**
+ * CLIENT-GROUP-SESSION-1 (owner, 2026-11-20): a group session shows no slot information, as on its card: one "Joined" count
+ * replaces the Taken and Open rows (and the gender split of the open seats).
+ */
+function slotSummary(session: Session, t: (key: string) => string): SectionSummaryItem[] {
+  if (session.groupId !== null) return [{ label: t('detail.summary.joined'), value: String(session.participantCount) }];
+  return [
+    { label: t('detail.summary.taken'), value: String(session.initialSlot + 1) },
+    { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
+  ];
+}
+
+function SlotRows({ session, t }: { session: Session; t: (key: string) => string }) {
+  if (session.groupId !== null) {
+    return <ViewRow label={t('detail.summary.joined')}>{session.participantCount}</ViewRow>;
+  }
+  return (
+    <>
+      <ViewRow label={t('detail.summary.taken')}>{session.initialSlot + 1}</ViewRow>
+      <ViewRow label={t('detail.summary.open')}>{whoSummaryOpen(session, t)}</ViewRow>
+    </>
+  );
+}
+
 function MoodBadge({ mood }: { mood: number }) {
   return (
     <span
@@ -355,8 +379,7 @@ function WhoSection(props: SectionProps) {
   const yes = t('detail.summary.yes');
   const no = t('detail.summary.no');
   const summary: SectionSummaryItem[] = [
-    { label: t('detail.summary.taken'), value: String(session.initialSlot + 1) },
-    { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
+    ...slotSummary(session, t),
     { label: t('detail.summary.mood'), value: formatGameMood(session.gameMood) },
     { label: t('detail.summary.autoApprove'), value: session.autoApprove ? yes : no },
     ...visibilitySummary(session, t),
@@ -383,6 +406,8 @@ function WhoSection(props: SectionProps) {
               onTakenChange={who.setTaken}
               open={who.open}
               onOpenChange={who.setOpen}
+              // A group session shows no slot information: its Taken, Open and gender inputs are not offered.
+              hideSlots={session.groupId !== null}
               whoCanJoin={who.whoCanJoin}
               onWhoCanJoinChange={who.setWhoCanJoin}
               maleChecked={who.maleChecked}
@@ -405,8 +430,7 @@ function WhoSection(props: SectionProps) {
           </>
         ) : (
           <>
-            <ViewRow label={t('detail.summary.taken')}>{session.initialSlot + 1}</ViewRow>
-            <ViewRow label={t('detail.summary.open')}>{whoSummaryOpen(session, t)}</ViewRow>
+            <SlotRows session={session} t={t} />
             <ViewRow label={t('detail.summary.mood')}>
               <MoodBadge mood={session.gameMood} />
             </ViewRow>
@@ -599,8 +623,7 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
       { label: t('detail.summary.note'), value: session.locationNote },
     ],
     [
-      { label: t('detail.summary.taken'), value: String(session.initialSlot + 1) },
-      { label: t('detail.summary.open'), value: whoSummaryOpen(session, t) },
+      ...slotSummary(session, t),
       { label: t('detail.summary.mood'), value: formatGameMood(session.gameMood) },
       { label: t('detail.summary.autoApprove'), value: session.autoApprove ? yes : no },
       ...visibilitySummary(session, t),
@@ -657,8 +680,7 @@ function InformationSection({ i18nOverridePrefix, session, missing, schema }: In
         </div>
       </ViewRow>
       <ViewRow label={t('detail.summary.note')}>{session.locationNote ?? '...'}</ViewRow>
-      <ViewRow label={t('detail.summary.taken')}>{session.initialSlot + 1}</ViewRow>
-      <ViewRow label={t('detail.summary.open')}>{whoSummaryOpen(session, t)}</ViewRow>
+      <SlotRows session={session} t={t} />
       <ViewRow label={t('detail.summary.mood')}>
         <MoodBadge mood={session.gameMood} />
       </ViewRow>

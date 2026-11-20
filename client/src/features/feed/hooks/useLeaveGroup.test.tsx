@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { act, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
 import { useGroupsPageStore } from '@/app/groupsPageStore';
+import { sessionKeys } from '@/features/session/queryKeys';
 import { feedKeys } from '../queryKeys';
 import type { Group, PageResponse } from '../types';
 import { useLeaveGroup } from './useLeaveGroup';
@@ -85,5 +86,25 @@ describe('useLeaveGroup', () => {
     expect(useGroupsPageStore.getState().selectedGroupId).toBeNull();
     const cached = queryClient.getQueryData<PageResponse<Group>>(feedKeys.userGroups('user-1'));
     expect(cached?.content.map((g) => g.id)).toEqual([2]);
+  });
+
+  it('drops the cached sessions nothing shows and refreshes the lists on screen (the left group\'s sessions are no longer visible)', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    queryClient.setQueryData(sessionKeys.detail(77), { id: 77, groupId: 1 });
+    const fetchUpcoming = vi.fn().mockResolvedValue({ content: [] });
+    const observer = new QueryObserver(queryClient, { queryKey: sessionKeys.upcoming(undefined), queryFn: fetchUpcoming });
+    const unsubscribe = observer.subscribe(() => {});
+    await waitFor(() => expect(fetchUpcoming).toHaveBeenCalledTimes(1));
+    vi.spyOn(apiClient, 'delete').mockResolvedValueOnce({
+      data: { success: true, message: '', data: undefined, timestamp: '' },
+    });
+
+    const { result } = renderHook(() => useLeaveGroup('user-1'), { wrapper: wrapper(queryClient) });
+    act(() => result.current.mutate(1));
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(queryClient.getQueryData(sessionKeys.detail(77))).toBeUndefined();
+    await waitFor(() => expect(fetchUpcoming).toHaveBeenCalledTimes(2));
+    unsubscribe();
   });
 });

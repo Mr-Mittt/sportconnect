@@ -39,6 +39,10 @@ export const sessionKeys = {
    * instead of serving yesterday's results — same reasoning the pre-22 single-date key had. */
   discoverDate: (date: string, filters: DiscoverFilters) =>
     [...sessionKeys.all, 'discover', 'date', date, serializeDiscoverFilters(filters)] as const,
+  /** CLIENT-GROUP-SESSION-1 — `GET /sessions/group/{groupId}?bucket=` (SESSION-GROUP-2): one status bucket of a group's sessions, the
+   * Posts-tab shortcut reads `ONGOING`, `SCHEDULED` and `PREPARING`. Under `all`, so every session write invalidates it. */
+  groupSessions: (groupId: number, bucket: 'ONGOING' | 'SCHEDULED' | 'PREPARING') =>
+    [...sessionKeys.all, 'group', groupId, bucket] as const,
   detail: (sessionId: number) => [...sessionKeys.all, 'detail', sessionId] as const,
   participants: (sessionId: number) => [...sessionKeys.all, 'participants', sessionId] as const,
   /** Separate cache entry from `participants` above — that one is always JOINED-only (the public

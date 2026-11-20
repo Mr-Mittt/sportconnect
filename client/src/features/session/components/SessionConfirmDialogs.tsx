@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Button } from '@/shared/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/shared/ui/dialog';
+import { Textarea } from '@/shared/ui/textarea';
 import { useNow } from '@/shared/hooks/useNow';
 import { formatCountdownSpan } from '@/shared/lib/countdown';
 import { getSessionStatusLabel } from '@/shared/lib/sessionStatus';
@@ -224,6 +226,86 @@ export function ConfirmLeaveDialog({
           </Button>
           <Button variant="primary" size="sm" onClick={onStay}>
             {t('detail.leaveConfirm.stay')}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** The server's limit on a cancel reason (`CancelSessionRequest`). */
+export const CANCEL_REASON_MAX_LENGTH = 500;
+
+interface ConfirmCancelSessionDialogProps {
+  /** i18next `"namespace:key.path"` prefix that overrides this component's copy (see `useOverridableText`). */
+  i18nOverridePrefix?: string;
+  isOpen: boolean;
+  isCancelling: boolean;
+  /** "Keep session" (also Escape): the session stays as it is. */
+  onKeep: () => void;
+  /** "Cancel session": the optional reason, trimmed (empty = none). */
+  onConfirm: (reason: string) => void;
+}
+
+/**
+ * CLIENT-GROUP-SESSION-1: asked before the host or a group owner or admin cancels a **group session**. It says the
+ * members are told, takes an optional reason (shown as "Cancelled by ..." on the session) and keeps the safe choice,
+ * "Keep session", primary. The reason box is cleared each time the dialog opens (a fresh mount).
+ */
+export function ConfirmCancelSessionDialog({
+  isOpen,
+  isCancelling,
+  onKeep,
+  onConfirm,
+  i18nOverridePrefix,
+}: ConfirmCancelSessionDialogProps) {
+  const t = useOverridableText('session', i18nOverridePrefix);
+  const [reason, setReason] = useState('');
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (open) return;
+        setReason('');
+        onKeep();
+      }}
+    >
+      <DialogContent centered className="p-4" onOpenAutoFocus={(event) => event.preventDefault()}>
+        <DialogTitle className="mb-1 text-sm font-semibold text-text-primary">
+          {t('detail.cancelSessionConfirm.title')}
+        </DialogTitle>
+        <p className="mb-3 text-2sm text-text-secondary">{t('detail.cancelSessionConfirm.body')}</p>
+        <Textarea
+          value={reason}
+          maxLength={CANCEL_REASON_MAX_LENGTH}
+          onChange={(event) => setReason(event.target.value)}
+          placeholder={t('detail.cancelSessionConfirm.reasonPlaceholder')}
+          aria-label={t('detail.cancelSessionConfirm.reasonLabel')}
+          className="mb-3"
+          rows={3}
+        />
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isCancelling}
+            onClick={() => {
+              onConfirm(reason.trim());
+              setReason('');
+            }}
+            className="border-text-danger text-text-danger hover:bg-bg-accent"
+          >
+            {isCancelling ? t('detail.cancelSessionConfirm.cancelling') : t('detail.cancelSessionConfirm.cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setReason('');
+              onKeep();
+            }}
+          >
+            {t('detail.cancelSessionConfirm.keep')}
           </Button>
         </div>
       </DialogContent>
