@@ -141,11 +141,32 @@ for (const width of breakpoints) {
 
     await openGroup(page, 'Weekend Tennis Ladder');
     await page.getByRole('tab', { name: 'Settings' }).click();
-    await expect(page.getByText('Privacy')).toBeVisible();
+    // CLIENT-GROUP-SESSION-4: every section starts collapsed, so wait for the three headers, not for Privacy.
+    await expect(page.getByRole('button', { name: 'Sessions', exact: true })).toBeVisible();
     await waitForContentSettled(page);
     await page.evaluate('document.fonts.ready');
 
     await expect(page).toHaveScreenshot(`groups-settings-tab-${width}.png`, { fullPage: true });
+  });
+
+  // CLIENT-GROUP-SESSION-4: the same tab with General, Permission and Sessions open and the Tuesday day opened (its slots, Edit and Delete).
+  test(`groups — settings-tab (all sections open) @ ${width}px`, async ({ page }) => {
+    await page.clock.setFixedTime(FROZEN_TIME);
+    await page.setViewportSize({ width, height: 900 });
+    await seedAuthenticatedSession(page, '/groups');
+
+    await openGroup(page, 'Weekend Tennis Ladder');
+    await page.getByRole('tab', { name: 'Settings' }).click();
+    for (const name of ['General', 'Permission', 'Sessions']) {
+      await page.getByRole('button', { name, exact: true }).click();
+    }
+    await page.getByRole('button', { name: /Tuesday \(2\)/ }).click();
+    await expect(page.getByText('Privacy')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete Tuesday at 18:00' })).toBeVisible();
+    await waitForContentSettled(page);
+    await page.evaluate('document.fonts.ready');
+
+    await expect(page).toHaveScreenshot(`groups-settings-tab-open-${width}.png`, { fullPage: true });
   });
 
   test(`groups — chat-tab (one message sent) @ ${width}px`, async ({ page }) => {

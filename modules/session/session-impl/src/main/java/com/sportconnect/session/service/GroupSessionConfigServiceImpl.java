@@ -43,6 +43,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -152,7 +153,12 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         if (recurrences.isEmpty()) {
             return List.of();
         }
-        return recurrences.stream().map(this::toResponse).toList();
+        // One batch lookup for the distinct locations of every configuration, never one per row.
+        List<Long> locationIds = recurrences.stream().map(GroupSessionRecurrence::getLocationId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, LocationResponse> locations = locationIds.isEmpty() ? Map.of() : locationService.getLocationsByIds(locationIds);
+        return recurrences.stream()
+                .map(recurrence -> toResponse(recurrence, recurrence.getLocationId() == null ? null : locations.get(recurrence.getLocationId())))
+                .toList();
     }
 
     @Override
@@ -161,7 +167,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         requireManager(groupId, callerId);
         RecurrenceMode mode = settingsRepository.findById(groupId).map(GroupSessionSettings::getMode).orElse(RecurrenceMode.WEEKLY);
         GroupSessionRecurrence recurrence = GroupSessionRecurrence.builder().groupId(groupId).mode(mode).build();
-        apply(recurrence, request, groupId, callerId);
+        LocationResponse location = apply(recurrence, request, groupId, callerId);
 
         if (recurrenceRepository.countByGroupIdAndModeAndDayKey(groupId, mode, recurrence.getDayKey()) >= MAX_PER_DAY) {
             throw dayLimit();
@@ -170,7 +176,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_ADDED, "added a", saved);
         eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
-        return toResponse(saved);
+        return toResponse(saved, location);
     }
 
     @Override
@@ -179,7 +185,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                                                            GroupSessionRecurrenceRequest request) {
         requireManager(groupId, callerId);
         GroupSessionRecurrence recurrence = findRecurrence(groupId, recurrenceId);
-        apply(recurrence, request, groupId, callerId);
+        LocationResponse location = apply(recurrence, request, groupId, callerId);
 
         if (recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(groupId, recurrence.getMode(), recurrence.getDayKey(),
                 recurrenceId) >= MAX_PER_DAY) {
@@ -189,7 +195,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_UPDATED, "changed the", saved);
         eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
-        return toResponse(saved);
+        return toResponse(saved, location);
     }
 
     @Override
@@ -270,9 +276,10 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     /**
      * Validates {@code request} and writes it onto {@code recurrence} (a new, mode-bearing one or an existing one: its mode
      * never changes). The validated members of a {@code SPECIFIC} audience go onto the recurrence itself (null otherwise). Nothing is
-     * saved here.
+     * saved here. Returns the resolved location of the request (null when it names none), already fetched for the sport check, so the
+     * response of a create or an update carries it without a second lookup.
      */
-    private void apply(GroupSessionRecurrence recurrence, GroupSessionRecurrenceRequest request, Long groupId, UUID callerId) {
+    private LocationResponse apply(GroupSessionRecurrence recurrence, GroupSessionRecurrenceRequest request, Long groupId, UUID callerId) {
         RecurrenceMode mode = recurrence.getMode();
         if (!mode.isValidDay(request.getDayKey())) {
             throw new BadRequestException("SESSION_RECURRENCE_DAY_INVALID",
@@ -285,8 +292,9 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         if (group.getSportId() == null) {
             throw new BadRequestException("SESSION_SPORT_REQUIRED", "This group has no sport, so it cannot have session configurations", null);
         }
+        LocationResponse location = null;
         if (request.getLocationId() != null) {
-            LocationResponse location = locationService.getLocation(request.getLocationId());
+            location = locationService.getLocation(request.getLocationId());
             if (!group.getSportId().equals(location.getSportId())) {
                 throw new BadRequestException("GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH",
                         "locationId does not match this group's sport", null);
@@ -315,6 +323,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         recurrence.setAttributes(attributeResolver.resolve(request.getAttributes(), group.getSportId()));
         List<String> missing = missingFields(recurrence);
         recurrence.setDraft(!missing.isEmpty());
+        return location;
     }
 
     /** What a complete configuration still lacks: the same readiness a session needs to be scheduled (location, duration, a fixed fee's amount). */
@@ -340,7 +349,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                 .build();
     }
 
-    private GroupSessionRecurrenceResponse toResponse(GroupSessionRecurrence recurrence) {
+    private GroupSessionRecurrenceResponse toResponse(GroupSessionRecurrence recurrence, LocationResponse location) {
         return GroupSessionRecurrenceResponse.builder()
                 .id(recurrence.getId())
                 .groupId(recurrence.getGroupId())
@@ -349,6 +358,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                 .startTime(recurrence.getStartTime())
                 .durationMinutes(recurrence.getDurationMinutes())
                 .locationId(recurrence.getLocationId())
+                .location(location)
                 .locationNote(recurrence.getLocationNote())
                 .audience(recurrence.getAudience())
                 .audienceUserIds(recurrence.getAudienceUserIds() != null ? recurrence.getAudienceUserIds() : List.of())

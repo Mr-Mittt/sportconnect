@@ -247,6 +247,140 @@ describe('useSettingsUnsavedGuard', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
   });
 
+  // ---- CLIENT-GROUP-SESSION-4: rules/schedule save when the field loses focus; Permission has its own Save ----------------
+
+  describe('rules/schedule save on blur, Permission Save', () => {
+    function okInfo(data: GroupInfo) {
+      return { data: { success: true, message: '', data, timestamp: '' } };
+    }
+
+    it('commitInfoField saves just that field (a partial PUT), and the text stays shown while it saves', async () => {
+      mockGetEndpoints(settings(), info({ rules: 'Be nice', schedule: 'Sundays' }));
+      const { box } = renderGuard(1, true);
+      await waitFor(() => expect(box.current?.info).toBeDefined());
+
+      let resolvePut: (value: ReturnType<typeof okInfo>) => void = () => {};
+      const putSpy = vi.spyOn(apiClient, 'put').mockReturnValueOnce(new Promise((resolve) => { resolvePut = resolve; }));
+      act(() => box.current?.updateInfoField('rules', 'Be nice and quiet'));
+      await act(async () => box.current?.commitInfoField('rules'));
+
+      expect(putSpy).toHaveBeenCalledTimes(1);
+      expect(putSpy).toHaveBeenCalledWith('/groups/1/generalData', { rules: 'Be nice and quiet' });
+      // While the save is in flight: the new text is still what the field shows, and it is not a dirty draft (leaving the tab must not raise the dialog).
+      expect(box.current?.info?.rules).toBe('Be nice and quiet');
+      expect(box.current?.hasUnsavedChanges).toBe(false);
+
+      await act(async () => resolvePut(okInfo(info({ rules: 'Be nice and quiet', schedule: 'Sundays' }))));
+      await waitFor(() => expect(box.current?.info?.rules).toBe('Be nice and quiet'));
+      expect(box.current?.hasUnsavedChanges).toBe(false);
+      expect(box.current?.infoFieldError).toBeNull();
+    });
+
+    it('commitInfoField sends nothing when the field is back at its saved value, or was never edited', async () => {
+      mockGetEndpoints(settings(), info({ rules: 'Be nice' }));
+      const { box } = renderGuard(1, true);
+      await waitFor(() => expect(box.current?.info).toBeDefined());
+      const putSpy = vi.spyOn(apiClient, 'put');
+
+      await act(async () => box.current?.commitInfoField('rules'));
+      act(() => box.current?.updateInfoField('rules', 'Be nice'));
+      await act(async () => box.current?.commitInfoField('rules'));
+
+      expect(putSpy).not.toHaveBeenCalled();
+      expect(box.current?.hasUnsavedChanges).toBe(false);
+    });
+
+    it('a failed field save puts the text back into the draft (dirty, guarded) and names the field; the next commit clears the error', async () => {
+      mockGetEndpoints(settings(), info({ rules: 'Be nice', schedule: 'Sundays' }));
+      const { box } = renderGuard(1, true);
+      await waitFor(() => expect(box.current?.info).toBeDefined());
+
+      vi.spyOn(apiClient, 'put').mockRejectedValueOnce(new Error('boom'));
+      act(() => box.current?.updateInfoField('rules', 'Be nice and quiet'));
+      await act(async () => box.current?.commitInfoField('rules'));
+
+      await waitFor(() => expect(box.current?.infoFieldError?.key).toBe('rules'));
+      expect(box.current?.info?.rules).toBe('Be nice and quiet');
+      expect(box.current?.hasUnsavedChanges).toBe(true);
+
+      vi.spyOn(apiClient, 'put').mockResolvedValueOnce(okInfo(info({ rules: 'Be nice', schedule: 'Mondays' })));
+      act(() => box.current?.updateInfoField('schedule', 'Mondays'));
+      await act(async () => box.current?.commitInfoField('schedule'));
+      await waitFor(() => expect(box.current?.infoFieldError).toBeNull());
+    });
+
+    it('two fields saved one right after the other both settle (neither is left saving)', async () => {
+      mockGetEndpoints(settings(), info({ rules: 'a', schedule: 'b' }));
+      const { box } = renderGuard(1, true);
+      await waitFor(() => expect(box.current?.info).toBeDefined());
+
+      vi.spyOn(apiClient, 'put').mockImplementation(async (_url: string, body: unknown) =>
+        okInfo(info({ rules: 'a2', schedule: 'b2', ...(body as Partial<GroupInfo>) })),
+      );
+      act(() => {
+        box.current?.updateInfoField('rules', 'a2');
+        box.current?.updateInfoField('schedule', 'b2');
+      });
+      await act(async () => {
+        box.current?.commitInfoField('rules');
+        box.current?.commitInfoField('schedule');
+      });
+
+      await waitFor(() => expect(box.current?.info?.schedule).toBe('b2'));
+      expect(box.current?.info?.rules).toBe('a2');
+      expect(box.current?.hasUnsavedChanges).toBe(false);
+    });
+
+    it('saveSettings saves only the Permission toggles and leaves a failed rules draft for the dialog Save', async () => {
+      mockGetEndpoints(settings(), info({ rules: 'Be nice' }));
+      const { box } = renderGuard(1, true);
+      await waitFor(() => expect(box.current?.info).toBeDefined());
+
+      vi.spyOn(apiClient, 'put').mockRejectedValueOnce(new Error('boom'));
+      act(() => box.current?.updateInfoField('rules', 'Be nice and quiet'));
+      await act(async () => box.current?.commitInfoField('rules'));
+      await waitFor(() => expect(box.current?.infoFieldError?.key).toBe('rules'));
+
+      const putSpy = vi.spyOn(apiClient, 'put').mockResolvedValueOnce({
+        data: { success: true, message: '', data: settings({ allowMemberInvites: true }), timestamp: '' },
+      });
+      putSpy.mockClear(); // the same spy also counted the failed rules save above
+      act(() => box.current?.updateSettingField('allowMemberInvites', true));
+      expect(box.current?.hasSettingsChanges).toBe(true);
+      await act(async () => box.current?.saveSettings());
+
+      await waitFor(() => expect(box.current?.hasSettingsChanges).toBe(false));
+      expect(putSpy).toHaveBeenCalledTimes(1);
+      expect(putSpy).toHaveBeenCalledWith('/groups/1/settings', { allowMemberInvites: true });
+      // The rules draft that failed is still there, and still guarded.
+      expect(box.current?.info?.rules).toBe('Be nice and quiet');
+      expect(box.current?.hasUnsavedChanges).toBe(true);
+    });
+
+    it('a failed Permission save keeps the draft and reports the error', async () => {
+      mockGetEndpoints(settings(), info());
+      const { box } = renderGuard(1, true);
+      await waitFor(() => expect(box.current?.settings).toBeDefined());
+
+      vi.spyOn(apiClient, 'put').mockRejectedValueOnce(new Error('boom'));
+      act(() => box.current?.updateSettingField('allowMemberInvites', true));
+      await act(async () => box.current?.saveSettings());
+
+      await waitFor(() => expect(box.current?.isSettingsSaveError).toBe(true));
+      expect(box.current?.hasSettingsChanges).toBe(true);
+    });
+
+    it('hasSettingsChanges is only about the toggles, not rules/schedule', async () => {
+      mockGetEndpoints(settings(), info({ rules: 'Be nice' }));
+      const { box } = renderGuard(1, true);
+      await waitFor(() => expect(box.current?.info).toBeDefined());
+
+      act(() => box.current?.updateInfoField('rules', 'changed'));
+      expect(box.current?.hasUnsavedChanges).toBe(true);
+      expect(box.current?.hasSettingsChanges).toBe(false);
+    });
+  });
+
   it('does not fetch settings/info and reports no unsaved changes when the tab is inactive', () => {
     const getSpy = vi.spyOn(apiClient, 'get');
     const { box } = renderGuard(1, false);

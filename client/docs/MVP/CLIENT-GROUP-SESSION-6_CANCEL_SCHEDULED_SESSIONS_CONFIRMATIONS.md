@@ -4,6 +4,8 @@
 **Type:** New Feature · **Depends on:** SESSION-GROUP-6, CLIENT-GROUP-SESSION-4
 **Filed:** 2026-11-19, from the owner's group-session specification (the cancel confirmation on OFF, delete and mode switch).
 
+**Scope change (owner, 2026-11-20, at the CLIENT-GROUP-SESSION-4 design): the OFF prompt moved out of this ticket.** CLIENT-GROUP-SESSION-4 builds the ON/OFF confirmations itself (OFF is always shown, with "Hold on" / "No, cancel the remaining sessions and turn off" / "Yes, keep them and turn off", sending `cancelScheduled`). This ticket keeps the **delete-a-configuration** and **mode-switch** prompts and the count lookup for them; where this text says "turning generation OFF", read only the two that remain.
+
 Before turning generation OFF, deleting a configuration or switching the recurrence mode, ask the server for the count of affected regular sessions (SESSION-GROUP-6). When it is above zero show "{x} sessions are available. Do you want to cancel them?" with **Leave it there** / **Cancel**; the choice is sent as `cancelScheduled` on the mutating call. When the count is zero, no dialog. The mode-switch dialog of CLIENT-GROUP-SESSION-4 comes first, then this one. All strings en and vi (plural forms), tests, stories, MSW handlers, Playwright flow, error rows for any new code.
 
 **Consumer census:** the three mutation hooks of CLIENT-GROUP-SESSION-4, `feedKeys`/`sessionKeys` invalidation (cancelled sessions leave the Scheduled bucket), e2e mocks.

@@ -572,6 +572,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
 
         then:
         1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [r1, r2]
+        1 * locationService.getLocationsByIds([9L]) >> [(9L): LocationResponse.builder().id(9L).sportId(1L).build()]
         result*.id == [77L, 78L]
         result[0].audienceUserIds == []
         result[1].audienceUserIds == [a]
@@ -582,6 +583,96 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         then:
         1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> []
         empty == []
+    }
+
+    // ---- CLIENT-GROUP-SESSION-4: the resolved location on every configuration ------------------------------------------
+
+    def "the list resolves the distinct locations of all configurations in ONE batch lookup and puts each on its own row"() {
+        given:
+        def r1 = stored(dayKey: 1)                                     // location 9
+        def r2 = stored(dayKey: 2)
+        r2.id = 78L
+        r2.locationId = 10L
+        def r3 = stored(dayKey: 3)                                     // location 9 again: asked once
+        r3.id = 79L
+        def r4 = stored(dayKey: 4)                                     // no location at all
+        r4.id = 80L
+        r4.locationId = null
+        def court = LocationResponse.builder().id(9L).name("Court 9").sportId(1L).build()
+        def hall = LocationResponse.builder().id(10L).name("Hall 10").sportId(1L).build()
+
+        when:
+        def result = service.getRecurrences(5L, admin)
+
+        then:
+        1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [r1, r2, r3, r4]
+        1 * locationService.getLocationsByIds([9L, 10L]) >> [(9L): court, (10L): hall]
+        0 * locationService.getLocation(_)
+        result*.location == [court, hall, court, null]
+        result*.locationId == [9L, 10L, 9L, null]
+    }
+
+    def "a location that is no longer available comes back null while its id stays; no lookup at all when no configuration has a location"() {
+        given:
+        def gone = stored(dayKey: 1)
+        def none = stored(dayKey: 2)
+        none.id = 78L
+        none.locationId = null
+
+        when:
+        def result = service.getRecurrences(5L, admin)
+
+        then:
+        1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [gone, none]
+        1 * locationService.getLocationsByIds([9L]) >> [:]
+        result[0].location == null
+        result[0].locationId == 9L
+
+        when:
+        def noLocations = service.getRecurrences(5L, admin)
+
+        then:
+        1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [none]
+        0 * locationService.getLocationsByIds(_)
+        0 * locationService.getLocation(_)
+        noLocations[0].location == null
+    }
+
+    def "creating and updating answer with the location they already fetched for the sport check (no second lookup); without one the location is null"() {
+        given:
+        def court = LocationResponse.builder().id(9L).name("Court 9").sportId(1L).build()
+
+        when:
+        def created = service.createRecurrence(5L, admin, complete().build())
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.empty()
+        1 * locationService.getLocation(9L) >> court
+        0 * locationService.getLocationsByIds(_)
+        1 * recurrenceRepository.countByGroupIdAndModeAndDayKey(5L, RecurrenceMode.WEEKLY, 1) >> 0L
+        created.location == court
+        created.locationId == 9L
+
+        when:
+        def updated = service.updateRecurrence(5L, 77L, admin, complete().build())
+
+        then:
+        1 * recurrenceRepository.findByIdAndGroupId(77L, 5L) >> Optional.of(stored())
+        1 * locationService.getLocation(9L) >> court
+        0 * locationService.getLocationsByIds(_)
+        1 * recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(5L, RecurrenceMode.WEEKLY, 1, 77L) >> 0L
+        updated.location == court
+
+        when:
+        def draft = service.createRecurrence(5L, admin, complete().locationId(null).build())
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.empty()
+        0 * locationService.getLocation(_)
+        0 * locationService.getLocationsByIds(_)
+        1 * recurrenceRepository.countByGroupIdAndModeAndDayKey(5L, RecurrenceMode.WEEKLY, 1) >> 0L
+        draft.location == null
+        draft.locationId == null
     }
 
     // ---- SESSION-GROUP-5: asking the generator to look at the group ----------------------------------------------------

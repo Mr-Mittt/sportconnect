@@ -185,6 +185,10 @@
     "SESSION_RECORD_LIMIT_REACHED": "This session has reached its limit of {{maxRecords}} results.",
     "SESSION_RECORD_NOT_LOGGABLE": "Results can only be logged while a session is ongoing or completed.",
     "SESSION_RECORD_WINDOW_CLOSED": "The 24 hours for changing this session's results have passed.",
-    "SESSION_RECORD_NOT_ALLOWED": "You can't view or change this session's results."
+    "SESSION_RECORD_NOT_ALLOWED": "You can't view or change this session's results.",
+    "SESSION_RECURRENCE_DAY_LIMIT": "A day can have up to {{limit}} configurations.",
+    "SESSION_RECURRENCE_DAY_INVALID": "That day doesn't fit this recurrence.",
+    "SESSION_RECURRENCE_START_REQUIRED": "Pick a start time.",
+    "SESSION_RECURRENCE_NOT_FOUND": "This configuration no longer exists."
   }
 }

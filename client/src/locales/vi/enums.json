@@ -61,6 +61,20 @@
       "SESSION_FEMALE_SLOTS_CHANGED": "chỗ trống cho nữ",
       "SESSION_GAME_MOOD_CHANGED": "cường độ",
       "SESSION_VISIBILITY_CHANGED": "chế độ hiển thị"
+    },
+    "GROUP_SESSION_RECURRENCE_ADDED": "{{name}} đã thêm một buổi chơi {{mode}} vào {{day}} lúc {{time}}",
+    "GROUP_SESSION_RECURRENCE_UPDATED": "{{name}} đã thay đổi buổi chơi {{mode}} vào {{day}} lúc {{time}}",
+    "GROUP_SESSION_RECURRENCE_DELETED": "{{name}} đã xóa buổi chơi {{mode}} vào {{day}} lúc {{time}}",
+    "GROUP_SESSION_GENERATION_ON": "{{name}} đã bật tự động tạo buổi chơi định kỳ ({{mode}})",
+    "GROUP_SESSION_GENERATION_OFF": "{{name}} đã tắt tự động tạo buổi chơi định kỳ",
+    "GROUP_SESSION_MODE_CHANGED": "{{name}} đã đổi chu kỳ lặp sang {{mode}}",
+    "modeWord": {
+      "WEEKLY": "hằng tuần",
+      "MONTHLY": "hằng tháng"
+    },
+    "dayPhrase": {
+      "WEEKLY": "{{day}}",
+      "MONTHLY": "ngày {{day}}"
     }
   },
   "notifications": {

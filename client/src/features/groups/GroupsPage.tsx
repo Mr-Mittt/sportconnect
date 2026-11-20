@@ -71,6 +71,7 @@ import { useGroupsPageData } from './useGroupsPageData';
 import { useInviteFriendModalData } from './useInviteFriendModalData';
 import { useJoinGroupModalData } from './useJoinGroupModalData';
 import { useSettingsUnsavedGuard } from './useSettingsUnsavedGuard';
+import { useGroupSessionsConfigData } from './sessionConfig/useGroupSessionsConfigData';
 
 // Callback-only entry points with no destination yet — same "affordance
 // exists, destination doesn't yet" pattern as HF-3/HF-4/HF-7's other no-ops.
@@ -261,6 +262,8 @@ export function GroupsPage() {
     selectedGroupId ?? undefined,
     activeGroupTab === 'settings',
   );
+  // CLIENT-GROUP-SESSION-4: the Sessions section of the settings tab (regular sessions ON/OFF, the mode, the configurations); each action saves at once.
+  const sessionsConfig = useGroupSessionsConfigData(selectedGroupId ?? undefined, activeGroupTab === 'settings');
   const guardedSetActiveGroupTab = (tab: GroupTabKey) =>
     settingsGuard.guard(() => setActiveGroupTab(tab));
   const guardedSelectGroupAndShowPosts = (groupId: number | null, groupSportId?: number | null) =>
@@ -840,11 +843,14 @@ export function GroupsPage() {
                       isGroupInfoLoading={settingsGuard.isInfoLoading}
                       isGroupInfoError={settingsGuard.isInfoError}
                       onUpdateGroupInfoField={settingsGuard.updateInfoField}
-                      hasUnsavedSettingsChanges={settingsGuard.hasUnsavedChanges}
-                      onSaveSettings={settingsGuard.save}
-                      isSavingSettings={settingsGuard.isSaving}
-                      isSaveSettingsError={settingsGuard.isSaveError}
-                      saveSettingsErrorText={getCodedErrorMessage(settingsGuard.saveError)}
+                      onCommitGroupInfoField={settingsGuard.commitInfoField}
+                      groupInfoFieldError={settingsGuard.infoFieldError}
+                      hasUnsavedPermissionChanges={settingsGuard.hasSettingsChanges}
+                      onSavePermission={settingsGuard.saveSettings}
+                      isSavingPermission={settingsGuard.isSavingSettings}
+                      isSavePermissionError={settingsGuard.isSettingsSaveError}
+                      savePermissionErrorText={getCodedErrorMessage(settingsGuard.settingsSaveError)}
+                      sessionsConfig={sessionsConfig}
                     />
                   )}
                 </div>

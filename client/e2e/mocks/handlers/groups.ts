@@ -22,6 +22,8 @@ import {
   mockGroupInvitation,
   mockGroupJoinRequest,
   mockGroupMembers,
+  mockGroupSessionRecurrences,
+  mockGroupSessionSettings,
   mockGroupSettings,
   mockOwnedGroup,
   mockPageResponse,
@@ -30,6 +32,7 @@ import {
   mockSentInvitation,
   mockUser,
 } from '../fixtures.ts';
+import type { GroupSessionRecurrence, GroupSessionSettings, RecurrenceMode } from '../../../src/features/groups/sessionConfig/types.ts';
 import { matchesName } from '../../../src/shared/lib/nameMatch.ts';
 import { getOverrides } from '../overrides.ts';
 import { createSessionStore, sessionIdFromRequest } from '../sessionStore.ts';
@@ -42,11 +45,22 @@ function apiError(message: string): ApiResponse<null> {
   return { success: false, message, data: null, timestamp: new Date().toISOString() };
 }
 
+/** A coded failure in the C12 shape: `errorCode` is what the client turns into its own en/vi copy. */
+function codedError(status: number, errorCode: string, message: string): Response {
+  return HttpResponse.json({ ...apiError(message), errorCode }, { status });
+}
+
 function requireAuth(request: Request): Response | null {
   if (!request.headers.get('Authorization')) {
     return HttpResponse.json(apiError('Unauthorized'), { status: 401 });
   }
   return null;
+}
+
+/** The test user's role in a group of this session (`undefined` = not a member), as the group lists carry it. */
+function callerRole(state: { userGroupsState: Group[] }, groupId: number): string | null | undefined {
+  const group = state.userGroupsState.find((candidate) => candidate.id === groupId);
+  return group === undefined ? undefined : group.currentUserRole;
 }
 
 interface GroupsSession {
@@ -71,6 +85,9 @@ interface GroupsSession {
   // Keeping this separate avoids coupling GRP-7's new merged-queue behavior
   // to GRP-3's existing fixture/tests.
   groupInvitationsState: Record<number, GroupInvitation[]>;
+  // CLIENT-GROUP-SESSION-4: a group's regular-session settings and configurations (both modes), keyed by groupId; a group with no entry is OFF, weekly, with none.
+  groupSessionSettingsState: Record<number, GroupSessionSettings>;
+  groupSessionRecurrencesState: Record<number, GroupSessionRecurrence[]>;
   // GRP-7: pending_user invitations addressed to the test user, across every
   // group — not group-scoped, unlike the other invitation state above.
   userPendingInvitationsState: GroupInvitation[];
@@ -104,12 +121,29 @@ function defaultGroupsSession(): GroupsSession {
       mockPublicGroup,
     ],
     joinRequestsState: [],
-    groupSettingsState: { [mockOwnedGroup.id]: { ...mockGroupSettings } },
-    groupInfoState: { [mockOwnedGroup.id]: { ...mockGroupInfo } },
+    // mockGroup (the one the test user only belongs to) has settings and info too: the real server lets a member read them, and the Settings tab of a
+    // member shows them read-only. Without them the member's tab raced a 404 ("Couldn't load permission settings") against the test's assertions.
+    groupSettingsState: {
+      [mockOwnedGroup.id]: { ...mockGroupSettings },
+      [mockGroup.id]: { ...mockGroupSettings, groupId: mockGroup.id },
+    },
+    groupInfoState: {
+      [mockOwnedGroup.id]: { ...mockGroupInfo },
+      [mockGroup.id]: { ...mockGroupInfo, groupId: mockGroup.id, groupName: mockGroup.groupName, isPrivate: mockGroup.isPrivate },
+    },
     groupMembersState: { [mockOwnedGroup.id]: mockGroupMembers.map((member) => ({ ...member })) },
     groupJoinRequestsState: { [mockOwnedGroup.id]: [{ ...mockGroupJoinRequest }] },
     sentInvitationsState: { [mockOwnedGroup.id]: [{ ...mockSentInvitation }] },
     groupInvitationsState: { [mockOwnedGroup.id]: [{ ...mockGroupInvitation }] },
+    // mockGroup is the one the test user only belongs to: generation is ON there too, with one Tuesday slot, so a member's read-only view has something to show.
+    groupSessionSettingsState: {
+      [mockOwnedGroup.id]: { ...mockGroupSessionSettings },
+      [mockGroup.id]: { ...mockGroupSessionSettings, groupId: mockGroup.id },
+    },
+    groupSessionRecurrencesState: {
+      [mockOwnedGroup.id]: mockGroupSessionRecurrences.map((recurrence) => ({ ...recurrence })),
+      [mockGroup.id]: [{ ...mockGroupSessionRecurrences[0], groupId: mockGroup.id }],
+    },
     userPendingInvitationsState: [{ ...mockReceivedInvitation }],
     nextGroupId: 100,
     nextJoinRequestId: 100,
@@ -443,6 +477,65 @@ export const groupHandlers: HttpHandler[] = [
       .slice(0, size)
       .map((member) => ({ userId: member.userId, fullName: member.userFullName, avatarUrl: member.userAvatarUrl }));
     return HttpResponse.json(apiResponse(found, 'Members retrieved successfully'));
+  }),
+
+  // CLIENT-GROUP-SESSION-4 (SESSION-GROUP-4/6): a group's regular-session settings and configurations. Read is any member's; every write is the owner's or an
+  // admin's (403 `SESSION_GROUP_ADMIN_REQUIRED`), a non-member gets 403 `SESSION_GROUP_MEMBER_REQUIRED`. The mock has no regular sessions, so a cancel
+  // (`cancelScheduled`) cancels none and answers `cancelledSessions: 0`.
+  http.get('/api/sessions/group/:groupId/settings', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const state = groupsSessions.get(sessionIdFromRequest(request));
+    if (callerRole(state, groupId) === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
+    const settings = state.groupSessionSettingsState[groupId] ?? { groupId, enabled: false, mode: 'WEEKLY' as RecurrenceMode, cancelledSessions: 0 };
+    return HttpResponse.json(apiResponse(settings));
+  }),
+
+  http.put('/api/sessions/group/:groupId/settings', async ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const state = groupsSessions.get(sessionIdFromRequest(request));
+    const role = callerRole(state, groupId);
+    if (role === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
+    if (role !== 'group_owner' && role !== 'group_admin') return codedError(403, 'SESSION_GROUP_ADMIN_REQUIRED', 'Only the group owner or an admin can do that');
+    const body = (await request.json()) as { enabled?: boolean; mode?: RecurrenceMode };
+    const current = state.groupSessionSettingsState[groupId] ?? { groupId, enabled: false, mode: 'WEEKLY' as RecurrenceMode, cancelledSessions: 0 };
+    const updated: GroupSessionSettings = {
+      ...current,
+      enabled: body.enabled ?? current.enabled,
+      mode: body.mode ?? current.mode,
+      cancelledSessions: 0,
+    };
+    state.groupSessionSettingsState[groupId] = updated;
+    return HttpResponse.json(apiResponse(updated, 'Settings updated'));
+  }),
+
+  http.get('/api/sessions/group/:groupId/recurrences', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const state = groupsSessions.get(sessionIdFromRequest(request));
+    if (callerRole(state, groupId) === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
+    return HttpResponse.json(apiResponse(state.groupSessionRecurrencesState[groupId] ?? []));
+  }),
+
+  http.delete('/api/sessions/group/:groupId/recurrences/:recurrenceId', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const recurrenceId = Number(params.recurrenceId);
+    const state = groupsSessions.get(sessionIdFromRequest(request));
+    const role = callerRole(state, groupId);
+    if (role === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
+    if (role !== 'group_owner' && role !== 'group_admin') return codedError(403, 'SESSION_GROUP_ADMIN_REQUIRED', 'Only the group owner or an admin can do that');
+    const list = state.groupSessionRecurrencesState[groupId] ?? [];
+    if (!list.some((recurrence) => recurrence.id === recurrenceId)) {
+      return codedError(404, 'SESSION_RECURRENCE_NOT_FOUND', 'Recurrence not found');
+    }
+    state.groupSessionRecurrencesState[groupId] = list.filter((recurrence) => recurrence.id !== recurrenceId);
+    return HttpResponse.json(apiResponse({ count: 0 }, 'Recurrence deleted'));
   }),
 
   http.get('/api/groups/:groupId/join-requests', ({ request, params }) => {

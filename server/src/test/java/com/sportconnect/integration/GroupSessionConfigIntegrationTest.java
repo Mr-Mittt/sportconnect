@@ -239,12 +239,41 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.data[0].startTime").value("07:15:00"))
                 .andExpect(jsonPath("$.data[0].durationMinutes").value(90))
                 .andExpect(jsonPath("$.data[0].locationId").value(locationId))
+                .andExpect(jsonPath("$.data[0].location.id").value(locationId))
+                .andExpect(jsonPath("$.data[0].location.name").value("Court"))
                 .andExpect(jsonPath("$.data[0].audience").value("ALL_MEMBERS"))
                 .andExpect(jsonPath("$.data[0].feeType").value("FREE"))
                 .andExpect(jsonPath("$.data[0].gameMood").value(5))
                 .andExpect(jsonPath("$.data[0].draft").value(false))
                 .andExpect(jsonPath("$.data[0].missing.length()").value(0));
         assertThat(systemPosts()).extracting(Post::getSystemCode).contains(SystemCode.GROUP_SESSION_RECURRENCE_ADDED);
+    }
+
+    // CLIENT-GROUP-SESSION-4: the response of a create, an update and the list carries the resolved location (real LocationService), so the
+    // client lists a slot's place without asking for each location; a configuration with none has no location.
+    @Test
+    void everyConfigurationResponse_carriesTheResolvedLocation_andADraftWithoutOneHasNone() throws Exception {
+        String created = sendAs(adminId, "POST", "/recurrences", complete(1, "18:00")).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.location.id").value(locationId))
+                .andExpect(jsonPath("$.data.location.name").value("Court"))
+                .andReturn().getResponse().getContentAsString();
+        Long id = objectMapper.readTree(created).get("data").get("id").asLong();
+
+        Map<String, Object> noLocation = new HashMap<>();
+        noLocation.put("dayKey", 2);
+        noLocation.put("startTime", "19:00");
+        sendAs(adminId, "POST", "/recurrences", noLocation).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.locationId").doesNotExist())
+                .andExpect(jsonPath("$.data.location").doesNotExist());
+
+        sendAs(adminId, "PUT", "/recurrences/" + id, complete(1, "20:00")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.location.name").value("Court"));
+
+        getAs(memberId, "/recurrences").andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2))
+                .andExpect(jsonPath("$.data[0].location.id").value(locationId))
+                .andExpect(jsonPath("$.data[0].location.name").value("Court"))
+                .andExpect(jsonPath("$.data[1].location").doesNotExist());
     }
 
     @Test

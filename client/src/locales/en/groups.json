@@ -160,7 +160,64 @@
     "leave": "Leave Group",
     "transferOwnership": "Transfer ownership to another member before you can leave.",
     "leaveError": "Couldn't leave the group. Try again.",
-    "delete": "Delete Group"
+    "delete": "Delete Group",
+    "sessions": {
+      "title": "Sessions",
+      "regular": "Regular sessions",
+      "regularDesc": "Create sessions automatically from the group's recurrence configurations.",
+      "recurrence": "Recurrence",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "add": "Add",
+      "loadError": "Couldn't load the session settings.",
+      "listError": "Couldn't load the configurations.",
+      "empty": "No configurations yet.",
+      "dayTitle": "{{day}} ({{count}})",
+      "monthDay": "{{ordinal}}",
+      "draft": "Draft",
+      "noLocation": "No location",
+      "noDuration": "No duration",
+      "noFee": "No fee amount",
+      "edit": "Edit",
+      "delete": "Delete",
+      "editLabel": "Edit {{slot}}",
+      "deleteLabel": "Delete {{slot}}",
+      "toggleError": "Couldn't update the session settings. Please try again.",
+      "deleteError": "Couldn't delete this configuration. Please try again.",
+      "onDialog": {
+        "title": "Turn on regular sessions?",
+        "body": "By switching this feature ON, your regular sessions will be generated automatically from the group's recurrence configurations. Are you ready?",
+        "back": "Let me check again",
+        "confirm": "Got it, turn on"
+      },
+      "offDialog": {
+        "title": "Turn off regular sessions?",
+        "body": "By switching this feature OFF, your regular sessions will stop being generated. The sessions already scheduled will stay here. Is that OK?",
+        "hold": "Hold on, don't turn off",
+        "cancelAndOff": "No, cancel the remaining sessions and turn off",
+        "keepAndOff": "Yes, keep them and turn off"
+      },
+      "modeDialog": {
+        "title": "Switch the recurrence?",
+        "body": "By switching the recurrence mode, your current configurations are not usable until you switch back.",
+        "stay": "Stay",
+        "confirm": "Got it"
+      },
+      "deleteDialog": {
+        "title": "Delete this configuration?",
+        "body": "The session on {{slot}} will no longer be created. Sessions already created stay.",
+        "cancel": "Keep it",
+        "confirm": "Delete"
+      },
+      "slotAt": "{{day}} at {{time}}",
+      "locationUnavailable": "Location unavailable"
+    },
+    "leaveDialog": {
+      "title": "Leave this group?",
+      "body": "You will no longer see this group's posts and sessions.",
+      "stay": "Stay",
+      "confirm": "Leave"
+    }
   },
   "chat": {
     "loading": "Loading…",

@@ -185,6 +185,10 @@
     "SESSION_RECORD_LIMIT_REACHED": "Buổi chơi này đã đạt giới hạn {{maxRecords}} kết quả.",
     "SESSION_RECORD_NOT_LOGGABLE": "Chỉ có thể ghi kết quả khi buổi chơi đang diễn ra hoặc đã hoàn thành.",
     "SESSION_RECORD_WINDOW_CLOSED": "Đã quá 24 giờ để thay đổi kết quả của buổi chơi này.",
-    "SESSION_RECORD_NOT_ALLOWED": "Bạn không thể xem hoặc thay đổi kết quả của buổi chơi này."
+    "SESSION_RECORD_NOT_ALLOWED": "Bạn không thể xem hoặc thay đổi kết quả của buổi chơi này.",
+    "SESSION_RECURRENCE_DAY_LIMIT": "Mỗi ngày chỉ có tối đa {{limit}} cấu hình.",
+    "SESSION_RECURRENCE_DAY_INVALID": "Ngày này không phù hợp với chu kỳ đã chọn.",
+    "SESSION_RECURRENCE_START_REQUIRED": "Hãy chọn giờ bắt đầu.",
+    "SESSION_RECURRENCE_NOT_FOUND": "Cấu hình này không còn tồn tại."
   }
 }

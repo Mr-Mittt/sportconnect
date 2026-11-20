@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { Group, GroupInfo, GroupSettings } from '@/features/feed/types';
+import { makeSessionsConfigData } from '../sessionConfig/fixtures';
 import { GroupSettingsTab } from './GroupSettingsTab';
 
 function group(overrides: Partial<Group> = {}): Group {
@@ -70,162 +71,151 @@ const baseProps = {
   isGroupInfoLoading: false,
   isGroupInfoError: false,
   onUpdateGroupInfoField: vi.fn(),
-  hasUnsavedSettingsChanges: false,
-  onSaveSettings: vi.fn(),
-  isSavingSettings: false,
-  isSaveSettingsError: false,
+  onCommitGroupInfoField: vi.fn(),
+  groupInfoFieldError: null,
+  hasUnsavedPermissionChanges: false,
+  onSavePermission: vi.fn(),
+  isSavingPermission: false,
+  isSavePermissionError: false,
+  sessionsConfig: makeSessionsConfigData(),
 };
 
+/** Every section starts collapsed (CLIENT-GROUP-SESSION-4): a test that reads one opens it first. */
+async function expandAll(user: ReturnType<typeof userEvent.setup>) {
+  for (const name of ['General', 'Permission', 'Sessions']) {
+    await user.click(screen.getByRole('button', { name }));
+  }
+}
+
+async function renderExpanded(props: Partial<Parameters<typeof GroupSettingsTab>[0]> & { role: string }) {
+  const { role, ...rest } = props;
+  const user = userEvent.setup();
+  const view = render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole={role} {...rest} />);
+  await expandAll(user);
+  return { user, ...view };
+}
+
 describe('GroupSettingsTab', () => {
-  it('renders General and Permission as separate, default-expanded collapsible sections', () => {
+  it('renders General, Permission and Sessions as separate collapsible sections, all collapsed by default', () => {
     render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_owner" />);
 
-    expect(screen.getByRole('button', { name: 'General' })).toHaveAttribute('data-state', 'open');
-    expect(screen.getByRole('button', { name: 'Permission' })).toHaveAttribute('data-state', 'open');
-    // Content from both sections is visible at once.
-    expect(screen.getByText('Privacy')).toBeInTheDocument();
-    expect(screen.getByText('Allow member posts')).toBeInTheDocument();
+    for (const name of ['General', 'Permission', 'Sessions']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('data-state', 'closed');
+    }
+    // Nothing of a section's content shows until it is opened.
+    expect(screen.queryByText('Privacy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Allow member posts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Regular sessions')).not.toBeInTheDocument();
   });
 
-  it('collapsing General hides its content but leaves Permission open', async () => {
+  it('opening a section shows its content and leaves the others closed; opening it again collapses it', async () => {
     const user = userEvent.setup();
     render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_owner" />);
 
     await user.click(screen.getByRole('button', { name: 'General' }));
-    expect(screen.getByRole('button', { name: 'General' })).toHaveAttribute('data-state', 'closed');
+    expect(screen.getByRole('button', { name: 'General' })).toHaveAttribute('data-state', 'open');
+    expect(screen.getByText('Privacy')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Permission' })).toHaveAttribute('data-state', 'closed');
+    expect(screen.queryByText('Allow member posts')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'General' }));
     expect(screen.queryByText('Privacy')).not.toBeInTheDocument();
-    expect(screen.getByText('Allow member posts')).toBeInTheDocument();
   });
 
-  it('member: privacy is read-only, no Delete button, Leave is enabled', () => {
-    render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_member" />);
+  it('member: privacy is read-only, no Delete button, Leave is enabled', async () => {
+    await renderExpanded({ role: 'group_member' });
 
     expect(screen.queryByRole('button', { name: 'Public' })).not.toBeInTheDocument();
     expect(screen.getByText('Public')).toBeInTheDocument();
-    expect(screen.getByText('Only the owner and admins can change this.')).toBeInTheDocument();
+    expect(screen.getAllByText('Only the owner and admins can change this.').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Delete Group' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Leave Group' })).toBeEnabled();
   });
 
   it('admin: can edit privacy, no Delete button', async () => {
-    const user = userEvent.setup();
     const onUpdatePrivacy = vi.fn();
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        onUpdatePrivacy={onUpdatePrivacy}
-        group={group()}
-        currentUserRole="group_admin"
-      />,
-    );
+    const { user } = await renderExpanded({ role: 'group_admin', onUpdatePrivacy });
 
-    const privateButton = screen.getByRole('button', { name: 'Private' });
-    await user.click(privateButton);
+    await user.click(screen.getByRole('button', { name: 'Private' }));
     expect(onUpdatePrivacy).toHaveBeenCalledWith(true);
     expect(screen.queryByRole('button', { name: 'Delete Group' })).not.toBeInTheDocument();
   });
 
   it('owner: can edit privacy, Delete button visible and opens the confirm flow, Leave is disabled', async () => {
-    const user = userEvent.setup();
     const onRequestDelete = vi.fn();
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        onRequestDelete={onRequestDelete}
-        group={group()}
-        currentUserRole="group_owner"
-      />,
-    );
+    const { user } = await renderExpanded({ role: 'group_owner', onRequestDelete });
 
     expect(screen.getByRole('button', { name: 'Public' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Leave Group' })).toBeDisabled();
-    expect(
-      screen.getByText('Transfer ownership to another member before you can leave.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Transfer ownership to another member before you can leave.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Delete Group' }));
     expect(onRequestDelete).toHaveBeenCalled();
   });
 
-  it('surfaces a privacy update error', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        isUpdatePrivacyError
-        group={group()}
-        currentUserRole="group_owner"
-      />,
-    );
+  it('surfaces a privacy update error', async () => {
+    await renderExpanded({ role: 'group_owner', isUpdatePrivacyError: true });
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't update privacy. Try again.");
   });
 
-  it('displays the read-only group type for every role, no cap number', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        group={group()}
-        currentUserRole="group_member"
-        groupSettings={groupSettings({ groupTypeName: 'PREMIUM' })}
-      />,
-    );
+  it('displays the read-only group type for every role, no cap number', async () => {
+    await renderExpanded({ role: 'group_member', groupSettings: groupSettings({ groupTypeName: 'PREMIUM' }) });
     expect(screen.getByText('PREMIUM')).toBeInTheDocument();
     expect(screen.queryByText(/500/)).not.toBeInTheDocument();
   });
 
-  it('member: rules/schedule render as read-only text', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        group={group()}
-        currentUserRole="group_member"
-        groupInfo={groupInfo({ rules: 'No slide tackles.', schedule: 'Fridays at 6pm.' })}
-      />,
-    );
+  it('member: rules/schedule render as read-only text', async () => {
+    await renderExpanded({ role: 'group_member', groupInfo: groupInfo({ rules: 'No slide tackles.', schedule: 'Fridays at 6pm.' }) });
     expect(screen.getByText('No slide tackles.')).toBeInTheDocument();
     expect(screen.getByText('Fridays at 6pm.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Rules')).not.toBeInTheDocument(); // no editable textarea
   });
 
-  it('member: shows empty-state copy when rules/schedule are unset', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        group={group()}
-        currentUserRole="group_member"
-        groupInfo={groupInfo({ rules: null, schedule: null })}
-      />,
-    );
+  it('member: shows empty-state copy when rules/schedule are unset', async () => {
+    await renderExpanded({ role: 'group_member', groupInfo: groupInfo({ rules: null, schedule: null }) });
     expect(screen.getByText('No rules set yet.')).toBeInTheDocument();
     expect(screen.getByText('No schedule set yet.')).toBeInTheDocument();
   });
 
   it('admin: can edit rules/schedule, calling onUpdateGroupInfoField', async () => {
-    const user = userEvent.setup();
     const onUpdateGroupInfoField = vi.fn();
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        onUpdateGroupInfoField={onUpdateGroupInfoField}
-        group={group()}
-        currentUserRole="group_admin"
-      />,
-    );
+    const { user } = await renderExpanded({ role: 'group_admin', onUpdateGroupInfoField });
 
-    const rulesField = screen.getByLabelText('Rules');
-    await user.type(rulesField, '!');
+    await user.type(screen.getByLabelText('Rules'), '!');
     expect(onUpdateGroupInfoField).toHaveBeenCalledWith('rules', 'Be on time.!');
   });
 
-  it('shows a loading/error state for rules/schedule independent of the toggles', () => {
-    const { rerender } = render(
-      <GroupSettingsTab
-        {...baseProps}
-        isGroupInfoLoading
-        groupInfo={undefined}
-        group={group()}
-        currentUserRole="group_owner"
-      />,
+  // CLIENT-GROUP-SESSION-4: leaving a rules/schedule field saves it, there is no Save button for them.
+  it('leaving the Rules field asks the page to save Rules; leaving Schedule asks for Schedule', async () => {
+    const onCommitGroupInfoField = vi.fn();
+    const { user } = await renderExpanded({ role: 'group_admin', onCommitGroupInfoField });
+
+    await user.click(screen.getByLabelText('Rules'));
+    await user.tab();
+    expect(onCommitGroupInfoField).toHaveBeenCalledWith('rules');
+
+    await user.click(screen.getByLabelText('Schedule'));
+    await user.tab();
+    expect(onCommitGroupInfoField).toHaveBeenCalledWith('schedule');
+  });
+
+  it('a failed rules/schedule save shows under that field only, with the coded text when there is one', async () => {
+    const { rerender } = await renderExpanded({
+      role: 'group_admin',
+      groupInfoFieldError: { key: 'schedule', text: 'Only the group owner or an admin can do this.' },
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Only the group owner or an admin can do this.');
+    expect(within(screen.getByLabelText('Schedule').parentElement!).getByRole('alert')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Rules').parentElement!).queryByRole('alert')).not.toBeInTheDocument();
+
+    rerender(
+      <GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_admin" groupInfoFieldError={{ key: 'rules' }} />,
     );
+    expect(within(screen.getByLabelText('Rules').parentElement!).getByRole('alert')).toHaveTextContent("Couldn't save changes. Try again.");
+  });
+
+  it('shows a loading/error state for rules/schedule independent of the toggles', async () => {
+    const { rerender } = await renderExpanded({ role: 'group_owner', isGroupInfoLoading: true, groupInfo: undefined });
     expect(screen.getAllByText('Loading…').length).toBeGreaterThan(0);
 
     rerender(
@@ -240,35 +230,40 @@ describe('GroupSettingsTab', () => {
     expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
   });
 
-  it('member: the three GroupSettings toggles are read-only text, no Save button', () => {
-    render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_member" />);
+  it('member: the three GroupSettings toggles are read-only text, no Save button', async () => {
+    await renderExpanded({ role: 'group_member' });
 
-    expect(screen.queryByRole('button', { name: 'On' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Off' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('On')).toHaveLength(1); // allowMemberPosts, plain text
+    expect(screen.queryByRole('button', { name: 'Allow member posts: On' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.getByText('Only the owner can change these.')).toBeInTheDocument();
   });
 
-  it('admin: the three GroupSettings toggles stay read-only, but Save is present (rules/schedule are still theirs to edit)', () => {
-    render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_admin" />);
+  // CLIENT-GROUP-SESSION-4: the Save button is Permission's, and only the owner edits the toggles.
+  it('admin: the toggles stay read-only and there is no Save button (rules/schedule save on blur)', async () => {
+    await renderExpanded({ role: 'group_admin' });
 
     expect(screen.queryByRole('button', { name: /Allow member posts:/ })).not.toBeInTheDocument();
     expect(screen.getByText('Only the owner can change these.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  });
+
+  it('owner: Save sits inside the Permission section, not at the bottom of the tab', async () => {
+    await renderExpanded({ role: 'group_owner' });
+
+    const permission = screen.getByRole('button', { name: 'Permission' }).parentElement!;
+    expect(within(permission).getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Save' })).toHaveLength(1);
+  });
+
+  it('collapsing Permission hides its Save with it', async () => {
+    const { user } = await renderExpanded({ role: 'group_owner' });
+    await user.click(screen.getByRole('button', { name: 'Permission' }));
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
   });
 
   it('owner: can toggle a GroupSettings field, calling onUpdateSetting', async () => {
-    const user = userEvent.setup();
     const onUpdateSetting = vi.fn();
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        onUpdateSetting={onUpdateSetting}
-        group={group()}
-        currentUserRole="group_owner"
-      />,
-    );
+    const { user } = await renderExpanded({ role: 'group_owner', onUpdateSetting });
 
     // allowMemberPosts starts true — button's accessible name distinguishes
     // it from the other two toggles' identical "On"/"Off" visible text.
@@ -276,110 +271,112 @@ describe('GroupSettingsTab', () => {
     expect(onUpdateSetting).toHaveBeenCalledWith('allowMemberPosts', false);
   });
 
-  it('owner: Save is disabled with no pending changes, enabled once there are some', () => {
-    const { rerender } = render(
-      <GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_owner" />,
-    );
+  it('owner: Save is disabled with no pending changes, enabled once there are some', async () => {
+    const { rerender } = await renderExpanded({ role: 'group_owner' });
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    rerender(<GroupSettingsTab {...baseProps} hasUnsavedPermissionChanges group={group()} currentUserRole="group_owner" />);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
+  it('owner: clicking Save calls onSavePermission', async () => {
+    const onSavePermission = vi.fn();
+    const { user } = await renderExpanded({ role: 'group_owner', onSavePermission, hasUnsavedPermissionChanges: true });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSavePermission).toHaveBeenCalled();
+  });
+
+  it('surfaces a Permission save error, with the coded text when there is one', async () => {
+    const { rerender } = await renderExpanded({ role: 'group_owner', isSavePermissionError: true, hasUnsavedPermissionChanges: true });
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save changes. Try again.");
 
     rerender(
       <GroupSettingsTab
         {...baseProps}
-        hasUnsavedSettingsChanges
+        isSavePermissionError
+        savePermissionErrorText="Only the group owner can do this."
+        hasUnsavedPermissionChanges
         group={group()}
         currentUserRole="group_owner"
       />,
     );
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Only the group owner can do this.');
   });
 
-  it('owner: clicking Save calls onSaveSettings', async () => {
-    const user = userEvent.setup();
-    const onSaveSettings = vi.fn();
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        onSaveSettings={onSaveSettings}
-        hasUnsavedSettingsChanges
-        group={group()}
-        currentUserRole="group_owner"
-      />,
-    );
-    await user.click(screen.getByRole('button', { name: 'Save' }));
-    expect(onSaveSettings).toHaveBeenCalled();
-  });
-
-  it('surfaces a save error', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        isSaveSettingsError
-        hasUnsavedSettingsChanges
-        group={group()}
-        currentUserRole="group_owner"
-      />,
-    );
-    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save changes. Try again.");
-  });
-
-  it('shows the specific error text for privacy, save and leave failures (CLIENT-ERR-5)', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        group={group()}
-        currentUserRole="group_admin"
-        isUpdatePrivacyError
-        privacyErrorText="Only the group owner or an admin can do this."
-        isSaveSettingsError
-        saveSettingsErrorText="Only the group owner can do this."
-        isLeaveError
-        leaveErrorText="The owner can't leave the group. Transfer ownership first."
-      />,
-    );
+  it('shows the specific error text for privacy and leave failures (CLIENT-ERR-5)', async () => {
+    await renderExpanded({
+      role: 'group_admin',
+      isUpdatePrivacyError: true,
+      privacyErrorText: 'Only the group owner or an admin can do this.',
+      isLeaveError: true,
+      leaveErrorText: "The owner can't leave the group. Transfer ownership first.",
+    });
     const alerts = screen.getAllByRole('alert').map((alert) => alert.textContent);
     expect(alerts).toEqual(
       expect.arrayContaining([
         'Only the group owner or an admin can do this.',
-        'Only the group owner can do this.',
         "The owner can't leave the group. Transfer ownership first.",
       ]),
     );
     expect(screen.queryByText("Couldn't update privacy. Try again.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Couldn't save changes. Try again.")).not.toBeInTheDocument();
   });
 
-  it('member: no Save button at all (nothing editable)', () => {
-    render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_member" />);
-    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
-  });
-
-  it('shows a loading state while settings are fetching', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        isSettingsLoading
-        groupSettings={undefined}
-        group={group()}
-        currentUserRole="group_owner"
-      />,
-    );
+  it('shows a loading state while settings are fetching', async () => {
+    await renderExpanded({ role: 'group_owner', isSettingsLoading: true, groupSettings: undefined });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 
-  it('shows an error state and hides the toggles when settings fail to load, but Save stays available for rules/schedule', () => {
-    render(
-      <GroupSettingsTab
-        {...baseProps}
-        isSettingsError
-        groupSettings={undefined}
-        group={group()}
-        currentUserRole="group_owner"
-      />,
-    );
+  it('shows an error state and hides the toggles and their Save when settings fail to load', async () => {
+    await renderExpanded({ role: 'group_owner', isSettingsError: true, groupSettings: undefined });
     expect(screen.getByText("Couldn't load permission settings.")).toBeInTheDocument();
     expect(screen.queryByText('Allow member posts')).not.toBeInTheDocument();
-    // Save is scoped to canEdit (owner/admin), not gated on the toggles
-    // loading successfully — rules/schedule can still be edited and saved.
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  });
+
+  // CLIENT-GROUP-SESSION-4: Leave group asks first.
+  describe('Leave group', () => {
+    it('opens a confirmation instead of leaving at once', async () => {
+      const onLeave = vi.fn();
+      const { user } = await renderExpanded({ role: 'group_member', onLeave });
+
+      await user.click(screen.getByRole('button', { name: 'Leave Group' }));
+      expect(onLeave).not.toHaveBeenCalled();
+      expect(screen.getByRole('dialog', { name: 'Leave this group?' })).toBeInTheDocument();
+    });
+
+    it('"Stay" closes the dialog and leaves nothing done', async () => {
+      const onLeave = vi.fn();
+      const { user } = await renderExpanded({ role: 'group_member', onLeave });
+
+      await user.click(screen.getByRole('button', { name: 'Leave Group' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Stay' }));
+      expect(onLeave).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog', { name: 'Leave this group?' })).not.toBeInTheDocument();
+    });
+
+    it('"Leave" leaves, once, and closes the dialog', async () => {
+      const onLeave = vi.fn();
+      const { user } = await renderExpanded({ role: 'group_member', onLeave });
+
+      await user.click(screen.getByRole('button', { name: 'Leave Group' }));
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Leave' }));
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: 'Leave this group?' })).not.toBeInTheDocument();
+    });
+
+    it('Escape is the safe way out: nothing is left', async () => {
+      const onLeave = vi.fn();
+      const { user } = await renderExpanded({ role: 'group_member', onLeave });
+
+      await user.click(screen.getByRole('button', { name: 'Leave Group' }));
+      await user.keyboard('{Escape}');
+      expect(onLeave).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog', { name: 'Leave this group?' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('the Sessions section shows the data it is given once opened', async () => {
+    await renderExpanded({ role: 'group_owner' });
+    expect(screen.getByText('Regular sessions')).toBeInTheDocument();
   });
 });
