@@ -19,6 +19,7 @@ import { useUpcomingMatches } from '@/shared/hooks/useUpcomingMatches';
 import type { SportProfile } from '@/shared/types/sport';
 import type { GroupBroadcast, TrendingHashtag } from '@/shared/types/rail';
 import type { Session } from '@/shared/types/session';
+import { isGroupManager } from '@/shared/lib/groupRole';
 
 export interface GroupsPageData {
   sportProfiles: SportProfile[];
@@ -141,11 +142,7 @@ export function useGroupsPageData(): {
 
   const canBroadcast = useMemo(() => {
     const selectedGroup = groups.find((group) => group.id === selectedGroupId);
-    return (
-      selectedGroup !== undefined &&
-      (selectedGroup.currentUserRole === 'group_owner' ||
-        selectedGroup.currentUserRole === 'group_admin')
-    );
+    return selectedGroup !== undefined && isGroupManager(selectedGroup.currentUserRole);
   }, [groups, selectedGroupId]);
 
   // Looked up from the unfiltered list (not `groups`, which is narrowed by

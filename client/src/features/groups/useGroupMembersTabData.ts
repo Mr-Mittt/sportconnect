@@ -9,6 +9,7 @@ import { useGroupJoinRequests } from '@/features/feed/hooks/useGroupJoinRequests
 import { useGroupMembers } from '@/features/feed/hooks/useGroupMembers';
 import { useSentInvitations } from '@/features/feed/hooks/useSentInvitations';
 import type { GroupInvitation, JoinRequest } from '@/features/feed/types';
+import { isGroupManager } from '@/shared/lib/groupRole';
 
 /**
  * GRP-7: a single "Waiting for group approve" row — either an existing
@@ -57,7 +58,7 @@ export function useGroupMembersTabData(
   onActionError?: (error: unknown) => void,
 ) {
   const onError = onActionError;
-  const canManage = currentUserRole === 'group_owner' || currentUserRole === 'group_admin';
+  const canManage = isGroupManager(currentUserRole);
 
   const membersQuery = useGroupMembers(groupId, isActive);
   const joinRequestsQuery = useGroupJoinRequests(groupId, isActive && canManage);
@@ -74,7 +75,7 @@ export function useGroupMembersTabData(
     const allMembers = membersQuery.data?.content ?? [];
     return {
       administrators: allMembers
-        .filter((member) => member.roleName === 'group_owner' || member.roleName === 'group_admin')
+        .filter((member) => isGroupManager(member.roleName))
         .sort((a, b) => (a.roleName === 'group_owner' ? -1 : b.roleName === 'group_owner' ? 1 : 0)),
       members: allMembers.filter((member) => member.roleName === 'group_member'),
     };
