@@ -12,6 +12,7 @@ import { getApiError } from '@/shared/lib/apiError';
 import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import type { Location } from '@/shared/types/location';
 import { useFriends } from '@/features/friends/hooks/useFriends';
+import { useGroupMembersPages } from '@/features/feed/hooks/useGroupMembersPages';
 import { useApproveParticipant } from './hooks/useApproveParticipant';
 import { useCancelSession } from './hooks/useCancelSession';
 import { useLikeSession } from './hooks/useLikeSession';
@@ -29,7 +30,7 @@ import { useUpdateSession } from './hooks/useUpdateSession';
 import { isGroupManager } from '@/shared/lib/groupRole';
 import { missingForSession } from './sessionReadiness';
 import { isSessionDialogError, useCloseOnSessionErrorDismissal, useSessionErrorGuard } from './sessionErrors';
-import type { SessionShareData, UpdateSessionPayload } from './types';
+import type { SessionShareData, SharePerson, UpdateSessionPayload } from './types';
 import { useSessionCommentsData } from './useSessionCommentsData';
 
 const NO_FRIENDS: never[] = [];
@@ -102,7 +103,10 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
   // failure (404 / 403) opens the app-wide error dialog and, once that is dismissed, closes this dialog too.
   const [isShareOpen, setIsShareOpen] = useState(false);
   const shareMutation = useShareSession();
-  const friendsQuery = useFriends(isDetailOpen && isShareOpen);
+  // CLIENT-GROUP-SESSION-3: a group session is shared with the group's members (100 at a time), a standalone one with friends.
+  const isGroupSession = sessionData?.groupId != null;
+  const friendsQuery = useFriends(isDetailOpen && isShareOpen && !isGroupSession);
+  const membersQuery = useGroupMembersPages(sessionData?.groupId ?? undefined, isDetailOpen && isShareOpen && isGroupSession);
   const armCloseOnShareErrorDismissal = useCloseOnSessionErrorDismissal(() => setIsShareOpen(false));
   const onShare = (userIds: string[], onDone: () => void) => {
     if (sessionId === null) return;
@@ -116,6 +120,16 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
       },
     );
   };
+  const sharePeople = useMemo<SharePerson[]>(() => {
+    if (isGroupSession) {
+      // The caller is a member too and is never offered to themselves (the server skips them anyway).
+      return (membersQuery.data?.pages ?? [])
+        .flatMap((page) => page.content)
+        .filter((member) => member.userId !== currentUserId)
+        .map((member) => ({ id: member.userId, fullName: member.userFullName, avatarUrl: member.userAvatarUrl }));
+    }
+    return (friendsQuery.data ?? NO_FRIENDS).map((friend) => ({ id: friend.id, fullName: friend.fullName, avatarUrl: friend.avatarUrl }));
+  }, [isGroupSession, membersQuery.data, friendsQuery.data, currentUserId]);
   const share: SessionShareData = {
     isOpen: isShareOpen,
     onOpen: () => setIsShareOpen(true),
@@ -123,9 +137,13 @@ export function useSessionDetailModalData(sessionId: number | null, closeDetail?
       setIsShareOpen(false);
       shareMutation.reset();
     },
-    friends: friendsQuery.data ?? NO_FRIENDS,
-    isFriendsLoading: friendsQuery.isLoading,
-    isFriendsError: friendsQuery.isError,
+    kind: isGroupSession ? 'group' : 'friends',
+    people: sharePeople,
+    isPeopleLoading: isGroupSession ? membersQuery.isLoading : friendsQuery.isLoading,
+    isPeopleError: isGroupSession ? membersQuery.isError : friendsQuery.isError,
+    hasMore: isGroupSession && membersQuery.hasNextPage,
+    isFetchingMore: membersQuery.isFetchingNextPage,
+    onLoadMore: () => void membersQuery.fetchNextPage(),
     onShare,
     isSharing: shareMutation.isPending,
     isShareError: shareMutation.isError && !isSessionDialogError(shareMutation.error),

@@ -81,6 +81,8 @@
     "sessionInvitationCreated": " đã mời bạn tham gia ",
     "sessionShareCreatedPrefix": " đã chia sẻ ",
     "sessionShareCreatedSuffix": " với bạn",
+    "sessionGroupCreated": " đã tạo buổi chơi ",
+    "sessionGroupCancelled": " đã hủy buổi chơi ",
     "sessionDetailsUpdated": " đã cập nhật ",
     "sessionRecordChanged": " đã cập nhật kết quả của ",
     "friendRequestCreated": " muốn kết bạn với bạn",

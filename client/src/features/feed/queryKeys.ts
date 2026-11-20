@@ -20,6 +20,8 @@ export const feedKeys = {
   groupSettings: (groupId: number) => [...feedKeys.all, 'group-settings', groupId] as const,
   groupInfo: (groupId: number) => [...feedKeys.all, 'group-info', groupId] as const,
   groupMembers: (groupId: number) => [...feedKeys.all, 'group-members', groupId] as const,
+  /** CLIENT-GROUP-SESSION-3: the same members, paged (the group Share dialog); under `groupMembers`, so a member change that invalidates that key refreshes this too. */
+  groupMembersPages: (groupId: number) => [...feedKeys.groupMembers(groupId), 'pages'] as const,
   /** CLIENT-GL-50 part 2: `GET /groups/{id}/members/search?q=` (B23); a `null` query is the idle search. */
   groupMemberSearch: (groupId: number, query: string | null) =>
     [...feedKeys.all, 'group-member-search', groupId, query] as const,

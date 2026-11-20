@@ -33,6 +33,9 @@ export interface SessionOverrides {
    * laid out around the real today, which a frozen-clock visual spec cannot match, so those specs switch them off to keep the Posts-tab
    * shortcut empty, as it was before the server decided what "today" is. */
   groupSessionsEmpty: boolean;
+  /** CLIENT-GROUP-SESSION-3: the owned group's member list (`GET /groups/:id/members`) also holds 130 synthetic members, so the group Share
+   * dialog's first page of 100 is full and its "Load more" is reachable. */
+  groupMembersVolume: boolean;
   /** CLIENT-SESSION-23: `GET /sessions/history` also returns 22 synthetic history dates (the newest
    * holding 23 sessions) for the requested sport — enough to reach both "Load more" levels
    * (dates past `dateCount=20`, sessions past a date's page size of 20). */
@@ -62,6 +65,7 @@ function defaultOverrides(): SessionOverrides {
     notificationsEmpty: false,
     sessionsEmpty: false,
     groupSessionsEmpty: false,
+    groupMembersVolume: false,
     historyVolume: false,
     discoverVolume: false,
     emailUnverified: false,

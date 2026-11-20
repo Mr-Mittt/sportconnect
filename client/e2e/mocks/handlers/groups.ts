@@ -390,8 +390,41 @@ export const groupHandlers: HttpHandler[] = [
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
     const groupId = Number(params.groupId);
-    const members = groupsSessions.get(sessionIdFromRequest(request)).groupMembersState[groupId] ?? [];
-    return HttpResponse.json(apiResponse(mockPageResponse(members), 'Members retrieved successfully'));
+    const sessionId = sessionIdFromRequest(request);
+    const stored = groupsSessions.get(sessionId).groupMembersState[groupId] ?? [];
+    // CLIENT-GROUP-SESSION-3: a real Spring page (`page`, `size`), and the `groupMembersVolume` override adds 130 members to the owned
+    // group so the group Share dialog's first page of 100 is full.
+    const volume =
+      getOverrides(sessionId).groupMembersVolume && groupId === mockOwnedGroup.id
+        ? Array.from({ length: 130 }, (_, i) => ({
+            ...mockGroupMembers[2],
+            id: 1000 + i,
+            userId: `volume-member-${i + 1}`,
+            userFullName: `Member ${String(i + 1).padStart(3, '0')}`,
+          }))
+        : [];
+    const members = [...stored, ...volume];
+    const url = new URL(request.url);
+    const page = Number(url.searchParams.get('page') ?? 0) || 0;
+    const size = Number(url.searchParams.get('size') ?? 20) || 20;
+    const content = members.slice(page * size, (page + 1) * size);
+    const totalPages = Math.max(1, Math.ceil(members.length / size));
+    return HttpResponse.json(
+      apiResponse(
+        {
+          content,
+          totalPages,
+          totalElements: members.length,
+          number: page,
+          size,
+          first: page === 0,
+          last: page >= totalPages - 1,
+          numberOfElements: content.length,
+          empty: content.length === 0,
+        },
+        'Members retrieved successfully',
+      ),
+    );
   }),
 
   // B23 (CLIENT-GL-50 part 2): the name search over a group's members, for tagging in a group post and its comments. The

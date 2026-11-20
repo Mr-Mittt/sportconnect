@@ -3,7 +3,6 @@
 // feature's own imports read naturally. Write-only payloads (typed 1:1 against
 // modules/session/session-api/.../dto/{CreateSessionRequest,UpdateSessionRequest,
 // CancelSessionRequest}) stay local — no other feature needs them.
-import type { FriendUser } from '@/features/friends/types';
 import type { FeeType, Session } from '@/shared/types/session';
 
 export type {
@@ -175,6 +174,16 @@ export interface ShareSessionResponse {
 }
 
 /**
+ * CLIENT-GROUP-SESSION-3: one person the Share dialog can send to: a friend (standalone session) or a group member (group
+ * session), reduced to what the row shows. The id is the user id the share request carries.
+ */
+export interface SharePerson {
+  id: string;
+  fullName: string;
+  avatarUrl: string | null;
+}
+
+/**
  * CLIENT-SESSION-49 — what the session modal's "Share" button and dialog need, owned by `useSessionDetailModalData`
  * (the query boundary). Optional on the modal: absent = no Share button (stories and tests that do not exercise it).
  */
@@ -182,10 +191,19 @@ export interface SessionShareData {
   isOpen: boolean;
   onOpen: () => void;
   onClose: () => void;
-  /** The caller's whole friend list, fetched only while the dialog is open. */
-  friends: FriendUser[];
-  isFriendsLoading: boolean;
-  isFriendsError: boolean;
+  /**
+   * Who the dialog lists: `'friends'` for a standalone session (the caller's whole friend list) or `'group'` for a group session
+   * (the group's members, 100 at a time, CLIENT-GROUP-SESSION-3). Both are filtered by name on the client over what is loaded.
+   */
+  kind: 'friends' | 'group';
+  /** The people loaded so far (the caller never among them), fetched only while the dialog is open. */
+  people: SharePerson[];
+  isPeopleLoading: boolean;
+  isPeopleError: boolean;
+  /** A group's members come in pages: another page is available. Always false for friends (one list). */
+  hasMore: boolean;
+  isFetchingMore: boolean;
+  onLoadMore: () => void;
   /** Sends the session to these friends; `onDone` runs once the server accepted it. */
   onShare: (userIds: string[], onDone: () => void) => void;
   isSharing: boolean;

@@ -24,6 +24,7 @@ const caller = {
 };
 
 const friends = [{ id: 'u-alice', fullName: 'Alice Nguyen', avatarUrl: null, coverUrl: null, bio: null }];
+const friendPeople = [{ id: 'u-alice', fullName: 'Alice Nguyen', avatarUrl: null }];
 
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -76,11 +77,12 @@ describe('useSessionDetailModalData: the Share slice (CLIENT-SESSION-49)', () =>
     const { result } = await openDetail();
 
     expect(result.current.share.isOpen).toBe(false);
-    expect(result.current.share.friends).toEqual([]);
+    expect(result.current.share.people).toEqual([]);
+    expect(result.current.share.kind).toBe('friends');
     expect(friendCalls(get)).toHaveLength(0);
 
     act(() => result.current.share.onOpen());
-    await waitFor(() => expect(result.current.share.friends).toEqual(friends));
+    await waitFor(() => expect(result.current.share.people).toEqual(friendPeople));
     expect(result.current.share.isOpen).toBe(true);
     expect(friendCalls(get)).toHaveLength(1);
   });
@@ -153,5 +155,109 @@ describe('useSessionDetailModalData: the Share slice (CLIENT-SESSION-49)', () =>
     act(() => result.current.resetActionErrors());
 
     expect(result.current.share.isOpen).toBe(false);
+  });
+});
+
+// CLIENT-GROUP-SESSION-3: a group session is shared with the group's members, 100 at a time, never with friends.
+describe('useSessionDetailModalData: the Share slice of a group session (CLIENT-GROUP-SESSION-3)', () => {
+  const groupSession = makeSession({ id: 7, groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false });
+
+  const member = (id: string, name: string) => ({
+    id: Number(id.replace(/\D/g, '')) || 1,
+    groupId: 5,
+    userId: id,
+    userFullName: name,
+    userAvatarUrl: null,
+    roleId: 3,
+    roleName: 'group_member',
+    roleLevel: 1,
+    joinedAt: '2026-01-01T00:00:00',
+  });
+
+  function mockGroupServer(pages: Record<number, { content: unknown[]; last: boolean }>) {
+    const get = vi.spyOn(apiClient, 'get').mockImplementation(async (url: string, config?: { params?: { page?: number } }) => {
+      let data: unknown = { content: [] };
+      if (url === '/sports' || url === '/sports/profiles') data = [];
+      else if (url.endsWith('/session-attribute-schema')) data = null;
+      else if (url === '/users/friends') data = friends;
+      else if (url === `/sessions/${groupSession.id}`) data = groupSession;
+      else if (url === '/groups/5/members') {
+        const page = config?.params?.page ?? 0;
+        data = { ...pages[page], number: page, totalPages: 2, totalElements: 3, size: 100, first: page === 0, numberOfElements: pages[page].content.length, empty: false };
+      }
+      return { data: { success: true, message: '', data, timestamp: '' } };
+    });
+    return get;
+  }
+
+  async function openGroupDetail() {
+    const hook = renderHook(() => useSessionDetailModalData(groupSession.id), { wrapper });
+    await waitFor(() => expect(hook.result.current.selectedSession).toBeDefined());
+    return hook;
+  }
+
+  const calls = (get: ReturnType<typeof mockGroupServer>, url: string) => get.mock.calls.filter(([u]) => u === url);
+
+  it('asks for no one until the dialog opens, then loads the first page of 100 members and not the friends', async () => {
+    const get = mockGroupServer({ 0: { content: [member('u-bao', 'Bảo Trần')], last: true } });
+    const { result } = await openGroupDetail();
+    expect(result.current.share.kind).toBe('group');
+    expect(calls(get, '/groups/5/members')).toHaveLength(0);
+
+    act(() => result.current.share.onOpen());
+    await waitFor(() => expect(result.current.share.people).toHaveLength(1));
+    expect(calls(get, '/groups/5/members')[0]).toEqual(['/groups/5/members', { params: { page: 0, size: 100 } }]);
+    expect(calls(get, '/users/friends')).toHaveLength(0);
+    expect(result.current.share.people[0]).toEqual({ id: 'u-bao', fullName: 'Bảo Trần', avatarUrl: null });
+  });
+
+  it('never lists the caller among the members', async () => {
+    mockGroupServer({ 0: { content: [member(caller.id, 'Jordan Lee'), member('u-bao', 'Bảo Trần')], last: true } });
+    const { result } = await openGroupDetail();
+    act(() => result.current.share.onOpen());
+    await waitFor(() => expect(result.current.share.people).toHaveLength(1));
+    expect(result.current.share.people.map((person) => person.id)).toEqual(['u-bao']);
+  });
+
+  it('"Load more" fetches the next page and appends it; hasMore follows the last page', async () => {
+    const get = mockGroupServer({
+      0: { content: [member('u-bao', 'Bảo Trần')], last: false },
+      1: { content: [member('u-chi', 'Chi Pham')], last: true },
+    });
+    const { result } = await openGroupDetail();
+    act(() => result.current.share.onOpen());
+    await waitFor(() => expect(result.current.share.people).toHaveLength(1));
+    expect(result.current.share.hasMore).toBe(true);
+
+    act(() => result.current.share.onLoadMore());
+    await waitFor(() => expect(result.current.share.people).toHaveLength(2));
+    expect(calls(get, '/groups/5/members')[1]).toEqual(['/groups/5/members', { params: { page: 1, size: 100 } }]);
+    expect(result.current.share.people.map((person) => person.id)).toEqual(['u-bao', 'u-chi']);
+    expect(result.current.share.hasMore).toBe(false);
+  });
+
+  it('a failed members load is reported', async () => {
+    const get = mockGroupServer({ 0: { content: [], last: true } });
+    get.mockImplementation(async (url: string) => {
+      if (url === '/groups/5/members') throw failure(500);
+      let data: unknown = { content: [] };
+      if (url === '/sports' || url === '/sports/profiles') data = [];
+      else if (url.endsWith('/session-attribute-schema')) data = null;
+      else if (url === `/sessions/${groupSession.id}`) data = groupSession;
+      return { data: { success: true, message: '', data, timestamp: '' } };
+    });
+    const { result } = await openGroupDetail();
+    act(() => result.current.share.onOpen());
+    await waitFor(() => expect(result.current.share.isPeopleError).toBe(true));
+  });
+
+  it('a standalone session still loads the friends and has no Load more', async () => {
+    const { get } = mockServer(session);
+    const { result } = await openDetail();
+    act(() => result.current.share.onOpen());
+    await waitFor(() => expect(result.current.share.people).toEqual(friendPeople));
+    expect(result.current.share.kind).toBe('friends');
+    expect(result.current.share.hasMore).toBe(false);
+    expect(get.mock.calls.filter(([url]) => url === '/groups/5/members')).toHaveLength(0);
   });
 });

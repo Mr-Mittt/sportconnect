@@ -33,6 +33,10 @@ export type NotificationType =
   | 'session.invitation.created'
   // SESSION-66 / CLIENT-SESSION-49: a friend shared a session with the user.
   | 'session.share.created'
+  // SESSION-GROUP-1 / CLIENT-GROUP-SESSION-3: a group session was created (or generated) for the user, or one they were told about or
+  // joined was cancelled. Both carry the session id and the actor and no group id.
+  | 'session.group.created'
+  | 'session.group.cancelled'
   // SESSION-24 / CLIENT-SESSION-21: fired on every successful updateSession call, regardless of
   // which field changed — field-agnostic by design, hence the generic text below.
   | 'session.details.updated'

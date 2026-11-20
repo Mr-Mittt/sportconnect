@@ -1,14 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { userEvent, within } from 'storybook/test';
-import type { FriendUser } from '@/features/friends/types';
+import type { SharePerson } from '../types';
 import { SHARE_LIMIT } from '../hooks/useShareSession';
 import { ShareSessionDialog } from './ShareSessionDialog';
 
-function friend(id: string, fullName: string): FriendUser {
-  return { id, fullName, avatarUrl: null, coverUrl: null, bio: null };
+function friend(id: string, fullName: string): SharePerson {
+  return { id, fullName, avatarUrl: null };
 }
 
-const friends: FriendUser[] = [
+const people: SharePerson[] = [
   friend('f-1', 'Alice Nguyen'),
   friend('f-2', 'Bảo Trần'),
   friend('f-3', 'Chi Pham'),
@@ -22,9 +22,13 @@ const meta = {
   args: {
     isOpen: true,
     onClose: () => {},
-    friends,
-    isFriendsLoading: false,
-    isFriendsError: false,
+    kind: 'friends' as 'friends' | 'group',
+    people,
+    isPeopleLoading: false,
+    isPeopleError: false,
+    hasMore: false,
+    isFetchingMore: false,
+    onLoadMore: () => {},
     joinedIds: new Set<string>(),
     // Sends successfully at once, like the server answering: the dialog then shows its "Session shared." state.
     onShare: (_userIds: string[], onDone: () => void) => onDone(),
@@ -80,15 +84,15 @@ export const NoMatch: Story = {
 };
 
 export const NoFriends: Story = {
-  args: { friends: [] },
+  args: { people: [] },
 };
 
 export const LoadingFriends: Story = {
-  args: { friends: [], isFriendsLoading: true },
+  args: { people: [], isPeopleLoading: true },
 };
 
 export const FriendsLoadError: Story = {
-  args: { friends: [], isFriendsError: true },
+  args: { people: [], isPeopleError: true },
 };
 
 /** The request is in flight. */
@@ -112,7 +116,7 @@ export const ShareError: Story = {
 /** The limit of one sharing turn: the footer warning shows and every unticked box is disabled (ticked ones can still be unticked). */
 export const AtTheLimit: Story = {
   args: {
-    friends: Array.from({ length: SHARE_LIMIT + 3 }, (_, i) => friend(`m-${i + 1}`, `Friend ${String(i + 1).padStart(3, '0')}`)),
+    people: Array.from({ length: SHARE_LIMIT + 3 }, (_, i) => friend(`m-${i + 1}`, `Friend ${String(i + 1).padStart(3, '0')}`)),
   },
   play: async ({ canvasElement }) => {
     const body = within(canvasElement.ownerDocument.body);
@@ -120,4 +124,22 @@ export const AtTheLimit: Story = {
       await userEvent.click(await body.findByRole('checkbox', { name: `Select Friend ${String(i).padStart(3, '0')}` }), { delay: 0 });
     }
   },
+};
+
+/** CLIENT-GROUP-SESSION-3: a group session lists the group's members, with the first page of a longer list. */
+export const GroupMembers: Story = {
+  args: { kind: 'group', joinedIds: new Set(['f-1']), hasMore: true },
+};
+
+/** A group's next page is being loaded. */
+export const GroupLoadingMore: Story = {
+  args: { kind: 'group', hasMore: true, isFetchingMore: true },
+};
+
+export const GroupNoOtherMembers: Story = {
+  args: { kind: 'group', people: [] },
+};
+
+export const GroupLoadError: Story = {
+  args: { kind: 'group', people: [], isPeopleError: true },
 };

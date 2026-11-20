@@ -70,6 +70,8 @@ Visual regression no longer runs per PR: it is the manual workflow `client-visua
 | `groups-members-tab-*`, `groups-settings-tab-*`, `groups-chat-tab-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-2 | changed: the vertical tab nav shown on every group tab gains the "Sessions" row |
 | `groups-discovery-*` | CLIENT-GROUP-SESSION-2 | unchanged: no group is selected, so there is no tab nav |
 | the Sessions tab itself | CLIENT-GROUP-SESSION-2 | no visual spec added: its content is dated around the real today and the specs freeze the browser clock (stories cover the states); add one in a baseline ticket once the mock can serve fixed dates |
+| `session-detail-already-joined-*`, `session-detail-approval-queue-*` at 375, 768, 1280 | CLIENT-GROUP-SESSION-3 | changed: both render a group session (`mockGroupSession`, "Ladder night"), whose Players header now has the icon-only Share button (a group session was never shareable before); the other `session-detail-*` states are standalone sessions and keep their button |
+| `groups-members-tab-*` and every other baseline | CLIENT-GROUP-SESSION-3 | unchanged: the members mock now pages by `size`, which the Members tab sends as 100; the notification texts and the Share dialog are in no baselined state |
 | `session-detail-*`, `home-feed-*`, `profile-*` | CLIENT-GROUP-SESSION-2 | unchanged: no fixture session has an end equal to its start (the cancelled fixture has no end), so the end rule shows nothing new |
 
 The SESSION-49 row comes from its diff (locale strings, the pre-filled title, the MSW handlers), not from a rendered comparison: nothing was rendered for it. `/updatebaseline` Phase 3 derives the real set from `git diff master...HEAD -- client/` and shows it to the owner.

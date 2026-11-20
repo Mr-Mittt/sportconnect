@@ -69,12 +69,16 @@ function makeShare(overrides: Partial<SessionShareData> = {}): SessionShareData 
     isOpen: false,
     onOpen: vi.fn(),
     onClose: vi.fn(),
-    friends: [
-      { id: 'u-alice', fullName: 'Alice Nguyen', avatarUrl: null, coverUrl: null, bio: null },
-      { id: 'u-bao', fullName: 'Bảo Trần', avatarUrl: null, coverUrl: null, bio: null },
+    kind: 'friends',
+    people: [
+      { id: 'u-alice', fullName: 'Alice Nguyen', avatarUrl: null },
+      { id: 'u-bao', fullName: 'Bảo Trần', avatarUrl: null },
     ],
-    isFriendsLoading: false,
-    isFriendsError: false,
+    isPeopleLoading: false,
+    isPeopleError: false,
+    hasMore: false,
+    isFetchingMore: false,
+    onLoadMore: vi.fn(),
     onShare: vi.fn(),
     isSharing: false,
     isShareError: false,
@@ -177,10 +181,14 @@ describe('the Share button: who sees it', () => {
     expect(within(screen.getByRole('region', { name: 'Players' })).getByRole('button', { name: SHARE })).toBeInTheDocument();
   });
 
-  it('is hidden for a group session, for everyone', () => {
-    render(<SessionDetailModal {...propsFor({ session: makeSession({ id: 1, groupId: 5, sessionType: 'GROUP_RECURRING' }) })} />);
-    expect(shareButton()).toBeNull();
-  });
+  // CLIENT-GROUP-SESSION-3: a group session is shareable by its members (whoever can open it is one).
+  it.each<SessionStatus>(['PREPARING', 'SCHEDULED', 'ONGOING', 'COMPLETED', 'CANCELLED'])(
+    'is shown for a group %s session, which is never public',
+    (status) => {
+      render(<SessionDetailModal {...propsFor({ session: makeSession({ id: 1, groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false, status }) })} />);
+      expect(shareButton()).toBeInTheDocument();
+    },
+  );
 
   it('is hidden for a private session (SESSION-69): a friend it was shared with could not open it', () => {
     render(<SessionDetailModal {...propsFor({ session: makeSession({ id: 1, isPublic: false }) })} />);
@@ -250,6 +258,28 @@ describe('the Share dialog in the session modal', () => {
     expect(within(dialog).getByRole('checkbox', { name: 'Select Bảo Trần' })).toBeInTheDocument();
     expect(within(dialog).queryByRole('checkbox', { name: 'Select Alice Nguyen' })).toBeNull();
     expect(within(dialog).getByText('Joined')).toBeInTheDocument();
+  });
+
+  it('opens as "Share with group members" for a group session, listing the members the slice carries', () => {
+    const view = render(
+      <SessionDetailModal
+        {...propsFor({
+          session: makeSession({ id: 1, groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false }),
+          share: makeShare({ isOpen: false, kind: 'group' }),
+        })}
+      />,
+    );
+    view.rerender(
+      <SessionDetailModal
+        {...propsFor({
+          session: makeSession({ id: 1, groupId: 5, sessionType: 'GROUP_RECURRING', isPublic: false }),
+          share: makeShare({ isOpen: true, kind: 'group', hasMore: true }),
+        })}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Share with group members' });
+    expect(within(dialog).getByRole('checkbox', { name: 'Select Bảo Trần' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Load more members' })).toBeInTheDocument();
   });
 
   it('sends the ticked friends through the slice', () => {

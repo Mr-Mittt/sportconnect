@@ -196,7 +196,7 @@ Statuses: `PENDING` (waits to be generated), `DONE` (**a session exists**), `FAI
 |---|---|---|
 | `CLIENT-GROUP-SESSION-1` create a session in a group (**done 2026-11-19**: also the Posts-tab "Session" shortcut, the host-or-owner/admin `canManage`, and cancelling a group session from the detail, 4.3) | 4.1, 4.2 (`ONGOING` and `SCHEDULED` buckets for the shortcut), 4.3 (cancel); the member picker uses the group member search (`GET /api/groups/{id}/members/search`, B23); `capacity` is mandatory, a group session sends 9999 | errors `SESSION_GROUP_MEMBER_REQUIRED`, `SESSION_AUDIENCE_REQUIRED`, `SESSION_AUDIENCE_NOT_MEMBER`, `SESSION_NOT_CANCELLABLE` |
 | `CLIENT-GROUP-SESSION-2` Sessions tab (done 2026-11-20) | 4.2 (`/today`, `/later`, `/history/dates`, `/history`); hides taken and open slots itself; no regular or custom field | tab and section titles, filters, empty states |
-| `CLIENT-GROUP-SESSION-3` share and notification texts | 4.3, 7 | `session.group.created` and `session.group.cancelled` texts, `SESSION_GROUP_MEMBER_REQUIRED` for a share |
+| `CLIENT-GROUP-SESSION-3` share and notification texts (done 2026-11-20) | 4.3, 7 | `session.group.created` and `session.group.cancelled` texts (no group name), `SESSION_GROUP_MEMBER_REQUIRED` for a share; the share dialog lists the group's members, 100 at a time |
 | `CLIENT-GROUP-SESSION-4` settings section | 4.4, 4.5 (list), 5, 6 (asynchronous), 8 | the six `GROUP_SESSION_*` post texts, errors of 4.4 and 4.5 |
 | `CLIENT-GROUP-SESSION-5` recurrence form | 4.5, 5, 6 (asynchronous) | all form copy, `SESSION_RECURRENCE_*`, `GROUP_RECURRENCE_LOCATION_SPORT_MISMATCH` |
 | `CLIENT-GROUP-SESSION-6` cancel confirmations | 4.4 (`cancelScheduled`), 4.5 (delete), 4.6 (count) | the three confirmation texts |
