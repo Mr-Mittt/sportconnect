@@ -208,6 +208,15 @@ public interface GroupService {
 
     List<Long> getGroupIdsForMember(UUID userId);
 
+    /**
+     * SESSION-GROUP-12: the ids of the <b>active</b> groups the user is a member of, in one ids-only query. The batch
+     * form of {@link #isGroupMember} (which is false for an inactive group): a list of sessions asks it once per request
+     * to hide the group sessions of a group the caller has left or that was deleted, so the list and the single-session
+     * gate answer by one rule. Unlike {@link #getGroupIdsForMember} (used by the feed, kept as it is) an inactive group's
+     * id is not returned. Empty when the user belongs to no active group; never null.
+     */
+    List<Long> getActiveGroupIdsForMember(UUID userId);
+
     // Invitations
 
     /**

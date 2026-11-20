@@ -48,6 +48,10 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
 
     long countByGroupId(Long groupId);
 
+    /** SESSION-GROUP-12: the ids of the active groups a user belongs to (one query, ids only, no entity load). */
+    @Query("SELECT gm.groupId FROM GroupMember gm, Group g WHERE gm.userId = :userId AND gm.groupId = g.id AND g.isActive = true")
+    List<Long> findActiveGroupIdsByUserId(@Param("userId") UUID userId);
+
     /** SESSION-GL-64: just the user ids of a group's members (one query, no entity load). */
     @Query("SELECT gm.userId FROM GroupMember gm WHERE gm.groupId = :groupId")
     List<UUID> findUserIdsByGroupId(@Param("groupId") Long groupId);

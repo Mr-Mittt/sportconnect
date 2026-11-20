@@ -41,6 +41,26 @@ class RegularSessionCancellerSpec extends Specification {
         [a, b].every { it.status == SessionStatus.CANCELLED && it.cancelReason == "Because" && it.cancelledBy == actor && it.cancelledAt != null }
     }
 
+    // SESSION-GROUP-12: a cancelled session always has an end time (its start when it had none).
+    def "a cancelled regular session with no end gets an end equal to its start; one that has an end keeps it"() {
+        given:
+        def start = java.time.Instant.parse("2026-11-20T10:00:00Z")
+        def end = java.time.Instant.parse("2026-11-20T12:00:00Z")
+        def noEnd = session(1L)
+        noEnd.scheduledStart = start
+        def withEnd = session(2L)
+        withEnd.scheduledStart = start
+        withEnd.scheduledEndAt = end
+
+        when:
+        canceller.cancel([noEnd, withEnd], actor, "Because")
+
+        then:
+        _ * recipients.of(_, actor, true) >> []
+        noEnd.scheduledEndAt == start
+        withEnd.scheduledEndAt == end
+    }
+
     def "each session's audience and players are told with session.group.cancelled, the actor as the actor"() {
         given:
         def a = session(1L)

@@ -48,6 +48,7 @@ public class RegularSessionCanceller {
             session.setCancelReason(reason);
             session.setCancelledBy(actorId);
             session.setCancelledAt(now);
+            session.endAtStartIfMissing();
         }
         sessionRepository.saveAll(sessions);
         List<com.sportconnect.session.entity.SessionOutboxEvent> events = new ArrayList<>();
