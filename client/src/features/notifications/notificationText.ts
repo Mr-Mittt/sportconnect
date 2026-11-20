@@ -72,6 +72,11 @@ export function getNotificationText(notification: Notification): NotificationTex
       ];
     case 'session.invitation.created':
       return [actor, plain(i18next.t('enums:notifications.sessionInvitationCreated')), entity];
+    // CLIENT-GROUP-SESSION-3: '{name} created {session}' / '{name} cancelled {session}' (no group name: the notification carries no group id).
+    case 'session.group.created':
+      return [actor, plain(i18next.t('enums:notifications.sessionGroupCreated')), entity];
+    case 'session.group.cancelled':
+      return [actor, plain(i18next.t('enums:notifications.sessionGroupCancelled')), entity];
     // SESSION-66 / CLIENT-SESSION-49: '{name} shared {session} with you'; a share is not an invitation, so it never says invited.
     case 'session.share.created':
       return [

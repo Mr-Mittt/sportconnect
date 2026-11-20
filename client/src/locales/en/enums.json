@@ -81,6 +81,8 @@
     "sessionInvitationCreated": " invited you to join ",
     "sessionShareCreatedPrefix": " shared ",
     "sessionShareCreatedSuffix": " with you",
+    "sessionGroupCreated": " created ",
+    "sessionGroupCancelled": " cancelled ",
     "sessionDetailsUpdated": " updated ",
     "sessionRecordChanged": " updated the result of ",
     "friendRequestCreated": " wants to be your friend",

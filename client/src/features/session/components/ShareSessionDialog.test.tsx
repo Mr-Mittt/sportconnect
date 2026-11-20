@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type { FriendUser } from '@/features/friends/types';
+import type { SharePerson } from '../types';
 import { SHARE_LIMIT } from '../hooks/useShareSession';
 import { ShareSessionDialog } from './ShareSessionDialog';
 
@@ -11,8 +11,8 @@ vi.mock('../hooks/useShareSession', () => ({ SHARE_LIMIT: 3 }));
 
 // CLIENT-SESSION-49: the "Share with friends" dialog.
 
-function friend(id: string, fullName: string): FriendUser {
-  return { id, fullName, avatarUrl: null, coverUrl: null, bio: null };
+function friend(id: string, fullName: string): SharePerson {
+  return { id, fullName, avatarUrl: null };
 }
 
 const alice = friend('u-alice', 'Alice Nguyen');
@@ -21,7 +21,7 @@ const chi = friend('u-chi', 'Chi Pham');
 const dung = friend('u-dung', 'Dũng Lê');
 
 /** `count` friends, "Friend 001" ... in order. */
-function manyFriends(count: number): FriendUser[] {
+function manyFriends(count: number): SharePerson[] {
   return Array.from({ length: count }, (_, i) => friend(`m-${i + 1}`, `Friend ${String(i + 1).padStart(3, '0')}`));
 }
 
@@ -31,9 +31,13 @@ function renderDialog(overrides: Partial<Props> = {}) {
   const props: Props = {
     isOpen: true,
     onClose: vi.fn(),
-    friends: [alice, bao, chi, dung],
-    isFriendsLoading: false,
-    isFriendsError: false,
+    kind: 'friends',
+    people: [alice, bao, chi, dung],
+    isPeopleLoading: false,
+    isPeopleError: false,
+    hasMore: false,
+    isFetchingMore: false,
+    onLoadMore: vi.fn(),
     joinedIds: new Set<string>(),
     onShare: vi.fn((_ids: string[], onDone: () => void) => onDone()),
     isSharing: false,
@@ -103,19 +107,19 @@ describe('ShareSessionDialog: the list', () => {
   });
 
   it('shows a hint, and no filter box, when the caller has no friends', () => {
-    renderDialog({ friends: [] });
+    renderDialog({ people: [] });
     expect(screen.getByText('You have no friends to share with yet.')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(shareButton(0)).toBeDisabled();
   });
 
   it('shows loading while the friend list loads', () => {
-    renderDialog({ friends: [], isFriendsLoading: true });
+    renderDialog({ people: [], isPeopleLoading: true });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
   });
 
   it('says so when the friend list could not be loaded', () => {
-    renderDialog({ friends: [], isFriendsError: true });
+    renderDialog({ people: [], isPeopleError: true });
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load your friends.");
   });
 });
@@ -239,7 +243,7 @@ describe('ShareSessionDialog: the limit of one sharing turn', () => {
 
   it('shows no warning and keeps every box enabled up to one below the limit', async () => {
     const user = userEvent.setup();
-    renderDialog({ friends: friends() });
+    renderDialog({ people: friends() });
     for (let i = 1; i < SHARE_LIMIT; i += 1) await user.click(box(name(i)));
 
     expect(screen.queryByText(warning)).toBeNull();
@@ -249,7 +253,7 @@ describe('ShareSessionDialog: the limit of one sharing turn', () => {
 
   it('at the limit shows the footer warning and disables every unticked box, while ticked ones stay enabled', async () => {
     const user = userEvent.setup();
-    renderDialog({ friends: friends() });
+    renderDialog({ people: friends() });
     for (let i = 1; i <= SHARE_LIMIT; i += 1) await user.click(box(name(i)));
 
     expect(screen.getByText(warning)).toBeInTheDocument();
@@ -262,7 +266,7 @@ describe('ShareSessionDialog: the limit of one sharing turn', () => {
 
   it('a disabled box at the limit cannot be ticked', async () => {
     const user = userEvent.setup();
-    renderDialog({ friends: friends() });
+    renderDialog({ people: friends() });
     for (let i = 1; i <= SHARE_LIMIT; i += 1) await user.click(box(name(i)));
 
     await user.click(box(name(SHARE_LIMIT + 1)));
@@ -273,7 +277,7 @@ describe('ShareSessionDialog: the limit of one sharing turn', () => {
 
   it('un-ticking one at the limit lifts the warning and re-enables the others', async () => {
     const user = userEvent.setup();
-    renderDialog({ friends: friends() });
+    renderDialog({ people: friends() });
     for (let i = 1; i <= SHARE_LIMIT; i += 1) await user.click(box(name(i)));
 
     await user.click(box(name(2)));
@@ -285,7 +289,7 @@ describe('ShareSessionDialog: the limit of one sharing turn', () => {
 
   it('friends already sent to do not count toward the limit of the next turn', async () => {
     const user = userEvent.setup();
-    const props = renderDialog({ friends: friends() });
+    const props = renderDialog({ people: friends() });
     for (let i = 1; i <= SHARE_LIMIT; i += 1) await user.click(box(name(i)));
     await user.click(shareButton(SHARE_LIMIT));
     expect((props.onShare as ReturnType<typeof vi.fn>).mock.calls[0][0]).toHaveLength(SHARE_LIMIT);
@@ -296,5 +300,98 @@ describe('ShareSessionDialog: the limit of one sharing turn', () => {
     expect(box(name(1))).toBeDisabled();
     await user.click(box(name(SHARE_LIMIT + 1)));
     expect(shareButton(1)).toBeEnabled();
+  });
+});
+
+// CLIENT-GROUP-SESSION-3: the same dialog for a group session lists the group's members, 100 at a time.
+describe('ShareSessionDialog: a group session (CLIENT-GROUP-SESSION-3)', () => {
+  const groupProps = (overrides: Partial<Props> = {}): Partial<Props> => ({
+    kind: 'group',
+    people: [alice, bao, chi, dung],
+    ...overrides,
+  });
+
+  it('is titled "Share with group members" and lists the members, with its own search label and placeholder', () => {
+    renderDialog(groupProps());
+    expect(screen.getByRole('dialog', { name: 'Share with group members' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Share with friends' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: "Search the group's members" })).toHaveAttribute('placeholder', 'Search members');
+    for (const name of ['Alice Nguyen', 'Bảo Trần', 'Chi Pham', 'Dũng Lê']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+  });
+
+  it('keeps the joined mark, the checkbox rule and the Share (x) count of the friends dialog', async () => {
+    const user = userEvent.setup();
+    const props = renderDialog(groupProps({ joinedIds: new Set(['u-alice']) }));
+    const rows = screen.getAllByRole('listitem').map((row) => row.textContent);
+    expect(rows[3]).toContain('Alice Nguyen');
+    expect(rows[3]).toContain('Joined');
+    expect(screen.queryByRole('checkbox', { name: 'Select Alice Nguyen' })).toBeNull();
+
+    await user.click(box('Bảo Trần'));
+    await user.click(box('Chi Pham'));
+    await user.click(shareButton(2));
+    expect(props.onShare).toHaveBeenCalledWith(['u-bao', 'u-chi'], expect.any(Function));
+  });
+
+  it('filters the members already loaded by name, on the client (no request is made by the dialog)', async () => {
+    const user = userEvent.setup();
+    renderDialog(groupProps());
+    await user.type(screen.getByRole('textbox', { name: "Search the group's members" }), 'bao');
+    expect(screen.getByText('Bảo Trần')).toBeInTheDocument();
+    expect(screen.queryByText('Alice Nguyen')).not.toBeInTheDocument();
+
+    await user.clear(screen.getByRole('textbox', { name: "Search the group's members" }));
+    await user.type(screen.getByRole('textbox', { name: "Search the group's members" }), 'zzz');
+    expect(screen.getByText('No members found.')).toBeInTheDocument();
+  });
+
+  it('has a "Load more members" while there is another page, and it asks for it', async () => {
+    const user = userEvent.setup();
+    const props = renderDialog(groupProps({ hasMore: true }));
+    await user.click(screen.getByRole('button', { name: 'Load more members' }));
+    expect(props.onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no "Load more members" on the last page, and never one for friends', () => {
+    renderDialog(groupProps({ hasMore: false }));
+    expect(screen.queryByRole('button', { name: 'Load more members' })).not.toBeInTheDocument();
+  });
+
+  it('never shows the Load more for a friend list, even if hasMore were set', () => {
+    renderDialog({ kind: 'friends', hasMore: true });
+    expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Load more when the filter matches nothing among the members loaded so far', async () => {
+    const user = userEvent.setup();
+    renderDialog(groupProps({ hasMore: true }));
+    await user.type(screen.getByRole('textbox', { name: "Search the group's members" }), 'zzz');
+    expect(screen.getByText('No members found.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Load more members' })).toBeInTheDocument();
+  });
+
+  it('disables the Load more while a page is loading', () => {
+    renderDialog(groupProps({ hasMore: true, isFetchingMore: true }));
+    expect(screen.getByRole('button', { name: 'Load more members' })).toBeDisabled();
+  });
+
+  it('shows its own hints: no other member yet, and a load error', () => {
+    renderDialog(groupProps({ people: [] }));
+    expect(screen.getByText('There are no other members to share with yet.')).toBeInTheDocument();
+  });
+
+  it('shows the members load error line', () => {
+    renderDialog(groupProps({ people: [], isPeopleError: true }));
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the group's members.");
+  });
+
+  it('stops at the same limit of one turn as for friends', async () => {
+    const user = userEvent.setup();
+    renderDialog(groupProps({ people: manyFriends(SHARE_LIMIT + 2) }));
+    for (let i = 1; i <= SHARE_LIMIT; i += 1) await user.click(box(`Friend ${String(i).padStart(3, '0')}`));
+    expect(screen.getByText('You reached the limit of one sharing turn.')).toBeInTheDocument();
+    expect(box(`Friend ${String(SHARE_LIMIT + 1).padStart(3, '0')}`)).toBeDisabled();
   });
 });

@@ -1,3 +1,4 @@
+import i18n from '@/app/i18n';
 import { describe, expect, it, vi } from 'vitest';
 import { getNotificationText, notificationTextToString } from './notificationText';
 import type { Notification, NotificationType } from './types';
@@ -70,6 +71,9 @@ describe('getNotificationText', () => {
     ['session.join_request.rejected', 'Your request to join "Friday Pickup Game" was declined'],
     ['session.invitation.created', 'Alice Nguyen invited you to join "Friday Pickup Game"'],
     ['session.share.created', 'Alice Nguyen shared "Friday Pickup Game" with you'],
+    // CLIENT-GROUP-SESSION-3
+    ['session.group.created', 'Alice Nguyen created "Friday Pickup Game"'],
+    ['session.group.cancelled', 'Alice Nguyen cancelled "Friday Pickup Game"'],
     ['session.details.updated', 'Alice Nguyen updated "Friday Pickup Game"'],
     ['session.participant.left', 'Alice Nguyen left "Friday Pickup Game"'],
     ['session.record.changed', 'Alice Nguyen updated the result of "Friday Pickup Game"'],
@@ -136,5 +140,20 @@ describe('getNotificationText', () => {
     getNotificationText(baseNotification({ type: 'session.status.started' }));
     expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+  // CLIENT-GROUP-SESSION-3: the group notifications name the actor and the session, never a group (the notification carries no group id).
+  it.each(['session.group.created', 'session.group.cancelled'] as NotificationType[])('%s bolds the actor and the session title only', (type) => {
+    const segments = getNotificationText(baseNotification({ type }));
+    expect(segments.filter((s) => s.bold)).toEqual([
+      { text: 'Alice Nguyen', bold: true },
+      { text: '"Friday Pickup Game"', bold: true },
+    ]);
+  });
+
+  it('renders the group notifications in Vietnamese', async () => {
+    await i18n.changeLanguage('vi');
+    expect(notificationTextToString(getNotificationText(baseNotification({ type: 'session.group.created' })))).toBe('Alice Nguyen đã tạo buổi chơi "Friday Pickup Game"');
+    expect(notificationTextToString(getNotificationText(baseNotification({ type: 'session.group.cancelled' })))).toBe('Alice Nguyen đã hủy buổi chơi "Friday Pickup Game"');
+    await i18n.changeLanguage('en');
   });
 });

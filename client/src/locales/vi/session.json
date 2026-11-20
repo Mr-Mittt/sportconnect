@@ -243,7 +243,14 @@
       "noFriends": "Bạn chưa có người bạn nào để chia sẻ.",
       "noResults": "Không tìm thấy người bạn nào.",
       "friendsError": "Không thể tải danh sách bạn bè.",
-      "error": "Không thể chia sẻ buổi chơi này. Hãy thử lại."
+      "error": "Không thể chia sẻ buổi chơi này. Hãy thử lại.",
+      "groupTitle": "Chia sẻ với thành viên nhóm",
+      "groupSearchLabel": "Tìm thành viên của nhóm",
+      "groupSearchPlaceholder": "Tìm thành viên",
+      "noMembers": "Nhóm chưa có thành viên nào khác để chia sẻ.",
+      "noMembersResults": "Không tìm thấy thành viên.",
+      "membersError": "Không tải được danh sách thành viên của nhóm.",
+      "loadMoreMembers": "Tải thêm thành viên"
     },
     "qualifier": {
       "hostAndYou": "(chủ trì, bạn)",

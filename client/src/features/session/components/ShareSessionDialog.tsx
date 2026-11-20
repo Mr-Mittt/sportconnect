@@ -1,6 +1,5 @@
 import { IconCheck } from '@tabler/icons-react';
 import { useState } from 'react';
-import type { FriendUser } from '@/features/friends/types';
 import { EmptyHint } from '@/shared/components/EmptyHint';
 import { matchesName } from '@/shared/lib/nameMatch';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
@@ -10,6 +9,8 @@ import { Checkbox } from '@/shared/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader } from '@/shared/ui/dialog';
 import { Input } from '@/shared/ui/input';
 import { SHARE_LIMIT } from '../hooks/useShareSession';
+import type { SharePerson } from '../types';
+import { LoadMoreButton } from './LoadMoreButton';
 
 function initialsFor(fullName: string): string {
   return fullName
@@ -21,21 +22,27 @@ function initialsFor(fullName: string): string {
     .toUpperCase();
 }
 
-function FriendAvatar({ friend }: { friend: FriendUser }) {
+function PersonAvatar({ person }: { person: SharePerson }) {
   return (
     <Avatar className="size-6 shrink-0">
-      {friend.avatarUrl !== null && <AvatarImage src={friend.avatarUrl} alt="" />}
-      <AvatarFallback className="text-2xs">{initialsFor(friend.fullName)}</AvatarFallback>
+      {person.avatarUrl !== null && <AvatarImage src={person.avatarUrl} alt="" />}
+      <AvatarFallback className="text-2xs">{initialsFor(person.fullName)}</AvatarFallback>
     </Avatar>
   );
 }
 
 interface ShareSessionBodyProps {
   i18nOverridePrefix?: string;
-  friends: FriendUser[];
-  isFriendsLoading: boolean;
-  isFriendsError: boolean;
-  /** Ids of the friends who already have a `JOINED` row in the session (the players the modal loaded). */
+  /** Who is listed: the caller's friends (standalone session) or the group's members (group session, CLIENT-GROUP-SESSION-3). */
+  kind: 'friends' | 'group';
+  people: SharePerson[];
+  isPeopleLoading: boolean;
+  isPeopleError: boolean;
+  /** A group's members come 100 at a time: another page can be loaded (always false for friends). */
+  hasMore: boolean;
+  isFetchingMore: boolean;
+  onLoadMore: () => void;
+  /** Ids of the people who already have a `JOINED` row in the session (the players the modal loaded). */
   joinedIds: ReadonlySet<string>;
   onShare: (userIds: string[], onDone: () => void) => void;
   isSharing: boolean;
@@ -47,9 +54,13 @@ interface ShareSessionBodyProps {
  * ticks, who was already sent to) starts fresh each time the dialog opens.
  */
 function ShareSessionBody({
-  friends,
-  isFriendsLoading,
-  isFriendsError,
+  kind,
+  people,
+  isPeopleLoading,
+  isPeopleError,
+  hasMore,
+  isFetchingMore,
+  onLoadMore,
   joinedIds,
   onShare,
   isSharing,
@@ -64,19 +75,21 @@ function ShareSessionBody({
   const [sentIds, setSentIds] = useState<ReadonlySet<string>>(new Set());
   const [isSentShown, setIsSentShown] = useState(false);
 
+  const isGroup = kind === 'group';
+  // The filter works on what is loaded, for both kinds (an API search is CLIENT-SESSION-53); a group's other pages come with "Load more".
   const trimmedQuery = query.trim();
-  const visible = (friend: FriendUser) => trimmedQuery === '' || matchesName(friend.fullName, trimmedQuery);
-  const pending = friends.filter((friend) => !joinedIds.has(friend.id) && visible(friend));
-  const joined = friends.filter((friend) => joinedIds.has(friend.id) && visible(friend));
+  const visible = (person: SharePerson) => trimmedQuery === '' || matchesName(person.fullName, trimmedQuery);
+  const pending = people.filter((person) => !joinedIds.has(person.id) && visible(person));
+  const joined = people.filter((person) => joinedIds.has(person.id) && visible(person));
 
   const isAtLimit = selected.size >= SHARE_LIMIT;
 
-  const toggle = (friendId: string, next: boolean) => {
+  const toggle = (personId: string, next: boolean) => {
     setIsSentShown(false);
     setSelected((previous) => {
       const updated = new Set(previous);
-      if (next) updated.add(friendId);
-      else updated.delete(friendId);
+      if (next) updated.add(personId);
+      else updated.delete(personId);
       return updated;
     });
   };
@@ -92,55 +105,58 @@ function ShareSessionBody({
 
   return (
     <>
-      <DialogHeader title={t('detail.share.title')} className="border-hairline-b border-border px-4 py-3" />
+      <DialogHeader title={isGroup ? t('detail.share.groupTitle') : t('detail.share.title')} className="border-hairline-b border-border px-4 py-3" />
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-4">
-        {isFriendsLoading ? (
+        {isPeopleLoading ? (
           <p className="text-2xs text-text-muted">{t('common.loading')}</p>
-        ) : isFriendsError ? (
+        ) : isPeopleError ? (
           <p role="alert" className="text-2sm text-text-danger">
-            {t('detail.share.friendsError')}
+            {isGroup ? t('detail.share.membersError') : t('detail.share.friendsError')}
           </p>
-        ) : friends.length === 0 ? (
-          <EmptyHint>{t('detail.share.noFriends')}</EmptyHint>
+        ) : people.length === 0 ? (
+          <EmptyHint>{isGroup ? t('detail.share.noMembers') : t('detail.share.noFriends')}</EmptyHint>
         ) : (
           <>
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('detail.share.searchPlaceholder')}
-              aria-label={t('detail.share.searchLabel')}
+              placeholder={isGroup ? t('detail.share.groupSearchPlaceholder') : t('detail.share.searchPlaceholder')}
+              aria-label={isGroup ? t('detail.share.groupSearchLabel') : t('detail.share.searchLabel')}
             />
             {pending.length === 0 && joined.length === 0 ? (
-              <EmptyHint>{t('detail.share.noResults')}</EmptyHint>
+              <EmptyHint>{isGroup ? t('detail.share.noMembersResults') : t('detail.share.noResults')}</EmptyHint>
             ) : (
               <ul className="flex flex-col gap-1">
-                {pending.map((friend) => {
-                  const isSent = sentIds.has(friend.id);
-                  const isTicked = isSent || selected.has(friend.id);
+                {pending.map((person) => {
+                  const isSent = sentIds.has(person.id);
+                  const isTicked = isSent || selected.has(person.id);
                   return (
-                    <li key={friend.id}>
+                    <li key={person.id}>
                       <label className="border-hairline flex cursor-pointer items-center gap-2 rounded-lg border-border p-2 hover:bg-surface-1">
                         <Checkbox
                           checked={isTicked}
                           disabled={isSent || (isAtLimit && !isTicked)}
-                          onCheckedChange={(next) => toggle(friend.id, next)}
-                          aria-label={t('detail.share.select', { name: friend.fullName })}
+                          onCheckedChange={(next) => toggle(person.id, next)}
+                          aria-label={t('detail.share.select', { name: person.fullName })}
                         />
-                        <FriendAvatar friend={friend} />
-                        <span className="min-w-0 flex-1 truncate text-2sm text-text-primary">{friend.fullName}</span>
+                        <PersonAvatar person={person} />
+                        <span className="min-w-0 flex-1 truncate text-2sm text-text-primary">{person.fullName}</span>
                       </label>
                     </li>
                   );
                 })}
-                {joined.map((friend) => (
-                  <li key={friend.id} className="border-hairline flex items-center gap-2 rounded-lg border-border p-2">
-                    <FriendAvatar friend={friend} />
-                    <span className="min-w-0 flex-1 truncate text-2sm text-text-primary">{friend.fullName}</span>
+                {joined.map((person) => (
+                  <li key={person.id} className="border-hairline flex items-center gap-2 rounded-lg border-border p-2">
+                    <PersonAvatar person={person} />
+                    <span className="min-w-0 flex-1 truncate text-2sm text-text-primary">{person.fullName}</span>
                     <span className="shrink-0 text-2xs text-text-muted">{t('detail.share.joined')}</span>
                   </li>
                 ))}
               </ul>
+            )}
+            {isGroup && hasMore && (
+              <LoadMoreButton isFetching={isFetchingMore} onClick={onLoadMore} ariaLabel={t('detail.share.loadMoreMembers')} />
             )}
           </>
         )}
@@ -177,7 +193,9 @@ interface ShareSessionDialogProps extends ShareSessionBodyProps {
 }
 
 /**
- * CLIENT-SESSION-49: the "Share with friends" dialog of a standalone session (the Players header's Share button). Every friend
+ * CLIENT-SESSION-49: the "Share with friends" dialog of a standalone session (the Players header's Share button); since
+ * CLIENT-GROUP-SESSION-3 it is "Share with group members" for a group session, listing the group's members 100 at a time with a
+ * "Load more" (the caller never among them). Every friend
  * of the caller is listed: those who have not joined first, each with a checkbox, then those who have, labelled "Joined" with
  * no checkbox. "Share (x)" counts the friends ticked since the last send and is disabled at 0; at {@link SHARE_LIMIT} ticks a
  * footer warning shows and every unticked box is disabled (ticked ones can still be unticked). A send keeps the dialog open:

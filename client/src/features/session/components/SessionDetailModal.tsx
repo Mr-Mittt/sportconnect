@@ -551,9 +551,10 @@ export function SessionDetailModal({
   // CLIENT-SESSION-37: everyone who cannot edit the session (a viewer, or the host once it is no longer
   // PREPARING) gets the read-only mode: Session information and Players, both collapsed.
   const readOnly = session !== undefined && !(canManage && session.status === 'PREPARING');
-  // CLIENT-SESSION-49: every viewer of a standalone session may share it, in any status and whatever their own
-  // participation; a group session is not shareable (SESSION-66), nor is a private one (SESSION-69): no button.
-  const canShare = share !== undefined && session !== undefined && session.groupId === null && session.isPublic;
+  // CLIENT-SESSION-49: every viewer of a public standalone session may share it, in any status and whatever their own
+  // participation; a private one is not shareable (SESSION-69): no button. CLIENT-GROUP-SESSION-3: a group session is shareable
+  // too, by any member of the group (whoever can open it is one: the server refuses the detail to everyone else), with the group's members.
+  const canShare = share !== undefined && session !== undefined && (session.groupId !== null || session.isPublic);
   const shareButton = canShare ? (
     <ShareSessionButton i18nOverridePrefix={i18nOverridePrefix} onClick={share.onOpen} />
   ) : undefined;
@@ -1198,9 +1199,13 @@ export function SessionDetailModal({
           i18nOverridePrefix={i18nOverridePrefix}
           isOpen={share.isOpen}
           onClose={share.onClose}
-          friends={share.friends}
-          isFriendsLoading={share.isFriendsLoading}
-          isFriendsError={share.isFriendsError}
+          kind={share.kind}
+          people={share.people}
+          isPeopleLoading={share.isPeopleLoading}
+          isPeopleError={share.isPeopleError}
+          hasMore={share.hasMore}
+          isFetchingMore={share.isFetchingMore}
+          onLoadMore={share.onLoadMore}
           joinedIds={joinedIds}
           onShare={share.onShare}
           isSharing={share.isSharing}

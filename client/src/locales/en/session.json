@@ -243,7 +243,14 @@
       "noFriends": "You have no friends to share with yet.",
       "noResults": "No friends found.",
       "friendsError": "Couldn't load your friends.",
-      "error": "Couldn't share this session. Try again."
+      "error": "Couldn't share this session. Try again.",
+      "groupTitle": "Share with group members",
+      "groupSearchLabel": "Search the group's members",
+      "groupSearchPlaceholder": "Search members",
+      "noMembers": "There are no other members to share with yet.",
+      "noMembersResults": "No members found.",
+      "membersError": "Couldn't load the group's members.",
+      "loadMoreMembers": "Load more members"
     },
     "qualifier": {
       "hostAndYou": "(host, you)",

@@ -158,20 +158,24 @@ const sportsByKey: Record<SportKey, SportProfile> = {
 };
 
 // CLIENT-SESSION-49: the Share button's slice. Every story of a standalone session shows the button (any status, any
-// participation); the group-linked one does not.
+// participation); CLIENT-GROUP-SESSION-3: a group session shows it too (a member shares it with the group's members).
 const shareFriends = [
-  { id: 'f-1', fullName: 'Alice Nguyen', avatarUrl: null, coverUrl: null, bio: null },
-  { id: 'user-2', fullName: 'Priya Shah', avatarUrl: null, coverUrl: null, bio: null },
-  { id: 'f-3', fullName: 'Chi Pham', avatarUrl: null, coverUrl: null, bio: null },
+  { id: 'f-1', fullName: 'Alice Nguyen', avatarUrl: null },
+  { id: 'user-2', fullName: 'Priya Shah', avatarUrl: null },
+  { id: 'f-3', fullName: 'Chi Pham', avatarUrl: null },
 ];
 
 const share = {
   isOpen: false,
   onOpen: () => {},
   onClose: () => {},
-  friends: shareFriends,
-  isFriendsLoading: false,
-  isFriendsError: false,
+  kind: 'friends' as const,
+  people: shareFriends,
+  isPeopleLoading: false,
+  isPeopleError: false,
+  hasMore: false,
+  isFetchingMore: false,
+  onLoadMore: () => {},
   onShare: (_userIds: string[], onDone: () => void) => onDone(),
   isSharing: false,
   isShareError: false,
