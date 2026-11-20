@@ -1145,6 +1145,14 @@ export async function seedEmptyGroupSessionsOnNextLoad(sessionId: string): Promi
 }
 
 /**
+ * CLIENT-GROUP-SESSION-3 — adds 130 synthetic members to the owned group's member list, so the group Share dialog's first page of 100 is
+ * full and its "Load more" can be exercised (the real users never reach 100 in a fixture).
+ */
+export async function seedGroupMembersVolumeOnNextLoad(sessionId: string): Promise<void> {
+  await postAdmin(sessionId, 'override/groupMembersVolume');
+}
+
+/**
  * CLIENT-SESSION-23 — makes `GET /sessions/history` return 22 synthetic history dates (the newest
  * with 23 sessions) on top of the fixtures, so an e2e run can reach both History "Load more"
  * levels: paging further back past `dateCount=20`, and a single date past its own page size of 20.

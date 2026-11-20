@@ -171,6 +171,7 @@ const OVERRIDE_NAMES: ReadonlySet<keyof SessionOverrides> = new Set([
   'notificationsEmpty',
   'sessionsEmpty',
   'groupSessionsEmpty',
+  'groupMembersVolume',
   'historyVolume',
   'discoverVolume',
   'emailUnverified',

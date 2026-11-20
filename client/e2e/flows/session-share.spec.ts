@@ -1,5 +1,11 @@
 import type { Page } from '@playwright/test';
-import { mockDiscoverableSession, mockFriend, seedAuthenticatedSession } from '../mocks/fixtures.ts';
+import {
+  mockDiscoverableSession,
+  mockFriend,
+  mockGroupMembers,
+  seedAuthenticatedSession,
+  seedGroupMembersVolumeOnNextLoad,
+} from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
 /*
@@ -143,13 +149,77 @@ test('at 50 ticked friends a footer warning shows and the unticked boxes are dis
   await expect(dialog.getByRole('checkbox', { name: 'Select Friend 051' })).toBeEnabled();
 });
 
-test('a group session has no Share button', async ({ page }) => {
+test('a private standalone session has no Share button', async ({ page }) => {
   await seedAuthenticatedSession(page, '/matches');
   await page.route(new RegExp(`/api/sessions/${SESSION_ID}$`), (route) =>
-    route.fulfill({ json: envelope({ ...mockDiscoverableSession, groupId: 5, sessionType: 'GROUP_RECURRING' }) }),
+    route.fulfill({ json: envelope({ ...mockDiscoverableSession, isPublic: false }) }),
   );
   const detail = await openSession(page);
 
   await expect(detail.getByRole('region', { name: 'Players' })).toBeVisible();
   await expect(detail.getByRole('button', { name: 'Share this session' })).toHaveCount(0);
+});
+
+/*
+ * CLIENT-GROUP-SESSION-3: a group session is shared with the group's members. Uses "Ladder night" of "Weekend Tennis Ladder" (the test
+ * user is its owner and host), opened from the Posts-tab shortcut; the member list is the MSW roster (the test user, Sam Ito, Alex Chen).
+ */
+async function openGroupSessionShare(page: Page) {
+  await page.getByRole('group', { name: 'Group filter' }).getByRole('button', { name: /Weekend Tennis Ladder/ }).click();
+  await page
+    .getByRole('region', { name: "Today's group sessions" })
+    .getByRole('button', { name: 'Ladder night — View details' })
+    .click();
+  const detail = page.getByRole('dialog').filter({ hasText: 'Ladder night' });
+  await detail.getByRole('button', { name: 'Share this session' }).click();
+  return page.getByRole('dialog', { name: 'Share with group members' });
+}
+
+test('a group session is shared with the group members: the list, the filter, and the request', async ({ page }) => {
+  await seedAuthenticatedSession(page, '/groups');
+  const dialog = await openGroupSessionShare(page);
+
+  await test.step('1. the dialog lists the other members of the group, never the caller', async () => {
+    await expect(dialog.getByText('Sam Ito')).toBeVisible();
+    await expect(dialog.getByText('Alex Chen')).toBeVisible();
+    await expect(dialog.getByText(`${mockGroupMembers[0].userFullName}`, { exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: /Load more/ })).toHaveCount(0);
+  });
+
+  await test.step('2. the filter works on the members loaded, by name', async () => {
+    await dialog.getByRole('textbox', { name: "Search the group's members" }).fill('sam');
+    await expect(dialog.getByText('Sam Ito')).toBeVisible();
+    await expect(dialog.getByText('Alex Chen')).toHaveCount(0);
+    await dialog.getByRole('textbox', { name: "Search the group's members" }).fill('zzz');
+    await expect(dialog.getByText('No members found.')).toBeVisible();
+    await dialog.getByRole('textbox', { name: "Search the group's members" }).fill('');
+  });
+
+  await test.step('3. sharing sends the user ids picked to the shares endpoint and confirms', async () => {
+    const request = page.waitForRequest((r) => /\/api\/sessions\/\d+\/shares$/.test(r.url()) && r.method() === 'POST');
+    await dialog.getByRole('checkbox', { name: 'Select Sam Ito' }).check();
+    await dialog.getByRole('button', { name: 'Share (1)' }).click();
+    expect((await request).postDataJSON()).toEqual({ userIds: [mockGroupMembers[1].userId] });
+    await expect(dialog.getByText('Session shared.')).toBeVisible();
+    await expect(dialog.getByRole('checkbox', { name: 'Select Sam Ito' })).toBeDisabled();
+  });
+});
+
+test('the group Share dialog lists 100 members first and loads the rest on request', async ({ page, mockSessionId }) => {
+  await seedGroupMembersVolumeOnNextLoad(mockSessionId);
+  await seedAuthenticatedSession(page, '/groups');
+  const dialog = await openGroupSessionShare(page);
+
+  // 133 members in all (3 + 130): page 1 holds 100 of them, the caller among those, so 99 rows. All 132 others after "Load more".
+  await expect(dialog.getByRole('checkbox')).toHaveCount(99);
+  await expect(dialog.getByText('Member 130')).toHaveCount(0);
+
+  await dialog.getByRole('button', { name: 'Load more members' }).click();
+  await expect(dialog.getByRole('checkbox')).toHaveCount(132);
+  await expect(dialog.getByText('Member 130')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Load more members' })).toHaveCount(0);
+
+  // The filter only sees what is loaded: with the rest loaded, a late member is found by name.
+  await dialog.getByRole('textbox', { name: "Search the group's members" }).fill('member 130');
+  await expect(dialog.getByRole('checkbox')).toHaveCount(1);
 });

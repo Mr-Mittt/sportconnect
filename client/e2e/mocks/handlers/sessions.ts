@@ -1443,8 +1443,14 @@ export const sessionHandlers: HttpHandler[] = [
     if (!existing) {
       return HttpResponse.json(apiError('Session not found', 'SESSION_NOT_FOUND'), { status: 404 });
     }
-    if (existing.groupId !== null || !existing.isPublic) {
-      return HttpResponse.json(apiError('A group or private session cannot be shared', 'SESSION_SHARE_NOT_ALLOWED'), { status: 403 });
+    // CLIENT-GROUP-SESSION-3 (SESSION-GROUP-3): a group session is shared by a member of its group (403 `SESSION_GROUP_MEMBER_REQUIRED`
+    // otherwise) with other members of the group; a private standalone session is refused.
+    const isGroupSession = existing.groupId !== null;
+    if (isGroupSession && ![mockGroup.id, mockOwnedGroup.id].includes(existing.groupId as number)) {
+      return HttpResponse.json(apiError('Only members of this group can do that', 'SESSION_GROUP_MEMBER_REQUIRED'), { status: 403 });
+    }
+    if (!isGroupSession && !existing.isPublic) {
+      return HttpResponse.json(apiError('A private session cannot be shared', 'SESSION_SHARE_NOT_ALLOWED'), { status: 403 });
     }
     const body = (await request.json()) as { userIds?: string[] };
     const userIds = [...new Set(body.userIds ?? [])];
@@ -1456,7 +1462,12 @@ export const sessionHandlers: HttpHandler[] = [
         .filter((p) => p.status === 'JOINED' || p.status === 'REQUESTED' || p.status === 'INVITED')
         .map((p) => p.userId),
     );
-    const sent = userIds.filter((id) => id !== mockUser.id && !alreadyIn.has(id)).length;
+    // A group session's recipients must be members of the group: the owned group's roster and the synthetic volume members (the other
+    // fixture group has no roster here, so every id counts as a member of it).
+    const groupMemberIds = new Set(mockGroupMembers.map((member) => member.userId));
+    const isRecipient = (id: string) =>
+      !isGroupSession || existing.groupId !== mockOwnedGroup.id || groupMemberIds.has(id) || id.startsWith('volume-member-');
+    const sent = userIds.filter((id) => id !== mockUser.id && !alreadyIn.has(id) && isRecipient(id)).length;
     return HttpResponse.json(apiResponse({ sent, skipped: userIds.length - sent }, 'Session shared successfully'));
   }),
 
