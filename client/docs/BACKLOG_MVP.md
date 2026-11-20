@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-19 (CLIENT-GROUP-SESSION-1 done)
+**Last updated:** 2026-11-20 (CLIENT-MOBILE-SUPPORT-1 filed)
 
 ---
 
@@ -89,6 +89,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 28 | [CLIENT-GROUP-SESSION-4](MVP/CLIENT-GROUP-SESSION-4_GROUP_SETTINGS_SESSIONS_CONFIGURATION_SECTION.md) | Group settings: the Sessions configuration section (ON/OFF, Weekly/Monthly, configurations grouped by day); depends on SESSION-GROUP-4 | `TODO` |
 | 29 | [CLIENT-GROUP-SESSION-5](MVP/CLIENT-GROUP-SESSION-5_RECURRENCE_CONFIGURATION_FORM.md) | The recurrence configuration form (date-less When, draft warning, saved dialog; closes GRP-12's scope); depends on SESSION-GROUP-4 | `TODO` |
 | 30 | [CLIENT-GROUP-SESSION-6](MVP/CLIENT-GROUP-SESSION-6_CANCEL_SCHEDULED_SESSIONS_CONFIRMATIONS.md) | "Cancel the scheduled sessions?" confirmations on OFF, delete and mode switch; depends on SESSION-GROUP-6 | `TODO` |
+| 31 | [CLIENT-MOBILE-SUPPORT-1](MVP/CLIENT-MOBILE-SUPPORT-1_MOBILE_VIEWPORT_SUPPORT.md) | Mobile viewport support: a **standing collector** (like `BASELINE-UPDATE-1`) for mobile-viewport problems noticed while building other client tickets, each added as a row (after a duplicate check) and solved together later; first points (owner, 2026-11-20, not investigated): less horizontal padding on the main div under the root, horizontal group tabs under the banner (selected = icon + label, the rest icon only), no horizontal scroll from the main navigator | `TODO` |
 
 #### Removed / Deferred
 
