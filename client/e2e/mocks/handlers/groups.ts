@@ -121,8 +121,16 @@ function defaultGroupsSession(): GroupsSession {
       mockPublicGroup,
     ],
     joinRequestsState: [],
-    groupSettingsState: { [mockOwnedGroup.id]: { ...mockGroupSettings } },
-    groupInfoState: { [mockOwnedGroup.id]: { ...mockGroupInfo } },
+    // mockGroup (the one the test user only belongs to) has settings and info too: the real server lets a member read them, and the Settings tab of a
+    // member shows them read-only. Without them the member's tab raced a 404 ("Couldn't load permission settings") against the test's assertions.
+    groupSettingsState: {
+      [mockOwnedGroup.id]: { ...mockGroupSettings },
+      [mockGroup.id]: { ...mockGroupSettings, groupId: mockGroup.id },
+    },
+    groupInfoState: {
+      [mockOwnedGroup.id]: { ...mockGroupInfo },
+      [mockGroup.id]: { ...mockGroupInfo, groupId: mockGroup.id, groupName: mockGroup.groupName, isPrivate: mockGroup.isPrivate },
+    },
     groupMembersState: { [mockOwnedGroup.id]: mockGroupMembers.map((member) => ({ ...member })) },
     groupJoinRequestsState: { [mockOwnedGroup.id]: [{ ...mockGroupJoinRequest }] },
     sentInvitationsState: { [mockOwnedGroup.id]: [{ ...mockSentInvitation }] },

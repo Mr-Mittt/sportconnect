@@ -245,6 +245,8 @@ test('Sessions section — deleting a configuration asks first, then deletes onl
 test('Sessions section — switching the recurrence asks first; the list follows the mode', async ({ page }) => {
   await openSettings(page, OWNED);
   await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+  // The confirm only appears while configurations of the mode exist: wait for the list, or the switch can happen before it has loaded and skip the question.
+  await expect(page.getByRole('button', { name: /Tuesday \(2\)/ })).toBeVisible();
 
   await page.getByLabel('Recurrence').selectOption('MONTHLY');
   const dialog = page.getByRole('dialog', { name: 'Switch the recurrence?' });
