@@ -90,6 +90,9 @@ interface GroupsSession {
   // CLIENT-GROUP-SESSION-4: a group's regular-session settings and configurations (both modes), keyed by groupId; a group with no entry is OFF, weekly, with none.
   groupSessionSettingsState: Record<number, GroupSessionSettings>;
   groupSessionRecurrencesState: Record<number, GroupSessionRecurrence[]>;
+  // CLIENT-GROUP-SESSION-6: scheduled regular sessions per group and configuration (groupId -> recurrenceId -> how many), what the count endpoint reports and
+  // `cancelScheduled` empties. Only these two configurations of mockOwnedGroup have any.
+  groupScheduledRegularSessions: Record<number, Record<number, number>>;
   // GRP-7: pending_user invitations addressed to the test user, across every
   // group — not group-scoped, unlike the other invitation state above.
   userPendingInvitationsState: GroupInvitation[];
@@ -146,6 +149,7 @@ function defaultGroupsSession(): GroupsSession {
       [mockOwnedGroup.id]: mockGroupSessionRecurrences.map((recurrence) => ({ ...recurrence })),
       [mockGroup.id]: [{ ...mockGroupSessionRecurrences[0], groupId: mockGroup.id }],
     },
+    groupScheduledRegularSessions: { [mockOwnedGroup.id]: { 1: 2, 4: 1 } },
     userPendingInvitationsState: [{ ...mockReceivedInvitation }],
     nextGroupId: 100,
     nextJoinRequestId: 100,
@@ -482,8 +486,8 @@ export const groupHandlers: HttpHandler[] = [
   }),
 
   // CLIENT-GROUP-SESSION-4 (SESSION-GROUP-4/6): a group's regular-session settings and configurations. Read is any member's; every write is the owner's or an
-  // admin's (403 `SESSION_GROUP_ADMIN_REQUIRED`), a non-member gets 403 `SESSION_GROUP_MEMBER_REQUIRED`. The mock has no regular sessions, so a cancel
-  // (`cancelScheduled`) cancels none and answers `cancelledSessions: 0`.
+  // admin's (403 `SESSION_GROUP_ADMIN_REQUIRED`), a non-member gets 403 `SESSION_GROUP_MEMBER_REQUIRED`. A cancel (`cancelScheduled`) empties the group's
+  // scheduled regular sessions (`groupScheduledRegularSessions`) and answers how many.
   http.get('/api/sessions/group/:groupId/settings', ({ request, params }) => {
     const unauthorized = requireAuth(request);
     if (unauthorized) return unauthorized;
@@ -502,7 +506,7 @@ export const groupHandlers: HttpHandler[] = [
     const role = callerRole(state, groupId);
     if (role === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
     if (role !== 'group_owner' && role !== 'group_admin') return codedError(403, 'SESSION_GROUP_ADMIN_REQUIRED', 'Only the group owner or an admin can do that');
-    const body = (await request.json()) as { enabled?: boolean; mode?: RecurrenceMode };
+    const body = (await request.json()) as { enabled?: boolean; mode?: RecurrenceMode; cancelScheduled?: boolean };
     const current = state.groupSessionSettingsState[groupId] ?? { groupId, enabled: false, mode: 'WEEKLY' as RecurrenceMode, cancelledSessions: 0 };
     const updated: GroupSessionSettings = {
       ...current,
@@ -510,6 +514,13 @@ export const groupHandlers: HttpHandler[] = [
       mode: body.mode ?? current.mode,
       cancelledSessions: 0,
     };
+    // Like the server: `cancelScheduled` counts only on a call that turns generation off or switches the mode.
+    const endsGeneration = body.enabled === false || (body.mode !== undefined && body.mode !== current.mode);
+    if (body.cancelScheduled === true && endsGeneration) {
+      const scheduled = state.groupScheduledRegularSessions[groupId] ?? {};
+      updated.cancelledSessions = Object.values(scheduled).reduce((sum, n) => sum + n, 0);
+      state.groupScheduledRegularSessions[groupId] = {};
+    }
     state.groupSessionSettingsState[groupId] = updated;
     return HttpResponse.json(apiResponse(updated, 'Settings updated'));
   }),
@@ -615,7 +626,27 @@ export const groupHandlers: HttpHandler[] = [
       return codedError(404, 'SESSION_RECURRENCE_NOT_FOUND', 'Recurrence not found');
     }
     state.groupSessionRecurrencesState[groupId] = list.filter((recurrence) => recurrence.id !== recurrenceId);
-    return HttpResponse.json(apiResponse({ count: 0 }, 'Recurrence deleted'));
+    const scheduled = state.groupScheduledRegularSessions[groupId] ?? {};
+    const cancelled = new URL(request.url).searchParams.get('cancelScheduled') === 'true' ? (scheduled[recurrenceId] ?? 0) : 0;
+    if (cancelled > 0) delete scheduled[recurrenceId];
+    return HttpResponse.json(apiResponse({ count: cancelled }, 'Recurrence deleted'));
+  }),
+
+  // CLIENT-GROUP-SESSION-6 (SESSION-GROUP-6): how many scheduled regular sessions a delete (`scope=RECURRENCE`) or an OFF / mode switch (`scope=ALL`) leaves behind.
+  http.get('/api/sessions/group/:groupId/regular-sessions/count', ({ request, params }) => {
+    const unauthorized = requireAuth(request);
+    if (unauthorized) return unauthorized;
+    const groupId = Number(params.groupId);
+    const state = groupsSessions.get(sessionIdFromRequest(request));
+    const role = callerRole(state, groupId);
+    if (role === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
+    if (role !== 'group_owner' && role !== 'group_admin') return codedError(403, 'SESSION_GROUP_ADMIN_REQUIRED', 'Only the group owner or an admin can do that');
+    const url = new URL(request.url);
+    const scheduled = state.groupScheduledRegularSessions[groupId] ?? {};
+    const recurrenceId = Number(url.searchParams.get('recurrenceId'));
+    const count =
+      url.searchParams.get('scope') === 'RECURRENCE' ? (scheduled[recurrenceId] ?? 0) : Object.values(scheduled).reduce((sum, n) => sum + n, 0);
+    return HttpResponse.json(apiResponse({ count }, 'Count retrieved successfully'));
   }),
 
   http.get('/api/groups/:groupId/join-requests', ({ request, params }) => {

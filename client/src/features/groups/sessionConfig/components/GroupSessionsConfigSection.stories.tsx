@@ -114,3 +114,34 @@ export const DeleteConfirmation: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Delete Tuesday at 18:00' }));
   },
 };
+
+/** CLIENT-GROUP-SESSION-6: after the delete confirm, 3 scheduled sessions are left behind: leave them there or cancel them. */
+export const CancelScheduledOnDelete: Story = {
+  args: { data: makeSessionsConfigData({ recurrences: weekly, onCountScheduled: (_scope, _recurrenceId, onCount) => onCount(3) }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /Tuesday \(2\)/ }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete Tuesday at 18:00' }));
+    await userEvent.click(within(document.body).getByRole('button', { name: 'Delete' }));
+  },
+};
+
+/** After the mode confirm, one scheduled session (the singular form). */
+export const CancelScheduledOnModeSwitch: Story = {
+  args: { data: makeSessionsConfigData({ recurrences: weekly, onCountScheduled: (_scope, _recurrenceId, onCount) => onCount(1) }) },
+  play: async ({ canvasElement }) => {
+    await userEvent.selectOptions(within(canvasElement).getByLabelText('Recurrence'), 'MONTHLY');
+    await userEvent.click(within(document.body).getByRole('button', { name: 'Got it' }));
+  },
+};
+
+/** The count could not be read, so nothing was changed: Try again or Close. */
+export const CountLookupFailed: Story = {
+  args: { data: makeSessionsConfigData({ recurrences: weekly, onCountScheduled: () => {}, isCountError: true }) },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /Tuesday \(2\)/ }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Delete Tuesday at 18:00' }));
+    await userEvent.click(within(document.body).getByRole('button', { name: 'Delete' }));
+  },
+};

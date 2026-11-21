@@ -12,11 +12,18 @@ import type { GroupSessionRecurrence, RecurrenceMissingField, RecurrenceMode } f
 import { ChoiceDialog, type DialogChoice } from './ChoiceDialog';
 import { RecurrenceConfigModal } from './RecurrenceConfigModal';
 
+/** A change that can leave scheduled regular sessions behind: it asks the server how many first (CLIENT-GROUP-SESSION-6). */
+type CountedAction = { kind: 'mode'; mode: RecurrenceMode } | { kind: 'delete'; recurrence: GroupSessionRecurrence };
+
 type Pending =
   | { kind: 'on' }
   | { kind: 'off' }
   | { kind: 'mode'; mode: RecurrenceMode }
-  | { kind: 'delete'; recurrence: GroupSessionRecurrence };
+  | { kind: 'delete'; recurrence: GroupSessionRecurrence }
+  /** The count lookup for `action` is running (no dialog) or failed (the "try again" dialog). */
+  | { kind: 'count'; action: CountedAction }
+  /** `count` scheduled sessions would be left behind: leave them or cancel them. */
+  | { kind: 'cancel'; action: CountedAction; count: number };
 
 interface GroupSessionsConfigSectionProps {
   /** The owner or an admin: they change the switch, the recurrence and the configurations; a member only reads them. */
@@ -74,10 +81,30 @@ export function GroupSessionsConfigSection({ canEdit, data, groupName, i18nOverr
     if (mode === settings.mode) return;
     // The confirm is about configurations that would stop being usable; with none there is nothing to warn about.
     if (modeConfigurations.length > 0) setPending({ kind: 'mode', mode });
-    else data.onSetMode(mode);
+    else startCount({ kind: 'mode', mode });
   };
 
-  const close = () => setPending(null);
+  // Closing forgets the lookup too: an answer that arrives after it must not change anything (the data hook drops it).
+  const close = () => {
+    data.onResetCount();
+    setPending(null);
+  };
+  const perform = (action: CountedAction, cancelScheduled: boolean) => {
+    if (action.kind === 'mode') data.onSetMode(action.mode, cancelScheduled);
+    else data.onDelete(action.recurrence.id, cancelScheduled);
+  };
+  // The change waits for the count: none scheduled = it goes ahead at once; some = the owner chooses; a failed lookup blocks it (try again or close).
+  function startCount(action: CountedAction) {
+    setPending({ kind: 'count', action });
+    data.onCountScheduled(action.kind === 'mode' ? 'ALL' : 'RECURRENCE', action.kind === 'delete' ? action.recurrence.id : undefined, (count) => {
+      if (count > 0) {
+        setPending({ kind: 'cancel', action, count });
+      } else {
+        setPending(null);
+        perform(action, false);
+      }
+    });
+  }
   const choose = (action: () => void) => () => {
     close();
     action();
@@ -120,7 +147,7 @@ export function GroupSessionsConfigSection({ canEdit, data, groupName, i18nOverr
       body: t('settings.sessions.modeDialog.body'),
       choices: [
         { key: 'stay', label: t('settings.sessions.modeDialog.stay'), variant: 'outline', onSelect: close },
-        { key: 'confirm', label: t('settings.sessions.modeDialog.confirm'), variant: 'primary', onSelect: choose(() => data.onSetMode(mode)) },
+        { key: 'confirm', label: t('settings.sessions.modeDialog.confirm'), variant: 'primary', onSelect: choose(() => startCount({ kind: 'mode', mode })) },
       ],
     };
   } else if (pending?.kind === 'delete') {
@@ -130,7 +157,27 @@ export function GroupSessionsConfigSection({ canEdit, data, groupName, i18nOverr
       body: t('settings.sessions.deleteDialog.body', { slot: slotLabel(recurrence) }),
       choices: [
         { key: 'cancel', label: t('settings.sessions.deleteDialog.cancel'), variant: 'outline', onSelect: close },
-        { key: 'confirm', label: t('settings.sessions.deleteDialog.confirm'), variant: 'danger', onSelect: choose(() => data.onDelete(recurrence.id)) },
+        { key: 'confirm', label: t('settings.sessions.deleteDialog.confirm'), variant: 'danger', onSelect: choose(() => startCount({ kind: 'delete', recurrence })) },
+      ],
+    };
+  } else if (pending?.kind === 'count' && data.isCountError) {
+    const { action } = pending;
+    dialog = {
+      title: t('settings.sessions.countError.title'),
+      body: t('settings.sessions.countError.body'),
+      choices: [
+        { key: 'close', label: t('settings.sessions.countError.close'), variant: 'outline', onSelect: close },
+        { key: 'retry', label: t('settings.sessions.countError.retry'), variant: 'primary', onSelect: () => startCount(action) },
+      ],
+    };
+  } else if (pending?.kind === 'cancel') {
+    const { action, count } = pending;
+    dialog = {
+      title: t('settings.sessions.cancelDialog.title'),
+      body: t('settings.sessions.cancelDialog.body', { count }),
+      choices: [
+        { key: 'leave', label: t('settings.sessions.cancelDialog.leave'), variant: 'outline', onSelect: choose(() => perform(action, false)) },
+        { key: 'cancel', label: t('settings.sessions.cancelDialog.cancel'), variant: 'danger', onSelect: choose(() => perform(action, true)) },
       ],
     };
   }
