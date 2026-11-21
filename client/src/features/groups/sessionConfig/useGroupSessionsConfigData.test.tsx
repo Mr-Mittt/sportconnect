@@ -126,7 +126,7 @@ describe('useGroupSessionsConfigData', () => {
     });
   });
 
-  it('switching the mode sends only { mode }, never cancelScheduled (that is the next ticket)', async () => {
+  it('switching the mode sends only { mode } unless the owner chose to cancel the scheduled sessions', async () => {
     mockReads();
     const { wrapper } = setupClient();
     const hook = renderHook(() => useGroupSessionsConfigData(1, true), { wrapper });
@@ -135,6 +135,93 @@ describe('useGroupSessionsConfigData', () => {
 
     await act(async () => hook.result.current.onSetMode('MONTHLY'));
     expect(put).toHaveBeenCalledWith('/sessions/group/1/settings', { mode: 'MONTHLY' });
+
+    put.mockClear();
+    await act(async () => hook.result.current.onSetMode('MONTHLY', false));
+    expect(put).toHaveBeenCalledWith('/sessions/group/1/settings', { mode: 'MONTHLY' });
+
+    put.mockClear();
+    await act(async () => hook.result.current.onSetMode('MONTHLY', true));
+    expect(put).toHaveBeenCalledWith('/sessions/group/1/settings', { mode: 'MONTHLY', cancelScheduled: true });
+  });
+
+  describe('counting the scheduled regular sessions', () => {
+    const answer = (count: number) => envelope({ count });
+
+    async function ready() {
+      const get = mockReads();
+      const { wrapper } = setupClient();
+      const hook = renderHook(() => useGroupSessionsConfigData(1, true), { wrapper });
+      await waitFor(() => expect(hook.result.current.settings).toBeDefined());
+      return { get, hook };
+    }
+
+    it('asks for the whole group (scope ALL) or for one configuration (RECURRENCE and its id) and hands the number over', async () => {
+      const { get, hook } = await ready();
+      get.mockImplementation(async () => answer(5));
+      const onCount = vi.fn();
+
+      await act(async () => hook.result.current.onCountScheduled('ALL', undefined, onCount));
+      await waitFor(() => expect(onCount).toHaveBeenCalledWith(5));
+      expect(get).toHaveBeenLastCalledWith('/sessions/group/1/regular-sessions/count', { params: { scope: 'ALL', recurrenceId: undefined } });
+
+      await act(async () => hook.result.current.onCountScheduled('RECURRENCE', 7, onCount));
+      expect(get).toHaveBeenLastCalledWith('/sessions/group/1/regular-sessions/count', { params: { scope: 'RECURRENCE', recurrenceId: 7 } });
+    });
+
+    it('a failed lookup reports isCountError, never calls back, and a reset clears it', async () => {
+      const { get, hook } = await ready();
+      get.mockRejectedValue(coded(500, 'INTERNAL_ERROR'));
+      const onCount = vi.fn();
+
+      await act(async () => hook.result.current.onCountScheduled('ALL', undefined, onCount));
+      await waitFor(() => expect(hook.result.current.isCountError).toBe(true));
+      expect(onCount).not.toHaveBeenCalled();
+
+      act(() => hook.result.current.onResetCount());
+      await waitFor(() => expect(hook.result.current.isCountError).toBe(false));
+    });
+
+    it('is busy while it runs, so the other controls wait', async () => {
+      const { get, hook } = await ready();
+      let resolve: (value: ReturnType<typeof envelope>) => void = () => {};
+      get.mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        }),
+      );
+
+      act(() => hook.result.current.onCountScheduled('ALL', undefined, () => {}));
+      await waitFor(() => expect(hook.result.current.isCounting).toBe(true));
+      expect(hook.result.current.isBusy).toBe(true);
+      await act(async () => resolve(answer(0)));
+      await waitFor(() => expect(hook.result.current.isCounting).toBe(false));
+    });
+
+    it('an answer that arrives after a reset (the dialog was closed) is dropped, so it cannot delete or switch anything', async () => {
+      const { get, hook } = await ready();
+      let resolve: (value: ReturnType<typeof envelope>) => void = () => {};
+      get.mockReturnValue(
+        new Promise((r) => {
+          resolve = r;
+        }),
+      );
+      const onCount = vi.fn();
+
+      act(() => hook.result.current.onCountScheduled('ALL', undefined, onCount));
+      act(() => hook.result.current.onResetCount());
+      await act(async () => resolve(answer(3)));
+      await waitFor(() => expect(hook.result.current.isCounting).toBe(false));
+      expect(onCount).not.toHaveBeenCalled();
+    });
+
+    it('does nothing without a group', async () => {
+      const get = vi.spyOn(apiClient, 'get');
+      const { wrapper } = setupClient();
+      const hook = renderHook(() => useGroupSessionsConfigData(undefined, true), { wrapper });
+      act(() => hook.result.current.onCountScheduled('ALL', undefined, () => {}));
+      expect(get).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleting a configuration', () => {
@@ -148,9 +235,36 @@ describe('useGroupSessionsConfigData', () => {
 
       await act(async () => hook.result.current.onDelete(2));
 
-      expect(del).toHaveBeenCalledWith('/sessions/group/1/recurrences/2');
+      expect(del).toHaveBeenCalledWith('/sessions/group/1/recurrences/2', { params: undefined });
       await waitFor(() => expect(hook.result.current.recurrences?.map((r) => r.id)).toEqual([1]));
       expect(invalidate).toHaveBeenCalledWith({ queryKey: feedKeys.groupFeed(1) });
+      // Nothing was cancelled: the Sessions tab is not asked to reload.
+      expect(invalidate).not.toHaveBeenCalledWith({ queryKey: sessionKeys.groupSessions(1) });
+    });
+
+    it('with cancelScheduled it sends ?cancelScheduled=true and refreshes the group sessions when some were cancelled', async () => {
+      mockReads([makeRecurrence({ id: 1 })]);
+      const { wrapper, queryClient } = setupClient();
+      const hook = renderHook(() => useGroupSessionsConfigData(1, true), { wrapper });
+      await waitFor(() => expect(hook.result.current.recurrences).toHaveLength(1));
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+      const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(envelope({ count: 2 }));
+
+      await act(async () => hook.result.current.onDelete(1, true));
+
+      expect(del).toHaveBeenCalledWith('/sessions/group/1/recurrences/1', { params: { cancelScheduled: true } });
+      await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: sessionKeys.groupSessions(1) }));
+    });
+
+    it('cancelScheduled false sends no parameter', async () => {
+      mockReads([makeRecurrence({ id: 1 })]);
+      const { wrapper } = setupClient();
+      const hook = renderHook(() => useGroupSessionsConfigData(1, true), { wrapper });
+      await waitFor(() => expect(hook.result.current.recurrences).toHaveLength(1));
+      const del = vi.spyOn(apiClient, 'delete').mockResolvedValue(envelope({ count: 0 }));
+
+      await act(async () => hook.result.current.onDelete(1, false));
+      expect(del).toHaveBeenCalledWith('/sessions/group/1/recurrences/1', { params: undefined });
     });
 
     it('a failed delete leaves the list alone and reports the coded text', async () => {

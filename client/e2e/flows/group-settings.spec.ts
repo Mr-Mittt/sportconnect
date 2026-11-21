@@ -26,7 +26,7 @@ async function openSettings(page: Page, groupName: string) {
 }
 
 const settingsUrl = (groupId: number) => new RegExp(`/api/sessions/group/${groupId}/settings$`);
-const recurrenceUrl = (groupId: number, id: number) => new RegExp(`/api/sessions/group/${groupId}/recurrences/${id}$`);
+const recurrenceUrl = (groupId: number, id: number) => new RegExp(`/api/sessions/group/${groupId}/recurrences/${id}(\\?.*)?$`);
 
 function failure(status: number, errorCode: string) {
   return { status, json: { success: false, message: 'English server prose', data: null, timestamp: '', errorCode } };
@@ -257,6 +257,8 @@ test('Sessions section — switching the recurrence asks first; the list follows
   await page.getByLabel('Recurrence').selectOption('MONTHLY');
   const request = page.waitForRequest((r) => r.method() === 'PUT' && settingsUrl(mockOwnedGroup.id).test(r.url()));
   await dialog.getByRole('button', { name: 'Got it' }).click();
+  // The group has 3 scheduled regular sessions (CLIENT-GROUP-SESSION-6): the second question comes after this one; leaving them sends no cancel.
+  await page.getByRole('dialog', { name: 'Cancel the scheduled sessions?' }).getByRole('button', { name: 'Leave it there' }).click();
   expect((await request).postDataJSON()).toEqual({ mode: 'MONTHLY' });
 
   await expect(page.getByLabel('Recurrence')).toHaveValue('MONTHLY');
@@ -368,9 +370,89 @@ test('Sessions section — failures show the coded message and change nothing', 
     await page.getByRole('button', { name: /Tuesday \(2\)/ }).click();
     await page.getByRole('button', { name: 'Delete Tuesday at 18:00' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Cancel the scheduled sessions?' }).getByRole('button', { name: 'Leave it there' }).click();
 
     // The refused switch's line is still under the switch: each failure has its own place.
     await expect(page.getByRole('alert').filter({ hasText: 'This configuration no longer exists.' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Tuesday \(2\)/ })).toBeVisible();
   });
+});
+
+/*
+ * CLIENT-GROUP-SESSION-6: a delete and a mode switch ask the server how many scheduled regular sessions they would leave behind, and offer to cancel
+ * them. The mock has 2 scheduled sessions from the Tuesday 18:00 configuration (id 1) and 1 from the monthly one (id 4); the Tuesday 20:00 one (id 2) has none.
+ */
+const cancelDialog = (page: Page) => page.getByRole('dialog', { name: 'Cancel the scheduled sessions?' });
+
+test('Sessions section — delete: no scheduled sessions deletes at once; some ask, and Cancel sends cancelScheduled', async ({ page }) => {
+  await openSettings(page, OWNED);
+  await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+  await page.getByRole('button', { name: /Tuesday \(2\)/ }).click();
+
+  await test.step('1. a configuration with none scheduled: no second question, no cancel flag', async () => {
+    const request = page.waitForRequest((r) => r.method() === 'DELETE' && recurrenceUrl(mockOwnedGroup.id, 2).test(r.url()));
+    await page.getByRole('button', { name: 'Delete Tuesday at 20:00' }).click();
+    await page.getByRole('dialog', { name: 'Delete this configuration?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    expect(new URL((await request).url()).searchParams.has('cancelScheduled')).toBe(false);
+    await expect(cancelDialog(page)).toBeHidden();
+    await expect(page.getByRole('button', { name: /Tuesday \(1\)/ })).toBeVisible();
+  });
+
+  await test.step('2. a configuration with 2 scheduled: the question names the count; Cancel deletes with cancelScheduled', async () => {
+    await page.getByRole('button', { name: 'Delete Tuesday at 18:00' }).click();
+    await page.getByRole('dialog', { name: 'Delete this configuration?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(cancelDialog(page).getByText('2 sessions are available. Do you want to cancel them?')).toBeVisible();
+    const request = page.waitForRequest((r) => r.method() === 'DELETE' && recurrenceUrl(mockOwnedGroup.id, 1).test(r.url()));
+    await cancelDialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+    expect(new URL((await request).url()).searchParams.get('cancelScheduled')).toBe('true');
+    await expect(page.getByRole('button', { name: /^Tuesday \(/ })).toBeHidden();
+  });
+});
+
+test('Sessions section — mode switch: Cancel sends cancelScheduled with the mode', async ({ page }) => {
+  await openSettings(page, OWNED);
+  await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Tuesday \(2\)/ })).toBeVisible();
+
+  await page.getByLabel('Recurrence').selectOption('MONTHLY');
+  await page.getByRole('dialog', { name: 'Switch the recurrence?' }).getByRole('button', { name: 'Got it' }).click();
+  await expect(cancelDialog(page).getByText('3 sessions are available. Do you want to cancel them?')).toBeVisible();
+  const request = page.waitForRequest((r) => r.method() === 'PUT' && settingsUrl(mockOwnedGroup.id).test(r.url()));
+  await cancelDialog(page).getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect((await request).postDataJSON()).toEqual({ mode: 'MONTHLY', cancelScheduled: true });
+  await expect(page.getByLabel('Recurrence')).toHaveValue('MONTHLY');
+});
+
+test('Sessions section — a failed count blocks the change; Try again repeats it', async ({ page }) => {
+  await openSettings(page, OWNED);
+  await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+  await page.getByRole('button', { name: /Tuesday \(2\)/ }).click();
+
+  const countUrl = new RegExp(`/api/sessions/group/${mockOwnedGroup.id}/regular-sessions/count`);
+  await page.route(countUrl, (route) => route.fulfill(failure(500, 'INTERNAL_ERROR')));
+  const deletes: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'DELETE') deletes.push(r.url());
+  });
+
+  await page.getByRole('button', { name: 'Delete Tuesday at 20:00' }).click();
+  await page.getByRole('dialog', { name: 'Delete this configuration?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+  const errorDialog = page.getByRole('dialog', { name: "Couldn't check the scheduled sessions" });
+  await expect(errorDialog).toBeVisible();
+  expect(deletes).toHaveLength(0);
+
+  // The dialog's X is also "Close": the labelled button is the one with that text.
+  await errorDialog.getByText('Close', { exact: true }).click();
+  await expect(errorDialog).toBeHidden();
+  expect(deletes).toHaveLength(0);
+  await expect(page.getByRole('button', { name: /Tuesday \(2\)/ })).toBeVisible();
+
+  // The server answers again: Try again repeats the lookup and the delete goes ahead (this configuration has none scheduled).
+  await page.getByRole('button', { name: 'Delete Tuesday at 20:00' }).click();
+  await page.getByRole('dialog', { name: 'Delete this configuration?' }).getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(errorDialog).toBeVisible();
+  await page.unroute(countUrl);
+  await errorDialog.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByRole('button', { name: /Tuesday \(1\)/ })).toBeVisible();
+  expect(deletes).toHaveLength(1);
 });

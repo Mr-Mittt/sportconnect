@@ -245,6 +245,19 @@
           "stay": "Tiếp tục chỉnh sửa",
           "leave": "Bỏ"
         }
+      },
+      "cancelDialog": {
+        "title": "Hủy các buổi chơi đã lên lịch?",
+        "leave": "Giữ nguyên",
+        "cancel": "Hủy các buổi",
+        "body_one": "Có {{count}} buổi chơi. Bạn có muốn hủy buổi này không?",
+        "body_other": "Có {{count}} buổi chơi. Bạn có muốn hủy các buổi này không?"
+      },
+      "countError": {
+        "title": "Không thể kiểm tra các buổi chơi đã lên lịch",
+        "body": "Chúng tôi không biết có buổi chơi nào đã lên lịch hay không nên chưa thay đổi gì. Vui lòng thử lại.",
+        "retry": "Thử lại",
+        "close": "Đóng"
       }
     },
     "leaveDialog": {

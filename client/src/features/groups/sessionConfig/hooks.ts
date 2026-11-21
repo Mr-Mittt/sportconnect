@@ -65,21 +65,59 @@ export function useUpdateGroupSessionSettings() {
 interface DeleteRecurrenceVariables {
   groupId: number;
   recurrenceId: number;
+  cancelScheduled?: boolean;
 }
 
-/** `DELETE /api/sessions/group/{groupId}/recurrences/{id}` (owner or admin, a hard delete); sends no `cancelScheduled` (CLIENT-GROUP-SESSION-6 adds the prompt). */
+/** What a count of scheduled regular sessions is about: the whole group (OFF, mode switch) or one configuration (delete). */
+export type RegularSessionScope = 'ALL' | 'RECURRENCE';
+
+interface CountScheduledVariables {
+  groupId: number;
+  scope: RegularSessionScope;
+  /** Required with `scope: 'RECURRENCE'`. */
+  recurrenceId?: number;
+}
+
+/**
+ * CLIENT-GROUP-SESSION-6: `GET /api/sessions/group/{groupId}/regular-sessions/count` (owner or admin): how many `SCHEDULED` / `PREPARING` regular
+ * sessions a delete or a mode switch would leave behind. A mutation, not a query: it is asked once, on the user's confirm, and its answer is not
+ * cached (a cached count could be stale by the next click). `isError` and `reset` drive the "try again" dialog.
+ */
+export function useCountScheduledRegularSessions() {
+  return useMutation({
+    meta: { errorDisplay: 'inline' },
+    mutationFn: async ({ groupId, scope, recurrenceId }: CountScheduledVariables) => {
+      const response = await apiClient.get<ApiResponse<{ count: number }>>(`/sessions/group/${groupId}/regular-sessions/count`, {
+        params: { scope, recurrenceId },
+      });
+      return response.data.data.count;
+    },
+  });
+}
+
+/**
+ * `DELETE /api/sessions/group/{groupId}/recurrences/{id}` (owner or admin, a hard delete). `cancelScheduled` (CLIENT-GROUP-SESSION-6) also cancels the
+ * scheduled sessions already generated from it (`?cancelScheduled=true`); the group's sessions are then refreshed, because the answer's `count` says how
+ * many left the Scheduled section.
+ */
 export function useDeleteGroupSessionRecurrence() {
   const queryClient = useQueryClient();
   return useMutation({
     meta: { errorDisplay: 'inline' },
-    mutationFn: async ({ groupId, recurrenceId }: DeleteRecurrenceVariables) => {
-      await apiClient.delete(`/sessions/group/${groupId}/recurrences/${recurrenceId}`);
+    mutationFn: async ({ groupId, recurrenceId, cancelScheduled }: DeleteRecurrenceVariables) => {
+      const response = await apiClient.delete<ApiResponse<{ count: number }>>(`/sessions/group/${groupId}/recurrences/${recurrenceId}`, {
+        params: cancelScheduled === true ? { cancelScheduled: true } : undefined,
+      });
+      return response.data.data;
     },
-    onSuccess: (_data, { groupId, recurrenceId }) => {
+    onSuccess: (answer, { groupId, recurrenceId }) => {
       queryClient.setQueryData<GroupSessionRecurrence[]>(sessionConfigKeys.recurrences(groupId), (list) =>
         list?.filter((recurrence) => recurrence.id !== recurrenceId),
       );
       void queryClient.invalidateQueries({ queryKey: feedKeys.groupFeed(groupId) });
+      if ((answer?.count ?? 0) > 0) {
+        void queryClient.invalidateQueries({ queryKey: sessionKeys.groupSessions(groupId) });
+      }
     },
   });
 }

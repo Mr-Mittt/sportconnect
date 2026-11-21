@@ -1,8 +1,10 @@
 # CLIENT-GROUP-SESSION-6 · "Cancel the scheduled sessions?" confirmations
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-21)
 **Type:** New Feature · **Depends on:** SESSION-GROUP-6, CLIENT-GROUP-SESSION-4
 **Filed:** 2026-11-19, from the owner's group-session specification (the cancel confirmation on OFF, delete and mode switch).
+
+**Phase 1 decisions (owner, 2026-11-21):** (1) the split below is **confirmed**: the OFF prompt stays in CLIENT-GROUP-SESSION-4, this ticket covers delete and mode switch only. (2) **A failed count lookup blocks the action:** the delete or the mode switch does not go ahead; the dialog shows an error ("couldn't check the scheduled sessions, please try again") with a try-again action that repeats the lookup. No fallback to a prompt without the cancel option.
 
 **Scope change (owner, 2026-11-20, at the CLIENT-GROUP-SESSION-4 design): the OFF prompt moved out of this ticket.** CLIENT-GROUP-SESSION-4 builds the ON/OFF confirmations itself (OFF is always shown, with "Hold on" / "No, cancel the remaining sessions and turn off" / "Yes, keep them and turn off", sending `cancelScheduled`). This ticket keeps the **delete-a-configuration** and **mode-switch** prompts and the count lookup for them; where this text says "turning generation OFF", read only the two that remain.
 
@@ -15,3 +17,19 @@ Before turning generation OFF, deleting a configuration or switching the recurre
 ---
 
 **The whole server contract of this topic is `modules/session/docs/GROUP_SESSION_DESIGN.md`** (endpoints in § 4, how generation behaves in § 6, system post codes in § 8, error codes in § 9, the client ticket map in § 13); it is the source if this ticket and the document disagree.
+
+## Implementation summary (DONE 2026-11-21)
+
+**Design as approved.** After the existing confirmation of a delete or a mode switch, the section asks the server how many `SCHEDULED` / `PREPARING` regular sessions the change would leave behind (`GET .../regular-sessions/count`, `scope=RECURRENCE` + the configuration's id for a delete, `scope=ALL` for a mode switch). Above zero: "{x} sessions are available. Do you want to cancel them?" with **Leave it there** / **Cancel**, and the answer goes out as `cancelScheduled` (`?cancelScheduled=true` on the `DELETE`, `cancelScheduled: true` in the settings `PUT`; `false` sends nothing). At zero: the change goes ahead at once. A failed lookup **blocks** the change (owner, 2026-11-21): "Couldn't check the scheduled sessions" with **Try again** / **Close**, nothing deleted or switched. The OFF prompt stays in CLIENT-GROUP-SESSION-4 (split confirmed by the owner, 2026-11-21).
+
+**Built.** `hooks.ts`: `useCountScheduledRegularSessions` (a mutation, not a cached query: asked once on the user's confirm, so a stale count is never reused), `useDeleteGroupSessionRecurrence` takes `cancelScheduled`, reads the answer and refreshes the group's sessions when `count > 0`. `useGroupSessionsConfigData`: `onCountScheduled(scope, recurrenceId, onCount)`, `isCounting`, `isCountError`, `onResetCount`, `onSetMode(mode, cancelScheduled?)`, `onDelete(id, cancelScheduled?)`; `isBusy` includes the lookup. `GroupSessionsConfigSection`: two new dialog kinds (`count`, `cancel`) through `ChoiceDialog`; closing the dialog resets the lookup so a late answer is dropped (TanStack drops the per-call callback after `reset`). en/vi strings under `settings.sessions.cancelDialog` (with `_one` / `_other` plurals) and `countError`. MSW: scheduled regular sessions per group and configuration (mock owned group: 2 from Tuesday 18:00, 1 from the monthly one), the count handler, `cancelScheduled` on the delete and the settings `PUT`. Stories: cancel on delete, cancel on mode switch (singular), count lookup failed.
+
+**Divergences from the plan.** A stale-answer token in the data hook was written and then removed: its mutant survived because `reset` already drops the callback, so it was dead code; the test that pins the behaviour (an answer after a reset never acts) stays and is killed by a "reset does nothing" mutant. One cancel text for delete and mode switch (the spec's), not two.
+
+**Checks.** Account lifecycle: the three calls are owner/admin on the server, a deactivated caller is refused by the per-request gate. Client-visible enum or event type: none new (`session.group.cancelled` is CLIENT-GROUP-SESSION-3's). No new error code, so no I18N-4 row. Race: the count can be stale by the time the owner answers (the generator may create a session in between); the server cancels whatever is scheduled when `cancelScheduled=true`, so the worst case is a different number than shown.
+
+**Consumer census (final).** `hooks.ts`, `useGroupSessionsConfigData` (+ test), `GroupSessionsConfigSection` (+ test, stories), `fixtures.ts`, the MSW handlers, `group-settings.spec.ts`, `E2E_OVERVIEW.md`: **updated**; `RecurrenceConfigModal`, `useRecurrenceFormData`, the OFF prompt, `GroupSettingsTab`: **compatible as-is**.
+
+**Verification (scoped).** Vitest `features/groups/sessionConfig`: 7 files / 143 tests; `tsc -b` and eslint clean. Mutation: 10 of 10 mutants killed (delete counted with the wrong scope, Cancel sending false, a zero count still asking, Try again doing nothing, no block on a failed count, a mode switch or delete dropping `cancelScheduled`, no sessions refresh after a cancelling delete, the count without its scope, a reset that does nothing). **E2E:** `e2e` project, group-settings, group-recurrence-form and group-errors: 31 passed, 2 failed under parallel load (`group-errors` "same failure in vi", a known flake, and the Permission test of `group-settings`, whose own steps this ticket does not touch); both pass in isolation (`--workers=1`, 2 of 2; the Permission one also 3 of 3 repeated). The ticket's own 3 new e2e tests and the 2 it changed pass. **Not run:** visual regression, Storybook in a browser, a real backend, the full suites.
+
+**Visual-regression expectation:** no baselined surface touched, no baseline change expected (the two new dialogs and the changed mock state are not rendered by any visual spec; `app-groups.spec.ts` opens the Sessions section and a day but never a dialog); no `BASELINE-UPDATE-1` row.

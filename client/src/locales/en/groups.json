@@ -245,6 +245,19 @@
           "stay": "Keep editing",
           "leave": "Discard"
         }
+      },
+      "cancelDialog": {
+        "title": "Cancel the scheduled sessions?",
+        "leave": "Leave it there",
+        "cancel": "Cancel",
+        "body_one": "{{count}} session is available. Do you want to cancel it?",
+        "body_other": "{{count}} sessions are available. Do you want to cancel them?"
+      },
+      "countError": {
+        "title": "Couldn't check the scheduled sessions",
+        "body": "We couldn't find out whether sessions are scheduled, so nothing was changed. Please try again.",
+        "retry": "Try again",
+        "close": "Close"
       }
     },
     "leaveDialog": {
