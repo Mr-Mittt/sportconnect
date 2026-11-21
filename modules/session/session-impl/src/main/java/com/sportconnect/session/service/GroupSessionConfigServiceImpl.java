@@ -10,6 +10,7 @@ import com.sportconnect.location.api.dto.LocationResponse;
 import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.session.api.dto.FeeType;
 import com.sportconnect.session.api.dto.GroupAudience;
+import com.sportconnect.session.api.dto.GroupSessionAudienceMember;
 import com.sportconnect.session.api.dto.GroupSessionRecurrenceRequest;
 import com.sportconnect.session.api.dto.GroupSessionRecurrenceResponse;
 import com.sportconnect.session.api.dto.GroupSessionSettingsResponse;
@@ -156,8 +157,11 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         // One batch lookup for the distinct locations of every configuration, never one per row.
         List<Long> locationIds = recurrences.stream().map(GroupSessionRecurrence::getLocationId).filter(Objects::nonNull).distinct().toList();
         Map<Long, LocationResponse> locations = locationIds.isEmpty() ? Map.of() : locationService.getLocationsByIds(locationIds);
+        // ...and one for the chosen members of every SPECIFIC audience (CLIENT-GROUP-SESSION-5).
+        Map<UUID, UserSummaryResponse> members = audienceSummaries(recurrences.stream()
+                .map(GroupSessionRecurrence::getAudienceUserIds).filter(Objects::nonNull).flatMap(List::stream).distinct().toList());
         return recurrences.stream()
-                .map(recurrence -> toResponse(recurrence, recurrence.getLocationId() == null ? null : locations.get(recurrence.getLocationId())))
+                .map(recurrence -> toResponse(recurrence, recurrence.getLocationId() == null ? null : locations.get(recurrence.getLocationId()), members))
                 .toList();
     }
 
@@ -176,7 +180,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_ADDED, "added a", saved);
         eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
-        return toResponse(saved, location);
+        return toResponse(saved, location, audienceSummaries(saved.getAudienceUserIds()));
     }
 
     @Override
@@ -195,7 +199,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
 
         announceRecurrence(groupId, callerId, SystemCode.GROUP_SESSION_RECURRENCE_UPDATED, "changed the", saved);
         eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
-        return toResponse(saved, location);
+        return toResponse(saved, location, audienceSummaries(saved.getAudienceUserIds()));
     }
 
     @Override
@@ -349,7 +353,16 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                 .build();
     }
 
-    private GroupSessionRecurrenceResponse toResponse(GroupSessionRecurrence recurrence, LocationResponse location) {
+    /** Name and avatar of the given members in one display lookup (deactivated accounts included, unknown ids absent); no call without ids. */
+    private Map<UUID, UserSummaryResponse> audienceSummaries(List<UUID> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        return userService.getUserSummariesByIds(userIds);
+    }
+
+    private GroupSessionRecurrenceResponse toResponse(GroupSessionRecurrence recurrence, LocationResponse location,
+                                                      Map<UUID, UserSummaryResponse> members) {
         return GroupSessionRecurrenceResponse.builder()
                 .id(recurrence.getId())
                 .groupId(recurrence.getGroupId())
@@ -361,7 +374,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                 .location(location)
                 .locationNote(recurrence.getLocationNote())
                 .audience(recurrence.getAudience())
-                .audienceUserIds(recurrence.getAudienceUserIds() != null ? recurrence.getAudienceUserIds() : List.of())
+                .audienceMembers(audienceMembers(recurrence, members))
                 .feeType(recurrence.getFeeType())
                 .feeAmountVnd(recurrence.getFeeAmountVnd())
                 .feeNote(recurrence.getFeeNote())
@@ -372,6 +385,18 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                 .createdAt(recurrence.getCreatedAt())
                 .updatedAt(recurrence.getUpdatedAt())
                 .build();
+    }
+
+    /** The picked members in their stored order; one whose account cannot be resolved is left out. */
+    private static List<GroupSessionAudienceMember> audienceMembers(GroupSessionRecurrence recurrence, Map<UUID, UserSummaryResponse> members) {
+        if (recurrence.getAudienceUserIds() == null) {
+            return List.of();
+        }
+        return recurrence.getAudienceUserIds().stream()
+                .map(members::get)
+                .filter(Objects::nonNull)
+                .map(user -> GroupSessionAudienceMember.builder().id(user.getId()).name(user.getFullName()).avatarUrl(user.getAvatarUrl()).build())
+                .toList();
     }
 
     private static String blankToNull(String value) {

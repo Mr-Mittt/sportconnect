@@ -13,7 +13,7 @@ const weekly = [
 const meta = {
   title: 'Groups/GroupSessionsConfigSection',
   component: GroupSessionsConfigSection,
-  args: { canEdit: true, data: makeSessionsConfigData({ recurrences: weekly }) },
+  args: { canEdit: true, groupName: 'Riverside Smashers', data: makeSessionsConfigData({ recurrences: weekly }) },
   decorators: [
     (Story) => (
       <div className="max-w-[520px] p-3">
@@ -29,7 +29,7 @@ type Story = StoryObj<typeof meta>;
 /** ON, the days collapsed: each slot's time range, location and what it lacks. */
 export const On: Story = {};
 
-/** A day opened: each slot with its address, a disabled Edit and Delete. */
+/** A day opened: each slot with its address, Edit and Delete. */
 export const DayOpened: Story = {
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('button', { name: /Tuesday \(2\)/ }));

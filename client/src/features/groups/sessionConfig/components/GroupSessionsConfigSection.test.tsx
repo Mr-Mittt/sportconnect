@@ -1,14 +1,14 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import { makeLocation, makeRecurrence, makeSessionsConfigData, makeSettings } from '../fixtures';
+import { makeLocation, makeRecurrence, makeRecurrenceFormData, makeSessionsConfigData, makeSettings } from '../fixtures';
 import type { GroupSessionsConfigData } from '../useGroupSessionsConfigData';
 import { GroupSessionsConfigSection } from './GroupSessionsConfigSection';
 
 function setup(data: Partial<GroupSessionsConfigData> = {}, canEdit = true) {
   const user = userEvent.setup();
   const fns = { onSetEnabled: vi.fn(), onSetMode: vi.fn(), onDelete: vi.fn() };
-  render(<GroupSessionsConfigSection canEdit={canEdit} data={makeSessionsConfigData({ ...fns, ...data })} />);
+  render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit={canEdit} data={makeSessionsConfigData({ ...fns, ...data })} />);
   return { user, ...fns };
 }
 
@@ -17,11 +17,11 @@ const dialog = () => screen.getByRole('dialog');
 describe('GroupSessionsConfigSection', () => {
   describe('states', () => {
     it('says it is loading, and says when the settings failed to load', () => {
-      const { unmount } = render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ settings: undefined, isSettingsLoading: true })} />);
+      const { unmount } = render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ settings: undefined, isSettingsLoading: true })} />);
       expect(screen.getByText('Loading…')).toBeInTheDocument();
       unmount();
 
-      render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ settings: undefined, isSettingsError: true })} />);
+      render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ settings: undefined, isSettingsError: true })} />);
       expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the session settings.");
     });
 
@@ -34,12 +34,12 @@ describe('GroupSessionsConfigSection', () => {
       expect(screen.queryByRole('button', { name: /Tuesday/ })).not.toBeInTheDocument();
     });
 
-    it('generation ON: the switch, the recurrence, a disabled Add and the list', () => {
+    it('generation ON: the switch, the recurrence, an Add button and the list', () => {
       setup({ recurrences: [makeRecurrence()] });
 
       expect(screen.getByRole('button', { name: 'Regular sessions: On' })).toBeInTheDocument();
       expect(screen.getByLabelText('Recurrence')).toHaveValue('WEEKLY');
-      expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
       expect(screen.getByRole('button', { name: /Tuesday \(1\)/ })).toBeInTheDocument();
     });
 
@@ -49,31 +49,31 @@ describe('GroupSessionsConfigSection', () => {
     });
 
     it('while the list loads or fails to load it says so, without hiding the switch', () => {
-      const { unmount } = render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ recurrences: undefined, isRecurrencesLoading: true })} />);
+      const { unmount } = render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ recurrences: undefined, isRecurrencesLoading: true })} />);
       expect(screen.getByText('Loading…')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Regular sessions: On' })).toBeInTheDocument();
       unmount();
 
-      render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ recurrences: undefined, isRecurrencesError: true })} />);
+      render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ recurrences: undefined, isRecurrencesError: true })} />);
       expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load the configurations.");
     });
 
     it('shows a failed switch or mode change, with the coded text when there is one, and a failed delete the same way', () => {
-      const { unmount } = render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ isUpdateError: true })} />);
+      const { unmount } = render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ isUpdateError: true })} />);
       expect(screen.getByRole('alert')).toHaveTextContent("Couldn't update the session settings. Please try again.");
       unmount();
 
       const second = render(
-        <GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ isUpdateError: true, updateErrorText: 'Only the group owner or an admin can do that.' })} />,
+        <GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ isUpdateError: true, updateErrorText: 'Only the group owner or an admin can do that.' })} />,
       );
       expect(screen.getByRole('alert')).toHaveTextContent('Only the group owner or an admin can do that.');
       second.unmount();
 
-      const third = render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ isDeleteError: true })} />);
+      const third = render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ isDeleteError: true })} />);
       expect(screen.getByRole('alert')).toHaveTextContent("Couldn't delete this configuration. Please try again.");
       third.unmount();
 
-      render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ isDeleteError: true, deleteErrorText: 'This configuration no longer exists.' })} />);
+      render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ isDeleteError: true, deleteErrorText: 'This configuration no longer exists.' })} />);
       expect(screen.getByRole('alert')).toHaveTextContent('This configuration no longer exists.');
     });
   });
@@ -147,14 +147,34 @@ describe('GroupSessionsConfigSection', () => {
       expect(screen.queryByText('No location')).not.toBeInTheDocument();
     });
 
-    it('opening a day shows each slot with its address and, for the owner or an admin, Delete and a disabled Edit', async () => {
+    it('opening a day shows each slot with its address and, for the owner or an admin, Delete and Edit', async () => {
       const { user } = setup({ recurrences: [makeRecurrence()] });
 
       await user.click(screen.getByRole('button', { name: /Tuesday \(1\)/ }));
       expect(screen.getByRole('button', { name: /Tuesday \(1\)/ })).toHaveAttribute('data-state', 'open');
       expect(screen.getByText('12 Riverside Road')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Edit Tuesday at 18:00' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Edit Tuesday at 18:00' })).toBeEnabled();
       expect(screen.getByRole('button', { name: 'Delete Tuesday at 18:00' })).toBeEnabled();
+    });
+
+    it('Add opens the recurrence form for a new configuration', async () => {
+      const openAdd = vi.fn();
+      const { user } = setup({ recurrences: [makeRecurrence()], recurrenceForm: makeRecurrenceFormData({ openAdd }) });
+
+      await user.click(screen.getByRole('button', { name: 'Add' }));
+      expect(openAdd).toHaveBeenCalledTimes(1);
+    });
+
+    it('Edit opens the form for that very configuration', async () => {
+      const openEdit = vi.fn();
+      const tuesday = makeRecurrence({ id: 4 });
+      const friday = makeRecurrence({ id: 5, dayKey: 5, startTime: '19:00:00' });
+      const { user } = setup({ recurrences: [tuesday, friday], recurrenceForm: makeRecurrenceFormData({ openEdit }) });
+
+      await user.click(screen.getByRole('button', { name: /Friday \(1\)/ }));
+      await user.click(screen.getByRole('button', { name: 'Edit Friday at 19:00' }));
+      expect(openEdit).toHaveBeenCalledTimes(1);
+      expect(openEdit).toHaveBeenCalledWith(friday);
     });
 
     it('each day opens and closes on its own', async () => {
@@ -348,7 +368,7 @@ describe('GroupSessionsConfigSection', () => {
 
     it('Delete is disabled while another change is being saved', async () => {
       const user = userEvent.setup();
-      render(<GroupSessionsConfigSection canEdit data={makeSessionsConfigData({ recurrences: [makeRecurrence()], isBusy: true })} />);
+      render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit data={makeSessionsConfigData({ recurrences: [makeRecurrence()], isBusy: true })} />);
       await user.click(screen.getByRole('button', { name: /Tuesday \(1\)/ }));
       expect(screen.getByRole('button', { name: 'Delete Tuesday at 18:00' })).toBeDisabled();
       expect(screen.getByLabelText('Recurrence')).toBeDisabled();

@@ -10,6 +10,7 @@ import { ToggleFieldRow } from '../../components/ToggleFieldRow';
 import type { GroupSessionsConfigData } from '../useGroupSessionsConfigData';
 import type { GroupSessionRecurrence, RecurrenceMissingField, RecurrenceMode } from '../types';
 import { ChoiceDialog, type DialogChoice } from './ChoiceDialog';
+import { RecurrenceConfigModal } from './RecurrenceConfigModal';
 
 type Pending =
   | { kind: 'on' }
@@ -21,6 +22,8 @@ interface GroupSessionsConfigSectionProps {
   /** The owner or an admin: they change the switch, the recurrence and the configurations; a member only reads them. */
   canEdit: boolean;
   data: GroupSessionsConfigData;
+  /** The group's name, for the recurrence form's intro line. */
+  groupName: string;
   /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
 }
@@ -37,12 +40,13 @@ function byStart(a: GroupSessionRecurrence, b: GroupSessionRecurrence): number {
 
 /**
  * CLIENT-GROUP-SESSION-4: the body of the group settings' "Sessions" section. The ON/OFF switch (the tab's On/Off pill) with its confirmations, the
- * recurrence mode with its confirm, an Add button (disabled until the form of CLIENT-GROUP-SESSION-5 exists), and the configurations of the group's
- * current mode grouped by day in collapsed sections, each slot with a disabled Edit and a Delete that confirms. When generation is OFF everything
+ * recurrence mode with its confirm, an Add button, and the configurations of the group's
+ * current mode grouped by day in collapsed sections, each slot with an Edit and a Delete that confirms (Add and Edit open the recurrence form of
+ * CLIENT-GROUP-SESSION-5). When generation is OFF everything
  * below the switch is hidden. Presentational: `data` carries the queries and the three actions; this owns only which dialog is open and which day
  * groups are expanded.
  */
-export function GroupSessionsConfigSection({ canEdit, data, i18nOverridePrefix }: GroupSessionsConfigSectionProps) {
+export function GroupSessionsConfigSection({ canEdit, data, groupName, i18nOverridePrefix }: GroupSessionsConfigSectionProps) {
   const t = useOverridableText('groups', i18nOverridePrefix);
   const [pending, setPending] = useState<Pending | null>(null);
   const [openDays, setOpenDays] = useState<ReadonlySet<number>>(new Set());
@@ -169,8 +173,7 @@ export function GroupSessionsConfigSection({ canEdit, data, i18nOverridePrefix }
               )}
             </div>
             {canEdit && (
-              // Disabled until CLIENT-GROUP-SESSION-5 builds the configuration form this opens.
-              <Button variant="outline" size="sm" disabled>
+              <Button variant="outline" size="sm" onClick={data.recurrenceForm.openAdd}>
                 {t('settings.sessions.add')}
               </Button>
             )}
@@ -217,8 +220,12 @@ export function GroupSessionsConfigSection({ canEdit, data, i18nOverridePrefix }
                           <SlotLine slot={slot} t={t} showAddress />
                           {canEdit && (
                             <div className="flex shrink-0 items-center gap-1">
-                              {/* Disabled until CLIENT-GROUP-SESSION-5. */}
-                              <Button variant="ghost" size="sm" disabled aria-label={t('settings.sessions.editLabel', { slot: slotLabel(slot) })}>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label={t('settings.sessions.editLabel', { slot: slotLabel(slot) })}
+                                onClick={() => data.recurrenceForm.openEdit(slot)}
+                              >
                                 {t('settings.sessions.edit')}
                               </Button>
                               <Button
@@ -257,6 +264,16 @@ export function GroupSessionsConfigSection({ canEdit, data, i18nOverridePrefix }
         choices={dialog?.choices ?? []}
         onClose={close}
       />
+
+      {canEdit && (
+        <RecurrenceConfigModal
+          form={data.recurrenceForm}
+          mode={settings.mode}
+          groupName={groupName}
+          isGenerationOn={settings.enabled}
+          i18nOverridePrefix={i18nOverridePrefix}
+        />
+      )}
     </div>
   );
 }

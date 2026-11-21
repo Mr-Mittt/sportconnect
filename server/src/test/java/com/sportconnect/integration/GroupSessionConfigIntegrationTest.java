@@ -350,9 +350,46 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         replacement.put("locationNote", "Court 3");
         sendAs(ownerId, "PUT", "/recurrences/" + id, replacement).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.locationNote").value("Court 3"))
-                .andExpect(jsonPath("$.data.audienceUserIds.length()").value(1));
+                .andExpect(jsonPath("$.data.audienceMembers.length()").value(1))
+                .andExpect(jsonPath("$.data.audienceMembers[0].id").value(memberId.toString()))
+                .andExpect(jsonPath("$.data.audienceMembers[0].name").value("It Tester"))
+                .andExpect(jsonPath("$.data.audienceUserIds").doesNotExist());
 
         assertThat(recurrenceRepository.findById(id).orElseThrow().getAudienceUserIds()).containsExactly(memberId);
+    }
+
+    @Test
+    void everyConfigurationResponse_namesItsAudience_andAMemberKeepsTheirNameAfterBeingDeactivated() throws Exception {
+        Map<String, Object> body = complete(4, "18:00");
+        body.put("audience", "SPECIFIC");
+        body.put("audienceUserIds", List.of(memberId.toString(), otherMemberId.toString()));
+        // The create answer already names the two, in the order they were picked.
+        String created = sendAs(adminId, "POST", "/recurrences", body).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.audienceMembers.length()").value(2))
+                .andExpect(jsonPath("$.data.audienceMembers[0].id").value(memberId.toString()))
+                .andExpect(jsonPath("$.data.audienceMembers[1].id").value(otherMemberId.toString()))
+                .andReturn().getResponse().getContentAsString();
+        Long id = objectMapper.readTree(created).get("data").get("id").asLong();
+        createAs(adminId, complete(5, "18:00"));                       // an everyone configuration beside it
+
+        // A display lookup, not an interaction: a deactivated account still shows its real name, never "Unknown".
+        userRepository.findById(otherMemberId).ifPresent(user -> {
+            user.setIsActive(false);
+            userRepository.save(user);
+        });
+
+        // Any member reads the list: the audience is named for the SPECIFIC one and empty for the other.
+        String list = getAs(memberId, "/recurrences").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var data = objectMapper.readTree(list).get("data");
+        for (var row : data) {
+            if (row.get("id").asLong() == id) {
+                assertThat(row.get("audienceMembers")).hasSize(2);
+                assertThat(row.get("audienceMembers").get(1).get("id").asText()).isEqualTo(otherMemberId.toString());
+                assertThat(row.get("audienceMembers").get(1).get("name").asText()).isEqualTo("It Tester");
+            } else {
+                assertThat(row.get("audienceMembers")).isEmpty();
+            }
+        }
     }
 
     @Test

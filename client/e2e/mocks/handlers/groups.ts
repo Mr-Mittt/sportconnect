@@ -16,6 +16,7 @@ import type {
   UpdateGroupSettingsPayload,
 } from '../../../src/features/feed/types.ts';
 import {
+  mockBadmintonLocation,
   mockFriend,
   mockGroup,
   mockGroupInfo,
@@ -25,6 +26,7 @@ import {
   mockGroupSessionRecurrences,
   mockGroupSessionSettings,
   mockGroupSettings,
+  mockLocation,
   mockOwnedGroup,
   mockPageResponse,
   mockPublicGroup,
@@ -520,6 +522,84 @@ export const groupHandlers: HttpHandler[] = [
     if (callerRole(state, groupId) === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
     return HttpResponse.json(apiResponse(state.groupSessionRecurrencesState[groupId] ?? []));
   }),
+
+  // CLIENT-GROUP-SESSION-5: add (POST, in the group's current mode) and replace (PUT) a configuration. Owner or admin only; `dayKey` and `startTime` are
+  // required; a missing location, duration or fixed fee amount saves a draft (`draft`, `missing`); 5 per mode and day (409 `SESSION_RECURRENCE_DAY_LIMIT`).
+  // A `SPECIFIC` audience answers its members named from the group's member list, as the server does.
+  ...(['post', 'put'] as const).map((method) =>
+    http[method](method === 'post' ? '/api/sessions/group/:groupId/recurrences' : '/api/sessions/group/:groupId/recurrences/:recurrenceId', async ({ request, params }) => {
+      const unauthorized = requireAuth(request);
+      if (unauthorized) return unauthorized;
+      const groupId = Number(params.groupId);
+      const state = groupsSessions.get(sessionIdFromRequest(request));
+      const role = callerRole(state, groupId);
+      if (role === undefined) return codedError(403, 'SESSION_GROUP_MEMBER_REQUIRED', 'Only members of this group can do that');
+      if (role !== 'group_owner' && role !== 'group_admin') return codedError(403, 'SESSION_GROUP_ADMIN_REQUIRED', 'Only the group owner or an admin can do that');
+
+      const body = (await request.json()) as {
+        dayKey?: number;
+        startTime?: string;
+        durationMinutes?: number;
+        locationId?: number;
+        locationNote?: string;
+        audience?: 'ALL_MEMBERS' | 'SPECIFIC';
+        audienceUserIds?: string[];
+        feeType?: GroupSessionRecurrence['feeType'];
+        feeAmountVnd?: number;
+        feeNote?: string;
+        gameMood?: number;
+        attributes?: Record<string, unknown>;
+      };
+      const list = state.groupSessionRecurrencesState[groupId] ?? [];
+      const existing = method === 'put' ? list.find((recurrence) => recurrence.id === Number(params.recurrenceId)) : undefined;
+      if (method === 'put' && existing === undefined) return codedError(404, 'SESSION_RECURRENCE_NOT_FOUND', 'Recurrence not found');
+      const mode: RecurrenceMode = existing?.mode ?? state.groupSessionSettingsState[groupId]?.mode ?? 'WEEKLY';
+      const max = mode === 'MONTHLY' ? 31 : 7;
+      if (typeof body.dayKey !== 'number' || body.dayKey < 1 || body.dayKey > max) return codedError(400, 'SESSION_RECURRENCE_DAY_INVALID', 'Invalid day');
+      if (body.startTime === undefined || body.startTime === '') return codedError(400, 'SESSION_RECURRENCE_START_REQUIRED', 'Start time required');
+      const sameDay = list.filter((recurrence) => recurrence.mode === mode && recurrence.dayKey === body.dayKey && recurrence.id !== existing?.id);
+      if (sameDay.length >= 5) return codedError(409, 'SESSION_RECURRENCE_DAY_LIMIT', 'A day can have up to 5 configurations');
+
+      const location = [mockLocation, mockBadmintonLocation].find((candidate) => candidate.id === body.locationId) ?? null;
+      const feeType = body.feeType ?? 'FREE';
+      const missing: GroupSessionRecurrence['missing'] = [];
+      if (location === null) missing.push('locationId');
+      if (body.durationMinutes === undefined) missing.push('durationMinutes');
+      if (feeType === 'FIXED' && body.feeAmountVnd === undefined) missing.push('feeAmountVnd');
+      const members = state.groupMembersState[groupId] ?? [];
+      const audience = body.audience ?? 'ALL_MEMBERS';
+      const saved: GroupSessionRecurrence = {
+        id: existing?.id ?? Math.max(0, ...Object.values(state.groupSessionRecurrencesState).flat().map((recurrence) => recurrence.id)) + 1,
+        groupId,
+        mode,
+        dayKey: body.dayKey,
+        startTime: body.startTime.length === 5 ? `${body.startTime}:00` : body.startTime,
+        durationMinutes: body.durationMinutes ?? null,
+        locationId: location?.id ?? null,
+        location,
+        locationNote: body.locationNote ?? null,
+        audience,
+        audienceMembers:
+          audience === 'SPECIFIC'
+            ? (body.audienceUserIds ?? []).flatMap((id) => {
+                const member = members.find((candidate) => candidate.userId === id);
+                return member === undefined ? [] : [{ id, name: member.userFullName, avatarUrl: member.userAvatarUrl }];
+              })
+            : [],
+        feeType,
+        feeAmountVnd: feeType === 'FIXED' ? (body.feeAmountVnd ?? null) : null,
+        feeNote: body.feeNote ?? null,
+        gameMood: body.gameMood ?? 5,
+        attributes: body.attributes ?? null,
+        draft: missing.length > 0,
+        missing,
+        createdAt: existing?.createdAt ?? '2026-11-20T10:00:00',
+        updatedAt: '2026-11-20T10:00:00',
+      };
+      state.groupSessionRecurrencesState[groupId] = existing === undefined ? [...list, saved] : list.map((recurrence) => (recurrence.id === saved.id ? saved : recurrence));
+      return HttpResponse.json(apiResponse(saved, existing === undefined ? 'Recurrence added' : 'Recurrence updated'), { status: existing === undefined ? 201 : 200 });
+    }),
+  ),
 
   http.delete('/api/sessions/group/:groupId/recurrences/:recurrenceId', ({ request, params }) => {
     const unauthorized = requireAuth(request);

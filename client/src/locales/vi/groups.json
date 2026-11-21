@@ -210,7 +210,42 @@
         "confirm": "Xóa"
       },
       "slotAt": "{{day}} lúc {{time}}",
-      "locationUnavailable": "Địa điểm không còn khả dụng"
+      "locationUnavailable": "Địa điểm không còn khả dụng",
+      "form": {
+        "titleAdd": "Thêm buổi chơi định kỳ",
+        "titleEdit": "Sửa buổi chơi định kỳ",
+        "intro": "Buổi chơi định kỳ của {{group}}, được tạo tự động vào ngày và giờ này.",
+        "day": "Ngày",
+        "dayOfWeek": "Thứ trong tuần",
+        "dayOfMonth": "Ngày trong tháng",
+        "endInvalid": "Giờ kết thúc phải khác giờ bắt đầu và buổi chơi phải ngắn hơn một ngày.",
+        "save": "Lưu",
+        "saving": "Đang lưu…",
+        "saveError": "Không thể lưu cấu hình này. Vui lòng thử lại.",
+        "missing": {
+          "title": "Buổi chơi định kỳ của bạn còn thiếu thông tin",
+          "body": "Cấu hình này còn thiếu các thông tin dưới đây. Cấu hình sẽ được lưu dưới dạng BẢN NHÁP và chưa thể dùng để tạo các buổi chơi của nhóm cho đến khi bạn hoàn tất.",
+          "keepEditing": "Tiếp tục chỉnh sửa",
+          "saveDraft": "Lưu bản nháp",
+          "location": "Địa điểm",
+          "duration": "Thời lượng",
+          "feeAmount": "Mức phí"
+        },
+        "saved": {
+          "title": "Đã lưu buổi chơi định kỳ",
+          "bodyOn": "Buổi chơi định kỳ của bạn đã được lưu. Buổi chơi định kỳ tiếp theo sẽ sớm được tạo. Bạn có muốn lên lịch thêm một buổi chơi định kỳ nữa không?",
+          "bodyOff": "Buổi chơi định kỳ của bạn đã được lưu. Tính năng tạo buổi chơi định kỳ đang TẮT, nên sẽ không có buổi chơi nào được tạo tự động cho đến khi bạn bật lại. Bạn có muốn lên lịch thêm một buổi chơi định kỳ nữa không?",
+          "no": "Không",
+          "more": "Tạo thêm",
+          "bodyDraft": "Cấu hình buổi chơi định kỳ của bạn đã được lưu dưới dạng BẢN NHÁP. Cấu hình chưa thể dùng để tạo các buổi chơi của nhóm cho đến khi bạn hoàn tất. Bạn có muốn lên lịch thêm một buổi chơi định kỳ nữa không?"
+        },
+        "leaveDialog": {
+          "title": "Bỏ cấu hình này?",
+          "body": "Bạn có nội dung chưa lưu. Nếu rời đi bây giờ, chúng sẽ bị mất.",
+          "stay": "Tiếp tục chỉnh sửa",
+          "leave": "Bỏ"
+        }
+      }
     },
     "leaveDialog": {
       "title": "Rời khỏi nhóm này?",

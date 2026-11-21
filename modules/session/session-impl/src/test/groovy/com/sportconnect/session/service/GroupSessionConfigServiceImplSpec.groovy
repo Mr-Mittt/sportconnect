@@ -371,8 +371,12 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * groupService.getMemberUserIds(5L) >> [admin, a, b]
         // The chosen members go on the recurrence itself: distinct, in the order given.
         1 * recurrenceRepository.save({ GroupSessionRecurrence r -> r.audienceUserIds == [a, b] }) >> { GroupSessionRecurrence r -> r.id = 77L; r }
+        // ...and the response names them (CLIENT-GROUP-SESSION-5): one display lookup, in the order they were picked.
+        1 * userService.getUserSummariesByIds([a, b]) >> [(a): UserSummaryResponse.builder().id(a).fullName("Ann").avatarUrl("https://img/ann.png").build(), (b): UserSummaryResponse.builder().id(b).fullName("Bob").avatarUrl("https://img/bob.png").build()]
         specific.audience == GroupAudience.SPECIFIC
-        (specific.audienceUserIds as Set) == ([a, b] as Set)
+        specific.audienceMembers*.id == [a, b]
+        specific.audienceMembers*.name == ["Ann", "Bob"]
+        specific.audienceMembers*.avatarUrl == ["https://img/ann.png", "https://img/bob.png"]
 
         when:
         def all = service.createRecurrence(5L, admin, complete().audience(GroupAudience.ALL_MEMBERS).audienceUserIds([UUID.randomUUID()]).build())
@@ -382,7 +386,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
         0 * groupService.getMemberUserIds(*_)
         1 * recurrenceRepository.save({ GroupSessionRecurrence r -> r.audienceUserIds == null }) >> { GroupSessionRecurrence r -> r.id = 77L; r }
-        all.audienceUserIds == []
+        all.audienceMembers == []
     }
 
     def "a SPECIFIC audience with a non-member or with nobody is refused, nothing written"() {
@@ -479,7 +483,9 @@ class GroupSessionConfigServiceImplSpec extends Specification {
                 SystemCode.GROUP_SESSION_RECURRENCE_UPDATED, [name: "Alice Admin", mode: "MONTHLY", day: "12", time: "18:30"])
         result.mode == RecurrenceMode.MONTHLY
         result.dayKey == 12
-        result.audienceUserIds == [a]
+        1 * userService.getUserSummariesByIds([a]) >> [(a): UserSummaryResponse.builder().id(a).fullName("Ann").avatarUrl("https://img/ann.png").build()]
+        result.audienceMembers*.id == [a]
+        result.audienceMembers*.name == ["Ann"]
     }
 
     def "updating from SPECIFIC to ALL_MEMBERS clears the chosen members; a new list replaces the old one whole"() {
@@ -498,7 +504,8 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         1 * locationService.getLocation(9L) >> LocationResponse.builder().id(9L).sportId(1L).build()
         1 * groupService.getMemberUserIds(5L) >> [admin, a, b]
         1 * recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(5L, RecurrenceMode.WEEKLY, 4, 77L) >> 0L
-        replaced.audienceUserIds == [b]
+        1 * userService.getUserSummariesByIds([b]) >> [(b): UserSummaryResponse.builder().id(b).fullName("Bob").avatarUrl("https://img/bob.png").build()]
+        replaced.audienceMembers*.id == [b]
         existing.audienceUserIds == [b]
 
         when: "switched to all members, with a stale list in the request"
@@ -510,7 +517,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         0 * groupService.getMemberUserIds(*_)
         1 * recurrenceRepository.countByGroupIdAndModeAndDayKeyAndIdNot(5L, RecurrenceMode.WEEKLY, 4, 77L) >> 0L
         all.audience == GroupAudience.ALL_MEMBERS
-        all.audienceUserIds == []
+        all.audienceMembers == []
         existing.audienceUserIds == null
     }
 
@@ -558,7 +565,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
                 SystemCode.GROUP_SESSION_RECURRENCE_DELETED, [name: "Alice Admin", mode: "WEEKLY", day: "3", time: "18:30"])
     }
 
-    def "the list carries each configuration's chosen members from the row itself, with no second query, and nothing when there is nothing"() {
+    def "the list names each configuration's chosen members with ONE lookup for all of them, and nothing when there is nothing"() {
         given:
         def a = UUID.randomUUID()
         def r1 = stored(dayKey: 1)
@@ -573,9 +580,11 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         then:
         1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [r1, r2]
         1 * locationService.getLocationsByIds([9L]) >> [(9L): LocationResponse.builder().id(9L).sportId(1L).build()]
+        1 * userService.getUserSummariesByIds([a]) >> [(a): UserSummaryResponse.builder().id(a).fullName("Ann").avatarUrl("https://img/ann.png").build()]
         result*.id == [77L, 78L]
-        result[0].audienceUserIds == []
-        result[1].audienceUserIds == [a]
+        result[0].audienceMembers == []
+        result[1].audienceMembers*.id == [a]
+        result[1].audienceMembers*.name == ["Ann"]
 
         when:
         def empty = service.getRecurrences(5L, admin)
@@ -583,6 +592,45 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         then:
         1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> []
         empty == []
+    }
+
+    def "the list looks the audiences up once for every row: shared members asked once, an unresolved id is left out, the picked order is kept"() {
+        given:
+        def a = UUID.randomUUID()
+        def b = UUID.randomUUID()
+        def gone = UUID.randomUUID()
+        def r1 = stored(dayKey: 1)
+        r1.audience = GroupAudience.SPECIFIC
+        r1.audienceUserIds = [b, a]
+        def r2 = stored(dayKey: 2)
+        r2.id = 78L
+        r2.audience = GroupAudience.SPECIFIC
+        r2.audienceUserIds = [a, gone]
+        def r3 = stored(dayKey: 3)                                     // everyone: nothing to name
+        r3.id = 79L
+
+        when:
+        def result = service.getRecurrences(5L, admin)
+
+        then:
+        1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [r1, r2, r3]
+        1 * locationService.getLocationsByIds([9L]) >> [(9L): LocationResponse.builder().id(9L).sportId(1L).build()]
+        1 * userService.getUserSummariesByIds({ List ids -> ids.size() == 3 && ids as Set == [a, b, gone] as Set }) >> [(a): UserSummaryResponse.builder().id(a).fullName("Ann").avatarUrl("https://img/ann.png").build(), (b): UserSummaryResponse.builder().id(b).fullName("Bob").avatarUrl("https://img/bob.png").build()]
+        0 * userService.getUserSummariesByIds(_)
+        result[0].audienceMembers*.name == ["Bob", "Ann"]
+        result[1].audienceMembers*.name == ["Ann"]
+        result[2].audienceMembers == []
+    }
+
+    def "the list makes no member lookup when nobody has a chosen audience"() {
+        when:
+        def result = service.getRecurrences(5L, admin)
+
+        then:
+        1 * recurrenceRepository.findByGroupIdOrderByModeAscDayKeyAscStartTimeAsc(5L) >> [stored(dayKey: 1)]
+        1 * locationService.getLocationsByIds([9L]) >> [(9L): LocationResponse.builder().id(9L).sportId(1L).build()]
+        0 * userService.getUserSummariesByIds(_)
+        result[0].audienceMembers == []
     }
 
     // ---- CLIENT-GROUP-SESSION-4: the resolved location on every configuration ------------------------------------------
