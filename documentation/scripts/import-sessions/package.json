@@ -1,0 +1,13 @@
+{
+  "name": "import-sessions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SESSION-71: turns a monthly results sheet (.xlsx) into the JSON the admin import page uploads (SESSION-70 / CLIENT-ADMIN-IMPORT-1). Offline: no network, no token. See import-sessions.mjs's header comment for usage.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0"
+  }
+}
