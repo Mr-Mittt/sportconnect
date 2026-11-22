@@ -88,6 +88,16 @@ export function AdminLayout() {
         >
           Sports
         </NavLink>
+        <NavLink
+          to="/admin/import"
+          className={({ isActive }) =>
+            `text-2sm font-medium underline-offset-4 hover:underline ${
+              isActive ? 'text-text-accent' : 'text-text-secondary'
+            }`
+          }
+        >
+          Import
+        </NavLink>
       </nav>
 
       <main className="mt-6">

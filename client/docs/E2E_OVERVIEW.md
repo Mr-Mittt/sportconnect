@@ -240,6 +240,7 @@ e2e/
     notification-bell.spec.ts # CLIENT-NOTIF-1, CLIENT-NOTIF-5, CLIENT-NOTIF-7
     admin-route-guard.spec.ts # ADMIN-1, ADMIN-4
     admin-sports.spec.ts      # ADMIN-2, ADMIN-4
+    admin-import.spec.ts      # CLIENT-ADMIN-IMPORT-1
     profile-journey.spec.ts   # PROFILE-8
     locale.spec.ts            # CLIENT-I18N-1, CLIENT-I18N-7, CLIENT-I18N-8, CLIENT-I18N-9, CLIENT-I18N-10, CLIENT-I18N-11, CLIENT-I18N-12
     error-handling.spec.ts    # CLIENT-ERR-1
@@ -283,6 +284,7 @@ e2e/
     fakeChatSocket.ts          # CHAT-10: fake in-page WebSocket for chat's real-time push
     handlers/
       index.ts                 # combines all handler arrays
+      adminImport.ts           # CLIENT-ADMIN-IMPORT-1 — POST /sessions/import/preview and /sessions/import (SESSION-70), group 46, location 7
       auth.ts
       feed.ts
       groups.ts
@@ -1021,6 +1023,24 @@ response — which A11 changed from a **500** to a readable **400**, so the hand
 it rather than being left describing the old behaviour.
 
 Related docs: `client/docs/MVP/ADMIN-2_SPORT_ADMIN_MASTER_DETAIL_PAGE.md`.
+
+### `e2e/flows/admin-import.spec.ts` (CLIENT-ADMIN-IMPORT-1, 3 `test()`s)
+
+The admin page `/admin/import` that imports finished sessions with their games (SESSION-70's preview and apply, the file made by
+SESSION-71's script), against `mocks/handlers/adminImport.ts`: one group (id 46, six members, two of them named "Ánh") and one
+location (id 7); any other group is `404 GROUP_NOT_FOUND`, any other location `SESSION_LOCATION_SPORT_MISMATCH`. Names are matched
+by first name ignoring accents and case, like the real server; an alias settles a clash; a name matching none or several blocks the
+apply with `409 SESSION_IMPORT_UNRESOLVED_NAMES`. The "imported" sessions are kept per test session, so a repeated apply skips them.
+What this covers that `AdminImportPage.test.tsx` cannot: the route and the link into it from the `/admin` index, a real file
+upload through the browser's file input, the native `<select>` choosing a member, and the apply being repeatable.
+
+| Test | Asserts |
+|---|---|
+| an admin previews a file, matches the names nobody matched, applies, and a repeat skips | Signs in as `mockAdminUser`, follows "Import sessions" from `/admin`, uploads a two-session file ("2 sessions from sheet 102026"), types group 46 and location 7, Preview. Both sessions are listed; "Ánh" (two members) and "Anh_VL" (nobody) each get a dropdown, "No member has this first name." shows for the second, and Apply stays disabled until both have a member. Choosing "Ánh Nguyễn" and "Ánh Vãng Lai" enables it; the first session opened reads "Hiếu Nguyễn, Ánh Nguyễn" and "Ánh Vãng Lai, Viên Nguyễn" with no "(not matched)". Apply: "Imported 2, already imported 0, failed 0."; Apply again: "Imported 0, already imported 2, failed 0." |
+| a group that does not exist is refused with a plain message and the file is kept | Group 999: the alert reads "No active group has that id." (its own copy, not the server text), the file line, the typed id and an enabled Preview are still there |
+| a file that is not an import file is refused before anything is sent | Uploads `{"hello":1}`: the alert reads "This isn't an import file made by the sheet script." and Preview stays disabled even with both ids typed |
+
+Related docs: `client/docs/MVP/CLIENT-ADMIN-IMPORT-1_ADMIN_PAGE_TO_IMPORT_FINISHED_SESSIONS.md`.
 
 ### `e2e/flows/profile-journey.spec.ts` (PROFILE-8, one `test()` with 9 steps + 1 separate `test()` — SPORT-10)
 
