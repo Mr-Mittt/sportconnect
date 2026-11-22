@@ -183,7 +183,7 @@ export function GroupSessionsConfigSection({ canEdit, data, groupName, i18nOverr
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-2">
       <ToggleFieldRow
         label={t('settings.sessions.regular')}
         description={t('settings.sessions.regularDesc')}
