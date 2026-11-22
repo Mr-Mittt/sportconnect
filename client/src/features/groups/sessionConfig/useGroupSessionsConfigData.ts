@@ -1,9 +1,11 @@
 import { getCodedErrorMessage } from '@/shared/lib/codedErrorMessage';
 import {
+  useCountScheduledRegularSessions,
   useDeleteGroupSessionRecurrence,
   useGroupSessionRecurrences,
   useGroupSessionSettings,
   useUpdateGroupSessionSettings,
+  type RegularSessionScope,
 } from './hooks';
 import { useRecurrenceFormData, type RecurrenceFormData } from './useRecurrenceFormData';
 import type { GroupSessionRecurrence, GroupSessionSettings, RecurrenceMode } from './types';
@@ -19,8 +21,21 @@ export interface GroupSessionsConfigData {
   isRecurrencesError: boolean;
   /** Turn generation on or off. `cancelScheduled` (OFF only) also cancels the group's scheduled regular sessions. */
   onSetEnabled: (enabled: boolean, cancelScheduled?: boolean) => void;
-  onSetMode: (mode: RecurrenceMode) => void;
-  onDelete: (recurrenceId: number) => void;
+  /** Switch the mode. `cancelScheduled` also cancels the group's scheduled regular sessions (CLIENT-GROUP-SESSION-6). */
+  onSetMode: (mode: RecurrenceMode, cancelScheduled?: boolean) => void;
+  /** Delete a configuration. `cancelScheduled` also cancels the scheduled sessions it generated (CLIENT-GROUP-SESSION-6). */
+  onDelete: (recurrenceId: number, cancelScheduled?: boolean) => void;
+  /**
+   * CLIENT-GROUP-SESSION-6: asks how many scheduled regular sessions a delete (`RECURRENCE` + the configuration's id) or a mode switch (`ALL`) would
+   * leave behind, and hands the number to `onCount`; on a failure `isCountError` turns true and `onCount` is not called.
+   */
+  onCountScheduled: (scope: RegularSessionScope, recurrenceId: number | undefined, onCount: (count: number) => void) => void;
+  /** A count lookup is in flight. */
+  isCounting: boolean;
+  /** The last count lookup failed (the change it was meant to precede has not been made). */
+  isCountError: boolean;
+  /** Forgets a failed lookup (the dialog closed, or a new try starts). */
+  onResetCount: () => void;
   /** A failed ON/OFF or mode switch. */
   isUpdateError: boolean;
   updateErrorText?: string;
@@ -47,6 +62,7 @@ export function useGroupSessionsConfigData(
   const recurrencesQuery = useGroupSessionRecurrences(groupId, enabled);
   const updateMutation = useUpdateGroupSessionSettings();
   const deleteMutation = useDeleteGroupSessionRecurrence();
+  const countMutation = useCountScheduledRegularSessions();
   const recurrenceForm = useRecurrenceFormData(groupId, sportId);
 
   return {
@@ -63,19 +79,28 @@ export function useGroupSessionsConfigData(
         payload: nextEnabled ? { enabled: true } : { enabled: false, cancelScheduled: cancelScheduled === true },
       });
     },
-    onSetMode: (mode) => {
+    onSetMode: (mode, cancelScheduled) => {
       if (groupId === undefined) return;
-      updateMutation.mutate({ groupId, payload: { mode } });
+      updateMutation.mutate({ groupId, payload: cancelScheduled === true ? { mode, cancelScheduled: true } : { mode } });
     },
-    onDelete: (recurrenceId) => {
+    onDelete: (recurrenceId, cancelScheduled) => {
       if (groupId === undefined) return;
-      deleteMutation.mutate({ groupId, recurrenceId });
+      deleteMutation.mutate({ groupId, recurrenceId, cancelScheduled });
     },
+    onCountScheduled: (scope, recurrenceId, onCount) => {
+      if (groupId === undefined) return;
+      // TanStack calls this per-call callback only for the latest `mutate` and only until `reset`, so an answer to a lookup the caller has since
+      // abandoned (the dialog closed, a newer lookup) never reaches `onCount`.
+      countMutation.mutate({ groupId, scope, recurrenceId }, { onSuccess: (count) => onCount(count) });
+    },
+    isCounting: countMutation.isPending,
+    isCountError: countMutation.isError,
+    onResetCount: countMutation.reset,
     isUpdateError: updateMutation.isError,
     updateErrorText: getCodedErrorMessage(updateMutation.error),
     isDeleteError: deleteMutation.isError,
     deleteErrorText: getCodedErrorMessage(deleteMutation.error),
-    isBusy: updateMutation.isPending || deleteMutation.isPending,
+    isBusy: updateMutation.isPending || deleteMutation.isPending || countMutation.isPending,
     recurrenceForm,
   };
 }

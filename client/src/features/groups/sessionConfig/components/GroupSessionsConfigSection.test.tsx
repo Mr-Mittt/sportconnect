@@ -7,7 +7,9 @@ import { GroupSessionsConfigSection } from './GroupSessionsConfigSection';
 
 function setup(data: Partial<GroupSessionsConfigData> = {}, canEdit = true) {
   const user = userEvent.setup();
-  const fns = { onSetEnabled: vi.fn(), onSetMode: vi.fn(), onDelete: vi.fn() };
+  // The count lookup answers 0 at once unless a test says otherwise (CLIENT-GROUP-SESSION-6): the change then goes ahead without a second question.
+  const onCountScheduled = vi.fn((_scope: string, _recurrenceId: number | undefined, onCount: (count: number) => void) => onCount(0));
+  const fns = { onSetEnabled: vi.fn(), onSetMode: vi.fn(), onDelete: vi.fn(), onCountScheduled, onResetCount: vi.fn() };
   render(<GroupSessionsConfigSection groupName="Riverside Smashers" canEdit={canEdit} data={makeSessionsConfigData({ ...fns, ...data })} />);
   return { user, ...fns };
 }
@@ -301,7 +303,7 @@ describe('GroupSessionsConfigSection', () => {
 
       await user.click(within(dialog()).getByRole('button', { name: 'Got it' }));
       expect(onSetMode).toHaveBeenCalledTimes(1);
-      expect(onSetMode).toHaveBeenCalledWith('MONTHLY');
+      expect(onSetMode).toHaveBeenCalledWith('MONTHLY', false);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
@@ -317,13 +319,13 @@ describe('GroupSessionsConfigSection', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
-    it('with no configuration of the current mode there is nothing to warn about: it switches at once', async () => {
+    it('with no configuration of the current mode there is nothing to warn about: it switches at once (none scheduled)', async () => {
       // The only configuration belongs to the other mode, so the switch does not make anything unusable.
       const { user, onSetMode } = setup({ recurrences: [makeRecurrence({ mode: 'MONTHLY', dayKey: 3 })] });
 
       await user.selectOptions(screen.getByLabelText('Recurrence'), 'MONTHLY');
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-      expect(onSetMode).toHaveBeenCalledWith('MONTHLY');
+      expect(onSetMode).toHaveBeenCalledWith('MONTHLY', false);
     });
 
     it('picking the mode it already has does nothing', async () => {
@@ -351,7 +353,7 @@ describe('GroupSessionsConfigSection', () => {
 
       await user.click(within(dialog()).getByRole('button', { name: 'Delete' }));
       expect(onDelete).toHaveBeenCalledTimes(1);
-      expect(onDelete).toHaveBeenCalledWith(42);
+      expect(onDelete).toHaveBeenCalledWith(42, false);
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
@@ -372,6 +374,150 @@ describe('GroupSessionsConfigSection', () => {
       await user.click(screen.getByRole('button', { name: /Tuesday \(1\)/ }));
       expect(screen.getByRole('button', { name: 'Delete Tuesday at 18:00' })).toBeDisabled();
       expect(screen.getByLabelText('Recurrence')).toBeDisabled();
+    });
+  });
+
+  /** CLIENT-GROUP-SESSION-6: the question about the scheduled regular sessions a delete or a mode switch would leave behind. */
+  describe('cancelling the scheduled sessions', () => {
+    const twoSlots = () => [makeRecurrence({ id: 41 }), makeRecurrence({ id: 42, startTime: '20:00:00' })];
+
+    /** A count lookup that answers `count` at once; the section waits for it before it deletes or switches. */
+    function withCount(count: number, data: Partial<GroupSessionsConfigData> = {}) {
+      const onCountScheduled = vi.fn((_scope: string, _recurrenceId: number | undefined, onCount: (count: number) => void) => onCount(count));
+      return { ...setup({ onCountScheduled, recurrences: twoSlots(), ...data }), onCountScheduled };
+    }
+
+    /** A lookup that never answers (it is slow, or it failed and `isCountError` says so). */
+    function withSilentCount(data: Partial<GroupSessionsConfigData> = {}) {
+      const onCountScheduled = vi.fn();
+      return { ...setup({ onCountScheduled, recurrences: twoSlots(), ...data }), onCountScheduled };
+    }
+
+    async function confirmDelete(user: ReturnType<typeof userEvent.setup>, slot = '20:00') {
+      await user.click(screen.getByRole('button', { name: /Tuesday \(2\)/ }));
+      await user.click(screen.getByRole('button', { name: `Delete Tuesday at ${slot}` }));
+      await user.click(within(dialog()).getByRole('button', { name: 'Delete' }));
+    }
+
+    async function confirmMode(user: ReturnType<typeof userEvent.setup>) {
+      await user.selectOptions(screen.getByLabelText('Recurrence'), 'MONTHLY');
+      await user.click(within(dialog()).getByRole('button', { name: 'Got it' }));
+    }
+
+    it('a delete asks for that configuration only (scope RECURRENCE and its id)', async () => {
+      const { user, onCountScheduled } = withCount(0);
+      await confirmDelete(user);
+      expect(onCountScheduled).toHaveBeenCalledTimes(1);
+      expect(onCountScheduled.mock.calls[0].slice(0, 2)).toEqual(['RECURRENCE', 42]);
+    });
+
+    it('a mode switch asks for the whole group (scope ALL), after its own confirm', async () => {
+      const { user, onCountScheduled } = withCount(0, { recurrences: [makeRecurrence()] });
+      await user.selectOptions(screen.getByLabelText('Recurrence'), 'MONTHLY');
+      expect(onCountScheduled).not.toHaveBeenCalled();
+      await user.click(within(dialog()).getByRole('button', { name: 'Got it' }));
+      expect(onCountScheduled.mock.calls[0].slice(0, 2)).toEqual(['ALL', undefined]);
+    });
+
+    it('with none scheduled there is no second question: the delete and the switch go ahead without cancelling', async () => {
+      const del = withCount(0);
+      await confirmDelete(del.user);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(del.onDelete).toHaveBeenCalledWith(42, false);
+    });
+
+    it('with sessions scheduled a delete asks "{x} sessions are available. Do you want to cancel them?" and does nothing until answered', async () => {
+      const { user, onDelete } = withCount(3);
+      await confirmDelete(user);
+      expect(within(dialog()).getByText('Cancel the scheduled sessions?')).toBeInTheDocument();
+      expect(dialog()).toHaveTextContent('3 sessions are available. Do you want to cancel them?');
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('one session reads in the singular', async () => {
+      const { user } = withCount(1);
+      await confirmDelete(user);
+      expect(dialog()).toHaveTextContent('1 session is available. Do you want to cancel it?');
+    });
+
+    it('"Leave it there" deletes without cancelling', async () => {
+      const { user, onDelete } = withCount(2);
+      await confirmDelete(user);
+      await user.click(within(dialog()).getByRole('button', { name: 'Leave it there' }));
+      expect(onDelete).toHaveBeenCalledWith(42, false);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('"Cancel" deletes and cancels the scheduled sessions', async () => {
+      const { user, onDelete } = withCount(2);
+      await confirmDelete(user);
+      await user.click(within(dialog()).getByRole('button', { name: 'Cancel' }));
+      expect(onDelete).toHaveBeenCalledWith(42, true);
+    });
+
+    it('a mode switch with sessions scheduled asks, then sends the mode with the answer', async () => {
+      const { user, onSetMode } = withCount(4, { recurrences: [makeRecurrence()] });
+      await confirmMode(user);
+      expect(dialog()).toHaveTextContent('4 sessions are available. Do you want to cancel them?');
+      expect(onSetMode).not.toHaveBeenCalled();
+      await user.click(within(dialog()).getByRole('button', { name: 'Cancel' }));
+      expect(onSetMode).toHaveBeenCalledWith('MONTHLY', true);
+    });
+
+    it('a mode switch answered "Leave it there" sends cancelScheduled false', async () => {
+      const { user, onSetMode } = withCount(4, { recurrences: [makeRecurrence()] });
+      await confirmMode(user);
+      await user.click(within(dialog()).getByRole('button', { name: 'Leave it there' }));
+      expect(onSetMode).toHaveBeenCalledWith('MONTHLY', false);
+    });
+
+    it('with no configuration of the current mode the switch still asks for the count: sessions can outlive their configuration', async () => {
+      const { user, onCountScheduled, onSetMode } = withCount(2, { recurrences: [makeRecurrence({ mode: 'MONTHLY', dayKey: 3 })] });
+      await user.selectOptions(screen.getByLabelText('Recurrence'), 'MONTHLY');
+      expect(onCountScheduled).toHaveBeenCalledTimes(1);
+      expect(dialog()).toHaveTextContent('2 sessions are available');
+      expect(onSetMode).not.toHaveBeenCalled();
+    });
+
+    it('Escape on the question changes nothing', async () => {
+      const { user, onDelete } = withCount(2);
+      await confirmDelete(user);
+      await user.keyboard('{Escape}');
+      expect(onDelete).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('a failed count blocks the change: an error dialog, nothing deleted', async () => {
+      const { user, onDelete } = withSilentCount({ isCountError: true });
+      await confirmDelete(user);
+
+      expect(within(dialog()).getByText("Couldn't check the scheduled sessions")).toBeInTheDocument();
+      expect(dialog()).toHaveTextContent("We couldn't find out whether sessions are scheduled, so nothing was changed. Please try again.");
+      expect(onDelete).not.toHaveBeenCalled();
+    });
+
+    it('a failed count on a mode switch blocks it the same way', async () => {
+      const { user, onSetMode } = withSilentCount({ isCountError: true, recurrences: [makeRecurrence()] });
+      await confirmMode(user);
+      expect(within(dialog()).getByText("Couldn't check the scheduled sessions")).toBeInTheDocument();
+      expect(onSetMode).not.toHaveBeenCalled();
+    });
+
+    it('Try again repeats the same lookup', async () => {
+      const { user, onCountScheduled, onResetCount } = withSilentCount({ isCountError: true });
+      await confirmDelete(user);
+      await user.click(within(dialog()).getByRole('button', { name: 'Try again' }));
+      expect(onCountScheduled).toHaveBeenCalledTimes(2);
+      expect(onCountScheduled.mock.calls[1].slice(0, 2)).toEqual(['RECURRENCE', 42]);
+      expect(onResetCount).toHaveBeenCalled();
+    });
+
+    it('Close on the error changes nothing', async () => {
+      const { user, onDelete } = withSilentCount({ isCountError: true });
+      await confirmDelete(user);
+      await user.click(within(dialog()).getByText('Close', { selector: 'button' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(onDelete).not.toHaveBeenCalled();
     });
   });
 });
