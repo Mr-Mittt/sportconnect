@@ -22,6 +22,14 @@ interface ChoiceDialogProps {
   onClose: () => void;
   /** A failure of the action just chosen, kept in the dialog so the user can try again. */
   errorText?: string;
+  /** Radix's `onCloseAutoFocus`: runs once the dialog is gone and its focus trap released, the moment to move the focus somewhere (CLIENT-GROUP-UI-1: the recurrence form's first missing field). */
+  onCloseAutoFocus?: (event: Event) => void;
+  /**
+   * Centre the dialog in the viewport instead of under the page's modal anchor. A dialog that opens over another one (the
+   * regular-session form's warnings) is centred, like the session create form's own popups (CLIENT-GROUP-UI-1); the settings
+   * confirmations, opened from the page itself, keep the anchored position.
+   */
+  centered?: boolean;
 }
 
 /**
@@ -29,11 +37,11 @@ interface ChoiceDialogProps {
  * off, switch the recurrence, delete a configuration, leave the group). Presentational: the caller owns what each choice does. Like
  * `SettingsUnsavedChangesDialog`: the header bar with its close X, the body, the buttons on the right (stacked when there are more than two).
  */
-export function ChoiceDialog({ isOpen, title, body, items, choices, onClose, errorText }: ChoiceDialogProps) {
+export function ChoiceDialog({ isOpen, title, body, items, choices, onClose, errorText, onCloseAutoFocus, centered = false }: ChoiceDialogProps) {
   const isStacked = choices.length > 2;
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="p-4">
+      <DialogContent centered={centered} className="p-4" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader title={title} className="mb-3" />
         <p className="mb-3 text-2sm text-text-secondary">{body}</p>
         {items !== undefined && items.length > 0 && (

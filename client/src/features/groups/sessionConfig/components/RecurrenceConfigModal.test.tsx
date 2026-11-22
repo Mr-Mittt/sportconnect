@@ -1,23 +1,26 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { makeLocation, makeRecurrence, makeRecurrenceFormData } from '../fixtures';
 import type { RecurrenceFormData } from '../useRecurrenceFormData';
 import type { RecurrenceMode } from '../types';
+import { ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import { RecurrenceConfigModal } from './RecurrenceConfigModal';
 
 const GROUP = 'Riverside Smashers';
 
-function setup(form: Partial<RecurrenceFormData> = {}, options: { mode?: RecurrenceMode; isGenerationOn?: boolean } = {}) {
+function setup(form: Partial<RecurrenceFormData> = {}, options: { mode?: RecurrenceMode; isGenerationOn?: boolean; anchorBottom?: number | null } = {}) {
   const user = userEvent.setup();
   const fns = { save: vi.fn(), close: vi.fn(), onCreateMore: vi.fn() };
   const view = render(
-    <RecurrenceConfigModal
-      form={makeRecurrenceFormData({ isOpen: true, ...fns, ...form })}
-      mode={options.mode ?? 'WEEKLY'}
-      groupName={GROUP}
-      isGenerationOn={options.isGenerationOn ?? true}
-    />,
+    <ModalAnchorProvider value={options.anchorBottom ?? null}>
+      <RecurrenceConfigModal
+        form={makeRecurrenceFormData({ isOpen: true, ...fns, ...form })}
+        mode={options.mode ?? 'WEEKLY'}
+        groupName={GROUP}
+        isGenerationOn={options.isGenerationOn ?? true}
+      />
+    </ModalAnchorProvider>,
   );
   return { user, ...fns, ...view };
 }
@@ -199,6 +202,20 @@ describe('RecurrenceConfigModal', () => {
       expect(save).not.toHaveBeenCalled();
     });
 
+    // CLIENT-GROUP-UI-1 (owner, 2026-11-22): on the Groups page (anchored modals) the form itself sits under the page row, and
+    // its warnings are centred in the viewport like the session create form's popups.
+    it('the warning and the leave question are centred in the viewport while the form stays under the page anchor', async () => {
+      const { user } = setup({}, { anchorBottom: 120 });
+      expect(screen.getByRole('dialog', { name: 'Add a regular session' }).style.top).toBe('132px');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(screen.getByRole('dialog', { name: /missing information/ }).style.top).toBe('');
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+      await user.type(durationInput(), '90');
+      await user.click(screen.getByRole('button', { name: 'Close' }));
+      expect(screen.getByRole('dialog', { name: 'Discard this configuration?' }).style.top).toBe('');
+    });
+
     it('Keep editing goes back to the form without saving', async () => {
       const { user, save } = setup();
       await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -206,6 +223,51 @@ describe('RecurrenceConfigModal', () => {
 
       expect(screen.queryByRole('dialog', { name: /missing information/ })).not.toBeInTheDocument();
       expect(screen.getByRole('dialog', { name: 'Add a regular session' })).toBeInTheDocument();
+      expect(save).not.toHaveBeenCalled();
+    });
+
+    // CLIENT-GROUP-UI-1 (owner, 2026-11-22): like the session create form's "Continue editing" (CLIENT-SESSION-50), Keep editing
+    // takes the user to the first missing field on the form and flicks the section that holds it.
+    it('Keep editing focuses the first missing field (the duration) and flicks its section', async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+      await waitFor(() => expect(durationInput()).toHaveFocus());
+      const section = (title: string) => screen.getByRole('button', { name: new RegExp(`^${title}`) }).closest('.border-hairline');
+      expect(section('When')?.className).toContain('section-flick');
+      expect(section('Where')?.className).not.toContain('section-flick');
+      expect(section('Cost')?.className).not.toContain('section-flick');
+    });
+
+    it('Keep editing lands on the location when only that is missing', async () => {
+      const { user } = setup();
+      await user.type(durationInput(), '90');
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      expect(within(screen.getByRole('dialog', { name: /missing information/ })).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Location']);
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+      await waitFor(() => expect(document.getElementById('recurrence-location')).toHaveFocus());
+      const where = screen.getByRole('button', { name: /^Where/ }).closest('.border-hairline');
+      expect(where?.className).toContain('section-flick');
+    });
+
+    it('Keep editing reopens a collapsed section that holds the missing field', async () => {
+      const { user } = setup();
+      await user.click(screen.getByRole('button', { name: /^When/ }));
+      expect(durationInput).toThrow();
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+      await waitFor(() => expect(durationInput()).toHaveFocus());
+    });
+
+    it('closing the warning with Escape does the same as Keep editing', async () => {
+      const { user, save } = setup();
+      await user.click(screen.getByRole('button', { name: 'Save' }));
+      await user.keyboard('{Escape}');
+
+      await waitFor(() => expect(durationInput()).toHaveFocus());
       expect(save).not.toHaveBeenCalled();
     });
 
@@ -301,12 +363,14 @@ describe('RecurrenceConfigModal', () => {
       const { user, close, rerender } = setup({ editing: first, selectedLocation: first.location });
       // The picker chose another venue while the form was open.
       rerender(
-        <RecurrenceConfigModal
-          form={makeRecurrenceFormData({ isOpen: true, close, editing: first, selectedLocation: makeLocation({ id: 12, name: 'Lakeside Courts' }) })}
-          mode="WEEKLY"
-          groupName={GROUP}
-          isGenerationOn
-        />,
+        <ModalAnchorProvider value={null}>
+          <RecurrenceConfigModal
+            form={makeRecurrenceFormData({ isOpen: true, close, editing: first, selectedLocation: makeLocation({ id: 12, name: 'Lakeside Courts' }) })}
+            mode="WEEKLY"
+            groupName={GROUP}
+            isGenerationOn
+          />
+        </ModalAnchorProvider>,
       );
       await user.click(screen.getByRole('button', { name: 'Close' }));
 

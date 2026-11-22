@@ -122,6 +122,37 @@ describe('GroupSettingsTab', () => {
     expect(screen.queryByText('Privacy')).not.toBeInTheDocument();
   });
 
+  // CLIENT-GROUP-UI-1 (owner, 2026-11-22): a section's title is told from its content by a line under the title and by the
+  // content sitting to the right of it.
+  it('draws a line under each section title and sets each section content in from the left, closer together', async () => {
+    const user = userEvent.setup();
+    render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_owner" />);
+
+    for (const name of ['General', 'Permission', 'Sessions']) {
+      const title = screen.getByRole('button', { name });
+      expect(title).toHaveClass('border-hairline-b');
+      await user.click(title);
+      const content = document.getElementById(title.getAttribute('aria-controls')!);
+      expect(content).toHaveClass('pl-6');
+      expect(content).toHaveClass('gap-2');
+    }
+  });
+
+  // CLIENT-GROUP-UI-1 (owner, 2026-11-22): a short hint beside each title says what the section holds; it describes the button
+  // without changing its name.
+  it('shows a short hint beside each section title, as the description of its button', () => {
+    render(<GroupSettingsTab {...baseProps} group={group()} currentUserRole="group_owner" />);
+    const hints: Record<string, string> = {
+      General: 'Name, privacy, rules and schedule',
+      Permission: 'What members can post and invite',
+      Sessions: 'Regular sessions made for the group',
+    };
+    for (const [name, hint] of Object.entries(hints)) {
+      expect(screen.getByText(hint)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name })).toHaveAccessibleDescription(hint);
+    }
+  });
+
   it('member: privacy is read-only, no Delete button, Leave is enabled', async () => {
     await renderExpanded({ role: 'group_member' });
 

@@ -12,6 +12,9 @@ Visual regression no longer runs per PR: it is the manual workflow `client-visua
 
 | Baselines | Ticket | Change |
 |---|---|---|
+| `groups-settings-tab-*` and `groups-settings-tab-open-*` at 375, 768, 1280 | CLIENT-GROUP-UI-1 | changed: each section title has a line under it and a short hint beside it, and the section's content is set in from the left (24px) with 8px between blocks (the open state shows it most) |
+| `groups-chat-tab-*` at 375, 768, 1280 | CLIENT-GROUP-UI-1 | changed: the Today's session shortcut (header and the "+" card) sits above the chat window, which is shorter by its height |
+| `groups-owner-posts-*`, `groups-member-posts-*`, the Sessions tab and the recurrence form | CLIENT-GROUP-UI-1 | unchanged: the Posts tab renders the same shortcut; the Sessions tab and the form have no visual spec (the Sessions headers now wrap at narrow widths, not baselined) |
 | `create-session-default-*`, `create-session-location-chosen-*`, `create-session-session-detail-ref-*` at 375, 768, 1280 | CLIENT-SESSION-34 | changed: five collapsible sections, new fields, the "Create session" footer |
 | the same three sets | SESSION-49 (client part, `94b854c`) | changed again: the title is required, so the field is pre-filled with the default "{first name}'s session" (`create.titleField.default`) and has the required mark and an error line (`create.validation.title`); the Overview summary shows it |
 | `create-session-no-sport-profiles-*` | CLIENT-SESSION-34, SESSION-49 | probably unchanged: the compact "add a sport first" view has no title field; confirm |

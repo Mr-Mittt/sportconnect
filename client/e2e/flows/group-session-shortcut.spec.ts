@@ -1,3 +1,4 @@
+import { installFakeChatSocket } from '../mocks/fakeChatSocket.ts';
 import { mockGroupMembers, seedAuthenticatedSession } from '../mocks/fixtures.ts';
 import { expect, test } from '../mocks/test.ts';
 
@@ -115,4 +116,32 @@ test('Group session detail: the host cancels it with a reason and it leaves the 
 
   await page.keyboard.press('Escape');
   await expect(list.getByText('Ladder night')).toHaveCount(0);
+});
+
+// CLIENT-GROUP-UI-1 (owner, 2026-11-22): the shortcut shows on the Chat tab too, right above the chat window.
+test('Group Chat tab: the Session shortcut sits above the chat window and the composer stays in view', async ({ page }) => {
+  // A tall window: the chat box ends at the bottom of the viewport and shares its height with the shortcut.
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await installFakeChatSocket(page);
+  await seedAuthenticatedSession(page, '/groups');
+  await page.getByRole('group', { name: 'Group filter' }).getByRole('button', { name: /Weekend Tennis Ladder/ }).click();
+  await page.getByRole('tab', { name: 'Chat' }).click();
+
+  const shortcut = page.getByRole('region', { name: "Today's session", exact: true });
+  const list = page.getByRole('region', { name: "Today's group sessions" });
+  const composer = page.getByLabel('Message the group', { exact: true });
+
+  await expect(shortcut).toBeVisible();
+  await expect(list.getByText('Ladder night')).toBeVisible();
+  await expect(composer).toBeVisible();
+
+  const shortcutBox = await shortcut.boundingBox();
+  const composerBox = await composer.boundingBox();
+  expect(shortcutBox!.y + shortcutBox!.height).toBeLessThanOrEqual(composerBox!.y);
+  const viewport = page.viewportSize()!;
+  expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(viewport.height);
+
+  // The plus still opens the group-mode form from here.
+  await list.getByRole('button', { name: 'Create a session for this group' }).click();
+  await expect(page.getByRole('dialog', { name: 'Create session', exact: true })).toBeVisible();
 });

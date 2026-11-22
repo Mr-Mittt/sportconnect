@@ -24,9 +24,9 @@ export function GroupSessionsSection({ title, defaultOpen, filter, children }: G
   return (
     <Collapsible defaultOpen={defaultOpen} asChild>
       <section aria-label={title}>
-        <div className="flex items-center gap-2 p-1">
+        <div className="flex flex-wrap items-center gap-2 p-1">
           <CollapsibleLabelTrigger className="gap-1.5 p-1 text-sm font-medium text-text-primary">{title}</CollapsibleLabelTrigger>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
             {filter}
             <CollapsibleChevron />
           </div>

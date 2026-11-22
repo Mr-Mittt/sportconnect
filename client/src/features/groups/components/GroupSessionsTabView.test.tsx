@@ -17,13 +17,23 @@ type Props = ComponentProps<typeof GroupSessionsTabView>;
 
 const idle = { isLoading: false, isError: false, onRetry: vi.fn() };
 
+/** The month filter's props (CLIENT-GROUP-UI-1): November 2026, a month back allowed, none forward. */
+const month = (overrides: Partial<{ month: string; canGoPrevious: boolean; canGoNext: boolean; onPreviousMonth: () => void; onNextMonth: () => void }> = {}) => ({
+  month: '2026-11',
+  canGoPrevious: true,
+  canGoNext: false,
+  onPreviousMonth: vi.fn(),
+  onNextMonth: vi.fn(),
+  ...overrides,
+});
+
 function props(overrides: Partial<Props> = {}): Props {
   return {
     statuses: { today: ['ONGOING', 'SCHEDULED', 'PREPARING'], others: ['PREPARING', 'SCHEDULED'], history: ['COMPLETED'] },
     onStatusesChange: vi.fn(),
     today: { ...idle, sessions: [] },
     others: { ...idle, sessions: [], hasMore: false, isFetchingMore: false, onLoadMore: vi.fn() },
-    history: { ...idle, dates: [], hasMore: false, isFetchingMore: false, onLoadMore: vi.fn(), expandedDates: new Set(), onToggleDate: vi.fn() },
+    history: { ...idle, dates: [], ...month(), expandedDates: new Set(), onToggleDate: vi.fn() },
     todayKey: '2026-11-20',
     onCreate: vi.fn(),
     renderDateSessions: (date) => <p>sessions of {date}</p>,
@@ -149,7 +159,7 @@ describe('GroupSessionsTabView: History', () => {
 
   it('shows one row per end date as "<date> (<count>)", only the expanded one with its sessions', () => {
     renderView({
-      history: { ...idle, dates, hasMore: false, isFetchingMore: false, onLoadMore: vi.fn(), expandedDates: new Set(['2026-11-19']), onToggleDate: vi.fn() },
+      history: { ...idle, dates, ...month(), expandedDates: new Set(['2026-11-19']), onToggleDate: vi.fn() },
     });
     const history = section('History');
     const rows = within(history).getAllByRole('button', { name: /^(Expand|Collapse) / });
@@ -165,7 +175,7 @@ describe('GroupSessionsTabView: History', () => {
   it('toggles a date by its row', async () => {
     const onToggleDate = vi.fn();
     renderView({
-      history: { ...idle, dates, hasMore: false, isFetchingMore: false, onLoadMore: vi.fn(), expandedDates: new Set(), onToggleDate },
+      history: { ...idle, dates, ...month(), expandedDates: new Set(), onToggleDate },
     });
     await userEvent.setup().click(within(section('History')).getAllByRole('button', { name: /^Expand / })[1]);
     expect(onToggleDate).toHaveBeenCalledWith('2026-11-14');
@@ -174,7 +184,7 @@ describe('GroupSessionsTabView: History', () => {
   it('labels today\'s date "Today" (a finished session of today never lists, but the label rule is the Matches one)', () => {
     renderView({
       todayKey: '2026-11-19',
-      history: { ...idle, dates, hasMore: false, isFetchingMore: false, onLoadMore: vi.fn(), expandedDates: new Set(), onToggleDate: vi.fn() },
+      history: { ...idle, dates, ...month(), expandedDates: new Set(), onToggleDate: vi.fn() },
     });
     expect(within(section('History')).getByRole('button', { name: 'Expand Today (2)' })).toBeInTheDocument();
   });
@@ -187,9 +197,7 @@ describe('GroupSessionsTabView: History', () => {
       history: {
         ...idle,
         dates: [{ date: '2026-11-19', count: 0 }, { date: '2026-11-18', count: 2 }],
-        hasMore: false,
-        isFetchingMore: false,
-        onLoadMore: vi.fn(),
+        ...month(),
         expandedDates: new Set(['2026-11-19']),
         onToggleDate: vi.fn(),
       },
@@ -202,49 +210,50 @@ describe('GroupSessionsTabView: History', () => {
     expect(renderDateSessions).not.toHaveBeenCalled();
   });
 
-  it('still shows a row for each day, all "(0)", for a group with no finished session at all, with no Load more when nothing is older', () => {
+  it('shows one hint instead of a row per day for a month with no finished session', () => {
     renderView({
       history: {
         ...idle,
         dates: [{ date: '2026-11-19', count: 0 }, { date: '2026-11-18', count: 0 }],
-        hasMore: false,
-        isFetchingMore: false,
-        onLoadMore: vi.fn(),
+        ...month(),
         expandedDates: new Set(),
         onToggleDate: vi.fn(),
       },
     });
-    expect(within(section('History')).getAllByRole('button', { name: /^Expand .*\(0\)/ })).toHaveLength(2);
+    const history = section('History');
+    expect(within(history).getByText('No finished session in November 2026.')).toBeInTheDocument();
+    expect(within(history).queryByRole('button', { name: /^Expand / })).not.toBeInTheDocument();
+  });
+
+  it('has no Load more for the history: the month filter replaced it', () => {
+    renderView({ history: { ...idle, dates, ...month(), expandedDates: new Set(), onToggleDate: vi.fn() } });
     expect(screen.queryByRole('button', { name: 'Load the previous 30 days' })).not.toBeInTheDocument();
   });
 
-  it('shows the zero rows and the Load more when the 30 days are empty but older sessions exist', () => {
+  it('shows the month in the History header with arrows that call back, each disabled at its limit', async () => {
+    const onPreviousMonth = vi.fn();
+    const onNextMonth = vi.fn();
     renderView({
-      history: {
-        ...idle,
-        dates: [{ date: '2026-11-19', count: 0 }, { date: '2026-11-18', count: 0 }],
-        hasMore: true,
-        isFetchingMore: false,
-        onLoadMore: vi.fn(),
-        expandedDates: new Set(),
-        onToggleDate: vi.fn(),
-      },
+      history: { ...idle, dates, ...month({ canGoNext: true, onPreviousMonth, onNextMonth }), expandedDates: new Set(), onToggleDate: vi.fn() },
     });
-    expect(within(section('History')).getAllByRole('button', { name: /^Expand .*\(0\)/ })).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Load the previous 30 days' })).toBeInTheDocument();
+    const history = section('History');
+    expect(within(history).getByText('November 2026')).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(within(history).getByRole('button', { name: 'Previous month' }));
+    await user.click(within(history).getByRole('button', { name: 'Next month' }));
+    expect(onPreviousMonth).toHaveBeenCalledTimes(1);
+    expect(onNextMonth).toHaveBeenCalledTimes(1);
   });
 
-  it('has a Load more for the previous 30 days while there is more', async () => {
-    const onLoadMore = vi.fn();
-    renderView({
-      history: { ...idle, dates, hasMore: true, isFetchingMore: false, onLoadMore, expandedDates: new Set(), onToggleDate: vi.fn() },
-    });
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Load the previous 30 days' }));
-    expect(onLoadMore).toHaveBeenCalledTimes(1);
+  it('disables the previous arrow at the first month and the next arrow at the latest month', () => {
+    renderView({ history: { ...idle, dates, ...month({ canGoPrevious: false, canGoNext: false }), expandedDates: new Set(), onToggleDate: vi.fn() } });
+    const history = section('History');
+    expect(within(history).getByRole('button', { name: 'Previous month' })).toBeDisabled();
+    expect(within(history).getByRole('button', { name: 'Next month' })).toBeDisabled();
   });
 
   it('shows an error with retry for the date list, and the select-a-status hint when none is chosen', () => {
-    renderView({ history: { dates: [], isLoading: false, isError: true, onRetry: vi.fn(), hasMore: false, isFetchingMore: false, onLoadMore: vi.fn(), expandedDates: new Set(), onToggleDate: vi.fn() } });
+    renderView({ history: { dates: [], isLoading: false, isError: true, onRetry: vi.fn(), ...month(), expandedDates: new Set(), onToggleDate: vi.fn() } });
     expect(within(section('History')).getByRole('alert')).toBeInTheDocument();
   });
 
