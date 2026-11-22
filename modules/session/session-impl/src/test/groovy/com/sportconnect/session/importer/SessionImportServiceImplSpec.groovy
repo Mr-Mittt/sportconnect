@@ -176,7 +176,17 @@ class SessionImportServiceImplSpec extends Specification {
 
     // ---- host, group, location ------------------------------------------------------------------------------------
 
-    def "the host defaults to the group's groupOwner"() {
+    def "the preview lists the group's active members by name, never a deactivated one"() {
+        when:
+        def preview = service.preview(admin, request([session()]))
+
+        then: 'sorted without accents; Gone (deactivated) is absent'
+        preview.members*.userId == [anhA, anhB, groupOwner, duc, hieu]
+        preview.members*.fullName == ['Ánh Nguyễn', 'Ánh Vãng Lai', 'Bảo Nguyễn', 'Đức Trần', 'Hiếu Nguyễn']
+        !(gone in preview.members*.userId)
+    }
+
+    def "the host defaults to the group's owner"() {
         expect:
         service.preview(admin, request([session()])).hostUserId == groupOwner
     }

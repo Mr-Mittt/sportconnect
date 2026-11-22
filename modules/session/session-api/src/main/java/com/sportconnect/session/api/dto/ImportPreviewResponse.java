@@ -31,6 +31,12 @@ public class ImportPreviewResponse {
     /** True when {@link #unresolved} is empty. */
     private boolean canApply;
 
+    /**
+     * The group's active members, by name: what an unresolved name can be settled with (an alias). Also lets the page work for
+     * an admin who is not a member of the group, who cannot search its members.
+     */
+    private List<Candidate> members;
+
     /** One session as it would be created. {@code exists} is true when the same group, title and start are already there. */
     @Data
     @Builder

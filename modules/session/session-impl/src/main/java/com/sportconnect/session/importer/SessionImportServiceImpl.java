@@ -63,7 +63,8 @@ public class SessionImportServiceImpl implements SessionImportService {
 
     /** The request after its checks: who the sessions belong to, and each session with its names resolved. */
     private record Plan(Long groupId, Long sportId, Long locationId, UUID hostId,
-                        List<PlannedSession> sessions, Map<String, List<ImportPreviewResponse.Candidate>> unresolved) {
+                        List<PlannedSession> sessions, Map<String, List<ImportPreviewResponse.Candidate>> unresolved,
+                        List<ImportPreviewResponse.Candidate> members) {
     }
 
     /** One session; {@code games.get(i)} holds the winners at 0 and the losers at 1. */
@@ -94,7 +95,8 @@ public class SessionImportServiceImpl implements SessionImportService {
         log.info("Session import preview by {}: group {}, {} sessions, {} unresolved names",
                 callerId, plan.groupId(), sessions.size(), unresolved.size());
         return ImportPreviewResponse.builder()
-                .hostUserId(plan.hostId()).sessions(sessions).unresolved(unresolved).canApply(unresolved.isEmpty()).build();
+                .hostUserId(plan.hostId()).sessions(sessions).unresolved(unresolved).canApply(unresolved.isEmpty())
+                .members(plan.members()).build();
     }
 
     /**
@@ -203,13 +205,17 @@ public class SessionImportServiceImpl implements SessionImportService {
         }
         Map<UUID, UserResponse> users = userService.getUsersByIds(new ArrayList<>(active));
         Map<String, List<ImportPreviewResponse.Candidate>> byFirstName = new HashMap<>();
+        List<ImportPreviewResponse.Candidate> members = new ArrayList<>();
         for (UUID id : active) {
             UserResponse user = users.get(id);
             if (user != null) {
-                byFirstName.computeIfAbsent(ImportNames.normalize(user.getFirstName()), k -> new ArrayList<>())
-                        .add(ImportPreviewResponse.Candidate.builder().userId(id).fullName(fullName(user)).build());
+                ImportPreviewResponse.Candidate candidate = ImportPreviewResponse.Candidate.builder().userId(id).fullName(fullName(user)).build();
+                byFirstName.computeIfAbsent(ImportNames.normalize(user.getFirstName()), k -> new ArrayList<>()).add(candidate);
+                members.add(candidate);
             }
         }
+        members.sort(java.util.Comparator.comparing((ImportPreviewResponse.Candidate c) -> ImportNames.normalize(c.getFullName()))
+                .thenComparing(c -> c.getUserId().toString()));
         Map<String, UUID> aliases = new HashMap<>();
         if (request.getAliases() != null) {
             request.getAliases().forEach((name, id) -> {
@@ -231,7 +237,7 @@ public class SessionImportServiceImpl implements SessionImportService {
         for (ImportSessionsRequest.ImportedSession s : request.getSessions()) {
             sessions.add(plannedSession(s, zone, now, maxGames, maxPerSide, byFirstName, aliases, users, unresolved));
         }
-        return new Plan(groupId, sportId, location.getId(), hostId, sessions, unresolved);
+        return new Plan(groupId, sportId, location.getId(), hostId, sessions, unresolved, members);
     }
 
     private PlannedSession plannedSession(ImportSessionsRequest.ImportedSession s, ZoneId zone, Instant now,

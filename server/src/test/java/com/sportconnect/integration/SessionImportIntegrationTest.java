@@ -200,6 +200,9 @@ class SessionImportIntegrationTest extends RedisBaseIT {
                 .andExpect(jsonPath("$.data.canApply").value(true))
                 .andExpect(jsonPath("$.data.hostUserId").value(ownerId.toString()))
                 .andExpect(jsonPath("$.data.unresolved.length()").value(0))
+                // The group's active members, for an admin who is not one of them: the deactivated member is not listed.
+                .andExpect(jsonPath("$.data.members.length()").value(5))
+                .andExpect(jsonPath("$.data.members[?(@.userId == '" + deactivated + "')]").isEmpty())
                 .andExpect(jsonPath("$.data.sessions[0].exists").value(false))
                 .andExpect(jsonPath("$.data.sessions[0].games[0].winners[0].userId").value(hieu.toString()))
                 .andExpect(jsonPath("$.data.sessions[0].games[0].winners[1].userId").value(duc.toString()));
