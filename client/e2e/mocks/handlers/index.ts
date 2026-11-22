@@ -1,4 +1,5 @@
 import type { HttpHandler } from 'msw';
+import { adminImportHandlers } from './adminImport.ts';
 import { authHandlers } from './auth.ts';
 import { chatHandlers } from './chat.ts';
 import { feedHandlers } from './feed.ts';
@@ -23,4 +24,5 @@ export const handlers: HttpHandler[] = [
   ...notificationHandlers,
   ...preferenceHandlers,
   ...referenceHandlers,
+  ...adminImportHandlers,
 ];

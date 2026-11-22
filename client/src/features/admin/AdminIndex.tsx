@@ -23,6 +23,17 @@ export function AdminIndex() {
             Update sport fields and per-sport attribute schemas.
           </p>
         </li>
+        <li>
+          <Link
+            to="/admin/import"
+            className="text-2sm font-medium text-text-accent underline-offset-4 hover:underline"
+          >
+            Import sessions
+          </Link>
+          <p className="text-2sm text-text-muted">
+            Load finished sessions and their games from a sheet&apos;s import file.
+          </p>
+        </li>
       </ul>
     </section>
   );

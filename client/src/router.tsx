@@ -1,4 +1,5 @@
 import { createBrowserRouter, createRoutesFromElements, Route } from 'react-router-dom';
+import { AdminImportPage } from './features/admin/import/AdminImportPage';
 import { AdminIndex } from './features/admin/AdminIndex';
 import { AdminLayout } from './features/admin/AdminLayout';
 import { AdminSportsPage } from './features/admin/AdminSportsPage';
@@ -94,6 +95,8 @@ export const routes = createRoutesFromElements(
           giving the panel deep-linking and browser back/forward. */}
       <Route path="sports" element={<AdminSportsPage />} />
       <Route path="sports/:sportId" element={<AdminSportsPage />} />
+      {/* CLIENT-ADMIN-IMPORT-1: upload the sheet script's file, preview, match names, import finished sessions. */}
+      <Route path="import" element={<AdminImportPage />} />
     </Route>
     {/* CLIENT-ERR-1: any URL nothing above matched. Outside AppShell, like the pre-auth routes,
         so it renders the same for a signed-in and a signed-out visitor. */}

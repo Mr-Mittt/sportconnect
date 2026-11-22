@@ -165,6 +165,7 @@ current whenever I18N-4 itself finally gets scoped:**
 | Admin | Sport attribute-schema editor | `useReplaceSportAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 | Admin | Session attribute-schema editor | `useReplaceSessionAttributeSchema` | CLIENT-ERR-1 (shared classifier only; no vi copy) |
 | Admin | Record (result) schema editor (SPORT-18): the server text of a refused save (`SPORT_RESULT_SCHEMA_INVALID`, `maxRecords` out of range) shown verbatim; the editor hint about a document the app cannot read is fixed English | `useReplaceResultSchema` | SPORT-18 (admin screens are English-only, CLIENT-I18N-6) |
+| Admin | Import sessions page (CLIENT-ADMIN-IMPORT-1): the preview and the apply of SESSION-70. Its refusals (`SESSION_IMPORT_INVALID` by `reason`, `SESSION_IMPORT_UNRESOLVED_NAMES`, `SESSION_IMPORT_HOST_NOT_MEMBER`, `SESSION_IMPORT_ALIAS_NOT_MEMBER`, `SESSION_IMPORT_NOT_FINISHED`, `GROUP_NOT_FOUND`, `SESSION_LOCATION_SPORT_MISMATCH`, `SESSION_SPORT_REQUIRED`, a 403, no connection) each show a fixed English message of the page's own (`importErrors.ts`), never the server text; no vi copy | `useImportPreview`, `useImportApply` | CLIENT-ADMIN-IMPORT-1 (admin screens are English-only, CLIENT-I18N-6) |
 
 **CLIENT-ERR-1 (2026-10-04):** all 11 hooks above now read their error through the shared classifier
 (`shared/lib/apiError.ts`, `getErrorMessage`) with the same return shape. A 400/409 (and a login 401)
