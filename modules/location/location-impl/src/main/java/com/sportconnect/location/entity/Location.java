@@ -54,6 +54,15 @@ public class Location {
     @Column(length = 64)
     private String timezone;
 
+    /** LOC-5 — reference-domain country id, derived from {@code location}'s coordinates at creation time (and by the
+     * start-up backfill). Nullable and best-effort, same stance as {@code timezone}; no FK (cross-domain id). No update path. */
+    @Column(name = "country_id")
+    private Long countryId;
+
+    /** LOC-5 — reference-domain region id; null when the country has no seeded regions or none matched. */
+    @Column(name = "region_id")
+    private Long regionId;
+
     @Column(name = "claimed_by_vendor_id")
     private Long claimedByVendorId;
 

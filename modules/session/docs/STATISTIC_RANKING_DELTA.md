@@ -3,7 +3,7 @@
 **Status:** Draft for the BA, 2026-11-23. Kept up to date as each ticket of the chain is built (section 5); when the chain is finished it goes back to the BA for the final app behaviour, the same way `BA_GAME_LOGGING_DELTA.md` did for game logging.
 **Compares:** the statistics, leaderboard, season, KPI, adjustment, guest, sharing and non-functional text of `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards (revised 2026-11-23).md` against the owner's specification `GROUP_AND_REGION_STATISTIC_RANKING.md` and the design `STATISTIC_RANKING_DESIGN.md` (decisions of 2026-11-23).
 **Tickets:** SESSION-72, SESSION-53, SESSION-73, SESSION-54 (server), CLIENT-SESSION-54, 41, 42 (client), prerequisite LOC-5; later SESSION-52, 55, 56 and CLIENT-SESSION-40, 43, 44, 48; follow-ups SESSION-74 to 77, CLIENT-SESSION-55, 56.
-**Nothing is built yet.** Every "as designed" below is a plan until section 5 says otherwise.
+**Built so far: LOC-5 only (section 5).** Every other "as designed" below is a plan until section 5 says otherwise.
 
 How to read it: **Server** and **Client** say where the decision is enforced. "Update BA" is a suggested change to the BA text; "Confirm" needs a BA answer.
 
@@ -84,4 +84,8 @@ How to read it: **Server** and **Client** say where the decision is enforced. "U
 
 Kept up to date as each ticket of the chain is built; each entry says what was built and what the BA text should now say.
 
-*(No ticket built yet. Written 2026-11-23 at design approval.)*
+*(Written 2026-11-23 at design approval; entries below, newest first.)*
+
+**LOC-5, a venue knows its country and region (built 2026-11-23, location).** A venue gets a country and a region from its coordinates when it is created, and venues that already existed are linked once when the server first starts. It uses the offline boundary data (the same lookup the sign-up form uses), so no network call and no one types it. A venue with no coordinates, in open water, or in a country that is not set up yet (today only Vietnam is, and regions exist only for Vietnam) has none. A failed lookup never stops a venue from being saved.
+
+What the BA text should now say: a game counts toward a region or country board only when its **venue** has that region or country, so a venue without coordinates, or outside Vietnam for now, never feeds those boards (the game still counts for the player and the group). The borders are simplified, so a venue within a few kilometres of a provincial border can land in the neighbouring province; the venue's region cannot be corrected by anyone yet. Confirm: is that acceptable for the first release, or must a venue's region be correctable (an admin tool) before the boards are public? Related decision 4 (section 4), farming, is unchanged.

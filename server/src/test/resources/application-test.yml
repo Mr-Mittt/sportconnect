@@ -4,6 +4,10 @@ app:
   # no default in application.yml on purpose (see its comment there), so the test profile needs
   # its own value or context startup fails resolving the placeholder.
   internal-service-secret: test-internal-service-secret
+  location:
+    geo-backfill:
+      # LOC-5: off so a context start never forces the boundary index to load; the IT invokes the runner directly
+      enabled: false
   session:
     generation:
       # SESSION-GROUP-5: the ITs drain the generation queue on the calling thread and keep the 60-second tick out of the way.

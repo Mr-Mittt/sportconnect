@@ -7,6 +7,8 @@ dependencies {
     implementation project(':modules:location:location-api')
     implementation project(':modules:common')
     implementation project(':modules:sport:sport-api')
+    // LOC-5: country/region derived from coordinates through ReferenceService. reference-api depends only on common, so no cycle.
+    implementation project(':modules:reference:reference-api')
 
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'

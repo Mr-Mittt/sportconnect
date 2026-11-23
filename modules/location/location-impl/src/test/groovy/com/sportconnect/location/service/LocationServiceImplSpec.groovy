@@ -8,6 +8,9 @@ import com.sportconnect.location.entity.Location
 import com.sportconnect.location.entity.UserFavoriteLocation
 import com.sportconnect.location.repository.LocationRepository
 import com.sportconnect.location.repository.UserFavoriteLocationRepository
+import com.sportconnect.reference.api.dto.CountryResponse
+import com.sportconnect.reference.api.dto.GeoMatch
+import com.sportconnect.reference.api.dto.RegionResponse
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
@@ -24,11 +27,17 @@ class LocationServiceImplSpec extends Specification {
     UserSportProfileService userSportProfileService = Mock()
     GoogleMapsUrlResolver googleMapsUrlResolver = Mock()
     LocationTimeZoneResolver locationTimeZoneResolver = Mock()
+    LocationGeoResolver locationGeoResolver = Mock()
 
     @Subject
     LocationServiceImpl locationService = new LocationServiceImpl(
             locationRepository, userFavoriteLocationRepository, sportService, userSportProfileService,
-            googleMapsUrlResolver, locationTimeZoneResolver)
+            googleMapsUrlResolver, locationTimeZoneResolver, locationGeoResolver)
+
+    def setup() {
+        // a Mock answers null for Optional; by default nothing resolves (tests below override per case)
+        locationGeoResolver.resolve(_, _) >> Optional.empty()
+    }
 
     def "createLocation saves a location with coordinates when lat/lng provided, timezone derived"() {
         given:
@@ -101,9 +110,82 @@ class LocationServiceImplSpec extends Specification {
 
         then:
         0 * locationTimeZoneResolver._
-        1 * locationRepository.save({ Location loc -> loc.location == null && loc.timezone == null }) >> saved
+        0 * locationGeoResolver._
+        1 * locationRepository.save({ Location loc -> loc.location == null && loc.timezone == null && loc.countryId == null && loc.regionId == null }) >> saved
         1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
         1 * sportService.getActiveSportsByIds([1L]) >> [:]
+    }
+
+    private CreateLocationRequest hcmcRequest() {
+        CreateLocationRequest.builder().sportId(1L).name("Court").latitude(10.77d).longitude(106.70d).build()
+    }
+
+    def "createLocation stores the country and region the resolver matched (LOC-5)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def saved = Location.builder().id(20L).sportId(1L).name("Court").createdBy(userId).countryId(84L).regionId(79L).build()
+
+        when:
+        def result = locationService.createLocation(userId, hcmcRequest())
+
+        then:
+        1 * locationTimeZoneResolver.resolve(10.77d, 106.70d) >> Optional.of("Asia/Ho_Chi_Minh")
+        1 * locationGeoResolver.resolve(10.77d, 106.70d) >> Optional.of(GeoMatch.builder()
+                .country(CountryResponse.builder().id(84L).build())
+                .region(RegionResponse.builder().id(79L).build()).build())
+        1 * locationRepository.save({ Location loc -> loc.countryId == 84L && loc.regionId == 79L }) >> saved
+        1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
+        1 * sportService.getActiveSportsByIds([1L]) >> [:]
+        result.countryId == 84L
+        result.regionId == 79L
+    }
+
+    def "createLocation stores the country alone when the country has no matching region (LOC-5)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def saved = Location.builder().id(21L).sportId(1L).name("Court").createdBy(userId).build()
+
+        when:
+        locationService.createLocation(userId, hcmcRequest())
+
+        then:
+        1 * locationTimeZoneResolver.resolve(_, _) >> Optional.empty()
+        1 * locationGeoResolver.resolve(10.77d, 106.70d) >> Optional.of(GeoMatch.builder()
+                .country(CountryResponse.builder().id(84L).build()).build())
+        1 * locationRepository.save({ Location loc -> loc.countryId == 84L && loc.regionId == null }) >> saved
+        1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
+        1 * sportService.getActiveSportsByIds([1L]) >> [:]
+    }
+
+    def "createLocation leaves country and region null when nothing resolves, and still saves (LOC-5)"() {
+        given:
+        def userId = UUID.randomUUID()
+        def saved = Location.builder().id(22L).sportId(1L).name("Court").createdBy(userId).build()
+
+        when:
+        locationService.createLocation(userId, hcmcRequest())
+
+        then:
+        1 * locationTimeZoneResolver.resolve(_, _) >> Optional.empty()
+        1 * locationGeoResolver.resolve(10.77d, 106.70d) >> Optional.empty()
+        1 * locationRepository.save({ Location loc -> loc.countryId == null && loc.regionId == null }) >> saved
+        1 * sportService.requireActiveSportById(1L) >> SportResponse.builder().id(1L).name("Basketball").isActive(true).build()
+        1 * sportService.getActiveSportsByIds([1L]) >> [:]
+    }
+
+    def "getLocationsByIds exposes the stored country and region (LOC-5, read by the statistics engine)"() {
+        given:
+        def venue = Location.builder().id(30L).sportId(1L).name("Court").createdBy(UUID.randomUUID())
+                .countryId(84L).regionId(79L).build()
+
+        when:
+        def result = locationService.getLocationsByIds([30L])
+
+        then:
+        1 * locationRepository.findByIdIn([30L]) >> [venue]
+        1 * sportService.getActiveSportsByIds([1L]) >> [:]
+        result[30L].countryId == 84L
+        result[30L].regionId == 79L
     }
 
     def "createLocation rejects a deactivated sport and persists nothing"() {

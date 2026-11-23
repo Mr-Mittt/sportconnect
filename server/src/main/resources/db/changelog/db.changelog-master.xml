@@ -266,5 +266,7 @@
     <include file="db/changelog/changes/V100__group_session_queue_ignored_status.sql" relativeToChangelogFile="false"/>
     <!-- SESSION-GROUP-12: a cancelled session always has an end time (end = start when it had none; backfill) -->
     <include file="db/changelog/changes/V101__cancelled_sessions_get_an_end_time.sql" relativeToChangelogFile="false"/>
+    <!-- LOC-5: venues gain nullable country_id / region_id (reference ids, no FK), derived from coordinates; backfilled by LocationGeoBackfillRunner -->
+    <include file="db/changelog/changes/V102__add_country_region_to_locations.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>
