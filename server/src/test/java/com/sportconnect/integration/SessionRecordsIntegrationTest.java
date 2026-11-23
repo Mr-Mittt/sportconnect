@@ -432,8 +432,9 @@ class SessionRecordsIntegrationTest extends RedisBaseIT {
     // -- status, window, sport ------------------------------------------------------------------
 
     @Test
-    void sessionThatIsNotOngoingOrCompleted_isNotLoggable() throws Exception {
-        for (SessionStatus status : List.of(SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.CANCELLED)) {
+    void sessionThatIsNotScheduledOngoingOrCompleted_isNotLoggable() throws Exception {
+        // SESSION-72: SCHEDULED is loggable now (a game can be set up before the start); PREPARING and CANCELLED are not.
+        for (SessionStatus status : List.of(SessionStatus.PREPARING, SessionStatus.CANCELLED)) {
             Long sessionId = seedSession(null, status, 3600);
             authenticateAs(aliceId);
             send(sessionId, addChange(aliceId))

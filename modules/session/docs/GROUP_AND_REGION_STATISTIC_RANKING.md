@@ -20,3 +20,5 @@
   - country: same with region ranking, but country match
 
  
+
+> **Decision change (owner, 2026-11-23, SESSION-72 pickup):** the line "region: ranking game statistic, but only if player region match with location region" no longer holds. A ranking game counts on the board of the **venue's** region and country for every player in it, wherever the player lives (a player from region A who plays at a venue in region B is counted on region B's board). See `STATISTIC_RANKING_DESIGN.md`, decision 8.

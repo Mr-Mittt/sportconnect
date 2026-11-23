@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface SessionRecordRepository extends JpaRepository<SessionRecord, Long> {
@@ -27,4 +28,12 @@ public interface SessionRecordRepository extends JpaRepository<SessionRecord, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM SessionRecord r WHERE r.sessionId = :sessionId AND r.id IN :ids ORDER BY r.id")
     List<SessionRecord> findForUpdate(@Param("sessionId") Long sessionId, @Param("ids") Collection<Long> ids);
+
+    /**
+     * SESSION-72: one record of this session, locked for the transaction (the same row lock an update takes, so a propose
+     * or confirm and an edit of the same record serialize). Empty when the id is not a record of this session.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM SessionRecord r WHERE r.sessionId = :sessionId AND r.id = :id")
+    Optional<SessionRecord> findOneForUpdate(@Param("sessionId") Long sessionId, @Param("id") Long id);
 }

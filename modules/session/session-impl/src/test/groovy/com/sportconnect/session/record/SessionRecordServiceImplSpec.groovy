@@ -49,6 +49,9 @@ class SessionRecordServiceImplSpec extends Specification {
     CommentService commentService = Mock()
     UserService userService = Mock()
     SessionOutboxWriter sessionOutboxWriter = Mock()
+    SessionRecordVerificationRepository verificationRepository = Mock()
+    RecordRankingSupport rankingSupport = Mock()
+    RecordReaders readers = new RecordReaders([new CompetitiveRecordReader()])
     static final Long POST_ID = 70L
     static final UUID CREATOR = UUID.randomUUID()
     String callerName = 'Alex Tran'    // what the user lookup returns for the caller (null: not found)
@@ -65,7 +68,8 @@ class SessionRecordServiceImplSpec extends Specification {
 
     @Subject
     SessionRecordServiceImpl service = new SessionRecordServiceImpl(sessionRepository, recordRepository,
-            participantRepository, gate, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter)
+            participantRepository, gate, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter,
+            verificationRepository, readers, rankingSupport)
 
     def setup() {
         service.clock = Clock.fixed(NOW, ZoneOffset.UTC)
@@ -78,6 +82,7 @@ class SessionRecordServiceImplSpec extends Specification {
             args[2].findAll { joined == null || joined.contains(it) }.collect { new SessionParticipant(userId: it, sessionId: SESSION_ID, status: ParticipantStatus.JOINED) }
         }
         recordRepository.findBySessionIdOrderByIdAsc(SESSION_ID) >> { listed }
+        rankingSupport.rankingFor(_, _) >> [:]
         recordRepository.findForUpdate(SESSION_ID, _) >> { locked }
         recordRepository.findBySessionIdAndClientRequestIdIn(SESSION_ID, _) >> { replays }
         recordRepository.countBySessionId(SESSION_ID) >> { liveCount }
@@ -111,7 +116,8 @@ class SessionRecordServiceImplSpec extends Specification {
         given:
         def failing = Mock(SessionRecordGate)
         def other = new SessionRecordServiceImpl(sessionRepository, recordRepository,
-                participantRepository, failing, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter)
+                participantRepository, failing, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter,
+                verificationRepository, readers, rankingSupport)
         failing.require(_, _, _, _, _, _) >> { throw new ForbiddenException("SESSION_RECORD_NOT_ALLOWED", "no", null) }
 
         when:
@@ -127,7 +133,8 @@ class SessionRecordServiceImplSpec extends Specification {
         given:
         def failing = Mock(SessionRecordGate)
         def other = new SessionRecordServiceImpl(sessionRepository, recordRepository,
-                participantRepository, failing, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter)
+                participantRepository, failing, sportService, new ObjectMapper(), commentService, userService, sessionOutboxWriter,
+                verificationRepository, readers, rankingSupport)
         sessionRepository.findById(99L) >> Optional.empty()
         failing.require(_, _, _, _, _, _) >> { throw new NotFoundException("SESSION_NOT_FOUND", "no", null) }
 
@@ -138,7 +145,7 @@ class SessionRecordServiceImplSpec extends Specification {
         thrown(NotFoundException)
     }
 
-    def "only ONGOING and COMPLETED sessions can be logged: #status"() {
+    def "only SCHEDULED, ONGOING and COMPLETED sessions can be logged (SESSION-72): #status is refused"() {
         given:
         current = session(status, NOW.plus(Duration.ofHours(1)))
 
@@ -150,7 +157,7 @@ class SessionRecordServiceImplSpec extends Specification {
         e.errorCode == "SESSION_RECORD_NOT_LOGGABLE"
 
         where:
-        status << [SessionStatus.PREPARING, SessionStatus.SCHEDULED, SessionStatus.CANCELLED]
+        status << [SessionStatus.PREPARING, SessionStatus.CANCELLED]
     }
 
     def "a change 23 hours after the session ended is still accepted"() {

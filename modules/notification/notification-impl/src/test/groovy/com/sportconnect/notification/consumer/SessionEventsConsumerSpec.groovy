@@ -7,6 +7,7 @@ import com.sportconnect.session.api.event.SessionCommentCreatedEvent
 import com.sportconnect.session.api.event.SessionGroupCancelledEvent
 import com.sportconnect.session.api.event.SessionGroupCreatedEvent
 import com.sportconnect.session.api.event.SessionInvitationCreatedEvent
+import com.sportconnect.session.api.event.SessionRecordVerificationRequestedEvent
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent
 import com.sportconnect.session.api.event.SessionShareCreatedEvent
 import com.sportconnect.session.api.event.SessionJoinRequestApprovedEvent
@@ -241,6 +242,23 @@ class SessionEventsConsumerSpec extends Specification {
         then:
         1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
             e.type() == "session.invitation.created" && e.singleRecipient() == recipientId
+        })
+    }
+
+    def "dispatches session.record.verification_requested as a single-recipient event (SESSION-72, NOTIF-16)"() {
+        given:
+        def actorId = UUID.randomUUID()
+        def recipientId = UUID.randomUUID()
+        def body = objectMapper.writeValueAsString(SessionRecordVerificationRequestedEvent.builder()
+                .sessionId(1L).recordId(9L).actorId(actorId).recipientUserId(recipientId).build())
+
+        when:
+        consumer.onSessionEvent(messageWith("session.record.verification_requested", body))
+
+        then:
+        1 * sessionEventProcessor.process("mid-1", { ParsedSessionEvent e ->
+            e.type() == "session.record.verification_requested" && e.singleRecipient() == recipientId &&
+                    e.actorId() == actorId && e.sessionId() == 1L
         })
     }
 

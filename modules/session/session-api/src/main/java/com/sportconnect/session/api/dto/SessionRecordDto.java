@@ -25,4 +25,6 @@ public class SessionRecordDto {
     private Instant createdAt;
     private UUID updatedBy;
     private Instant updatedAt;
+    /** SESSION-72: the record's state as a ranking game (additive). */
+    private RecordRankingDto ranking;
 }

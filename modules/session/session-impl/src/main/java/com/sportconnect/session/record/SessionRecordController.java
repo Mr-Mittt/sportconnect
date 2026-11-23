@@ -55,7 +55,7 @@ public class SessionRecordController {
 
     @Operation(summary = "Apply a change set to a session's result records",
             description = "Adds, updates and deletes in one transaction (at most 50 operations, 64 KB). "
-                    + "Only while the session is ONGOING or COMPLETED and no later than 24 hours after it "
+                    + "Only while the session is SCHEDULED, ONGOING or COMPLETED (SESSION-72) and no later than 24 hours after it "
                     + "ended. Concurrency never errors: the later request wins, an update of a deleted "
                     + "record restores it under a new id, deleting a gone record does nothing. A bad "
                     + "record is refused alone (status REJECTED with its errorCode) and the valid ones are stored; "
@@ -77,5 +77,46 @@ public class SessionRecordController {
         RecordChangeSetResponse response = sessionRecordService.applyChanges(
                 sessionId, SecurityUtils.extractUserId(authentication), request);
         return ResponseEntity.ok(ApiResponse.success("Records updated successfully", response));
+    }
+
+    @Operation(summary = "Propose a record as a ranking game",
+            description = "Only a JOINED participant, while the session is SCHEDULED, ONGOING or COMPLETED and no later than "
+                    + "24 hours after it ended. The record must be valid and either rankable (a complete score with the first "
+                    + "team ahead) or a planned game with no score yet. Proposing again changes nothing. Tells every other "
+                    + "active player named in the record. Returns the record with its ranking state.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Proposed (or already proposed)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "SESSION_RECORD_NOT_ALLOWED or SESSION_RECORD_RANKING_PROPOSER_NOT_JOINED"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "SESSION_NOT_FOUND or SESSION_RECORD_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "SESSION_RECORD_NOT_LOGGABLE, SESSION_RECORD_WINDOW_CLOSED, SESSION_RECORD_RANKING_NOT_AVAILABLE or SESSION_RECORD_RANKING_NOT_RANKABLE (errorParams.reason)")
+    })
+    @PostMapping("/{recordId}/ranking-request")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<SessionRecordDto>> requestRanking(
+            @PathVariable Long sessionId, @PathVariable Long recordId, Authentication authentication) {
+        SessionRecordDto record = sessionRecordService.requestRanking(
+                sessionId, recordId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success("Ranking game proposed", record));
+    }
+
+    @Operation(summary = "Confirm a proposed ranking game",
+            description = "Only a player named in the record, in the same window as the proposal; the record must be proposed "
+                    + "and rankable (a planned game with no score cannot be confirmed). Confirming again does nothing. "
+                    + "Returns the record with its ranking state.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Confirmed (or already confirmed)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Not authenticated"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "SESSION_RECORD_NOT_ALLOWED or SESSION_RECORD_VERIFY_NOT_A_PLAYER"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "SESSION_NOT_FOUND or SESSION_RECORD_NOT_FOUND"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "SESSION_RECORD_NOT_LOGGABLE, SESSION_RECORD_WINDOW_CLOSED, SESSION_RECORD_RANKING_NOT_AVAILABLE, SESSION_RECORD_NOT_PROPOSED or SESSION_RECORD_RANKING_NOT_RANKABLE")
+    })
+    @PostMapping("/{recordId}/verify")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<SessionRecordDto>> verify(
+            @PathVariable Long sessionId, @PathVariable Long recordId, Authentication authentication) {
+        SessionRecordDto record = sessionRecordService.verify(
+                sessionId, recordId, SecurityUtils.extractUserId(authentication));
+        return ResponseEntity.ok(ApiResponse.success("Ranking game confirmed", record));
     }
 }
