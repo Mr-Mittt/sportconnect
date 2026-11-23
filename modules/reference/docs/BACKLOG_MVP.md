@@ -35,8 +35,9 @@ each names its REF prerequisite:
 
 | # | Ticket | Title | Status |
 |---|---|---|---|
-| 1 | [REF-3](MVP/REF-3_VIETNAM_PROVINCE_DATA_REFRESH.md) | Refresh Vietnam's regions and boundaries to the current province list (63 → 34 merger) | `TODO` |
-| 2 | [REF-4](MVP/REF-4_SEED_REMAINING_COUNTRIES.md) | Seed the remaining ISO 3166-1 countries (REF-1 seeds Vietnam only; polygons already ship, rows only) | `TODO` |
+| 1 | [REF-4](MVP/REF-4_SEED_REMAINING_COUNTRIES.md) | Seed the remaining ISO 3166-1 countries (REF-1 seeds Vietnam only; polygons already ship, rows only) | `TODO` |
+
+**Moved to V1 (2026-11-23, owner, statistic and ranking design):** [REF-3](BACKLOG_V1.md) (the 63 to 34 province refresh): region rankings are keyed by region id, so the refresh waits until it can be planned together with the boards.
 
 ---
 

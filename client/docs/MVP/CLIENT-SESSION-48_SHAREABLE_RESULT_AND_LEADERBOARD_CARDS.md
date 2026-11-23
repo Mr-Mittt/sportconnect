@@ -9,3 +9,5 @@ Share a standalone session's result (SH-2) and, after the statistics and boards 
 **Out of scope:** Anything that needs the statistics before they exist.
 
 **Tests:** Vitest and a visual check.
+
+**Note (2026-11-23, `/feature` session "statistic and ranking", `modules/session/docs/STATISTIC_RANKING_DESIGN.md`):** the group-only note of 2026-11-17 is superseded; this ticket now reads the history and counters of SESSION-53 and is revisited when picked up.

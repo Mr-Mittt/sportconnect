@@ -11,3 +11,5 @@ Season create and list for admins, the KPI target and each player's progress, an
 **Out of scope:** The server side (SESSION-55).
 
 **Tests:** Vitest and a scoped e2e.
+
+**Note (2026-11-23, `/feature` session "statistic and ranking", `modules/session/docs/STATISTIC_RANKING_DESIGN.md`):** the group-only note of 2026-11-17 is superseded; this ticket now reads the history and counters of SESSION-53 and is revisited when picked up.

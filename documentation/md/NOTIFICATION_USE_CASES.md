@@ -205,3 +205,10 @@ When a member creates a group session, the audience they chose is told: every ot
 **Source:** the owner's answer while planning the group sessions ("owner/admin can cancel a regular session -> notify configured members").
 
 A cancel told nobody before. Now cancelling a group session (by its creator while still a member, or by a group owner or admin) notifies its audience (all members, or the chosen ones who are still members) and everyone still `JOINED`, except the person who cancelled. Own type `session.group.cancelled`, actor = who cancelled. Deactivated accounts are skipped. A standalone session's cancel is unchanged (still silent), as are the automatic cancels (a `PREPARING` session whose start passed). The bulk cancel when generation is turned off, a configuration is deleted or the mode is switched (SESSION-GROUP-6) uses the same event. Built 2026-11-19 (SESSION-GROUP-1); the client text is CLIENT-GROUP-SESSION-3.
+
+### NOTIF-16 · A player proposes a game as a ranking game
+**Date added:** 2026-11-23
+**Status:** `DECIDED` (2026-11-23, owner, `/feature` statistic and ranking; built by SESSION-72)
+**Source:** the owner's answer while planning the statistics ("when a player proposes a game, the other players receive a notification").
+
+When someone proposes a record as a ranking game, every other player named in it who is still active gets a notification (new type `session.record.verification.requested`, client text and route in CLIENT-SESSION-54), one per player per proposal; the existing aggregation keeps one unread notification per recipient and session. The proposer is not notified, and a deactivated player is skipped (a new interaction). Not decided: whether a game becoming verified, or a player's confirmation, should notify the proposer (candidate, not built); and the access-request notification of SESSION-74 (to be logged at its pickup). Design: `modules/session/docs/STATISTIC_RANKING_DESIGN.md`.

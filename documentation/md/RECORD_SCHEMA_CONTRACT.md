@@ -81,3 +81,9 @@ The session detail's Result section shows a scoreboard of the whole session abov
 ## Where it is edited
 
 Admin: the "Record schema" section of the sport detail at `/admin/sports/:sportId` (SPORT-18), the same generic JSON editor as the profile and session attributes. The server validates only `maxRecords` and the 16 KB size; the editor shows a non-blocking note when `parseRecordSchema` cannot read the typed document (the Results section would stay hidden).
+
+## Planned (2026-11-23, SESSION-53): the server now reads part of the schema
+
+The statistics engine (`modules/session/docs/STATISTIC_RANKING_DESIGN.md`) makes the server read `record.data` (type, `playersPerSide`, `score.slot`) when it counts a session after its 24-hour guard, and two new optional blocks, `record.statistics` (metrics with SUM, MAX or MIN, derived formulas, combo size) and `record.ranking` (sort keys, minimum games), so the same engine serves every sport; one reader per record type (`COMPETITIVE` first). A record that fails the reader is ignored by the statistics with a reason and is never rejected at write time. A shared fixture of valid and invalid records is run by the client's Vitest and the server's Spock so the two readers cannot drift. This section is filled in with the final contract when SESSION-53 is built.
+
+`record.ranking.sort` has **at most three keys** (each a core counter, a metric or a derived key): the ranking projection stores three sort values per board entry (SESSION-54), and the player's name is only the final tiebreak when listing and is not stored. More than three keys are refused or dropped when the schema is saved.
