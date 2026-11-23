@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
+import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RecordAddOperation;
@@ -11,9 +12,11 @@ import com.sportconnect.session.api.dto.RecordChangeSetRequest;
 import com.sportconnect.session.api.dto.RecordChangeSetResponse;
 import com.sportconnect.session.api.dto.RecordOperationResult;
 import com.sportconnect.session.api.dto.RecordOperationStatus;
+import com.sportconnect.session.api.dto.RecordRankingDto;
 import com.sportconnect.session.api.dto.RecordUpdateOperation;
 import com.sportconnect.session.api.dto.SessionRecordDto;
 import com.sportconnect.session.api.dto.SessionStatus;
+import com.sportconnect.session.api.event.SessionRecordVerificationRequestedEvent;
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
 import com.sportconnect.session.api.service.SessionRecordService;
 import com.sportconnect.session.entity.Session;
@@ -41,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -82,6 +86,9 @@ public class SessionRecordServiceImpl implements SessionRecordService {
     private final CommentService commentService;
     private final UserService userService;
     private final SessionOutboxWriter sessionOutboxWriter;
+    private final SessionRecordVerificationRepository verificationRepository;
+    private final RecordReaders readers;
+    private final RecordRankingSupport rankingSupport;
 
     /** Replaceable in tests; not a constructor dependency. */
     private Clock clock = Clock.systemUTC();
@@ -94,8 +101,8 @@ public class SessionRecordServiceImpl implements SessionRecordService {
     @Override
     @Transactional(readOnly = true)
     public List<SessionRecordDto> getRecords(Long sessionId, UUID callerId) {
-        requireAccess(sessionId, callerId);
-        return toDtos(recordRepository.findBySessionIdOrderByIdAsc(sessionId));
+        Session session = requireAccess(sessionId, callerId);
+        return toDtos(recordRepository.findBySessionIdOrderByIdAsc(sessionId), optionalSchema(session.getSportId()));
     }
 
     /**
@@ -112,7 +119,8 @@ public class SessionRecordServiceImpl implements SessionRecordService {
         Session session = requireAccess(sessionId, callerId);
         Instant now = clock.instant();
         requireLoggable(session, now);
-        int maxRecords = maxRecordsFor(session.getSportId());
+        Map<String, Object> schema = requireSchema(session.getSportId());
+        int maxRecords = maxRecordsOf(schema);
 
         List<RecordAddOperation> adds = orEmpty(request == null ? null : request.getAdd());
         List<RecordUpdateOperation> updates = orEmpty(request == null ? null : request.getUpdate());
@@ -190,6 +198,8 @@ public class SessionRecordServiceImpl implements SessionRecordService {
         List<RecordOperationResult> results = new ArrayList<>();
         List<Pending> pending = new ArrayList<>();
         List<SessionRecord> toDelete = new ArrayList<>();
+        // SESSION-72: proposed records whose content this change set changed: their players are asked to confirm again.
+        List<SessionRecord> reproposed = new ArrayList<>();
 
         for (int i = 0; i < adds.size(); i++) {
             RecordAddOperation add = adds.get(i);
@@ -226,9 +236,18 @@ public class SessionRecordServiceImpl implements SessionRecordService {
                         newRecord(sessionId, UUID.randomUUID(), update.getData(), callerId, now)));
                 continue;
             }
-            row.setData(new LinkedHashMap<>(update.getData()));
+            Map<String, Object> newData = new LinkedHashMap<>(update.getData());
+            boolean contentChanged = !newData.equals(row.getData());
+            row.setData(newData);
             row.setUpdatedBy(callerId);
             row.setUpdatedAt(now);
+            if (contentChanged) {
+                // SESSION-72: confirmations are tied to the revision they confirmed, so this makes them stale.
+                row.setRevision(row.getRevision() + 1);
+                if (row.getRankingRequestedAt() != null) {
+                    reproposed.add(row);
+                }
+            }
             results.add(result(null, update.getId(), row.getId(), RecordOperationStatus.UPDATED));
         }
         for (Long id : deleteIds) {
@@ -270,13 +289,19 @@ public class SessionRecordServiceImpl implements SessionRecordService {
         if (changedAny) {
             announceChange(session, callerId);
         }
+        Optional<RecordTypeReader> reader = readers.forSchema(schema);
+        if (reader.isPresent()) {
+            for (SessionRecord row : reproposed) {
+                notifyPlayers(session, row, callerId, reader.get().read(schema, row.getData()));
+            }
+        }
 
         long refused = results.stream().filter(r -> r.getStatus() == RecordOperationStatus.REJECTED).count();
         log.info("Session {} records changed by {}: {} adds, {} updates, {} deletes, {} rejected",
                 sessionId, callerId, adds.size(), updates.size(), deleteIds.size(), refused);
         return RecordChangeSetResponse.builder()
                 .results(results)
-                .records(toDtos(recordRepository.findBySessionIdOrderByIdAsc(sessionId)))
+                .records(toDtos(recordRepository.findBySessionIdOrderByIdAsc(sessionId), schema))
                 .build();
     }
 
@@ -306,13 +331,16 @@ public class SessionRecordServiceImpl implements SessionRecordService {
                 "SESSION_RECORD_NOT_ALLOWED", "You don't have access to this session's results");
     }
 
-    /** Status {@code ONGOING}/{@code COMPLETED} and no later than 24 hours after {@code scheduledEndAt}. */
+    /**
+     * Status {@code SCHEDULED}, {@code ONGOING} or {@code COMPLETED} (SESSION-72: a game can be set up before the session
+     * starts; {@code PREPARING} and {@code CANCELLED} stay closed) and no later than 24 hours after {@code scheduledEndAt}.
+     */
     private void requireLoggable(Session session, Instant now) {
         SessionStatus status = session.getStatus();
-        if ((status != SessionStatus.ONGOING && status != SessionStatus.COMPLETED)
+        if ((status != SessionStatus.SCHEDULED && status != SessionStatus.ONGOING && status != SessionStatus.COMPLETED)
                 || session.getScheduledEndAt() == null) {
             throw new ConflictException("SESSION_RECORD_NOT_LOGGABLE",
-                    "Results can only be recorded in an ongoing or completed session", null);
+                    "Results can only be recorded in a scheduled, ongoing or completed session", null);
         }
         if (now.isAfter(session.getScheduledEndAt().plus(EDIT_WINDOW))) {
             throw new ConflictException("SESSION_RECORD_WINDOW_CLOSED",
@@ -321,20 +349,30 @@ public class SessionRecordServiceImpl implements SessionRecordService {
     }
 
     /**
-     * The sport's {@code maxRecords} (records one session may hold) from its result schema: default 100 if
-     * absent, clamped to 500. A sport without a result schema (or an inactive one) has no result logging.
+     * The sport's result schema; a sport without one (or an inactive one) has no result logging.
+     *
+     * @throws ConflictException {@code SESSION_RECORD_NOT_LOGGABLE}
      */
-    private int maxRecordsFor(Long sportId) {
-        Map<String, Object> schema;
-        try {
-            schema = sportService.getResultSchema(sportId);
-        } catch (ResourceNotFoundException e) {
-            schema = null;
-        }
+    private Map<String, Object> requireSchema(Long sportId) {
+        Map<String, Object> schema = optionalSchema(sportId);
         if (schema == null) {
             throw new ConflictException("SESSION_RECORD_NOT_LOGGABLE",
                     "Results cannot be recorded for this sport", null);
         }
+        return schema;
+    }
+
+    /** The sport's result schema, or {@code null} when it has none (reads still work, they just cannot be ranked). */
+    private Map<String, Object> optionalSchema(Long sportId) {
+        try {
+            return sportService.getResultSchema(sportId);
+        } catch (ResourceNotFoundException e) {
+            return null;
+        }
+    }
+
+    /** The schema's {@code maxRecords} (records one session may hold): default 100 if absent, clamped to 500. */
+    private static int maxRecordsOf(Map<String, Object> schema) {
         return clampedInt(schema.get("maxRecords"), DEFAULT_MAX_RECORDS, CEILING_MAX_RECORDS);
     }
 
@@ -430,7 +468,9 @@ public class SessionRecordServiceImpl implements SessionRecordService {
         return RecordOperationResult.builder().clientRef(clientRef).requestedId(requestedId).id(id).status(status).build();
     }
 
-    private static List<SessionRecordDto> toDtos(List<SessionRecord> records) {
+    /** The records as DTOs with their ranking state, resolved for all of them at once (one confirmations query). */
+    private List<SessionRecordDto> toDtos(List<SessionRecord> records, Map<String, Object> schema) {
+        Map<Long, RecordRankingDto> ranking = rankingSupport.rankingFor(records, schema);
         return records.stream()
                 .map(r -> SessionRecordDto.builder()
                         .id(r.getId())
@@ -439,8 +479,134 @@ public class SessionRecordServiceImpl implements SessionRecordService {
                         .createdAt(r.getCreatedAt())
                         .updatedBy(r.getUpdatedBy())
                         .updatedAt(r.getUpdatedAt())
+                        .ranking(ranking.get(r.getId()))
                         .build())
                 .toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public SessionRecordDto requestRanking(Long sessionId, Long recordId, UUID callerId) {
+        Session session = requireAccess(sessionId, callerId);
+        Instant now = clock.instant();
+        requireLoggable(session, now);
+        boolean joined = participantRepository.findBySessionIdAndUserId(sessionId, callerId)
+                .filter(p -> p.getStatus() == ParticipantStatus.JOINED).isPresent();
+        if (!joined) {
+            throw new ForbiddenException("SESSION_RECORD_RANKING_PROPOSER_NOT_JOINED",
+                    "Only a participant who joined the session can propose a ranking game", null);
+        }
+        Map<String, Object> schema = requireSchema(session.getSportId());
+        RecordTypeReader reader = requireRankingReader(schema);
+        SessionRecord record = lockRecord(sessionId, recordId);
+        RecordFacts facts = reader.read(schema, record.getData());
+        // A game with no score yet can be proposed (it is set up before play); one whose score is wrong cannot.
+        if (!facts.rankable() && !facts.isPlanned()) {
+            throw notRankable(facts.notRankableReason());
+        }
+        if (record.getRankingRequestedAt() == null) {
+            record.setRankingRequestedBy(callerId);
+            record.setRankingRequestedAt(now);
+            if (facts.rankable() && facts.players().contains(callerId)) {
+                saveConfirmation(record, callerId, now);
+            }
+            notifyPlayers(session, record, callerId, facts);
+            log.info("Record {} of session {} proposed as a ranking game by {}", recordId, sessionId, callerId);
+        }
+        return toDtos(List.of(record), schema).get(0);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    @Transactional
+    public SessionRecordDto verify(Long sessionId, Long recordId, UUID callerId) {
+        Session session = requireAccess(sessionId, callerId);
+        Instant now = clock.instant();
+        requireLoggable(session, now);
+        Map<String, Object> schema = requireSchema(session.getSportId());
+        RecordTypeReader reader = requireRankingReader(schema);
+        SessionRecord record = lockRecord(sessionId, recordId);
+        RecordFacts facts = reader.read(schema, record.getData());
+        if (!facts.valid() || !facts.players().contains(callerId)) {
+            throw new ForbiddenException("SESSION_RECORD_VERIFY_NOT_A_PLAYER",
+                    "Only a player named in the game can confirm it", null);
+        }
+        if (record.getRankingRequestedAt() == null) {
+            throw new ConflictException("SESSION_RECORD_NOT_PROPOSED",
+                    "This game has not been proposed as a ranking game", null);
+        }
+        if (!facts.rankable()) {
+            throw notRankable(facts.notRankableReason());
+        }
+        saveConfirmation(record, callerId, now);
+        log.info("Record {} of session {} confirmed by {}", recordId, sessionId, callerId);
+        return toDtos(List.of(record), schema).get(0);
+    }
+
+    /** The reader of this sport's records, when the sport lets them be ranked (it defines a score). */
+    private RecordTypeReader requireRankingReader(Map<String, Object> schema) {
+        return readers.forSchema(schema).filter(r -> r.supportsRanking(schema))
+                .orElseThrow(() -> new ConflictException("SESSION_RECORD_RANKING_NOT_AVAILABLE",
+                        "Ranking games are not available for this sport", null));
+    }
+
+    /** The record of this session, locked for the transaction ({@code SESSION_RECORD_NOT_FOUND} otherwise). */
+    private SessionRecord lockRecord(Long sessionId, Long recordId) {
+        return recordRepository.findOneForUpdate(sessionId, recordId)
+                .orElseThrow(() -> ResourceNotFoundException.coded("SESSION_RECORD_NOT_FOUND", "Record not found", null));
+    }
+
+    private static ConflictException notRankable(String reason) {
+        return new ConflictException("SESSION_RECORD_RANKING_NOT_RANKABLE",
+                "This game cannot be a ranking game yet", Map.of("reason", String.valueOf(reason)));
+    }
+
+    /**
+     * Stores the player's confirmation of the record's current revision. The caller holds the record's row lock, so two
+     * confirmations of one record never interleave; a confirmation already at this revision is left alone, an older one is
+     * overwritten.
+     */
+    private void saveConfirmation(SessionRecord record, UUID userId, Instant now) {
+        Optional<SessionRecordVerification> existing =
+                verificationRepository.findByRecordIdAndUserId(record.getId(), userId);
+        if (existing.isEmpty()) {
+            verificationRepository.save(SessionRecordVerification.builder()
+                    .recordId(record.getId()).userId(userId).revision(record.getRevision()).verifiedAt(now).build());
+        } else if (existing.get().getRevision() < record.getRevision()) {
+            existing.get().setRevision(record.getRevision());
+            existing.get().setVerifiedAt(now);
+            verificationRepository.save(existing.get());
+        }
+    }
+
+    /**
+     * Asks every other player named in the record to confirm it: one {@code session.record.verification_requested}
+     * outbox event per active player, in this transaction. The actor is never notified, and a deactivated player is
+     * skipped (a new interaction, CLAUDE.md account lifecycle).
+     */
+    private void notifyPlayers(Session session, SessionRecord record, UUID actorId, RecordFacts facts) {
+        if (!facts.valid()) {
+            return;
+        }
+        Set<UUID> others = facts.players().stream()
+                .filter(p -> !p.equals(actorId))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (others.isEmpty()) {
+            return;
+        }
+        Set<UUID> active = userService.getActiveUserIds(others);
+        for (UUID recipient : others) {
+            if (active.contains(recipient)) {
+                sessionOutboxWriter.record("session.record.verification_requested",
+                        SessionRecordVerificationRequestedEvent.builder()
+                                .sessionId(session.getId())
+                                .recordId(record.getId())
+                                .actorId(actorId)
+                                .recipientUserId(recipient)
+                                .build());
+            }
+        }
     }
 
     private static <T> List<T> orEmpty(List<T> list) {

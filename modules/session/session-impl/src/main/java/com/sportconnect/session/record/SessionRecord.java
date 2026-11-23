@@ -61,4 +61,20 @@ public class SessionRecord {
 
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    /** SESSION-72: who proposed this game as a ranking game; null for a normal game. Set once, kept across edits. */
+    @Column(name = "ranking_requested_by")
+    private UUID rankingRequestedBy;
+
+    /** SESSION-72: when it was proposed; null for a normal game. */
+    @Column(name = "ranking_requested_at")
+    private Instant rankingRequestedAt;
+
+    /**
+     * SESSION-72: raised by every update that changes {@link #data}. A confirmation counts only while its revision equals
+     * this one, so an edit makes the confirmations stale without writing to them.
+     */
+    @Builder.Default
+    @Column(name = "revision", nullable = false)
+    private Integer revision = 1;
 }

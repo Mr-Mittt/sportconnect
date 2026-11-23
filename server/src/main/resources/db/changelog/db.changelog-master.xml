@@ -268,5 +268,7 @@
     <include file="db/changelog/changes/V101__cancelled_sessions_get_an_end_time.sql" relativeToChangelogFile="false"/>
     <!-- LOC-5: venues gain nullable country_id / region_id (reference ids, no FK), derived from coordinates; backfilled by LocationGeoBackfillRunner -->
     <include file="db/changelog/changes/V102__add_country_region_to_locations.sql" relativeToChangelogFile="false"/>
+    <!-- SESSION-72: ranking games: session_records gain ranking_requested_by/at and revision; session_record_verifications holds one confirmation per player per record -->
+    <include file="db/changelog/changes/V103__session_record_ranking.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

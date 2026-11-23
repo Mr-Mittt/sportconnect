@@ -3,7 +3,7 @@
 **Status:** Draft for the BA, 2026-11-23. Kept up to date as each ticket of the chain is built (section 5); when the chain is finished it goes back to the BA for the final app behaviour, the same way `BA_GAME_LOGGING_DELTA.md` did for game logging.
 **Compares:** the statistics, leaderboard, season, KPI, adjustment, guest, sharing and non-functional text of `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards (revised 2026-11-23).md` against the owner's specification `GROUP_AND_REGION_STATISTIC_RANKING.md` and the design `STATISTIC_RANKING_DESIGN.md` (decisions of 2026-11-23).
 **Tickets:** SESSION-72, SESSION-53, SESSION-73, SESSION-54 (server), CLIENT-SESSION-54, 41, 42 (client), prerequisite LOC-5; later SESSION-52, 55, 56 and CLIENT-SESSION-40, 43, 44, 48; follow-ups SESSION-74 to 77, CLIENT-SESSION-55, 56.
-**Built so far: LOC-5 only (section 5).** Every other "as designed" below is a plan until section 5 says otherwise.
+**Built so far: LOC-5 and SESSION-72 (section 5).** Every other "as designed" below is a plan until section 5 says otherwise.
 
 How to read it: **Server** and **Client** say where the decision is enforced. "Update BA" is a suggested change to the BA text; "Confirm" needs a BA answer.
 
@@ -14,10 +14,10 @@ How to read it: **Server** and **Client** say where the decision is enforced. "U
 | New concept | Meaning | Where | Update BA |
 |---|---|---|---|
 | **Normal game** and **ranking game** | Every valid logged record is a normal game. A record with a complete score that **every player named in it has confirmed** is a ranking game. Only ranking games feed region and country boards | Server, Client | Add both terms and the verification flow (GL section) |
-| **Proposal** | Anyone who may log can propose a record as a ranking game; the other players are notified and confirm. A player with no region on their profile can propose but cannot confirm and is asked to add a region | Both | Add requirement rows GL-17 to GL-19 (below) |
-| **Verification** | Confirmation by each player of the record; editing a record clears it; it must happen inside the same 24-hour window as any change | Server | Add; **Confirm** the window (section 4, question 1) |
-| **Region and country leaderboards** | Boards across all groups and standalone sessions, ranking games only, only for a player whose profile region (country) equals the session location's region (country), singles and pairs. Visible to every signed-in user | Server, Client | Add to the Leaderboards section; the BA's LB-1 speaks only of group boards |
-| **Region snapshot** | A player's region and country are copied onto their confirmation when they confirm; a later move does not change old games | Server | Add; **Confirm** (section 4, question 3) |
+| **Proposal** | A `JOINED` participant of the session proposes a record as a ranking game, from the moment the session is scheduled (a game can be set up before the start, even with no score yet) until 24 hours after it ended; the other players are notified, and notified again when a proposed game is changed. No region is needed on anyone's profile | Both | Add requirement rows GL-17 to GL-19 (below) |
+| **Verification** | Confirmation by each player named in the record, once the score is complete; editing a record makes the confirmations stale (everyone confirms the new result again); it must happen inside the same 24-hour window as any change | Server | Add; **Confirm** the window (section 4, question 1) |
+| **Region and country leaderboards** | Boards across all groups and standalone sessions, ranking games only, for the region and the country **of the venue where the game was played**, singles and pairs. A player from another region who plays at a venue in region B is counted on region B's board. Visible to every signed-in user | Server, Client | Add to the Leaderboards section; the BA's LB-1 speaks only of group boards |
+| **Venue region** | A venue has a country and a region, found from its coordinates when it is created (LOC-5); a venue without coordinates, in open water or in a country that is not set up (only Vietnam is) has none, and its games feed no regional board. The player's own region is not used | Server | Add; **Confirm** (section 4, question 3) |
 | **Generic across sports** | The same engine serves every sport. A sport differs only by its schema and by the reader of its record type (a head-to-head match now; a per-player result such as running later). Adding a sport of an existing type is configuration | Server | Add to the template section: the template now also declares metrics, formulas, team-combination size and ranking order |
 | **Draws** | The engine counts draws as a fourth universal counter; they arrive with the draw rule (SESSION-59) | Server | Keep "draws deferred"; note the counter exists |
 | **Statistics appear after the 24-hour guard** | The server counts a session once its 24-hour change window has closed. The session's own scoreboard stays live | Server | State it in ST (section 2) and NF |
@@ -58,12 +58,12 @@ How to read it: **Server** and **Client** say where the decision is enforced. "U
 
 | ID (suggested) | Requirement | Priority |
 |---|---|---|
-| GL-17 | Any player who may log can propose a record as a ranking game. It needs a complete score, the sport must define a score, and the record must be inside the 24-hour window. The other players are notified | Must |
-| GL-18 | A player named in the record confirms it. Only a player with a region on the profile can confirm; without one the app asks them to add it. When every player has confirmed, the record is a ranking game | Must |
-| GL-19 | Changing a record (its players or content) clears the proposal and the confirmations. A record unconfirmed when the 24-hour window closes counts as a normal game | Must |
+| GL-17 | A participant who joined the session can propose a record as a ranking game while the session is scheduled, ongoing, or completed (within 24 hours of its end). A game can be proposed before it has a score. The other players are notified | Must |
+| GL-18 | A player named in the record confirms it once the score is complete (the first team ahead). When every player has confirmed its current content, the record is a ranking game. If the proposer is a player, their own confirmation is given with the proposal | Must |
+| GL-19 | Changing a record (its players or content) makes the confirmations stale: the proposal stays and every player confirms the changed game again, and is told to. A record not confirmed by every player when the 24-hour window closes counts as a normal game | Must |
 | ST-8 | Statistics are counted per session once its 24-hour window has closed; invalid records are ignored and the ignored ones are kept with a reason for the operator | Must |
 | ST-9 | Personal statistics cover all the player's games in every session; the group statistics cover that group's sessions and are counted once more per group | Must |
-| LB-10 | Region and country boards use ranking games only, only for a player whose region (country) matches the session location's, singles and pairs, visible to every signed-in user | Must |
+| LB-10 | Region and country boards use ranking games only, counted for the region and country of the venue where the game was played, singles and pairs, for every player in the game wherever they live, visible to every signed-in user | Must |
 | LB-11 | Ranks are calculated nightly and the board shows when. The group owner or admin can refresh the group board by hand, at most once an hour per sport; the app shows the countdown | Must |
 | LB-12 | A board shows a player only while their account is active; a player who left a group is not on its board | Must |
 | NF-9 | Statistics appear up to 24 hours after a session ends, plus up to a minute for the next scheduled pass | Proposed |
@@ -73,7 +73,7 @@ How to read it: **Server** and **Client** say where the decision is enforced. "U
 
 1. Is 24 hours the right window for verification (the same as editing), given statistics appear after it?
 2. Should a record the players disagree on (one refuses) show that refusal, or is "not confirmed" enough? (The design has no refusal.)
-3. A player's region is fixed when they confirm; if they move, old games keep the old region. Right?
+3. A game counts on the board of the region and country of its venue, not of the player's. A player from another region who plays there is on that board. Right? (This also means a group of friends can appear on any region's board by playing there; see question 4.)
 4. Region and country boards accept friends confirming each other's games, so they can be farmed. Is a later rule (a minimum number of different opponents) needed before the boards are public?
 5. Head-to-head (ST-2) is not in the first statistics release. Acceptable?
 6. A player's personal statistics are visible to others by default (low priority setting). Should the default be hidden?
@@ -85,6 +85,10 @@ How to read it: **Server** and **Client** say where the decision is enforced. "U
 Kept up to date as each ticket of the chain is built; each entry says what was built and what the BA text should now say.
 
 *(Written 2026-11-23 at design approval; entries below, newest first.)*
+
+**SESSION-72, ranking games: propose and confirm (built 2026-11-23, session).** A participant who joined a session can propose one of its games as a ranking game, and every player named in the game confirms it; when all have, it is a ranking game. The other players are notified when a game is proposed and again when a proposed game is changed. A confirmation covers the game as it was when confirmed: changing the game (its players or its score) makes everyone confirm it again, and the app shows how many have confirmed. A game can be set up from the moment the session is scheduled, even with no score yet (a *planned game*), and proposed then; confirming needs the score to be complete, with the first team ahead, so players confirm after the score is in. If the proposer is one of the players, proposing counts as their own confirmation. A game is open for proposing and changing until 24 hours after the session ends. No region is needed on anyone's profile to propose or confirm. Games can now be logged in a scheduled session (before, only ongoing or completed).
+
+What the BA text should now say: GL-17 to GL-19 as updated in section 3 (a joined participant proposes; planned games before the start; confirmations go stale on a change). The statistics later ignore a game with no complete score, count a game with a score and no full confirmation as a normal game, and count a verified one on the board of its venue's region and country. **Confirm:** (a) a player's tap confirms the game as it is when the request runs, so a player can confirm a change made a moment earlier that they had not yet seen; the planned fix (confirm the version the player saw) is SESSION-RANKING-RECORD-1, is that acceptable until then? (b) a player who leaves the session after being named in a game: the statistics will ignore a game naming someone no longer in the session (to be built in SESSION-53), is that right?
 
 **LOC-5, a venue knows its country and region (built 2026-11-23, location).** A venue gets a country and a region from its coordinates when it is created, and venues that already existed are linked once when the server first starts. It uses the offline boundary data (the same lookup the sign-up form uses), so no network call and no one types it. A venue with no coordinates, in open water, or in a country that is not set up yet (today only Vietnam is, and regions exist only for Vietnam) has none. A failed lookup never stops a venue from being saved.
 

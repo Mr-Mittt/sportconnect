@@ -486,7 +486,20 @@ CREATE TABLE IF NOT EXISTS session_records (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by UUID NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    -- SESSION-72 (V103): the proposal as a ranking game, and the revision confirmations are tied to
+    ranking_requested_by UUID,
+    ranking_requested_at TIMESTAMP WITH TIME ZONE,
+    revision INTEGER NOT NULL DEFAULT 1,
     CONSTRAINT uq_session_records_request UNIQUE (session_id, client_request_id)
+);
+
+-- SESSION-72 (V103): one confirmation per player per record; deleting a record deletes its confirmations
+CREATE TABLE IF NOT EXISTS session_record_verifications (
+    record_id BIGINT NOT NULL REFERENCES session_records (id) ON DELETE CASCADE,
+    user_id UUID NOT NULL,
+    revision INTEGER NOT NULL,
+    verified_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (record_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS notifications (

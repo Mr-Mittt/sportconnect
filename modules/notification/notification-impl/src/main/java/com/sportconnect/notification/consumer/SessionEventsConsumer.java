@@ -13,6 +13,7 @@ import com.sportconnect.session.api.event.SessionJoinRequestCreatedEvent;
 import com.sportconnect.session.api.event.SessionJoinRequestRejectedEvent;
 import com.sportconnect.session.api.event.SessionParticipantJoinedEvent;
 import com.sportconnect.session.api.event.SessionParticipantLeftEvent;
+import com.sportconnect.session.api.event.SessionRecordVerificationRequestedEvent;
 import com.sportconnect.session.api.event.SessionRecordsChangedEvent;
 import com.sportconnect.session.api.event.SessionShareCreatedEvent;
 import com.sportconnect.session.api.event.SessionStatusStartedEvent;
@@ -112,6 +113,12 @@ public class SessionEventsConsumer {
                 SessionRecordsChangedEvent e = objectMapper.readValue(body, SessionRecordsChangedEvent.class);
                 yield ParsedSessionEvent.fanOut(routingKey, e.getSessionId(), e.getActorId(),
                         COMMENT_RECIPIENT_STATUSES, ANY_SESSION_STATUS);
+            }
+            case "session.record.verification_requested" -> {
+                // SESSION-72 / NOTIF-16: a player proposed a game as a ranking game; the recipient is a player named in
+                // it who has to confirm (single recipient, the producer already dropped deactivated players).
+                SessionRecordVerificationRequestedEvent e = objectMapper.readValue(body, SessionRecordVerificationRequestedEvent.class);
+                yield ParsedSessionEvent.single(routingKey, e.getSessionId(), e.getActorId(), e.getRecipientUserId());
             }
             case "session.details.updated" -> {
                 SessionUpdatedEvent e = objectMapper.readValue(body, SessionUpdatedEvent.class);
