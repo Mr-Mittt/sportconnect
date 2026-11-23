@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-22 (CLIENT-GROUP-UI-1 done)
+**Last updated:** 2026-11-23 (statistic and ranking chain designed: CLIENT-SESSION-54, 55, 56 filed; CLIENT-SESSION-41 and 42 rewritten)
 
 ---
 
@@ -77,12 +77,15 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 9 | [BASELINE-UPDATE-1](MVP/BASELINE-UPDATE-1_VISUAL_BASELINES_FOR_THIS_RELEASE.md) | Standing ticket: the visual baselines each client ticket of this release expects to change (now CLIENT-SESSION-34 and SESSION-49), regenerated through the `client-visual` workflow and `/updatebaseline` before the release; then closed and `BASELINE-UPDATE-2` filed | `TODO` |
 | 10 | [SPORT-17](MVP/SPORT-17_SEEDED_ATTRIBUTE_DEFAULT_READS_AS_A_USER_EDIT.md) | A schema default seeded by `SportAttributesFields` reads as a user edit in the profile editor and the session detail edit section (same defect as the create-session form fixed in CLIENT-SESSION-34; attributes customise each sport app-wide, so audit every host) | `TODO` |
 | 11 | [ACCOUNT-8](MVP/ACCOUNT-8_REQUIRE_FIRST_NAME_IN_ACCOUNT_SETTINGS.md) | First name is required when editing the profile in account settings (from SESSION-49; pairs with auth A38) | `TODO` |
-| 14 | [CLIENT-SESSION-40](MVP/CLIENT-SESSION-40_GUESTS_IN_THE_RESULT_DIALOG.md) | Add a guest and pick guests in the result dialog | `TODO` |
-| 15 | [CLIENT-SESSION-41](MVP/CLIENT-SESSION-41_RESULT_STATISTICS_SCREENS.md) | Statistics screens: player totals and head-to-head | `TODO` |
-| 16 | [CLIENT-SESSION-42](MVP/CLIENT-SESSION-42_GROUP_LEADERBOARD_SCREENS.md) | Group leaderboard screens and the ranking-order settings | `TODO` |
-| 17 | [CLIENT-SESSION-43](MVP/CLIENT-SESSION-43_SEASON_KPI_AND_RECAP_SCREENS.md) | Season management, KPI progress and the season recap | `TODO` |
-| 18 | [CLIENT-SESSION-44](MVP/CLIENT-SESSION-44_POINT_ADJUSTMENT_SCREENS.md) | Point adjustment dialog and adjustment history | `TODO` |
+| 14 | [CLIENT-SESSION-54](MVP/CLIENT-SESSION-54_PROPOSE_AND_CONFIRM_RANKING_GAMES.md) | Statistic and ranking chain (design `modules/session/docs/STATISTIC_RANKING_DESIGN.md`, 2026-11-23): propose a game as a ranking game, confirm it, the "Add region" dialog and the notification text (needs SESSION-72) | `TODO` |
+| 15 | [CLIENT-SESSION-41](MVP/CLIENT-SESSION-41_RESULT_STATISTICS_SCREENS.md) | My statistics and my games history (rewritten 2026-11-23; needs SESSION-73, after review gate 1) | `TODO` |
+| 16 | [CLIENT-SESSION-42](MVP/CLIENT-SESSION-42_GROUP_LEADERBOARD_SCREENS.md) | Boards: the group's, the region's and the country's, with the owner/admin refresh countdown (rewritten 2026-11-23; needs SESSION-54, after review gate 2) | `TODO` |
+| 17 | [CLIENT-SESSION-40](MVP/CLIENT-SESSION-40_GUESTS_IN_THE_RESULT_DIALOG.md) | Add a guest and pick guests in the result dialog | `TODO` |
+| 18 | [CLIENT-SESSION-43](MVP/CLIENT-SESSION-43_SEASON_KPI_AND_RECAP_SCREENS.md) | Season management, KPI progress and the season recap | `TODO` |
+| 19 | [CLIENT-SESSION-44](MVP/CLIENT-SESSION-44_POINT_ADJUSTMENT_SCREENS.md) | Point adjustment dialog and adjustment history | `TODO` |
 | 22 | [CLIENT-SESSION-48](MVP/CLIENT-SESSION-48_SHAREABLE_RESULT_AND_LEADERBOARD_CARDS.md) | Shareable images: session result card, leaderboard and head-to-head cards (BA SH-1, SH-2) | `TODO` |
+| 23 | [CLIENT-SESSION-55](MVP/CLIENT-SESSION-55_STATISTICS_VISIBILITY_SETTING_AND_ACCESS_REQUESTS.md) | Low priority: the "who can see my statistics" setting and asking for access (needs SESSION-74) | `TODO` |
+| 24 | [CLIENT-SESSION-56](MVP/CLIENT-SESSION-56_HEAD_TO_HEAD_SCREEN.md) | Head-to-head screen and best partners (BA ST-2, ST-6; needs SESSION-76 and CLIENT-SESSION-41) | `TODO` |
 | 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request`; **2026-11-18: also `matches-journey` step 8c (Discover filters, failed in two large runs, passes alone) and 7 `home-feed-journey` sign-in timeouts under load, folded in** | `TODO` |
 | 26 | [CLIENT-MOBILE-SUPPORT-1](MVP/CLIENT-MOBILE-SUPPORT-1_MOBILE_VIEWPORT_SUPPORT.md) | Mobile viewport support: a **standing collector** (like `BASELINE-UPDATE-1`) for mobile-viewport problems noticed while building other client tickets, each added as a row (after a duplicate check) and solved together later; first points (owner, 2026-11-20, not investigated): less horizontal padding on the main div under the root, horizontal group tabs under the banner (selected = icon + label, the rest icon only), no horizontal scroll from the main navigator | `TODO` |
 | 27 | [CLIENT-SESSION-53](MVP/CLIENT-SESSION-53_SHARE_DIALOG_API_SEARCH_FOR_FRIENDS_AND_GROUP_MEMBERS.md) | Share dialog: search through the API for friends and group members instead of filtering only what is loaded (the group half needs nothing new, the friend half needs U29); follow-up of CLIENT-GROUP-SESSION-3 | `TODO` |

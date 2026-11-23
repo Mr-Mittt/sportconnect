@@ -1,13 +1,11 @@
-# CLIENT-SESSION-41 · Statistics screens: player totals and head-to-head
+# CLIENT-SESSION-41 · Statistics screens: my statistics and my games
 
 **Status:** `TODO`
-**Type:** Feature · **Depends on:** SESSION-53 ·
-**Filed:** 2026-11-12, Filed 2026-11-12 by the `/feature` session "game logging" (BA document `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards.md`; design: `modules/session/docs/SESSION_RECORDS_DESIGN.md`).
+**Type:** Feature · **Depends on:** SESSION-73 (and review gate 1)
+**Filed:** 2026-11-12 as "player totals and head-to-head"; **rewritten 2026-11-23** by the `/feature` session "statistic and ranking" (`modules/session/docs/STATISTIC_RANKING_DESIGN.md`). The earlier group-only note and the scope picker (all-time, season, session) are superseded; head-to-head moved to CLIENT-SESSION-56.
 
-Player totals and a head-to-head screen that opens fast on a phone, with the scope picker (all-time, season, one session). En/vi copy.
+The signed-in player's statistics for a sport: all games and ranking games side by side (normal derived), their pairs, the columns the sport's schema names, the "as of" time, and their games history newest first (paged), each with its ranking badge. Where it lives (a profile section or its own page) is decided at pickup with the owner. The group's member statistics screen shares the table component and arrives in CLIENT-SESSION-42. Statistics appear up to 24 hours after a session ends, so the screen says so when a recent session is missing. en/vi.
 
-**Group-only (owner, 2026-11-17):** this exists for group sessions only. The standalone-session chain is finished first (SESSION-65, 66, 67, NTF-8 and their client pairs), then the group chain; a standalone session keeps only its own scoreboard (CLIENT-GL-49).
-
-**Out of scope:** The server side (SESSION-53).
+**Out of scope:** other players' statistics (SESSION-74, CLIENT-SESSION-55), head-to-head, seasons.
 
 **Tests:** Vitest and a scoped e2e.

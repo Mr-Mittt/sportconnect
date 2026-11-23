@@ -9,3 +9,5 @@ Deferred by the BA until after the leaderboard is implemented: a sport template 
 **Out of scope:** Tournaments and brackets.
 
 **Tests:** Decided at pickup.
+
+**Generic statistics note (2026-11-23):** Under the generic statistics design (`STATISTIC_RANKING_DESIGN.md` section 3) a draw is the outcome `DRAW` produced by the `COMPETITIVE` reader and counted in the core counter `draws`; best-of-three is a record-type or schema decision for the reader, not a change of the engine.

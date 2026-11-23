@@ -9,3 +9,6 @@ A host adds a guest by name to a session (no account); guests can be picked in r
 **Out of scope:** The client (CLIENT-SESSION-40), statistics and boards (they only read the flag).
 
 **Tests:** Spock plus an IT for the add-guest permission (host and group admin only) and the exclusion from group statistics once they exist.
+
+**Rewritten at the 2026-11-23 design (`/feature` session "statistic and ranking", `modules/session/docs/STATISTIC_RANKING_DESIGN.md`):** this ticket now reads the history and counters of SESSION-53 (the group-only note of 2026-11-17 is superseded: games of standalone sessions count in personal statistics, and group boards use group sessions). Its detailed design is revisited when it is picked up, after SESSION-54.
+A game with a guest cannot be proposed as a ranking game (SESSION-72) and is ignored by the statistics engine with the reason `GUEST` (SESSION-53) unless a group setting turns it on.

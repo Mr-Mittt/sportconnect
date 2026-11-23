@@ -52,3 +52,7 @@ new columns.
 
 **Out of scope:** filtering/searching venues by country or region; a client change; an update path for a venue's
 country/region (same "no update path yet" stance as LOC-4's timezone); admin tooling to correct a wrong derivation.
+
+## Needed by the statistics chain (2026-11-23)
+
+SESSION-53 (the statistics engine, `modules/session/docs/STATISTIC_RANKING_DESIGN.md`) counts a ranking game toward a region or country board only when the player's region or country, copied when they confirmed, equals the **venue's**. It therefore needs `locations.country_id` and `region_id` and a batch read of them through `location-api` (add `getLocationsByIds`-style access to the response fields if it does not exist). Build this ticket before SESSION-53. REF-3 (the 63 to 34 province refresh) moved to the reference V1 backlog on the same day, so the region ids stay stable meanwhile.

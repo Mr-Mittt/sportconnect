@@ -1,13 +1,9 @@
-# CLIENT-SESSION-42 · Group leaderboard screens and the ranking-order settings
+# CLIENT-SESSION-42 · Boards: the group's, the region's and the country's
 
 **Status:** `TODO`
-**Type:** Feature · **Depends on:** SESSION-54 ·
-**Filed:** 2026-11-12, Filed 2026-11-12 by the `/feature` session "game logging" (BA document `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards.md`; design: `modules/session/docs/SESSION_RECORDS_DESIGN.md`).
+**Type:** Feature · **Depends on:** SESSION-54 (and review gate 2), CLIENT-SESSION-41
+**Filed:** 2026-11-12 as "Group leaderboard screens and the ranking-order settings"; **rewritten 2026-11-23** by the `/feature` session "statistic and ranking" (`modules/session/docs/STATISTIC_RANKING_DESIGN.md`). The ranking-order admin settings and the season picker are superseded (the order is the sport's, a group's own order and seasons are later).
 
-Single and Pair boards for a group, the season picker, and the admin settings for the ranking order and the minimum games. En/vi copy.
-
-**Group-only (owner, 2026-11-17):** this exists for group sessions only. The standalone-session chain is finished first (SESSION-65, 66, 67, NTF-8 and their client pairs), then the group chain; a standalone session keeps only its own scoreboard (CLIENT-GL-49).
-
-**Out of scope:** The server side (SESSION-54).
+Single and Pair boards for the group (members), and for the player's region and country (everyone signed in), with the viewer's own row, the sport's columns, the "ranked at" time, and for the group owner or admin a **Refresh ranking** button that shows a countdown while the one-hour cooldown runs (`STATS_RANKING_COOLDOWN`, `retryAfterSeconds`). A player with no region sees the country board and a prompt to add a region. en/vi, error copy and an I18N-4 row.
 
 **Tests:** Vitest and a scoped e2e.

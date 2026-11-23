@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/session/session-impl`
-**Last updated:** 2026-11-20 (SESSION-GROUP-12 done)
+**Last updated:** 2026-11-23 (statistic and ranking chain designed: SESSION-72, 73, 74 to 77 filed; SESSION-52 to 56 rewritten; design `STATISTIC_RANKING_DESIGN.md`)
 
 ---
 
@@ -27,21 +27,27 @@
 | 6 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
 | 7 | [SESSION-48](MVP/SESSION-48_REMOVE_DESCRIPTION_FROM_THE_SESSION_API.md) | Remove description from the session API (deferred from CLIENT-SESSION-34; depends on it) | `TODO` |
 | 8 | [SESSION-GL-51](MVP/SESSION-GL-51_SESSION_THREAD_CHAT_COMMANDS_FOR_RESULTS.md) | Chat commands `:add`, `:del`, `:upd` in the session post thread | `POSTPONED` (2026-11-14, see CLIENT-GL-39) |
-| 9 | [SESSION-52](MVP/SESSION-52_GUESTS_IN_SESSION_RESULTS.md) | Guests in session results (BA GU-1 to GU-4) | `TODO` |
-| 10 | [SESSION-53](MVP/SESSION-53_RESULT_STATISTICS.md) | Result statistics: per player, head-to-head, pair stats, scope (BA ST-1 to ST-7) | `TODO` |
-| 11 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Group leaderboards and the admin-set ranking order (BA LB-1 to LB-9) | `TODO` |
-| 12 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `TODO` |
-| 13 | [SESSION-56](MVP/SESSION-56_POINT_ADJUSTMENTS.md) | Admin point adjustments with a reason and history (BA AD-1 to AD-4) | `TODO` |
-| 14 | [SESSION-58](MVP/SESSION-58_PERFORMANCE_RECORDS_FOR_RUNNING_CYCLING_SWIMMING.md) | A RECORD kind for sports without a head-to-head result (running, cycling, swimming) | `TODO` |
-| 15 | [SESSION-59](MVP/SESSION-59_DRAWS_AND_BEST_OF_THREE_RESULTS.md) | Draws and best-of-three results | `TODO` |
-| 16 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
-| 17 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
-| 18 | [SESSION-62](MVP/SESSION-62_REJECT_A_SESSION_START_IN_THE_PAST.md) | Reject a session start in the past (coded 400 `SESSION_START_IN_PAST`, 5-minute grace) on create and on a start change; the client already restricts it in CLIENT-GL-38 | `TODO` |
-| 19 | [SESSION-68](MVP/SESSION-68_CREATE_SESSION_INVITEES_MUST_BE_FRIENDS_AND_ACTIVE.md) | `createSession` invitees must be friends and active: `inviteeIds` are checked for neither today, so a stranger or a deactivated account becomes an `INVITED` row and gets a notification; skip silently (default) or refuse, decided at pickup (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
-| 20 | [SESSION-GROUP-7](MVP/SESSION-GROUP-7_SCHEDULED_SESSION_JOBS_HAVE_NO_MULTI_POD_LOCK.md) | The three scheduled session jobs (start ongoing, close past, cancel unprepared) run on every server instance with no lock: two instances can start the same session and tell its players twice (found in the SESSION-GROUP-5 queue review) | `TODO` |
-| 21 | [SESSION-GROUP-8](MVP/SESSION-GROUP-8_PRUNE_OLD_GENERATION_QUEUE_ROWS.md) | Prune the finished (`DONE`, `IGNORED`) rows of `group_session_generation_queue` after about 30 days; they are kept for ever today (depends on SESSION-GROUP-5) | `TODO` |
-| 22 | [SESSION-GROUP-9](MVP/SESSION-GROUP-9_SCALE_THE_GENERATION_RUNNERS_WITH_THE_BACKLOG.md) | Scale the generation runners with the backlog: the fixed single worker starts more runners when the queue is crowded, up to a configured maximum in parallel (depends on SESSION-GROUP-5's hardening) | `TODO` |
-| 23 | [SESSION-GROUP-11](MVP/SESSION-GROUP-11_SOLID_FIVE_PER_DAY_LIMIT_TRANSFER_HOST_BEFORE_DEACTIVATING_AND_CANCEL_ONLY_THE_OLD_MODE.md) | Close the three known limits of the group-session chain: a 5-per-day limit that holds under a race, transfer the group before the host deactivates, and a mode switch that cancels only the old mode's scheduled sessions (client contract change for CLIENT-GROUP-SESSION-6) | `TODO` |
+| 9 | [SESSION-72](MVP/SESSION-72_RANKING_GAMES_PROPOSE_AND_VERIFY.md) | Ranking games, first of the statistic and ranking chain (design `STATISTIC_RANKING_DESIGN.md`, 2026-11-23): propose a record and verify it (every player named confirms, the player's region and country are snapshotted, an edit resets, `session.record.verification.requested` notification, new `ranking` state on the record) (client pair CLIENT-SESSION-54) | `TODO` |
+| 10 | [SESSION-53](MVP/SESSION-53_RESULT_STATISTICS.md) | Statistics engine (rewritten 2026-11-23): the queue of completed sessions picked after the 24-hour guard, the server record reader, the history of counted games and the counters (personal, group member, pair; region and country for ranking games). **Needs LOC-5 (venue region). Review gate 1 follows it** | `TODO` |
+| 11 | [SESSION-73](MVP/SESSION-73_STATISTICS_READ_API.md) | Statistics read API: my statistics, my games history, a group's member statistics (client pair CLIENT-SESSION-41) | `TODO` |
+| 12 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Ranking jobs and boards (rewritten 2026-11-23): the nightly ranking job, group, region and country boards from the sport's order, the manual group refresh with a one-hour cooldown (client pair CLIENT-SESSION-42). **Review gate 2 follows it** | `TODO` |
+| 13 | [SESSION-52](MVP/SESSION-52_GUESTS_IN_SESSION_RESULTS.md) | Guests in session results (BA GU-1 to GU-4); rewritten note 2026-11-23: a guest game is not a ranking game and is not counted | `TODO` |
+| 14 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `TODO` |
+| 15 | [SESSION-56](MVP/SESSION-56_POINT_ADJUSTMENTS.md) | Admin point adjustments with a reason and history (BA AD-1 to AD-4) | `TODO` |
+| 16 | [SESSION-58](MVP/SESSION-58_PERFORMANCE_RECORDS_FOR_RUNNING_CYCLING_SWIMMING.md) | A RECORD kind for sports without a head-to-head result (running, cycling, swimming) | `TODO` |
+| 17 | [SESSION-59](MVP/SESSION-59_DRAWS_AND_BEST_OF_THREE_RESULTS.md) | Draws and best-of-three results | `TODO` |
+| 18 | [SESSION-60](MVP/SESSION-60_EXPORT_GROUP_GAMES_AS_CSV.md) | Export a group's games as CSV (BA NF-8) | `TODO` |
+| 19 | [SESSION-GL-PERF-61](MVP/SESSION-GL-PERF-61_BENCHMARK_RECORDS_CHANGE_SET_API.md) | Benchmark the session records change-set API (add, update, delete, mixed, concurrent) against real Postgres with k6 and record the numbers | `TODO` |
+| 20 | [SESSION-62](MVP/SESSION-62_REJECT_A_SESSION_START_IN_THE_PAST.md) | Reject a session start in the past (coded 400 `SESSION_START_IN_PAST`, 5-minute grace) on create and on a start change; the client already restricts it in CLIENT-GL-38 | `TODO` |
+| 21 | [SESSION-68](MVP/SESSION-68_CREATE_SESSION_INVITEES_MUST_BE_FRIENDS_AND_ACTIVE.md) | `createSession` invitees must be friends and active: `inviteeIds` are checked for neither today, so a stranger or a deactivated account becomes an `INVITED` row and gets a notification; skip silently (default) or refuse, decided at pickup (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
+| 22 | [SESSION-GROUP-7](MVP/SESSION-GROUP-7_SCHEDULED_SESSION_JOBS_HAVE_NO_MULTI_POD_LOCK.md) | The three scheduled session jobs (start ongoing, close past, cancel unprepared) run on every server instance with no lock: two instances can start the same session and tell its players twice (found in the SESSION-GROUP-5 queue review) | `TODO` |
+| 23 | [SESSION-GROUP-8](MVP/SESSION-GROUP-8_PRUNE_OLD_GENERATION_QUEUE_ROWS.md) | Prune the finished (`DONE`, `IGNORED`) rows of `group_session_generation_queue` after about 30 days; they are kept for ever today (depends on SESSION-GROUP-5) | `TODO` |
+| 24 | [SESSION-GROUP-9](MVP/SESSION-GROUP-9_SCALE_THE_GENERATION_RUNNERS_WITH_THE_BACKLOG.md) | Scale the generation runners with the backlog: the fixed single worker starts more runners when the queue is crowded, up to a configured maximum in parallel (depends on SESSION-GROUP-5's hardening) | `TODO` |
+| 25 | [SESSION-GROUP-11](MVP/SESSION-GROUP-11_SOLID_FIVE_PER_DAY_LIMIT_TRANSFER_HOST_BEFORE_DEACTIVATING_AND_CANCEL_ONLY_THE_OLD_MODE.md) | Close the three known limits of the group-session chain: a 5-per-day limit that holds under a race, transfer the group before the host deactivates, and a mode switch that cancels only the old mode's scheduled sessions (client contract change for CLIENT-GROUP-SESSION-6) | `TODO` |
+| 26 | [SESSION-74](MVP/SESSION-74_PROFILE_STATISTICS_VISIBILITY_AND_ACCESS_REQUESTS.md) | Low priority: a player sets whether others can see personal and pair statistics (default visible) and others can ask for access (client pair CLIENT-SESSION-55) | `TODO` |
+| 27 | [SESSION-75](MVP/SESSION-75_PRUNE_FINISHED_STATS_JOBS.md) | Prune the finished rows of `session_stats_jobs` after about 30 days (depends on SESSION-53) | `TODO` |
+| 28 | [SESSION-76](MVP/SESSION-76_HEAD_TO_HEAD_AND_BEST_PARTNERS.md) | Head-to-head, best partners and the opponent a player loses to most (BA ST-2, ST-6), read from the history (client pair CLIENT-SESSION-56) | `TODO` |
+| 29 | [SESSION-77](MVP/SESSION-77_REBUILD_THE_COUNTERS_FROM_THE_HISTORY.md) | ADMIN-only rebuild of the counters from the history after a rule change (depends on SESSION-53) | `TODO` |
 
 ---
 

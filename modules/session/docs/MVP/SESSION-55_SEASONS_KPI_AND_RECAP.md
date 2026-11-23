@@ -11,3 +11,6 @@ A group admin creates a season (name, start date, end date); a season view is th
 **Out of scope:** Fees in the recap (separate topic).
 
 **Tests:** Spock for the date filtering and the single-active-season rule; an IT for the admin-only endpoints.
+
+**Rewritten at the 2026-11-23 design (`/feature` session "statistic and ranking", `modules/session/docs/STATISTIC_RANKING_DESIGN.md`):** this ticket now reads the history and counters of SESSION-53 (the group-only note of 2026-11-17 is superseded: games of standalone sessions count in personal statistics, and group boards use group sessions). Its detailed design is revisited when it is picked up, after SESSION-54.
+Seasons are counted from the permanent record of what each session contributed (`session_stats_jobs.result` plus the session's local date at the venue) into season counters beside the all-time blobs; the group board keeps its all-time counters.

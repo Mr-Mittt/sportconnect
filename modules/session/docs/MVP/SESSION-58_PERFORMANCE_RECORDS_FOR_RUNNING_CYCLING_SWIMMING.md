@@ -9,3 +9,5 @@ The result schema is designed to allow a per-player RECORD (times, distances) ne
 **Out of scope:** Statistics for RECORD results.
 
 **Tests:** Decided at pickup.
+
+**Generic statistics note (2026-11-23):** Under the generic statistics design (`STATISTIC_RANKING_DESIGN.md` section 3) this ticket adds a **`RecordTypeReader`** for the per-player kind (one participant per record, outcome NONE, metrics such as `distanceM` and `durationS`, its own `rankable` rule) and the sport's `record.statistics` declaration (e.g. SUM distance, MIN time, derived pace); it adds no table.
