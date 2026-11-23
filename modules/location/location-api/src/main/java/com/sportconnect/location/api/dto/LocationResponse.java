@@ -34,6 +34,13 @@ public class LocationResponse {
      * no coordinates or when they fall outside every timezone polygon. */
     private String timezone;
 
+    /** LOC-5 — reference-domain country id derived from the coordinates; null when there are none, nothing
+     * resolved, or the country is not seeded. Names are not included: batch via reference-api. */
+    private Long countryId;
+
+    /** LOC-5 — reference-domain region id; null when the country has no seeded regions or none matched. */
+    private Long regionId;
+
     private Long claimedByVendorId;
 
     private UUID createdBy;

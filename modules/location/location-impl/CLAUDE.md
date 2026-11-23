@@ -12,6 +12,7 @@ both point at by id instead of each carrying its own raw location fields.
 | `modules/location/location-api` | LocationService interface + all DTOs |
 | `modules/common` | ApiResponse<T>, shared exceptions |
 | `modules/sport/sport-api` | Batch `sportName` enrichment on `LocationResponse` |
+| `modules/reference/reference-api` | `ReferenceService.resolveByCoordinates` gives a venue's country and region ids (LOC-5); reference-api depends on common only, so no cycle |
 | Hibernate Spatial + JTS | Same `geography(Point,4326)` pattern as `user-impl`/`post-impl` |
 | JDK `java.net.http.HttpClient` | Outbound call to resolve short Google Maps links — no external library |
 | `net.iakovlev:timeshape` (and zstd-jni under it) | Offline timezone lookup (LOC-4); zstd-jni unpacks a native library at first use, see Gotchas |
@@ -24,6 +25,8 @@ both point at by id instead of each carrying its own raw location fields.
 | `LocationServiceImpl` | CRUD/search, all sport-scoped; batch-resolves `sportName` via `SportService.getSportsByIds` — never per-row |
 | `GoogleMapsUrlResolver` | Parses coordinates from a pasted Google Maps URL; resolves short links via a domain-allowlisted redirect follow |
 | `LocationHttpClientConfig` | The one `HttpClient` bean, used only by `GoogleMapsUrlResolver` |
+| `LocationGeoResolver` | LOC-5: coordinates to reference country/region ids; never throws and runs `NOT_SUPPORTED`, outside the caller's transaction (see Gotchas) |
+| `LocationGeoBackfillRunner` | LOC-5: `ApplicationRunner` that links venues which have coordinates but no country; id-cursor paging (200), guarded `UPDATE ... WHERE country_id IS NULL`; `app.location.geo-backfill.enabled` (default on, off under the test profile) |
 
 ## Location Pattern
 
@@ -69,3 +72,5 @@ POST /api/locations/resolve-maps-url   ROLE_USER — resolve only, does not pers
   start the engine: a location without its timezone would make generated sessions use the JVM zone
   (`SessionGenerationService#resolveZone`), so the save fails. Run `infra/scripts/test-server-native-lib.sh` after touching either
   flag; it needs Docker and a built `server.jar`.
+- A venue's `countryId` / `regionId` (LOC-5) are derived from the coordinates at creation and by the start-up backfill, nullable, best-effort, no FK, no update path (same stance as `timezone`). Null means: no coordinates, nothing matched, or the country is not seeded (only Vietnam is, and regions exist only for Vietnam). `LocationGeoResolver` swallows a failure on purpose (a venue without a country is only missing from region/country boards), unlike the timezone engine (LOC-7). It must stay `@Transactional(propagation = NOT_SUPPORTED)`: `ReferenceServiceImpl` is a transactional proxy, an exception through it marks the caller's transaction rollback-only even when caught, and `LocationGeoLinkIntegrationTest` fails with a 500 without it.
+- The backfill runner never lets a failure stop start-up, tries each venue once per run (an unresolved one is tried again on the next start) and is off in `:server:test`, where the IT builds it by hand.

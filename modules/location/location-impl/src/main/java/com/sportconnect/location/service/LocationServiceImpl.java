@@ -41,6 +41,7 @@ public class LocationServiceImpl implements LocationService {
     private final UserSportProfileService userSportProfileService;
     private final GoogleMapsUrlResolver googleMapsUrlResolver;
     private final LocationTimeZoneResolver locationTimeZoneResolver;
+    private final LocationGeoResolver locationGeoResolver;
 
     private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
@@ -70,6 +71,14 @@ public class LocationServiceImpl implements LocationService {
                     new Coordinate(request.getLongitude(), request.getLatitude())));
             locationTimeZoneResolver.resolve(request.getLatitude(), request.getLongitude())
                     .ifPresent(location::setTimezone);
+            // LOC-5: country/region by id, same best-effort stance; LocationGeoResolver never throws and runs outside this
+            // transaction, so a failure there cannot mark it rollback-only.
+            locationGeoResolver.resolve(request.getLatitude(), request.getLongitude()).ifPresent(match -> {
+                location.setCountryId(match.getCountry().getId());
+                if (match.getRegion() != null) {
+                    location.setRegionId(match.getRegion().getId());
+                }
+            });
         }
 
         Location saved = locationRepository.save(location);
@@ -214,6 +223,8 @@ public class LocationServiceImpl implements LocationService {
                 .longitude(longitude)
                 .sourceMapsUrl(location.getSourceMapsUrl())
                 .timezone(location.getTimezone())
+                .countryId(location.getCountryId())
+                .regionId(location.getRegionId())
                 .claimedByVendorId(location.getClaimedByVendorId())
                 .createdBy(location.getCreatedBy())
                 .createdAt(location.getCreatedAt())
