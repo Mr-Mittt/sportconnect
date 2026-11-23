@@ -6,6 +6,7 @@ import type { ChatLoadFailure, ChatSendFailure } from '@/features/chat/chatError
 import type { ConnectionStatus } from '@/features/chat/types';
 import type { ChatMessage } from '@/features/chat/types';
 import { formatTypingLabel, type TypingUser } from '@/features/chat/typingLabel';
+import { cn } from '@/shared/lib/utils';
 import { useOverridableText } from '@/shared/lib/useOverridableText';
 import { useAutoResizeTextarea } from '@/shared/lib/useAutoResizeTextarea';
 import { useInfiniteScrollSentinel } from '@/shared/lib/useInfiniteScrollSentinel';
@@ -58,6 +59,8 @@ export interface GroupChatTabViewProps {
   sendTyping: (isTyping: boolean) => void;
   /** CLIENT-I18N-7: `"namespace:key.path"` override for the copy (see `useOverridableText`). */
   i18nOverridePrefix?: string;
+  /** Extra classes for the root; a `min-h-*` here replaces the default `min-h-105` (CLIENT-GROUP-UI-1). */
+  className?: string;
 }
 
 /**
@@ -98,6 +101,7 @@ export function GroupChatTabView({
   typingUsers,
   sendTyping,
   i18nOverridePrefix,
+  className,
 }: GroupChatTabViewProps) {
   const t = useOverridableText('groups', i18nOverridePrefix);
   const [draft, setDraft] = useState('');
@@ -234,7 +238,7 @@ export function GroupChatTabView({
   const typingLabel = formatTypingLabel(typingUsers.filter((u) => u.userId !== currentUserId));
 
   return (
-    <div className="flex h-full min-h-105 flex-col">
+    <div className={cn('flex h-full min-h-105 flex-col', className)}>
       <div className="border-hairline flex flex-1 flex-col overflow-hidden rounded-xl border-border bg-surface-2">
         <div ref={containerRef} className="flex-1 overflow-y-auto p-3.5">
           {isLoading && <p className="text-2sm text-text-muted">{t('chat.loading')}</p>}

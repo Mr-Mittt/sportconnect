@@ -4,6 +4,8 @@ import { GroupChatTabView } from './GroupChatTabView';
 interface GroupChatTabProps {
   groupId: number;
   currentUserId: string;
+  /** Extra classes for the chat window's root (CLIENT-GROUP-UI-1: the page lets it shrink below its usual minimum when it shares its box with the session shortcut). */
+  className?: string;
 }
 
 /**
@@ -14,7 +16,7 @@ interface GroupChatTabProps {
  * group — that mount/unmount is what drives `useGroupChatData`'s WebSocket
  * connect/disconnect lifecycle.
  */
-export function GroupChatTab({ groupId, currentUserId }: GroupChatTabProps) {
+export function GroupChatTab({ groupId, currentUserId, className }: GroupChatTabProps) {
   const { data: messages, ...chatData } = useGroupChatData(groupId);
-  return <GroupChatTabView currentUserId={currentUserId} messages={messages} {...chatData} />;
+  return <GroupChatTabView currentUserId={currentUserId} messages={messages} className={className} {...chatData} />;
 }

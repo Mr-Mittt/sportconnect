@@ -40,7 +40,7 @@ test('Settings tab: every section starts collapsed, and opening one leaves the o
   }
   await expect(page.getByText('DEFAULT')).toBeHidden();
   await expect(page.getByRole('button', { name: /Allow member invites/ })).toBeHidden();
-  await expect(page.getByText('Regular sessions')).toBeHidden();
+  await expect(page.getByText('Regular sessions', { exact: true })).toBeHidden();
   // Leave and Delete are not in a section: always there.
   await expect(page.getByRole('button', { name: 'Delete Group' })).toBeVisible();
 
@@ -334,7 +334,7 @@ test('Sessions section — a member reads the state and changes nothing', async 
   await openSettings(page, MEMBER);
   await page.getByRole('button', { name: 'Sessions', exact: true }).click();
 
-  await expect(page.getByText('Regular sessions')).toBeVisible();
+  await expect(page.getByText('Regular sessions', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /Regular sessions:/ })).toBeHidden(); // plain text, nothing to press
   await expect(page.getByRole('combobox')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeHidden();

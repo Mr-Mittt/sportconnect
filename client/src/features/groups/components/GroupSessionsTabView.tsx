@@ -1,6 +1,7 @@
 import { IconChevronDown, IconChevronRight, IconPlus } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 import { GROUP_SESSION_STATUS_OPTIONS, type GroupSessionSection } from '@/features/session/groupSessionStatuses';
+import { formatHistoryMonth } from '@/features/session/groupHistoryMonth';
 import { formatSessionDayLabel } from '@/features/session/groupSessionsByDate';
 import { LoadMoreButton } from '@/features/session/components/LoadMoreButton';
 import type { SessionHistoryDate } from '@/features/session/types';
@@ -12,6 +13,7 @@ import type { Session, SessionStatus } from '@/shared/types/session';
 import type { SportKey, SportProfile } from '@/shared/types/sport';
 import { Button } from '@/shared/ui/button';
 import { GroupSessionsSection } from './GroupSessionsSection';
+import { HistoryMonthFilter } from './HistoryMonthFilter';
 import { SessionStatusFilter } from './SessionStatusFilter';
 
 interface LoadState {
@@ -29,9 +31,12 @@ export interface GroupSessionsTabViewProps {
   others: LoadState & { sessions: Session[]; hasMore: boolean; isFetchingMore: boolean; onLoadMore: () => void };
   history: LoadState & {
     dates: SessionHistoryDate[];
-    hasMore: boolean;
-    isFetchingMore: boolean;
-    onLoadMore: () => void;
+    /** The month shown (`yyyy-MM`) and its arrows (CLIENT-GROUP-UI-1). */
+    month: string;
+    canGoPrevious: boolean;
+    canGoNext: boolean;
+    onPreviousMonth: () => void;
+    onNextMonth: () => void;
     expandedDates: ReadonlySet<string>;
     onToggleDate: (date: string) => void;
   };
@@ -52,7 +57,7 @@ export interface GroupSessionsTabViewProps {
  * session" button, then three collapsible sections, each with a right-aligned multi-select status filter (owner, 2026-11-20):
  * **Today's** (playing time overlaps today; open), **Others** (from tomorrow on; collapsed) and **History** (finished sessions
  * grouped by end date, one row per date as `<date> (<count>)`; open, with yesterday's row expanded and the rest collapsed, and
- * a "Load more" for the next 30 days). A section with no status selected shows a hint and asks for nothing.
+ * a month filter in its header, CLIENT-GROUP-UI-1). A section with no status selected shows a hint and asks for nothing.
  */
 export function GroupSessionsTabView({
   statuses,
@@ -121,6 +126,8 @@ export function GroupSessionsTabView({
   const showTodayList = statuses.today.length > 0 && !today.isLoading && !today.isError;
   const showOthersList = statuses.others.length > 0 && !others.isLoading && !others.isError;
   const showHistoryList = statuses.history.length > 0 && !history.isLoading && !history.isError;
+  // A month with no finished session shows one hint instead of a row per day (CLIENT-GROUP-UI-1).
+  const isHistoryEmpty = history.dates.every(({ count }) => count === 0);
   // Every day of the window has a row, with its count, 0 included, whether or not the group has any finished session (owner, 2026-11-20).
 
   return (
@@ -149,9 +156,25 @@ export function GroupSessionsTabView({
         )}
       </GroupSessionsSection>
 
-      <GroupSessionsSection title={t('sessionsTab.history.title')} defaultOpen filter={filter('history', t('sessionsTab.history.title'))}>
-        {placeholder('history', history, false, '')}
-        {showHistoryList && history.dates.length > 0 && (
+      <GroupSessionsSection
+        title={t('sessionsTab.history.title')}
+        defaultOpen
+        filter={
+          <>
+            <HistoryMonthFilter
+              i18nOverridePrefix={i18nOverridePrefix}
+              month={history.month}
+              canGoPrevious={history.canGoPrevious}
+              canGoNext={history.canGoNext}
+              onPrevious={history.onPreviousMonth}
+              onNext={history.onNextMonth}
+            />
+            {filter('history', t('sessionsTab.history.title'))}
+          </>
+        }
+      >
+        {placeholder('history', history, isHistoryEmpty, t('sessionsTab.history.emptyMonth', { month: formatHistoryMonth(history.month) }))}
+        {showHistoryList && !isHistoryEmpty && (
           <div className="flex flex-col gap-3">
             {history.dates.map(({ date, count }) => {
               const isExpanded = history.expandedDates.has(date);
@@ -183,9 +206,6 @@ export function GroupSessionsTabView({
               );
             })}
           </div>
-        )}
-        {showHistoryList && history.hasMore && (
-          <LoadMoreButton isFetching={history.isFetchingMore} onClick={history.onLoadMore} ariaLabel={t('sessionsTab.history.loadMore')} />
         )}
       </GroupSessionsSection>
     </div>

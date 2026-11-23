@@ -47,8 +47,8 @@ export const sessionKeys = {
     [...sessionKeys.all, 'group', groupId, 'today', statuses, viewerZoneId] as const,
   groupSessionsLater: (groupId: number, statuses: readonly string[], viewerZoneId: string) =>
     [...sessionKeys.all, 'group', groupId, 'later', statuses, viewerZoneId] as const,
-  groupHistoryDates: (groupId: number, statuses: readonly string[], viewerZoneId: string) =>
-    [...sessionKeys.all, 'group', groupId, 'history', 'dates', statuses, viewerZoneId] as const,
+  groupHistoryDates: (groupId: number, statuses: readonly string[], viewerZoneId: string, month: string) =>
+    [...sessionKeys.all, 'group', groupId, 'history', 'dates', month, statuses, viewerZoneId] as const,
   groupHistoryDate: (groupId: number, date: string, statuses: readonly string[], viewerZoneId: string) =>
     [...sessionKeys.all, 'group', groupId, 'history', 'date', date, statuses, viewerZoneId] as const,
   detail: (sessionId: number) => [...sessionKeys.all, 'detail', sessionId] as const,

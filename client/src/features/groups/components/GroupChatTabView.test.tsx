@@ -66,6 +66,15 @@ describe('GroupChatTabView', () => {
     vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver);
   });
 
+  // CLIENT-GROUP-UI-1: the page lets the window shrink when the session shortcut shares its box.
+  it('keeps its usual minimum height, and a className can replace it', () => {
+    const { container, rerender } = render(<GroupChatTabView {...baseProps()} />);
+    expect(container.firstElementChild).toHaveClass('min-h-105');
+    rerender(<GroupChatTabView {...baseProps()} className="min-h-40" />);
+    expect(container.firstElementChild).toHaveClass('min-h-40');
+    expect(container.firstElementChild).not.toHaveClass('min-h-105');
+  });
+
   it('shows a loading state while the conversation/history is loading', () => {
     render(<GroupChatTabView {...baseProps({ isLoading: true })} />);
     expect(screen.getByText('Loading…')).toBeInTheDocument();

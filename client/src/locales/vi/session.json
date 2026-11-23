@@ -6,6 +6,7 @@
     "weekdayDayMonth": "EEE, d MMM",
     "dayMonth": "d MMM",
     "dayMonthYear": "d MMM, yyyy",
+    "monthYear": "MMMM, yyyy",
     "monthDay": "d MMM",
     "monthYear": "MMMM yyyy",
     "weekdayNarrow": "EEEEE",

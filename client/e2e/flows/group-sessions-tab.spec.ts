@@ -10,8 +10,8 @@ import { expect, test } from '../mocks/test.ts';
  * Uses `mockOwnedGroup` ("Weekend Tennis Ladder"). The mock's `groupSessionsFor` lays sessions out relative to today:
  * ongoing "Night ladder" (started yesterday, ends tomorrow), "Ladder night" (scheduled, noon today), "Early drills" (completed
  * today), "Cancelled today"; "Tomorrow doubles", "Cancelled tomorrow", "Next week draft"; yesterday's "Yesterday evening" and
- * "Yesterday morning" (completed) and "Cancelled yesterday"; "Last week play" 6 days ago; "Long ago play" 40 days ago (outside
- * the first 30-day window).
+ * "Yesterday morning" (completed) and "Cancelled yesterday"; "Last week play" 6 days ago; "Long ago play" 40 days ago (in an
+ * earlier month, reached with the History's previous-month arrow, CLIENT-GROUP-UI-1).
  */
 
 async function openTab(page: Page) {
@@ -75,30 +75,68 @@ test('Group Sessions tab: See all, the three sections, their filters, the histor
     await expect(others.getByText('Cancelled tomorrow')).toBeVisible();
   });
 
-  await test.step('5. History: a row for each of the 30 days before today, zero days included; yesterday is open with its sessions (newest end first)', async () => {
-    await expect(history.getByRole('button', { name: /^(Expand|Collapse) / })).toHaveCount(30);
-    await expect(history.getByRole('button', { name: /^Expand .*\(0\)$/ })).toHaveCount(28);
+  // CLIENT-GROUP-UI-1: the History shows one month, yesterday's by default (the previous month on the 1st). The mock lays its
+  // sessions out relative to today, so what falls in the shown month depends on the date the test runs: worked out here.
+  const daysAgo = (n: number) => {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() - n);
+    return date;
+  };
+  const monthLabel = (date: Date) => date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const sameMonth = (a: Date, b: Date) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+  const yesterday = daysAgo(1);
+  const lastDayShown = (month: Date) => (sameMonth(month, new Date()) ? daysAgo(1).getDate() : new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate());
+
+  await test.step("5. History: opens on yesterday's month with a row for each of its days up to yesterday, zero days included; yesterday is open with its sessions (newest end first)", async () => {
+    await expect(history.getByText(monthLabel(yesterday), { exact: true })).toBeVisible();
+    await expect(history.getByRole('button', { name: 'Next month' })).toBeDisabled();
+    const lastWeekShown = sameMonth(daysAgo(6), yesterday);
+    await expect(history.getByRole('button', { name: /^(Expand|Collapse) / })).toHaveCount(lastDayShown(yesterday));
+    await expect(history.getByRole('button', { name: /^Expand .*\(0\)$/ })).toHaveCount(lastDayShown(yesterday) - 1 - (lastWeekShown ? 1 : 0));
     const yesterdayRow = history.getByRole('button', { name: /^Collapse .*\(2\)$/ });
     await expect(yesterdayRow).toHaveAttribute('aria-expanded', 'true');
     const titles = await history.getByText(/^(Yesterday evening|Yesterday morning)$/).allTextContents();
     expect(titles).toEqual(['Yesterday evening', 'Yesterday morning']);
-    const lastWeekRow = history.getByRole('button', { name: /^Expand .*\(1\)$/ });
-    await expect(lastWeekRow).toHaveAttribute('aria-expanded', 'false');
-    await expect(history.getByText('Last week play')).toHaveCount(0);
-    await lastWeekRow.click();
-    await expect(history.getByText('Last week play')).toBeVisible();
+    if (lastWeekShown) {
+      const lastWeekRow = history.getByRole('button', { name: /^Expand .*\(1\)$/ });
+      await expect(lastWeekRow).toHaveAttribute('aria-expanded', 'false');
+      await expect(history.getByText('Last week play')).toHaveCount(0);
+      await lastWeekRow.click();
+      await expect(history.getByText('Last week play')).toBeVisible();
+    }
     // A day with no finished session opens to a plain line, with no request for its sessions.
     await history.getByRole('button', { name: /^Expand .*\(0\)$/ }).first().click();
     await expect(history.getByText('No session on this day.')).toBeVisible();
+    await expect(history.getByRole('button', { name: 'Load the previous 30 days' })).toHaveCount(0);
   });
 
-  await test.step('6. History: the date 40 days ago is outside the first 30 days; Load the previous 30 days adds 30 more rows', async () => {
+  await test.step('6. History: the previous arrow goes back a month at a time to the month of the session 40 days ago, and forward again', async () => {
+    const longAgo = daysAgo(40);
+    let shown = yesterday;
+    while (!sameMonth(shown, longAgo)) {
+      await history.getByRole('button', { name: 'Previous month' }).click();
+      shown = new Date(shown.getFullYear(), shown.getMonth() - 1, 15);
+      await expect(history.getByText(monthLabel(shown), { exact: true })).toBeVisible();
+      const days = new Date(shown.getFullYear(), shown.getMonth() + 1, 0).getDate();
+      await expect(history.getByRole('button', { name: /^(Expand|Collapse) / })).toHaveCount(days);
+    }
     await expect(history.getByText('Long ago play')).toHaveCount(0);
-    await history.getByRole('button', { name: 'Load the previous 30 days' }).click();
-    await expect(history.getByRole('button', { name: /^(Expand|Collapse) / })).toHaveCount(60);
     await history.getByRole('button', { name: /^Expand .*\(1\)$/ }).click();
     await expect(history.getByText('Long ago play')).toBeVisible();
-    await expect(history.getByRole('button', { name: 'Load the previous 30 days' })).toHaveCount(0);
+    await history.getByRole('button', { name: 'Next month' }).click();
+    await expect(history.getByRole('button', { name: /^(Expand|Collapse) / }).first()).toBeVisible();
+  });
+
+  await test.step("6b. History: the previous arrow stops at the month the group was created in (June 2026)", async () => {
+    const previous = history.getByRole('button', { name: 'Previous month' });
+    for (let guard = 0; guard < 60 && (await previous.isEnabled()); guard += 1) await previous.click();
+    await expect(history.getByText('June 2026', { exact: true })).toBeVisible();
+    await expect(previous).toBeDisabled();
+    // ...and the month filter starts again from yesterday's month when the tab is opened again.
+    await page.getByRole('tab', { name: 'Posts' }).click();
+    await page.getByRole('tab', { name: 'Sessions' }).click();
+    await expect(section(page, 'History').getByText(monthLabel(yesterday), { exact: true })).toBeVisible();
   });
 
   await test.step('7. History filter: Cancelled adds the cancelled one and the date count changes', async () => {
@@ -143,17 +181,18 @@ test('Group Sessions tab: a section with no status asks for one and sends no req
   expect(historyCalls).toBe(before);
 });
 
-test('Group Sessions tab: a group with no session shows the empty hint today and a row for each of the 30 days in History', async ({ page }) => {
+test('Group Sessions tab: a group with no session shows the empty hint today and one hint for the month in History', async ({ page }) => {
   await seedAuthenticatedSession(page, '/groups');
   await page.getByRole('group', { name: 'Group filter' }).getByRole('button', { name: /Friday Night Football/ }).click();
   await page.getByRole('tab', { name: 'Sessions' }).click();
   await expect(section(page, "Today's sessions").getByText('No session today.')).toBeVisible();
-  // History lists every day of the window whether or not the group has a finished session: 30 rows, every one "(0)".
+  // CLIENT-GROUP-UI-1: a month with no finished session shows one hint (the month's name in it) instead of a row per day.
   const history = section(page, 'History');
-  await expect(history.getByRole('button', { name: /^(Expand|Collapse) / })).toHaveCount(30);
-  await expect(history.getByRole('button', { name: /\(0\)$/ })).toHaveCount(30);
-  // Yesterday is open and says so without a request; the older days are collapsed.
-  await expect(history.getByText('No session on this day.')).toHaveCount(1);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const month = yesterday.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  await expect(history.getByText(`No finished session in ${month}.`)).toBeVisible();
+  await expect(history.getByRole('button', { name: /^(Expand|Collapse) / })).toHaveCount(0);
   await expect(history.getByRole('button', { name: 'Load the previous 30 days' })).toHaveCount(0);
 });
 

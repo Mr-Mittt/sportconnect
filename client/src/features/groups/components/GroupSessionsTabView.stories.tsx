@@ -15,6 +15,8 @@ const draft = makeSession({ id: 3, groupId: 5, status: 'PREPARING', title: 'Week
 const done = makeSession({ id: 4, groupId: 5, status: 'COMPLETED', title: 'Monday play', participantCount: 8 });
 
 const idle = { isLoading: false, isError: false, onRetry: () => {} };
+/** The History month filter's props: November 2026, a month back allowed, none forward. */
+const historyMonth = { month: '2026-11', canGoPrevious: true, canGoNext: false, onPreviousMonth: () => {}, onNextMonth: () => {} };
 
 const meta = {
   title: 'Groups/GroupSessionsTabView',
@@ -27,9 +29,7 @@ const meta = {
     history: {
       ...idle,
       dates: [{ date: '2026-11-19', count: 2 }, { date: '2026-11-14', count: 1 }],
-      hasMore: true,
-      isFetchingMore: false,
-      onLoadMore: () => {},
+      ...historyMonth,
       expandedDates: new Set(['2026-11-19']),
       onToggleDate: () => {},
     },
@@ -52,13 +52,13 @@ export const Empty: Story = {
   args: {
     today: { ...idle, sessions: [] },
     others: { ...idle, sessions: [], hasMore: false, isFetchingMore: false, onLoadMore: () => {} },
-    history: { ...idle, dates: [], hasMore: false, isFetchingMore: false, onLoadMore: () => {}, expandedDates: new Set(), onToggleDate: () => {} },
+    history: { ...idle, dates: [], ...historyMonth, expandedDates: new Set(), onToggleDate: () => {} },
   },
 };
 export const Loading: Story = {
   args: {
     today: { isLoading: true, isError: false, onRetry: () => {}, sessions: [] },
-    history: { isLoading: true, isError: false, onRetry: () => {}, dates: [], hasMore: false, isFetchingMore: false, onLoadMore: () => {}, expandedDates: new Set(), onToggleDate: () => {} },
+    history: { isLoading: true, isError: false, onRetry: () => {}, dates: [], ...historyMonth, expandedDates: new Set(), onToggleDate: () => {} },
   },
 };
 export const LoadFailed: Story = {
@@ -69,4 +69,10 @@ export const NoStatusSelected: Story = {
 };
 export const WithFinishedSessions: Story = {
   args: { today: { ...idle, sessions: [evening, done] }, statuses: { today: ['ONGOING', 'SCHEDULED', 'PREPARING', 'COMPLETED', 'CANCELLED'], others: ['PREPARING', 'SCHEDULED'], history: ['COMPLETED'] } },
+};
+/** A month with no finished session: one hint instead of a row per day; both arrows enabled (a month in the middle of the range). */
+export const EmptyMonth: Story = {
+  args: {
+    history: { ...idle, dates: [{ date: '2026-10-31', count: 0 }, { date: '2026-10-30', count: 0 }], ...historyMonth, month: '2026-10', canGoNext: true, expandedDates: new Set(), onToggleDate: () => {} },
+  },
 };

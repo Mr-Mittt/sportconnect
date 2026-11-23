@@ -6,6 +6,8 @@ import { GroupSessionsTabView } from './GroupSessionsTabView';
 
 interface GroupSessionsTabProps {
   groupId: number;
+  /** The group's `createdAt`: the History's month filter does not go back past its month. */
+  groupCreatedAt?: string;
   onCreate: () => void;
   sportsByKey: Record<SportKey, SportProfile>;
   currentUserId: string;
@@ -21,6 +23,7 @@ interface GroupSessionsTabProps {
  */
 export function GroupSessionsTab({
   groupId,
+  groupCreatedAt,
   onCreate,
   sportsByKey,
   currentUserId,
@@ -28,7 +31,7 @@ export function GroupSessionsTab({
   onParticipationAction,
   isParticipationActionPending,
 }: GroupSessionsTabProps) {
-  const data = useGroupSessionsTabData(groupId, true);
+  const data = useGroupSessionsTabData(groupId, true, groupCreatedAt);
   return (
     <GroupSessionsTabView
       statuses={data.statuses}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { LocationPicker } from '@/features/location/components/LocationPicker';
 import { GroupAudienceField } from '@/features/session/components/GroupAudienceField';
 import { GameMoodSlider } from '@/features/session/components/GameMoodSlider';
@@ -36,6 +36,16 @@ const MISSING_KEY: Record<RecurrenceMissingField, string> = {
   feeAmountVnd: 'feeAmount',
 };
 
+/**
+ * CLIENT-GROUP-UI-1: where "Keep editing" lands, like the session create form's "Continue editing" (CLIENT-SESSION-50): the first
+ * missing field on the form, top to bottom (duration, location, fee amount), and the section that holds it.
+ */
+const MISSING_TARGETS: readonly { field: RecurrenceMissingField; id: string; section: 'when' | 'where' | 'cost' }[] = [
+  { field: 'durationMinutes', id: 'recurrence-duration', section: 'when' },
+  { field: 'locationId', id: 'recurrence-location', section: 'where' },
+  { field: 'feeAmountVnd', id: 'recurrence-fee-amount', section: 'cost' },
+];
+
 interface RecurrenceConfigModalProps {
   form: RecurrenceFormData;
   /** The group's recurrence now: the days offered are weekdays (Weekly) or days of the month (Monthly). */
@@ -69,6 +79,7 @@ export function RecurrenceConfigModal({ form, mode, groupName, isGenerationOn, i
       )}
       <LocationPicker {...form.locationPicker} />
       <ChoiceDialog
+        centered
         isOpen={form.isOpen && form.isSaved}
         title={tg('settings.sessions.form.saved.title')}
         body={tg(savedBodyKey)}
@@ -113,6 +124,11 @@ function RecurrenceForm({
   const [isLeaveOpen, setIsLeaveOpen] = useState(false);
   const [isMissingOpen, setIsMissingOpen] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  // "Keep editing" in the missing-information popup: the first missing field waits here until the popup has closed
+  // (`onCloseAutoFocus`: only then is its focus trap gone, so the field can take the focus), and its section flicks once.
+  const focusAfterMissingRef = useRef<{ id: string; section: 'when' | 'where' | 'cost' } | null>(null);
+  const [flickRequest, setFlickRequest] = useState<{ section: 'when' | 'where' | 'cost'; n: number } | null>(null);
+  const flickFor = (section: 'when' | 'where' | 'cost') => (flickRequest?.section === section ? flickRequest.n : 0);
 
   const values: RecurrenceFormValues = {
     dayKey,
@@ -194,6 +210,15 @@ function RecurrenceForm({
         : [],
   };
 
+  const keepEditing = () => {
+    setIsMissingOpen(false);
+    const target = MISSING_TARGETS.find(({ field }) => missing.includes(field));
+    if (target === undefined) return;
+    // The field may sit in a section the user collapsed.
+    setOpenSections(ALL_OPEN);
+    focusAfterMissingRef.current = { id: target.id, section: target.section };
+  };
+
   const missingItems = missing.map((field) => tg(`settings.sessions.form.missing.${MISSING_KEY[field]}`));
 
   return (
@@ -216,6 +241,7 @@ function RecurrenceForm({
               title={t('form.sections.when')}
               open={openSections.when}
               onOpenChange={(open) => setSection('when', open)}
+              flickRequest={flickFor('when')}
               summary={<SectionSummary items={summaries.when} />}
               missing={missing.includes('durationMinutes') ? ['duration'] : []}
             >
@@ -226,6 +252,7 @@ function RecurrenceForm({
               title={t('form.sections.where')}
               open={openSections.where}
               onOpenChange={(open) => setSection('where', open)}
+              flickRequest={flickFor('where')}
               summary={<SectionSummary items={summaries.where} />}
               missing={missing.includes('locationId') ? ['location'] : []}
             >
@@ -275,6 +302,7 @@ function RecurrenceForm({
               title={t('form.sections.cost')}
               open={openSections.cost}
               onOpenChange={(open) => setSection('cost', open)}
+              flickRequest={flickFor('cost')}
               summary={<SectionSummary items={summaries.cost} />}
             >
               <CostFields
@@ -328,12 +356,13 @@ function RecurrenceForm({
       </Dialog>
 
       <ChoiceDialog
+        centered
         isOpen={isMissingOpen}
         title={tg('settings.sessions.form.missing.title')}
         body={tg('settings.sessions.form.missing.body')}
         items={missingItems}
         choices={[
-          { key: 'keep', label: tg('settings.sessions.form.missing.keepEditing'), variant: 'outline', onSelect: () => setIsMissingOpen(false) },
+          { key: 'keep', label: tg('settings.sessions.form.missing.keepEditing'), variant: 'outline', onSelect: keepEditing },
           {
             key: 'draft',
             label: tg('settings.sessions.form.missing.saveDraft'),
@@ -344,9 +373,17 @@ function RecurrenceForm({
             },
           },
         ]}
-        onClose={() => setIsMissingOpen(false)}
+        onClose={keepEditing}
+        onCloseAutoFocus={() => {
+          const target = focusAfterMissingRef.current;
+          focusAfterMissingRef.current = null;
+          if (target === null) return;
+          focusFieldById(target.id);
+          setFlickRequest((current) => ({ section: target.section, n: (current?.n ?? 0) + 1 }));
+        }}
       />
       <ChoiceDialog
+        centered
         isOpen={isLeaveOpen}
         title={tg('settings.sessions.form.leaveDialog.title')}
         body={tg('settings.sessions.form.leaveDialog.body')}

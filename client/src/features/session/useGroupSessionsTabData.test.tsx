@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { format, subDays } from 'date-fns';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '@/app/apiClient';
@@ -11,12 +10,13 @@ import { GROUP_SESSION_STATUS_DEFAULTS } from './groupSessionStatuses';
 import { useGroupSessionsTabData } from './useGroupSessionsTabData';
 
 /**
- * CLIENT-GROUP-SESSION-2: what the group Sessions tab's data hook asks the server for, how it keeps the three status filters, which
- * history dates it opens, and how it walks empty 30-day windows.
+ * CLIENT-GROUP-SESSION-2: what the group Sessions tab's data hook asks the server for, how it keeps the three status filters and which
+ * history dates it opens. CLIENT-GROUP-UI-1: the History shows one month (yesterday's by default), with arrows between the group's
+ * first month and yesterday's. The clock is pinned (only `Date`, so the queries still run) to 20 November 2026.
  */
 
 const zone = getViewerZoneId();
-const day = (offset: number) => format(subDays(new Date(), -offset), 'yyyy-MM-dd');
+const NOW = new Date(2026, 10, 20, 12, 0, 0);
 
 function wrapper({ children }: { children: ReactNode }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -26,20 +26,17 @@ function wrapper({ children }: { children: ReactNode }) {
 interface Server {
   today?: unknown[];
   later?: unknown[];
-  /** The `/history/dates` answers in call order; the last one repeats. */
-  windows?: { dates: { date: string; count: number }[]; hasMore: boolean; nextBefore: string }[];
+  /** The dates the `/history/dates` call answers with (every call). */
+  historyDates?: { date: string; count: number }[];
 }
 
 function serve(server: Server = {}) {
-  let windowCall = 0;
   return vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
     let data: unknown = { content: [] };
     if (url.endsWith('/today')) data = { content: server.today ?? [] };
     else if (url.endsWith('/later')) data = { content: server.later ?? [], last: true, number: 0 };
     else if (url.endsWith('/history/dates')) {
-      const windows = server.windows ?? [{ dates: [], hasMore: false, nextBefore: day(-30) }];
-      data = windows[Math.min(windowCall, windows.length - 1)];
-      windowCall += 1;
+      data = { dates: server.historyDates ?? [], hasMore: false, nextBefore: '2026-01-01' };
     }
     return { data: { success: true, message: '', data, timestamp: '' } };
   });
@@ -49,6 +46,7 @@ const calls = (get: ReturnType<typeof serve>, suffix: string) =>
   get.mock.calls.filter(([url]) => String(url).endsWith(suffix)) as unknown as [string, { params: Record<string, unknown> }][];
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOW });
   useGroupSessionsTabStore.setState({
     statuses: {
       today: [...GROUP_SESSION_STATUS_DEFAULTS.today],
@@ -58,7 +56,10 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe('useGroupSessionsTabData: what it asks for', () => {
   it('asks each section with its default statuses, comma-joined, in the viewer zone', async () => {
@@ -67,7 +68,7 @@ describe('useGroupSessionsTabData: what it asks for', () => {
     await waitFor(() => expect(get).toHaveBeenCalledTimes(3));
     expect(calls(get, '/today')[0]).toEqual(['/sessions/group/5/today', { params: { status: 'ONGOING,SCHEDULED,PREPARING', viewerZoneId: zone } }]);
     expect(calls(get, '/later')[0][1].params).toEqual({ status: 'PREPARING,SCHEDULED', viewerZoneId: zone, page: 0, size: 20 });
-    expect(calls(get, '/history/dates')[0][1].params).toEqual({ status: 'COMPLETED', days: 30, viewerZoneId: zone });
+    expect(calls(get, '/history/dates')[0][1].params).toEqual({ status: 'COMPLETED', days: 19, before: '2026-11-20', viewerZoneId: zone });
   });
 
   it('asks again with the new statuses when a filter changes, always in the section order', async () => {
@@ -124,107 +125,139 @@ describe('useGroupSessionsTabData: the filters stay for the browser session', ()
   });
 });
 
-describe('useGroupSessionsTabData: the history dates (a row for every day of every window)', () => {
+
+describe('useGroupSessionsTabData: the history month (a row for every day of it)', () => {
   const sessionDays = [
-    { date: day(-1), count: 2 },
-    { date: day(-5), count: 1 },
+    { date: '2026-11-19', count: 2 },
+    { date: '2026-11-05', count: 1 },
   ];
-  const firstWindow = { dates: sessionDays, hasMore: false, nextBefore: day(-30) };
+  const historyCalls = (get: ReturnType<typeof serve>) => calls(get, '/history/dates').map(([, options]) => options.params);
+  const nowAt = (year: number, monthIndex: number, dayOfMonth: number) => vi.setSystemTime(new Date(year, monthIndex, dayOfMonth, 12, 0, 0));
 
-  it('lists all 30 days before today, newest first, with the count of each and 0 for a day with no finished session', async () => {
-    serve({ windows: [firstWindow] });
+  it('opens on the month of yesterday and lists its days up to yesterday, newest first, with the count of each and 0 for a day with no finished session', async () => {
+    const get = serve({ historyDates: sessionDays });
     const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
-    await waitFor(() => expect(result.current.history.dates).toHaveLength(30));
+    await waitFor(() => expect(result.current.history.dates[0]).toEqual({ date: '2026-11-19', count: 2 }));
+    expect(result.current.history.dates).toHaveLength(19);
 
+    expect(result.current.history.month).toBe('2026-11');
+    expect(historyCalls(get)).toEqual([{ status: 'COMPLETED', days: 19, before: '2026-11-20', viewerZoneId: zone }]);
     const rows = result.current.history.dates;
-    expect(rows[0]).toEqual({ date: day(-1), count: 2 });
-    expect(rows[29]).toEqual({ date: day(-30), count: 0 });
-    expect(rows.map((row) => row.date)).toEqual(Array.from({ length: 30 }, (_, i) => day(-(i + 1))));
-    expect(Object.fromEntries(rows.filter((row) => row.count > 0).map((row) => [row.date, row.count]))).toEqual({
-      [day(-1)]: 2,
-      [day(-5)]: 1,
-    });
+    expect(rows.map((row) => row.date)).toEqual(Array.from({ length: 19 }, (_, i) => `2026-11-${String(19 - i).padStart(2, '0')}`));
+    expect(Object.fromEntries(rows.filter((row) => row.count > 0).map((row) => [row.date, row.count]))).toEqual({ '2026-11-19': 2, '2026-11-05': 1 });
   });
 
-  it('lists the 30 days even when the group has no finished session in them', async () => {
-    serve({ windows: [{ dates: [], hasMore: false, nextBefore: day(-30) }] });
+  it('on the 1st of a month the History shows the previous month, whole', async () => {
+    nowAt(2026, 11, 1);
+    const get = serve();
     const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
     await waitFor(() => expect(result.current.history.dates).toHaveLength(30));
-    expect(result.current.history.dates.every((row) => row.count === 0)).toBe(true);
-    expect(result.current.history.hasMore).toBe(false);
+    expect(result.current.history.month).toBe('2026-11');
+    expect(historyCalls(get)).toEqual([{ status: 'COMPLETED', days: 30, before: '2026-12-01', viewerZoneId: zone }]);
+    expect(result.current.history.dates[0].date).toBe('2026-11-30');
+    expect(result.current.history.canGoNext).toBe(false);
+  });
+
+  it('on 1 January the History shows December of the year before', async () => {
+    nowAt(2027, 0, 1);
+    const get = serve();
+    const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
+    await waitFor(() => expect(result.current.history.dates).toHaveLength(31));
+    expect(result.current.history.month).toBe('2026-12');
+    expect(historyCalls(get)[0]).toMatchObject({ days: 31, before: '2027-01-01' });
+  });
+
+  it('the previous arrow asks for that whole month alone, with before = the first of the month after it', async () => {
+    const get = serve({ historyDates: [{ date: '2026-10-31', count: 4 }] });
+    const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
+    await waitFor(() => expect(result.current.history.dates).toHaveLength(19));
+
+    act(() => result.current.history.onPreviousMonth());
+    await waitFor(() => expect(result.current.history.month).toBe('2026-10'));
+    await waitFor(() => expect(result.current.history.dates[0]).toEqual({ date: '2026-10-31', count: 4 }));
+    expect(result.current.history.dates).toHaveLength(31);
+    expect(historyCalls(get)[1]).toEqual({ status: 'COMPLETED', days: 31, before: '2026-11-01', viewerZoneId: zone });
+    expect(result.current.history.canGoNext).toBe(true);
+
+    act(() => result.current.history.onNextMonth());
+    await waitFor(() => expect(result.current.history.month).toBe('2026-11'));
+    expect(result.current.history.canGoNext).toBe(false);
+  });
+
+  it('stops going back at the month the group was created in', () => {
+    serve();
+    const { result } = renderHook(() => useGroupSessionsTabData(5, true, '2026-09-10T08:00:00'), { wrapper });
+    expect(result.current.history.canGoPrevious).toBe(true);
+    act(() => result.current.history.onPreviousMonth());
+    act(() => result.current.history.onPreviousMonth());
+    expect(result.current.history.month).toBe('2026-09');
+    expect(result.current.history.canGoPrevious).toBe(false);
+  });
+
+  it('has no earliest month when the group has no readable creation date', () => {
+    serve();
+    const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
+    act(() => result.current.history.onPreviousMonth());
+    act(() => result.current.history.onPreviousMonth());
+    expect(result.current.history.canGoPrevious).toBe(true);
+    const { result: broken } = renderHook(() => useGroupSessionsTabData(5, true, 'not a date'), { wrapper });
+    expect(broken.current.history.canGoPrevious).toBe(true);
+  });
+
+  it("starts on yesterday's month again every time the tab is opened (the month is not remembered)", () => {
+    serve();
+    const first = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
+    act(() => first.result.current.history.onPreviousMonth());
+    expect(first.result.current.history.month).toBe('2026-10');
+    first.unmount();
+    const second = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
+    expect(second.result.current.history.month).toBe('2026-11');
   });
 
   it('opens yesterday and leaves every other date collapsed', async () => {
-    serve({ windows: [firstWindow] });
+    serve({ historyDates: sessionDays });
     const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
-    await waitFor(() => expect(result.current.history.dates).toHaveLength(30));
-    expect([...result.current.history.expandedDates]).toEqual([day(-1)]);
+    await waitFor(() => expect(result.current.history.dates).toHaveLength(19));
+    expect([...result.current.history.expandedDates]).toEqual(['2026-11-19']);
   });
 
   it('opens yesterday even when it has no session (its row is open and empty)', async () => {
-    serve({ windows: [{ dates: [{ date: day(-5), count: 1 }], hasMore: false, nextBefore: day(-30) }] });
+    serve({ historyDates: [{ date: '2026-11-05', count: 1 }] });
     const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
-    await waitFor(() => expect(result.current.history.dates).toHaveLength(30));
-    expect([...result.current.history.expandedDates]).toEqual([day(-1)]);
-    expect(result.current.history.dates[0]).toEqual({ date: day(-1), count: 0 });
+    await waitFor(() => expect(result.current.history.dates).toHaveLength(19));
+    expect([...result.current.history.expandedDates]).toEqual(['2026-11-19']);
+    expect(result.current.history.dates[0]).toEqual({ date: '2026-11-19', count: 0 });
   });
 
   it('keeps a date as the viewer toggled it: collapse yesterday, open another', async () => {
-    serve({ windows: [firstWindow] });
+    serve({ historyDates: sessionDays });
     const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
-    await waitFor(() => expect(result.current.history.dates).toHaveLength(30));
+    await waitFor(() => expect(result.current.history.dates).toHaveLength(19));
 
-    act(() => result.current.history.onToggleDate(day(-1)));
+    act(() => result.current.history.onToggleDate('2026-11-19'));
     expect([...result.current.history.expandedDates]).toEqual([]);
-    act(() => result.current.history.onToggleDate(day(-5)));
-    expect([...result.current.history.expandedDates]).toEqual([day(-5)]);
-    act(() => result.current.history.onToggleDate(day(-5)));
+    act(() => result.current.history.onToggleDate('2026-11-05'));
+    expect([...result.current.history.expandedDates]).toEqual(['2026-11-05']);
+    act(() => result.current.history.onToggleDate('2026-11-05'));
     expect([...result.current.history.expandedDates]).toEqual([]);
   });
 
-  it('"Load more" asks for the window before with before = nextBefore and adds its 30 days below', async () => {
-    const get = serve({
-      windows: [
-        { dates: sessionDays, hasMore: true, nextBefore: day(-30) },
-        { dates: [{ date: day(-40), count: 3 }], hasMore: false, nextBefore: day(-60) },
-      ],
-    });
-    const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
-    await waitFor(() => expect(result.current.history.hasMore).toBe(true));
-    expect(result.current.history.dates).toHaveLength(30);
-
-    act(() => result.current.history.onLoadMore());
-    await waitFor(() => expect(result.current.history.dates).toHaveLength(60));
-    expect(calls(get, '/history/dates')[1][1].params.before).toBe(day(-30));
-    const rows = result.current.history.dates;
-    expect(rows[30]).toEqual({ date: day(-31), count: 0 });
-    expect(rows.find((row) => row.date === day(-40))).toEqual({ date: day(-40), count: 3 });
-    expect(rows[59]).toEqual({ date: day(-60), count: 0 });
-    expect(result.current.history.hasMore).toBe(false);
+  it('asks nothing for the History when no status is selected', async () => {
+    useGroupSessionsTabStore.getState().setStatuses('history', []);
+    const get = serve();
+    renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    expect(calls(get, '/history/dates')).toHaveLength(0);
   });
 
-  it('an empty window is not followed by itself any more: the next window waits for "Load more"', async () => {
-    const get = serve({
-      windows: [
-        { dates: [], hasMore: true, nextBefore: day(-30) },
-        { dates: [{ date: day(-75), count: 1 }], hasMore: false, nextBefore: day(-60) },
-      ],
-    });
-    const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
-    await waitFor(() => expect(result.current.history.dates).toHaveLength(30));
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(calls(get, '/history/dates')).toHaveLength(1);
-    expect(result.current.history.hasMore).toBe(true);
-  });
-
-  it('reports a failed window and lists nothing', async () => {
+  it('reports a failed month and lists no count', async () => {
     const get = vi.spyOn(apiClient, 'get').mockImplementation(async (url: string) => {
       if (url.endsWith('/history/dates')) throw new Error('boom');
       return { data: { success: true, message: '', data: { content: [], last: true, number: 0 }, timestamp: '' } };
     });
     const { result } = renderHook(() => useGroupSessionsTabData(5, true), { wrapper });
     await waitFor(() => expect(result.current.history.isError).toBe(true));
-    expect(result.current.history.dates).toEqual([]);
+    expect(result.current.history.dates.every((row) => row.count === 0)).toBe(true);
     expect(calls(get, '/history/dates')).toHaveLength(1);
   });
 });

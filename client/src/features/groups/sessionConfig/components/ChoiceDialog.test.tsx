@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { ModalAnchorProvider } from '@/shared/lib/modalAnchor';
 import { ChoiceDialog, type DialogChoice } from './ChoiceDialog';
 
 function choices(overrides: Partial<Record<string, () => void>> = {}): DialogChoice[] {
@@ -18,6 +19,19 @@ describe('ChoiceDialog', () => {
     expect(screen.getByText('This changes things.')).toBeInTheDocument();
     const labels = screen.getAllByRole('button').map((button) => button.textContent);
     expect(labels.indexOf('Safe way out')).toBeLessThan(labels.indexOf('Do it'));
+  });
+
+  // CLIENT-GROUP-UI-1 (owner, 2026-11-22): the regular-session form's dialogs are centred in the viewport, like the create form's.
+  it('sits under the page anchor by default and in the middle of the viewport when centered', () => {
+    const open = (centered: boolean) => (
+      <ModalAnchorProvider value={120}>
+        <ChoiceDialog isOpen centered={centered} title="Sure?" body="Body" choices={choices()} onClose={vi.fn()} />
+      </ModalAnchorProvider>
+    );
+    const { rerender } = render(open(false));
+    expect(screen.getByRole('dialog', { name: 'Sure?' }).style.top).toBe('132px');
+    rerender(open(true));
+    expect(screen.getByRole('dialog', { name: 'Sure?' }).style.top).toBe('');
   });
 
   it('renders nothing while closed', () => {

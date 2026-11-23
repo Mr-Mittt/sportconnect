@@ -552,11 +552,34 @@ export function GroupsPage() {
   const createSessionModalData = useCreateSessionModalData({
     onGroupSessionCreated: (session) => discoverModalData.onViewDetails(session.id),
   });
-  // CLIENT-GROUP-SESSION-1: today's ongoing and scheduled sessions of the selected group, for the Posts tab's shortcut. Only
-  // read while that tab shows (a member only: the groups on this page are the caller's own).
+  // CLIENT-GROUP-SESSION-1: today's ongoing and scheduled sessions of the selected group, for the shortcut under the post composer.
+  // CLIENT-GROUP-UI-1: the Chat tab shows it above the chat window too. Only read while one of those tabs shows (a member only: the
+  // groups on this page are the caller's own).
   const groupSessionShortcut = useGroupSessionShortcutData(
     selectedGroup?.id,
-    selectedGroup !== null && activeGroupTab === 'posts',
+    selectedGroup !== null && (activeGroupTab === 'posts' || activeGroupTab === 'chat'),
+  );
+  // CLIENT-GROUP-UI-1: the "Session" shortcut, shown under the post composer of the Posts tab and above the chat window of the Chat tab.
+  const renderSessionShortcut = (group: { id: number; sportId: number; groupName: string }) => (
+    <GroupSessionShortcut
+      sessions={groupSessionShortcut.sessions}
+      isLoading={groupSessionShortcut.isLoading}
+      isError={groupSessionShortcut.isError}
+      onRetry={groupSessionShortcut.retry}
+      onCreate={() =>
+        createSessionModalData.openCreateGroupSessionModal({
+          id: group.id,
+          sportId: group.sportId,
+          name: group.groupName,
+        })
+      }
+      onSeeAll={() => guardedSetActiveGroupTab('sessions')}
+      sportsByKey={sportsByKey}
+      currentUserId={user.id}
+      onViewDetails={discoverModalData.onViewDetails}
+      onParticipationAction={discoverModalData.onParticipationAction}
+      isParticipationActionPending={discoverModalData.isParticipationActionPending}
+    />
   );
   const activeSessionSportId = activeSport === 'all' ? undefined : sportIdForKey(activeSport);
   // CLIENT-SESSION-29 revision (2026-09-23) — see HomeFeedPage's identical comment.
@@ -732,25 +755,7 @@ export function GroupsPage() {
                         canBroadcast={canBroadcast}
                         mentionSource={composerMentionSource}
                       />
-                      <GroupSessionShortcut
-                        sessions={groupSessionShortcut.sessions}
-                        isLoading={groupSessionShortcut.isLoading}
-                        isError={groupSessionShortcut.isError}
-                        onRetry={groupSessionShortcut.retry}
-                        onCreate={() =>
-                          createSessionModalData.openCreateGroupSessionModal({
-                            id: selectedGroup.id,
-                            sportId: selectedGroup.sportId,
-                            name: selectedGroup.groupName,
-                          })
-                        }
-                        onSeeAll={() => guardedSetActiveGroupTab('sessions')}
-                        sportsByKey={sportsByKey}
-                        currentUserId={user.id}
-                        onViewDetails={discoverModalData.onViewDetails}
-                        onParticipationAction={discoverModalData.onParticipationAction}
-                        isParticipationActionPending={discoverModalData.isParticipationActionPending}
-                      />
+                      {renderSessionShortcut(selectedGroup)}
                       <Feed
                         posts={data.posts}
                         activeSport={activeSport}
@@ -779,6 +784,7 @@ export function GroupsPage() {
                     <GroupSessionsTab
                       key={selectedGroup.id}
                       groupId={selectedGroup.id}
+                      groupCreatedAt={selectedGroup.createdAt}
                       onCreate={() =>
                         createSessionModalData.openCreateGroupSessionModal({
                           id: selectedGroup.id,
@@ -794,11 +800,14 @@ export function GroupsPage() {
                     />
                   )}
                   {activeGroupTab === 'chat' && (
-                    <GroupChatTab
-                      key={selectedGroup.id}
-                      groupId={selectedGroup.id}
-                      currentUserId={user.id}
-                    />
+                    // CLIENT-GROUP-UI-1: the session shortcut sits right above the chat window, inside the box's computed height: only
+                    // the message list gives up room for it (the window keeps its own scroll and the composer stays in view).
+                    <div className="flex h-full flex-col gap-3.5">
+                      {renderSessionShortcut(selectedGroup)}
+                      <div className="min-h-0 flex-1">
+                        <GroupChatTab key={selectedGroup.id} groupId={selectedGroup.id} currentUserId={user.id} className="min-h-40" />
+                      </div>
+                    </div>
                   )}
                   {activeGroupTab === 'members' && (
                     <GroupMembersTab

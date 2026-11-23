@@ -66,6 +66,31 @@ function TextFieldRow({
   );
 }
 
+/**
+ * CLIENT-GROUP-UI-1: a section's title is told from its content by a line under the title and by the content sitting a little to
+ * the right of it (owner, 2026-11-22).
+ */
+const SECTION_TITLE = 'border-hairline-b rounded-b-none border-border pb-2';
+const SECTION_CONTENT = 'flex flex-col gap-2 pl-6 pt-3';
+
+/**
+ * A section's title with a short hint beside it saying what is in the section (owner, 2026-11-22). The button keeps the title as
+ * its name (`aria-label`) and the hint is its description, so a screen reader hears "General, collapsed, <hint>" and the
+ * button's accessible name stays the title.
+ */
+function SectionTitle({ id, title, hint }: { id: string; title: string; hint: string }) {
+  return (
+    <CollapsibleTrigger className={SECTION_TITLE} aria-label={title} aria-describedby={id}>
+      <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+        <span className="text-sm font-semibold text-text-primary">{title}</span>
+        <span id={id} className="text-2xs font-normal text-text-muted">
+          {hint}
+        </span>
+      </span>
+    </CollapsibleTrigger>
+  );
+}
+
 interface GroupSettingsTabProps {
   group: Group;
   /** `Group.currentUserRole` — `'group_owner' | 'group_admin' | 'group_member' | null`. */
@@ -184,10 +209,8 @@ export function GroupSettingsTab({
   return (
     <div className="flex flex-col gap-4">
       <Collapsible open={isGeneralOpen} onOpenChange={setIsGeneralOpen}>
-        <CollapsibleTrigger>
-          <span className="text-sm font-semibold text-text-primary">{t('settings.general')}</span>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="flex flex-col gap-4 pt-3">
+        <SectionTitle id="group-settings-general-hint" title={t('settings.general')} hint={t('settings.generalHint')} />
+        <CollapsibleContent className={SECTION_CONTENT}>
           <div>
             <div className="text-sm font-medium text-text-primary">{group.groupName}</div>
             {group.description !== null && group.description !== '' && (
@@ -289,10 +312,8 @@ export function GroupSettingsTab({
       </Collapsible>
 
       <Collapsible open={isPermissionOpen} onOpenChange={setIsPermissionOpen}>
-        <CollapsibleTrigger>
-          <span className="text-sm font-semibold text-text-primary">{t('settings.permission')}</span>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="flex flex-col gap-4 pt-3">
+        <SectionTitle id="group-settings-permission-hint" title={t('settings.permission')} hint={t('settings.permissionHint')} />
+        <CollapsibleContent className={SECTION_CONTENT}>
           {isSettingsError ? (
             <p role="alert" className="text-2sm text-text-danger">
               {t('settings.permissionLoadError')}
@@ -351,10 +372,8 @@ export function GroupSettingsTab({
       </Collapsible>
 
       <Collapsible open={isSessionsOpen} onOpenChange={setIsSessionsOpen}>
-        <CollapsibleTrigger>
-          <span className="text-sm font-semibold text-text-primary">{t('settings.sessions.title')}</span>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="flex flex-col gap-4 pt-3">
+        <SectionTitle id="group-settings-sessions-hint" title={t('settings.sessions.title')} hint={t('settings.sessions.hint')} />
+        <CollapsibleContent className={SECTION_CONTENT}>
           <GroupSessionsConfigSection canEdit={canEdit} data={sessionsConfig} groupName={group.groupName} i18nOverridePrefix={i18nOverridePrefix} />
         </CollapsibleContent>
       </Collapsible>
