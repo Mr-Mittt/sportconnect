@@ -2,7 +2,7 @@
 
 **Version:** MVP v1
 **Module:** `modules/common`
-**Last updated:** 2026-11-13 (C13 filed: timestamps as instants)
+**Last updated:** 2026-11-23 (C14 filed: outbox relay retry policy)
 
 ---
 
@@ -20,6 +20,7 @@
 | # | Ticket | Title | Status |
 |---|---|---|---|
 | 1 | [C13](MVP/C13_TIMESTAMPS_AS_INSTANT_WITH_TIMEZONE_ACROSS_THE_API.md) | Store and send every timestamp as an instant (`timestamptz` + `Instant`) instead of a zone-less `LocalDateTime`: posts, comments, notifications and other times show 7 hours old for a viewer in UTC+7 because the API sends no offset (found 2026-11-13, session 13299) | `TODO` |
+| 2 | [C14](MVP/C14_OUTBOX_RELAY_RETRY_POLICY_AND_POISON_ROW_HANDLING.md) | Outbox relay retry policy: today a row that keeps failing is retried every 10 s for ever, with no backoff, no cap and no signal, and the 50 oldest pending rows can block newer events (found while writing `BACKGROUND_JOBS.md`; left open by C3) | `TODO` |
 
 ---
 

@@ -271,4 +271,7 @@
     <!-- SESSION-72: ranking games: session_records gain ranking_requested_by/at and revision; session_record_verifications holds one confirmation per player per record -->
     <include file="db/changelog/changes/V103__session_record_ranking.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-53: statistics engine: the job queue, the per-user and per-group-member statistic blobs, the ranking projection and the board runs -->
+    <include file="db/changelog/changes/V104__session_statistics_engine.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

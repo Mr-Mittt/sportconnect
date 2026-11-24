@@ -82,8 +82,44 @@ The session detail's Result section shows a scoreboard of the whole session abov
 
 Admin: the "Record schema" section of the sport detail at `/admin/sports/:sportId` (SPORT-18), the same generic JSON editor as the profile and session attributes. The server validates only `maxRecords` and the 16 KB size; the editor shows a non-blocking note when `parseRecordSchema` cannot read the typed document (the Results section would stay hidden).
 
-## Planned (2026-11-23, SESSION-53): the server now reads part of the schema
+## The server reads part of the schema (SESSION-53, built 2026-11-23)
 
-The statistics engine (`modules/session/docs/STATISTIC_RANKING_DESIGN.md`) makes the server read `record.data` (type, `playersPerSide`, `score.slot`) when it counts a session after its 24-hour guard, and two new optional blocks, `record.statistics` (metrics with SUM, MAX or MIN, derived formulas, combo size) and `record.ranking` (sort keys, minimum games), so the same engine serves every sport; one reader per record type (`COMPETITIVE` first). A record that fails the reader is ignored by the statistics with a reason and is never rejected at write time. A shared fixture of valid and invalid records is run by the client's Vitest and the server's Spock so the two readers cannot drift. This section is filled in with the final contract when SESSION-53 is built.
+The statistics engine (`modules/session/docs/STATISTIC_RANKING_DESIGN.md`) makes the server read `record.data` (`type`, `playersPerSide`, `score.slot` with its `required` and `rule`, and `record.ranking.scoreSlot`) when it counts a session after its 24-hour guard, and two new optional blocks, `record.statistics` and `record.ranking`, so the same engine serves every sport. One **reader** per record type turns a record into neutral facts (valid, rankable, the teams, one participant per player with the outcome and the numbers); `COMPETITIVE` is the only reader. A record that fails the reader is ignored by the statistics with a reason and is **never rejected at write time**. The server reads the schema **leniently**: an entry it cannot use is dropped, never an error, so editing the schema can never stop a session being counted. The server still validates only `maxRecords` and the 16 KB size when the schema is saved.
 
-`record.ranking.sort` has **at most three keys** (each a core counter, a metric or a derived key): the ranking projection stores three sort values per board entry (SESSION-54), and the player's name is only the final tiebreak when listing and is not stored. More than three keys are refused or dropped when the schema is saved.
+**COMPETITIVE, what the reader does.** Valid: exactly two teams; each with between `playersPerSide.min` and `.max` players (defaults 1 and 10); every player a UUID, none twice; the scores consistent (at most one entry per slot, each empty or a whole number; a slot filled by both teams or by neither; a filled score satisfies the slot's `rule`; a team with any score fills every `required` slot). A game with no score at all is valid and *planned*. The first team is the winner by position, so a game is **counted** only when the ranking slot (`record.ranking.scoreSlot`, default the first) is filled by both teams with the first strictly ahead; a game with no score, or one the first team does not win (no draws yet, SESSION-59), is ignored with the reason `NO_SCORE` or `FIRST_TEAM_NOT_AHEAD`; a sport with no score slot is ignored with `RANKING_NOT_AVAILABLE`. The reader gives each player the two numbers `scoreFor` (their team's sum over every slot both teams filled) and `scoreAgainst`. The ignore reasons are stable upper-case tokens: `TEAMS`, `PLAYERS_PER_SIDE`, `PLAYER_ID`, `DUPLICATE_PLAYER`, `SCORE_SHAPE`, `SCORE_INCOMPLETE`, `SCORE_RULE`, `NO_SCORE`, `FIRST_TEAM_NOT_AHEAD`, `RANKING_NOT_AVAILABLE`, and from the engine `PLAYER_NOT_JOINED` (a named player is no longer `JOINED` in the session) and `ALREADY_COUNTED`.
+
+**`record.statistics`** (optional; the keys are the scoreboard's where they overlap):
+
+```json
+"statistics": {
+  "counters": [ "games", "wins" ],
+  "metrics": [ { "key": "scoreFor", "aggregate": "SUM" }, { "key": "scoreAgainst", "aggregate": "SUM" } ],
+  "derived": [ { "key": "winRate", "formula": "wins/games" }, { "key": "winDiff", "formula": "wins-losses" },
+               { "key": "scoreDiff", "formula": "scoreFor-scoreAgainst" } ],
+  "groupBy": [ { "by": "PARTNER" }, { "by": "TEAM", "size": 2 } ]
+}
+```
+
+The shape the engine stores these counters in, and everything else it writes as jsonb, is in `documentation/md/STATISTICS_JSONB_REFERENCE.md`.
+
+- **Core counters** every sport has and cannot redeclare: `games`, `wins`, `losses`, `draws`. All four are always stored; **`counters`** lists the ones the sport shows (any of the four; default `["games", "wins"]`; a name that is not a core counter is dropped). A **metric** is one of the numbers the reader gives (`scoreFor` and `scoreAgainst` for COMPETITIVE); its `aggregate` is `SUM`, `MAX` or `MIN` (case-insensitive); a number not declared is not counted; an unknown aggregate drops the entry.
+- A **derived** column is a formula of exactly two operands and one of `+ - * /`: the first a key (a core counter, a metric or another derived key, at most three levels deep), the second a key or a plain number; no brackets. A division by zero, or an operand with no value, gives no value. Nothing derived is stored: the leaderboard stores the three sort values computed when a game is counted.
+- **`groupBy`** lists the dimensions that get counters of their own beside the totals (`all` games and `ranked` games each), at most one of each, a repeat or an unknown `by` dropped:
+  - **`{ "by": "PARTNER" }`**: one set of counters per teammate (player A's games and wins *with* B). A team with more than 100 other members gets none.
+  - **`{ "by": "TEAM", "size": 2 }`** (`size` 2 or more; an entry with no usable size is dropped): one set per group of that many players of one team that includes the player (badminton: the pair); a team with more than 100 such groups gets none. This is the only dimension that becomes a **leaderboard entry** (a `COMBO` board); a partner grouping is a personal view.
+  - Replaces the first build's `combos: { "size": n }` (never merged; read nowhere now).
+- **Defaults.** A schema with **no** `record.statistics` block gets the block above **without `groupBy`**: no partner and no team counters until the sport declares `groupBy` (owner, 2026-11-24). Badminton's stored schema must therefore declare `groupBy` (and its `metrics` and `derived`, since a block that is present is taken as written) to have pair and partner statistics and a pair board. A block that is present is taken as written: a part left out is empty (no `groupBy` means no groupings), except `counters`, which defaults to `["games", "wins"]`.
+
+**`record.ranking`** (optional):
+
+```json
+"ranking": {
+  "sort": [ { "by": "winDiff", "dir": "DESC" }, { "by": "winRate", "dir": "DESC" }, { "by": "games", "dir": "DESC" } ],
+  "minGames": { "single": 0, "combo": 5 },
+  "scoreSlot": 0
+}
+```
+
+`record.ranking.sort` has **at most three keys** (each a core counter, a metric or a derived key): the ranking projection stores three sort values per board entry (SESSION-54), and the player's name is only the final tiebreak when listing and is not stored. The server **drops** a key beyond the third, an unknown key, an unknown direction (`ASC` or `DESC`) and a repeated key when it reads the schema. With no `sort` the default is the three keys above. `minGames` (per board kind, `single` and `combo`; defaults 0 and 5) is applied by the ranking job: an entry below it shows in statistics but has no rank. `scoreSlot` is the zero-based score slot that decides the winner (default 0).
+
+**The shared fixture** is `modules/session/session-impl/src/test/resources/record-reader/competitive-v1-cases.json`: two real schemas (badminton, and a football-like one with up to 11 a side, MAX and MIN metrics and no `groupBy`) and 21 cases, each with the expected `valid`, `rankable`, reason and players. The server's `CompetitiveRecordReaderFixtureSpec` runs every case; the client's Vitest will run the same file (client ticket CLIENT-SESSION-58, not built yet), so until then the two readers are held together only by review. A case changed there is a decision for both sides.

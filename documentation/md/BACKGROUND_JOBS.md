@@ -1,0 +1,36 @@
+# Background jobs and runners
+
+Every scheduled job, start-up runner and background worker the Java server runs, in one place (the counterpart of `REDIS_KEYS.md` and `infra/documentation/PORTS.md`). **Add the row in the same change that adds a job.** Written 2026-11-23 (SESSION-53 pickup) from the code: the intervals and switches below were read from the classes named in the table, not from memory.
+
+**One scheduler thread.** `SchedulingConfig` only enables `@Scheduled`; no pool size is set, so Spring's default applies: all `@Scheduled` methods of the server share **one thread**. A slow job delays every other tick. That is why a job that can run long does not do its work on the scheduler thread: it only *nudges* a dedicated worker thread (the group-session generation worker, the statistics worker).
+
+| Job | Class (module) | Trigger | Does what | Where it runs | Switches (test profile) | Doc |
+|---|---|---|---|---|---|---|
+| Session outbox relay | `SessionOutboxRelayJob` (session-impl) over `OutboxRelay` (common) | `fixedDelay` 10 s | Publishes pending `session_outbox_events` rows to RabbitMQ (same shape as the user relay, which takes the 50 oldest pending) | scheduler thread | none | SESSION-15, SESSION-17 |
+| User outbox relay | `UserOutboxRelayJob` (user-impl) over `OutboxRelay` | `fixedDelay` 10 s | Same for `user_outbox_events` | scheduler thread | none | U13 |
+| Session lifecycle | `SessionGenerationJob` (session-impl) | three crons, every 15 min (`0 */15 * * * *`) | `startOngoingSessions`, `closePastSessions`, `cancelUnpreparedSessions` | scheduler thread | none | SESSION-2, SESSION-GROUP-5 |
+| Group session generation drain | `GroupSessionGenerationDrainJob` (session-impl) | `fixedDelay` 60 s, `initialDelay` 60 s | Nudges `GroupSessionGenerationWorker`; its clock is also the retry backoff's (1, 5, 15, 60 min) | **dedicated thread** `group-session-generation`, one per instance, queue of one with a discard policy | `app.session.generation.safety-net` (off), `app.session.generation.async` (off: drains on the caller) | SESSION-GROUP-5, GROUP_SESSION_DESIGN.md |
+| Group session generation, event triggers | `GroupSessionGenerationListener` (session-impl) | start-up and after-commit events | Plans inline, then nudges the same worker | caller, then the worker | same | SESSION-GROUP-5 |
+| Venue country and region backfill | `LocationGeoBackfillRunner` (location-impl) | once at start-up (`ApplicationRunner`) | Links venues that have coordinates and no country, 200 per page by id cursor, guarded update; unresolved venues are retried at the next start | main thread, before traffic | `app.location.geo-backfill.enabled` (default on, off in tests) | LOC-5 |
+| Statistics engine (SESSION-53) | `SessionStatsDrainJob` + `SessionStatsWorker` + `SessionStatsRunner` (session-impl) | `fixedDelay` 5 min with an initial delay; no start-up run | Counts completed sessions whose 24-hour guard has passed; the tick only nudges the worker | **dedicated thread** `session-stats`, one per instance | `app.stats.job.enabled`, `app.stats.job.async` (both off in tests) | STATISTIC_RANKING_DESIGN.md §6 |
+| Nightly ranking (planned, SESSION-54) | `app.stats.ranking.cron` (session-impl) | cron `0 5 0 * * *`, `Asia/Ho_Chi_Minh` | Ranks the boards marked dirty by the statistics engine, one board per transaction | to be decided at SESSION-54 (the scheduler thread must not run it) | not built yet | STATISTIC_RANKING_DESIGN.md §7 |
+
+## When it fails, and what retries it
+
+| Job | A failure does | What retries it, and when | A cap, and what the operator sees |
+|---|---|---|---|
+| Outbox relays (session, user) | A publish that is nacked or times out (5 s confirm) leaves the row `PENDING`, bumps `attemptCount` and `lastAttemptAt`, logs a warning, never throws | The next tick, every 10 s, takes it again (the fetch takes pending rows oldest first) | **No cap**: a row that never publishes is retried for ever, so it stays at the head of the queue; `attemptCount` and the warning in the log are the signal. Filed as common **C14** (backoff, a cap, no head-of-line blocking) |
+| Session lifecycle | Each of the three methods is one `@Transactional`: a failure rolls that method back | The next 15-minute cron run does the same work again (nothing is queued, the query finds the sessions still due) | No cap; the scheduler logs the exception |
+| Group session generation | One slot per `REQUIRES_NEW` transaction; a failed slot is counted under its row lock | Backoff 1, 5, 15, 60 minutes, read by the 60-second tick; `FAILED` on the fifth attempt, revived by the next planning (an edit, a session ending, or start-up) | Capped at five attempts; `FAILED` slots and their last error are on the queue row |
+| Venue backfill | A failure of the whole run is logged at error and never stops start-up; a venue that resolves to nothing stays unlinked | The next start of the server, which tries every still-unlinked venue once | No cap; the log line `examined / linked / left unresolved` |
+| Statistics engine (SESSION-53) | The session's counting rolls back as a whole; the failure is recorded in a separate small transaction (`RETRY`, `next_attempt_at` 15 min ahead, `last_error`) | The 5-minute tick takes a `RETRY` row once it is due (the third tick after the failure); a `RUNNING` claim older than 10 minutes is taken over; `FAILED` is taken again after 6 hours | `FAILED` after four attempts; `attempts`, `last_error` and `result` on the job row |
+| Nightly ranking (planned, SESSION-54) | The board's transaction rolls back and the board stays dirty | The next night's run | to be written at SESSION-54 |
+
+## Two things every job here must answer (design review)
+
+- **Two at once.** Name the guard: a unique key (the loser fails, so absorb the error), a row lock such as `FOR UPDATE SKIP LOCKED` (the loser skips), or a compare-and-set update. Every transaction has its own connection, so threads of one instance race like two instances.
+- **What the clock is.** A backoff with nothing to wake it is not a retry; say which tick reads `next_attempt_at`.
+
+## Not covered here
+
+The Go chat service's own goroutines and sync consumers (`services/chat/`), Keycloak, and the box's cron or systemd units (`infra/`) are documented with their own services. If one of them should be listed here too, add a section rather than a row.

@@ -1,0 +1,211 @@
+{
+  "description": "SESSION-53: one shared fixture for the COMPETITIVE (v1) record reader. The server's CompetitiveRecordReaderFixtureSpec runs every case; the client's Vitest runs the same file (CLIENT-SESSION-58) so the two readers cannot drift. A case names a schema, a record's data, and what the reader must say. Player ids are fixed UUIDs: p1 = 11111111-1111-1111-1111-111111111111, p2 = 2222..., p3 = 3333..., p4 = 4444... (the literal ids are used below).",
+  "schemas": {
+    "badminton": {
+      "version": 1,
+      "maxRecords": 50,
+      "record": {
+        "data": {
+          "type": "COMPETITIVE",
+          "playersPerSide": { "min": 1, "max": 2 },
+          "score": { "slot": [ { "required": true, "rule": ">=0&<=30" } ] }
+        }
+      }
+    },
+    "football": {
+      "version": 1,
+      "maxRecords": 100,
+      "record": {
+        "data": {
+          "type": "COMPETITIVE",
+          "playersPerSide": { "min": 1, "max": 11 },
+          "score": { "slot": [ { "required": true, "rule": ">=0" } ] }
+        },
+        "statistics": {
+          "metrics": [ { "key": "scoreFor", "aggregate": "MAX" }, { "key": "scoreAgainst", "aggregate": "MIN" } ],
+          "derived": [ { "key": "goalDiff", "formula": "scoreFor-scoreAgainst" } ]
+        }
+      }
+    },
+    "noScore": {
+      "version": 1,
+      "record": { "data": { "type": "COMPETITIVE", "playersPerSide": { "min": 1, "max": 2 } } }
+    }
+  },
+  "cases": [
+    {
+      "id": "doubles-complete-first-ahead",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"], "scores": [18] } ] },
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null,
+        "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"] }
+    },
+    {
+      "id": "singles-complete-first-ahead",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [0] } ] },
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null,
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "planned-game-null-scores",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [null] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [null] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "NO_SCORE",
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "planned-game-no-scores-key",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"] },
+        { "players": ["33333333-3333-3333-3333-333333333333"] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "NO_SCORE",
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "first-team-behind",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [15] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [21] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "FIRST_TEAM_NOT_AHEAD",
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "tie",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [21] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "FIRST_TEAM_NOT_AHEAD",
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "score-for-one-team-only",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [null] } ] },
+      "expect": { "valid": false, "invalidReason": "SCORE_INCOMPLETE", "rankable": false, "players": [] }
+    },
+    {
+      "id": "score-breaks-the-slot-rule",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [31] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
+      "expect": { "valid": false, "invalidReason": "SCORE_RULE", "rankable": false, "players": [] }
+    },
+    {
+      "id": "score-not-a-whole-number",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21.5] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
+      "expect": { "valid": false, "invalidReason": "SCORE_SHAPE", "rankable": false, "players": [] }
+    },
+    {
+      "id": "more-scores-than-slots",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21, 19] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18, 15] } ] },
+      "expect": { "valid": false, "invalidReason": "SCORE_SHAPE", "rankable": false, "players": [] }
+    },
+    {
+      "id": "three-players-a-side",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "55555555-5555-5555-5555-555555555555"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
+      "expect": { "valid": false, "invalidReason": "PLAYERS_PER_SIDE", "rankable": false, "players": [] }
+    },
+    {
+      "id": "no-players-on-a-side",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": [], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
+      "expect": { "valid": false, "invalidReason": "PLAYERS_PER_SIDE", "rankable": false, "players": [] }
+    },
+    {
+      "id": "player-twice-in-a-team",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111", "11111111-1111-1111-1111-111111111111"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
+      "expect": { "valid": false, "invalidReason": "DUPLICATE_PLAYER", "rankable": false, "players": [] }
+    },
+    {
+      "id": "player-on-both-teams",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [18] } ] },
+      "expect": { "valid": false, "invalidReason": "DUPLICATE_PLAYER", "rankable": false, "players": [] }
+    },
+    {
+      "id": "player-id-not-a-uuid",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["not-a-uuid"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
+      "expect": { "valid": false, "invalidReason": "PLAYER_ID", "rankable": false, "players": [] }
+    },
+    {
+      "id": "one-team",
+      "schema": "badminton",
+      "data": { "teams": [ { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] } ] },
+      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "players": [] }
+    },
+    {
+      "id": "three-teams",
+      "schema": "badminton",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] },
+        { "players": ["44444444-4444-4444-4444-444444444444"], "scores": [10] } ] },
+      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "players": [] }
+    },
+    {
+      "id": "no-teams-at-all",
+      "schema": "badminton",
+      "data": { },
+      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "players": [] }
+    },
+    {
+      "id": "football-three-against-two",
+      "schema": "football",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "55555555-5555-5555-5555-555555555555"], "scores": [3] },
+        { "players": ["33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"], "scores": [1] } ] },
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null,
+        "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "55555555-5555-5555-5555-555555555555", "33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"] }
+    },
+    {
+      "id": "football-first-team-behind",
+      "schema": "football",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [0] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [2] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "FIRST_TEAM_NOT_AHEAD",
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "sport-with-no-score-slot",
+      "schema": "noScore",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"] },
+        { "players": ["33333333-3333-3333-3333-333333333333"] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "RANKING_NOT_AVAILABLE",
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    }
+  ]
+}

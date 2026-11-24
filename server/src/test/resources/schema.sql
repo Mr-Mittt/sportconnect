@@ -502,6 +502,73 @@ CREATE TABLE IF NOT EXISTS session_record_verifications (
     PRIMARY KEY (record_id, user_id)
 );
 
+-- SESSION-53 (V104): the statistics engine. JSON for JSONB; no FKs (domain-scoped); no partial or DESC NULLS LAST indexes (H2).
+CREATE TABLE IF NOT EXISTS session_stats_jobs (
+    session_id BIGINT PRIMARY KEY,
+    status VARCHAR(10) NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMP WITH TIME ZONE,
+    claimed_at TIMESTAMP WITH TIME ZONE,
+    last_error VARCHAR(500),
+    counted INTEGER NOT NULL DEFAULT 0,
+    ignored INTEGER NOT NULL DEFAULT 0,
+    result JSON,
+    finished_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS user_sport_stats (
+    user_id UUID NOT NULL,
+    sport_id BIGINT NOT NULL,
+    personal JSON NOT NULL,
+    groupings JSON NOT NULL,
+    scopes JSON NOT NULL,
+    history JSON NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, sport_id)
+);
+
+CREATE TABLE IF NOT EXISTS group_member_stats (
+    group_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    sport_id BIGINT NOT NULL,
+    stats JSON NOT NULL,
+    history JSON NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, user_id, sport_id)
+);
+
+CREATE TABLE IF NOT EXISTS leaderboard_entry (
+    scope_type VARCHAR(10) NOT NULL,
+    scope_id BIGINT NOT NULL,
+    sport_id BIGINT NOT NULL,
+    kind VARCHAR(10) NOT NULL,
+    subject_key VARCHAR(255) NOT NULL,
+    k1 DOUBLE PRECISION,
+    k2 DOUBLE PRECISION,
+    k3 DOUBLE PRECISION,
+    games INTEGER NOT NULL DEFAULT 0,
+    rank INTEGER,
+    ranked_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (scope_type, scope_id, sport_id, kind, subject_key)
+);
+
+CREATE TABLE IF NOT EXISTS stat_board_runs (
+    sport_id BIGINT NOT NULL,
+    scope_type VARCHAR(10) NOT NULL,
+    scope_id BIGINT NOT NULL,
+    dirty BOOLEAN NOT NULL DEFAULT FALSE,
+    dirty_at TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(10) NOT NULL DEFAULT 'IDLE',
+    claimed_at TIMESTAMP WITH TIME ZONE,
+    computed_at TIMESTAMP WITH TIME ZONE,
+    PRIMARY KEY (sport_id, scope_type, scope_id)
+);
+
 CREATE TABLE IF NOT EXISTS notifications (
     id BIGSERIAL PRIMARY KEY,
     recipient_user_id UUID NOT NULL,
