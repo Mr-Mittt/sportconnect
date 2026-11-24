@@ -13,6 +13,11 @@ app:
       # SESSION-GROUP-5: the ITs drain the generation queue on the calling thread and keep the 60-second tick out of the way.
       async: false
       safety-net: false
+  stats:
+    job:
+      # SESSION-53: the ITs call the runner directly and keep the 5-minute tick (and its worker thread) out of the way.
+      enabled: false
+      async: false
 
 spring:
   datasource:

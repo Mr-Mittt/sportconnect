@@ -54,6 +54,7 @@ public class CompetitiveRecordReader implements RecordTypeReader {
             return RecordFacts.invalid("TEAMS");
         }
         List<UUID> players = new ArrayList<>();
+        List<List<UUID>> teamPlayers = new ArrayList<>();
         Set<UUID> seen = new HashSet<>();
         List<List<Long>> scores = new ArrayList<>();
         for (Object teamNode : teams) {
@@ -63,6 +64,7 @@ public class CompetitiveRecordReader implements RecordTypeReader {
             if (ids.size() < min || ids.size() > max) {
                 return RecordFacts.invalid("PLAYERS_PER_SIDE");
             }
+            List<UUID> thisTeam = new ArrayList<>();
             for (Object id : ids) {
                 UUID parsed = uuidOf(id);
                 if (parsed == null) {
@@ -72,7 +74,9 @@ public class CompetitiveRecordReader implements RecordTypeReader {
                     return RecordFacts.invalid("DUPLICATE_PLAYER");
                 }
                 players.add(parsed);
+                thisTeam.add(parsed);
             }
+            teamPlayers.add(List.copyOf(thisTeam));
             List<Long> teamScores = scoresOf(team.get("scores"), slots.size());
             if (teamScores == null) {
                 return RecordFacts.invalid("SCORE_SHAPE");
@@ -86,20 +90,47 @@ public class CompetitiveRecordReader implements RecordTypeReader {
         }
 
         List<UUID> named = List.copyOf(players);
+        List<List<UUID>> sides = List.copyOf(teamPlayers);
         if (slots.isEmpty()) {
-            return new RecordFacts(true, null, false, "RANKING_NOT_AVAILABLE", named);
+            return new RecordFacts(true, null, false, "RANKING_NOT_AVAILABLE", named, sides, List.of());
         }
         int rankingSlot = rankingSlot(schema, slots.size());
         Long first = scores.get(0).get(rankingSlot);
         Long second = scores.get(1).get(rankingSlot);
         if (first == null && second == null) {
-            return new RecordFacts(true, null, false, "NO_SCORE", named);
+            return new RecordFacts(true, null, false, "NO_SCORE", named, sides, List.of());
         }
         // Both filled here: checkScores already refused a slot filled by one team only.
         if (first <= second) {
-            return new RecordFacts(true, null, false, "FIRST_TEAM_NOT_AHEAD", named);
+            return new RecordFacts(true, null, false, "FIRST_TEAM_NOT_AHEAD", named, sides, List.of());
         }
-        return new RecordFacts(true, null, true, null, named);
+        return new RecordFacts(true, null, true, null, named, sides, participants(sides, scores));
+    }
+
+    /**
+     * SESSION-53: the first team wins by position (the contract), the second loses. The numbers each player gets are the
+     * team's: {@code scoreFor} is the sum of the team's scores over every slot both teams filled, {@code scoreAgainst} the
+     * other team's sum.
+     */
+    private static List<RecordFacts.Participant> participants(List<List<UUID>> sides, List<List<Long>> scores) {
+        double[] sum = new double[2];
+        for (int slot = 0; slot < scores.get(0).size(); slot++) {
+            Long a = scores.get(0).get(slot);
+            Long b = scores.get(1).get(slot);
+            if (a != null && b != null) {
+                sum[0] += a;
+                sum[1] += b;
+            }
+        }
+        List<RecordFacts.Participant> result = new ArrayList<>();
+        for (int team = 0; team < 2; team++) {
+            Map<String, Double> metrics = Map.of("scoreFor", sum[team], "scoreAgainst", sum[1 - team]);
+            RecordFacts.Outcome outcome = team == 0 ? RecordFacts.Outcome.WIN : RecordFacts.Outcome.LOSS;
+            for (UUID player : sides.get(team)) {
+                result.add(new RecordFacts.Participant(player, team, outcome, metrics));
+            }
+        }
+        return List.copyOf(result);
     }
 
     /** Consistency of the two teams' scores, or the reason it is not. */
