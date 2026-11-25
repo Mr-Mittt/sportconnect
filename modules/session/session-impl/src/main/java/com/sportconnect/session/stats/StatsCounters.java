@@ -54,6 +54,16 @@ public final class StatsCounters {
         return values.get(key);
     }
 
+    /**
+     * SESSION-73: these counters minus another's, for the "normal" games (all minus ranking). Every stat held here keeps its
+     * key, with the other's value (0 when it has none) taken off and never below zero; a stat only the other holds is ignored.
+     */
+    public StatsCounters minus(StatsCounters other) {
+        StatsCounters result = new StatsCounters();
+        values.forEach((key, value) -> result.values.put(key, Math.max(0d, value - other.values.getOrDefault(key, 0d))));
+        return result;
+    }
+
     public Map<String, Object> toMap() {
         Map<String, Object> map = new LinkedHashMap<>();
         values.forEach((key, value) -> map.put(key, value == Math.rint(value) && Math.abs(value) < 1e15

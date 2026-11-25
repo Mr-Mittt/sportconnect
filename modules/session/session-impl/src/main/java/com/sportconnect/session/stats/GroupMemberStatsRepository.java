@@ -12,6 +12,9 @@ import java.util.UUID;
 
 public interface GroupMemberStatsRepository extends JpaRepository<GroupMemberStats, GroupMemberStats.Key> {
 
+    /** SESSION-73: every member row of the group for the sport, for the statistics list (no lock; primary key prefix {@code group_id}). */
+    List<GroupMemberStats> findByGroupIdAndSportId(Long groupId, Long sportId);
+
     /** Which of these users already have a row for the group and sport (no lock). */
     @Query("SELECT s.userId FROM GroupMemberStats s WHERE s.groupId = :groupId AND s.sportId = :sportId "
             + "AND s.userId IN :userIds")

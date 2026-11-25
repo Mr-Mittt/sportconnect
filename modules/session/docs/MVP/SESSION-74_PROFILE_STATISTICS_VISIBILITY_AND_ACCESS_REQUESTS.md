@@ -9,3 +9,5 @@ A per-user setting (`personal`, `pair`) and an access request (asker, owner, sta
 **Out of scope:** the board rows themselves (boards are public by decision).
 
 **Tests:** Spock and an integration test for the access rule (self, other with setting on, off, approved request, deactivated).
+
+**Hand-over from SESSION-73 (2026-11-24):** the group member detail endpoint `GET /api/sessions/group/{groupId}/stats/members/{userId}` returns that member's pair statistics to **any member of the group**, with no privacy setting. When this ticket adds the `pair` and `personal` visibility setting, that endpoint must follow it (and say what a group member sees when the setting is off); decide at pickup whether a group member is treated like any other signed-in user or has a right of their own.
