@@ -1,5 +1,5 @@
 -- SESSION-53: the statistics engine (design: modules/session/docs/STATISTIC_RANKING_DESIGN.md, sections 4 and 6).
--- Six session-owned tables. No foreign keys to other domains (user, sport, group and region ids only); the sessions
+-- Five session-owned tables. No foreign keys to other domains (user, sport, group and region ids only); the sessions
 -- table is the same domain but the job row is keyed by the session id with no FK, like session_records.
 --
 -- session_stats_jobs      the queue: one row per completed session once its 24-hour guard has passed, and the
@@ -10,11 +10,8 @@
 --                         groupings (per partner, per team), the region and country scopes earned by ranking games,
 --                         the history pointers. Every jsonb shape: documentation/md/STATISTICS_JSONB_REFERENCE.md.
 -- group_member_stats      the same for the games of one group's sessions, per member.
--- group_stats             what a group keeps about itself in a sport: the head-to-head of its pairs, one jsonb document
---                         per group and sport (SESSION-53 rework, owner 2026-11-25).
 -- leaderboard_entry       the flat ranking projection: one row per player or pair per board, with the sport's three
---                         sort values. Written and ranked by SESSION-54's job (owner 2026-11-25: the counting engine
---                         does not write it).
+--                         sort values computed once when the row is written. Ranked by the nightly job (SESSION-54).
 -- stat_board_runs         one tiny row per board: dirty flag, claim and time, for the ranking job (SESSION-54).
 
 CREATE TABLE session_stats_jobs (
@@ -59,15 +56,6 @@ CREATE TABLE group_member_stats (
     PRIMARY KEY (group_id, user_id, sport_id)
 );
 
-CREATE TABLE group_stats (
-    group_id BIGINT NOT NULL,
-    sport_id BIGINT NOT NULL,
-    h2h JSONB NOT NULL DEFAULT '{}'::jsonb,
-    version INTEGER NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (group_id, sport_id)
-);
-
 CREATE TABLE leaderboard_entry (
     scope_type VARCHAR(10) NOT NULL,
     scope_id BIGINT NOT NULL,
@@ -99,8 +87,3 @@ CREATE TABLE stat_board_runs (
     computed_at TIMESTAMPTZ,
     PRIMARY KEY (sport_id, scope_type, scope_id)
 );
-
--- The sport switch (SESSION-53 rework, owner 2026-11-25): statistics and ranking on or off for a sport, together. Off by
--- default: the statistics runner picks only the sessions of sports that have it on, and the ranking proposal refuses the
--- others. Results logging does not depend on it (it needs only sports.result_schema).
-ALTER TABLE sports ADD COLUMN statistics_enabled BOOLEAN NOT NULL DEFAULT FALSE;
