@@ -55,6 +55,7 @@ class SessionRecordRankingSpec extends Specification {
                                                    score: [slot: [[required: true, rule: '>=0']]]]]]
     SessionParticipant callerParticipation
     Set<UUID> active = null   // null: everyone is active
+    boolean statisticsOn = true   // SESSION-53 rework: the sport's statistics switch
     SessionRecord stored
     List<SessionRecordVerification> confirmations = []
     List<SessionRecordVerification> saved = []
@@ -72,6 +73,7 @@ class SessionRecordRankingSpec extends Specification {
         sessionRepository.findById(SESSION_ID) >> { Optional.of(current) }
         gate.require(_, _, _, _, _, _) >> { args -> args[0] }
         sportService.getResultSchema(SPORT_ID) >> { schema }
+        sportService.isStatisticsEnabled(SPORT_ID) >> { statisticsOn }
         participantRepository.findBySessionIdAndUserId(SESSION_ID, _) >> { args ->
             args[1] == proposer ? Optional.ofNullable(callerParticipation) : Optional.empty()
         }
@@ -257,6 +259,34 @@ class SessionRecordRankingSpec extends Specification {
                 [record: [data: [type: 'PERSONAL_BEST']]],
                 [kind: 'MATCH']
         ]
+    }
+
+    def "a sport with statistics switched off has no ranking games: proposing is refused and nothing is written"() {
+        given:
+        statisticsOn = false
+
+        when:
+        service.requestRanking(SESSION_ID, RECORD_ID, proposer)
+
+        then:
+        def e = thrown(ConflictException)
+        e.errorCode == "SESSION_RECORD_RANKING_NOT_AVAILABLE"
+        stored.rankingRequestedAt == null
+        saved.isEmpty()
+        0 * sessionOutboxWriter.record(*_)
+    }
+
+    def "a sport with statistics switched off cannot have a ranking game confirmed either"() {
+        given:
+        statisticsOn = false
+
+        when:
+        service.verify(SESSION_ID, RECORD_ID, p2)
+
+        then:
+        def e = thrown(ConflictException)
+        e.errorCode == "SESSION_RECORD_RANKING_NOT_AVAILABLE"
+        saved.isEmpty()
     }
 
     def "a scored game whose first team is not ahead cannot be proposed, with the reason as a parameter"() {

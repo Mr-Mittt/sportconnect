@@ -1,155 +1,226 @@
 package com.sportconnect.session.stats
 
+import com.sportconnect.session.record.RecordFacts.Outcome
 import spock.lang.Specification
 
-/** SESSION-53: what a sport's schema says about its statistics and ranking, read leniently with the badminton defaults. */
+/**
+ * SESSION-53 rework (owner, 2026-11-25): what a sport's result schema says about its statistics. One config shared with the
+ * client ({@code record.scoreboard.columns}), no defaults: no usable columns collects nothing.
+ */
 class StatisticsSchemaSpec extends Specification {
 
-    Map badminton(Map extra = [:]) {
-        def record = [data: [type: 'COMPETITIVE', playersPerSide: [min: 1, max: 2], score: [slot: [[required: true]]]]]
-        record.putAll(extra)
+    /** A COMPETITIVE schema with the given scoreboard, ranking and data additions. */
+    def schema(Map scoreboard = null, Map ranking = null, Map data = [:]) {
+        def record = [data: [type: 'COMPETITIVE'] + data]
+        if (scoreboard != null) {
+            record.scoreboard = scoreboard
+        }
+        if (ranking != null) {
+            record.ranking = ranking
+        }
         [record: record]
     }
 
-    def "a competitive schema with no statistics block gets the default metrics and derived columns, and no groupings"() {
-        when:
-        def s = StatisticsSchema.of(badminton())
-
-        then:
-        s.metrics() == [scoreFor: Aggregate.SUM, scoreAgainst: Aggregate.SUM]
-        s.derived()*.key() == ['winRate', 'winDiff', 'scoreDiff']
-        s.comboSize() == 0
-        s.counters() == ['games', 'wins']
-        s.groupBy() == []
-        !s.groupsByPartner()
-        s.sort()*.by() == ['winDiff', 'winRate', 'games']
-        s.sort().every { it.descending() }
-        s.minGamesSingle() == 0
-        s.minGamesCombo() == 5
+    def keys(StatisticsSchema s) {
+        s.collected()*.key()
     }
 
-    def "the default groups by nothing, whatever the side size: a sport asks for partners or teams with groupBy"() {
+    // ---- no defaults -----------------------------------------------------------------------------------------------
+
+    def "a sport with no scoreboard columns collects nothing, whatever else it says"() {
         expect:
-        StatisticsSchema.of([record: [data: [playersPerSide: [min: 1, max: 11]]]]).groupBy() == []
-        StatisticsSchema.of([record: [data: [playersPerSide: [min: 1, max: 2]]]]).groupBy() == []
-        StatisticsSchema.of([record: [data: [playersPerSide: [min: 1, max: 2]]]]).comboSize() == 0
-        !StatisticsSchema.of([record: [data: [playersPerSide: [min: 1, max: 2]]]]).groupsByPartner()
-        StatisticsSchema.of([:]).groupBy() == []
-        StatisticsSchema.of([:]).counters() == ['games', 'wins']
+        !StatisticsSchema.of(input).collects()
+        StatisticsSchema.of(input).columns().isEmpty()
+        StatisticsSchema.of(input).collected().isEmpty()
+        StatisticsSchema.of(input).groupBy().isEmpty()
+
+        where:
+        input << [
+                null,
+                [:],
+                [record: [:]],
+                schema(),
+                schema([enabled: true]),
+                schema([columns: []]),
+                schema([columns: 'games'])]
     }
 
-    def "a present statistics block is taken as written, a missing part being empty"() {
-        when:
-        def s = StatisticsSchema.of(badminton(statistics: [
-                metrics: [[key: 'scoreFor', aggregate: 'max'], [key: 'scoreAgainst', aggregate: 'MIN']],
-                derived: [[key: 'goalDiff', formula: 'scoreFor-scoreAgainst']]]))
+    def "the old record.statistics block is not read: a sport that only has it collects nothing"() {
+        given:
+        def old = [record: [data: [type: 'COMPETITIVE'], statistics: [counters: ['games', 'wins'], groupBy: [[by: 'PARTNER']]]]]
 
-        then:
-        s.metrics() == [scoreFor: Aggregate.MAX, scoreAgainst: Aggregate.MIN]
-        s.derived()*.key() == ['goalDiff']
-        s.comboSize() == 0          // no groupBy: none, whatever playersPerSide says
-        s.groupBy() == []
-        s.counters() == ['games', 'wins']
-    }
-
-    def "groupBy TEAM takes effect from size 2 up and an unusable size drops the entry"() {
         expect:
-        StatisticsSchema.of(badminton(statistics: [groupBy: [[by: 'TEAM', size: 3]]])).comboSize() == 3
-        StatisticsSchema.of(badminton(statistics: [groupBy: [[by: 'TEAM', size: 1]]])).groupBy() == []
-        StatisticsSchema.of(badminton(statistics: [groupBy: [[by: 'TEAM', size: 'two']]])).groupBy() == []
-        StatisticsSchema.of(badminton(statistics: [groupBy: [[by: 'TEAM']]])).groupBy() == []
+        !StatisticsSchema.of(old).collects()
+        StatisticsSchema.of(old).groupBy().isEmpty()
     }
 
-    def "groupBy PARTNER stands alone, a name is read in any case, and unknown or repeated dimensions are dropped"() {
-        when:
-        def s = StatisticsSchema.of(badminton(statistics: [groupBy: [
-                [by: 'partner'], [by: 'OPPONENT'], [by: 'PARTNER'], [by: 'Team', size: 2], [by: 'TEAM', size: 3], 'PARTNER', [size: 2]]]))
-
-        then:
-        s.groupBy() == [new StatisticsSchema.Grouping('PARTNER', 0), new StatisticsSchema.Grouping('TEAM', 2)]
-        s.groupsByPartner()
-        s.comboSize() == 2
-    }
-
-    def "a schema that groups by partner only has no team boards"() {
-        when:
-        def s = StatisticsSchema.of(badminton(statistics: [groupBy: [[by: 'PARTNER']]]))
-
-        then:
-        s.groupsByPartner()
-        s.comboSize() == 0
-    }
-
-    def "counters lists the core counters to show: missing means games and wins, a list is taken as written"() {
+    def "a record type with no catalog collects nothing"() {
         expect:
-        StatisticsSchema.of(badminton(statistics: [metrics: []])).counters() == ['games', 'wins']
-        StatisticsSchema.of(badminton(statistics: [counters: ['wins', 'games', 'losses']])).counters() == ['wins', 'games', 'losses']
-        StatisticsSchema.of(badminton(statistics: [counters: ['wins', 'aces', 'wins', 7]])).counters() == ['wins']
-        StatisticsSchema.of(badminton(statistics: [counters: []])).counters() == []
-        StatisticsSchema.of(badminton(statistics: [counters: 'games'])).counters() == ['games', 'wins']
+        !StatisticsSchema.of([record: [data: [type: 'RECORD'], scoreboard: [columns: ['games', 'wins']]]]).collects()
+        !StatisticsSchema.of([record: [scoreboard: [columns: ['games']]]]).collects()
     }
 
-    def "an entry the server cannot use is dropped, never an error"() {
-        when:
-        def s = StatisticsSchema.of(badminton(statistics: [
-                metrics: [[key: 'aces', aggregate: 'AVERAGE'], [key: 'wins', aggregate: 'SUM'], [key: '', aggregate: 'SUM'],
-                          [key: 'points', aggregate: 'SUM']],
-                derived: [[key: 'bad', formula: 'wins/(games)'], [key: 'winRate', formula: 'wins/games'], [key: 'games', formula: 'wins+1']]]))
+    // ---- columns and what they collect -----------------------------------------------------------------------------
 
-        then: "an unknown aggregate, a core counter or a blank key cannot be a metric; a bad formula or a core name is no column"
-        s.metrics() == [points: Aggregate.SUM]
-        s.derived()*.key() == ['winRate']
+    def "the listed columns are collected, in the catalog's order of storage"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['wins', 'games']]))
+
+        expect:
+        s.collects()
+        s.columns() == ['wins', 'games']
+        keys(s) == ['games', 'wins']
     }
 
-    def "the sort keeps at most three keys, in order, and drops unknown keys, directions and repeats"() {
-        when:
-        def s = StatisticsSchema.of(badminton(ranking: [sort: [
-                [by: 'wins', dir: 'DESC'], [by: 'nonsense', dir: 'DESC'], [by: 'winRate', dir: 'sideways'],
-                [by: 'wins', dir: 'ASC'], [by: 'losses', dir: 'asc'], [by: 'games', dir: 'DESC'], [by: 'winDiff', dir: 'DESC']]]))
+    def "a formula column collects its operands, which are not shown unless listed"() {
+        expect:
+        keys(StatisticsSchema.of(schema([columns: ['winRate']]))) == ['games', 'wins']
+        StatisticsSchema.of(schema([columns: ['winRate']])).columns() == ['winRate']
+        keys(StatisticsSchema.of(schema([columns: ['winDiff']]))) == ['wins', 'losses']
+        keys(StatisticsSchema.of(schema([columns: ['scoreDiff']]))) == ['scoreFor', 'scoreAgainst']
+    }
 
-        then:
-        s.sort()*.by() == ['wins', 'losses', 'games']
+    def "unknown, repeated and non-catalog columns are dropped, and none left collects nothing"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['games', 'aces', 'games', 7, null, 'name']])).columns() == ['games']
+        !StatisticsSchema.of(schema([columns: ['aces', 'name', 'draws']])).collects()
+    }
+
+    // ---- the ranking order ------------------------------------------------------------------------------------------
+
+    def "a sport that names no ranking order has none: there is no default sort"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['games', 'wins']])).sort().isEmpty()
+    }
+
+    def "the sort keeps the catalog's keys, at most three, no repeats, with their directions"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['games', 'wins']], [sort: [
+                [by: 'wins', dir: 'desc'], [by: 'wins', dir: 'ASC'], [by: 'nope', dir: 'DESC'], [by: 'games', dir: 'ASC'],
+                [by: 'winRate', dir: 'DESC'], [by: 'losses', dir: 'DESC'], [by: 'scoreFor', dir: 'sideways']]]))
+
+        expect:
+        s.sort()*.by() == ['wins', 'games', 'winRate']
         s.sort()*.descending() == [true, false, true]
     }
 
-    def "minGames comes from the ranking block"() {
-        when:
-        def s = StatisticsSchema.of(badminton(ranking: [minGames: [single: 3, combo: 10]]))
-
-        then:
-        s.minGamesSingle() == 3
-        s.minGamesCombo() == 10
+    def "a sort key collects what it needs too, so the ranking can order by it, but only for a sport that lists columns"() {
+        expect:
+        keys(StatisticsSchema.of(schema([columns: ['games']], [sort: [[by: 'winDiff', dir: 'DESC']]]))) == ['games', 'wins', 'losses']
+        !StatisticsSchema.of(schema(null, [sort: [[by: 'winDiff', dir: 'DESC']]])).collects()
+        !StatisticsSchema.of(schema([columns: []], [sort: [[by: 'winDiff', dir: 'DESC']]])).collects()
     }
 
-    def "valueOf reads a core counter, a metric and a derived column, and gives no value for a division by zero"() {
-        given:
-        def s = StatisticsSchema.of(badminton())
-        def c = new StatsCounters()
-        c.add(com.sportconnect.session.record.RecordFacts.Outcome.WIN, [scoreFor: 21d, scoreAgainst: 15d], s.metrics())
-        c.add(com.sportconnect.session.record.RecordFacts.Outcome.LOSS, [scoreFor: 10d, scoreAgainst: 21d], s.metrics())
-        c.add(com.sportconnect.session.record.RecordFacts.Outcome.WIN, [scoreFor: 21d, scoreAgainst: 19d], s.metrics())
-
+    def "minGames defaults to 0 for a single player and 5 for a combo, and is read as written"() {
         expect:
-        s.valueOf('games', c) == 3d
-        s.valueOf('scoreFor', c) == 52d
-        s.valueOf('winRate', c) == 2d / 3d
-        s.valueOf('winDiff', c) == 1d
-        s.valueOf('scoreDiff', c) == 52d - 55d
-        s.valueOf('nonsense', c) == null
-        s.valueOf('winRate', new StatsCounters()) == null      // 0 / 0
+        StatisticsSchema.of(schema([columns: ['games']])).minGamesSingle() == 0
+        StatisticsSchema.of(schema([columns: ['games']])).minGamesCombo() == 5
+        StatisticsSchema.of(schema([columns: ['games']], [minGames: [single: 3, combo: 8]])).minGamesSingle() == 3
+        StatisticsSchema.of(schema([columns: ['games']], [minGames: [single: 3, combo: 8]])).minGamesCombo() == 8
+        StatisticsSchema.of(schema([columns: ['games']], [minGames: [single: -1, combo: 'x']])).minGamesSingle() == 0
     }
 
-    def "a derived column may be built on another derived column, to a small depth"() {
+    // ---- the one grouping ---------------------------------------------------------------------------------------------
+
+    def "a sport with no groupBy has no grouping at all"() {
         given:
-        def s = StatisticsSchema.of(badminton(statistics: [
-                metrics: [[key: 'points', aggregate: 'SUM']],
-                derived: [[key: 'perGame', formula: 'points/games'], [key: 'doubled', formula: 'perGame*2']]]))
-        def c = new StatsCounters()
-        c.add(com.sportconnect.session.record.RecordFacts.Outcome.WIN, [points: 30d], s.metrics())
-        c.add(com.sportconnect.session.record.RecordFacts.Outcome.WIN, [points: 10d], s.metrics())
+        def s = StatisticsSchema.of(schema([columns: ['games']]))
 
         expect:
-        s.valueOf('perGame', c) == 20d
-        s.valueOf('doubled', c) == 40d
+        s.groupBy().isEmpty()
+        !s.groupsByPartner()
+        s.comboSize() == 0
+    }
+
+    def "PARTNER and TEAM with a size are the groupings, the name in any case"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'partner']]])).groupsByPartner()
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: ' Partner ']]])).groupBy() == [new StatisticsSchema.Grouping('PARTNER', 0)]
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'TEAM', size: 5]]])).comboSize() == 5
+        !StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'TEAM', size: 5]]])).groupsByPartner()
+    }
+
+    def "a TEAM smaller than two, and anything else, is not a grouping"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'TEAM', size: 1]]])).groupBy().isEmpty()
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'TEAM']]])).groupBy().isEmpty()
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'CLUB']]])).groupBy().isEmpty()
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: 'PARTNER'])).groupBy().isEmpty()
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [7, [size: 2]]])).groupBy().isEmpty()
+    }
+
+    def "only the first usable entry is kept: a sport is grouped one way, never two"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'PARTNER'], [by: 'TEAM', size: 2]]])).groupBy() ==
+                [new StatisticsSchema.Grouping('PARTNER', 0)]
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'TEAM', size: 2], [by: 'PARTNER']]])).groupBy() ==
+                [new StatisticsSchema.Grouping('TEAM', 2)]
+        StatisticsSchema.of(schema([columns: ['games'], groupBy: [[by: 'NOPE'], [by: 'TEAM', size: 3]]])).groupBy() ==
+                [new StatisticsSchema.Grouping('TEAM', 3)]
+    }
+
+    def "groupBy is read from the scoreboard, not from the old statistics block"() {
+        expect:
+        StatisticsSchema.of([record: [data: [type: 'COMPETITIVE'], scoreboard: [columns: ['games']],
+                                      statistics: [groupBy: [[by: 'PARTNER']]]]]).groupBy().isEmpty()
+    }
+
+    // ---- draws ---------------------------------------------------------------------------------------------------------
+
+    def "a sport allows draws only when record.data.allowDraws is true"() {
+        expect:
+        !StatisticsSchema.of(schema([columns: ['games']])).allowDraws()
+        !StatisticsSchema.of(schema([columns: ['games']], null, [allowDraws: 'yes'])).allowDraws()
+        StatisticsSchema.of(schema([columns: ['games']], null, [allowDraws: true])).allowDraws()
+    }
+
+    // ---- values ----------------------------------------------------------------------------------------------------------
+
+    def counters(StatisticsSchema s, Outcome... outcomes) {
+        def c = new StatsCounters()
+        outcomes.each { c.add(it, [scoreFor: 21d, scoreAgainst: 10d], s.collected()) }
+        c
+    }
+
+    def "a stored stat is its counted value and a formula is computed from the stored ones"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['games', 'wins', 'winRate', 'winDiff', 'scoreDiff']]))
+        def c = counters(s, Outcome.WIN, Outcome.WIN, Outcome.LOSS, Outcome.WIN)
+
+        expect:
+        s.valueOf('games', c) == 4d
+        s.valueOf('wins', c) == 3d
+        s.valueOf('winRate', c) == 0.75d
+        s.valueOf('winDiff', c) == 2d
+    }
+
+    def "a stat the sport does not collect, or a formula over one, has no value"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['games']]))
+        def c = counters(s, Outcome.WIN)
+
+        expect:
+        s.valueOf('games', c) == 1d
+        s.valueOf('wins', c) == null
+        s.valueOf('winRate', c) == null
+        s.valueOf('scoreFor', c) == null
+        s.valueOf('nope', c) == null
+    }
+
+    def "a formula that divides by zero has no value"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['winRate']]))
+
+        expect:
+        s.valueOf('winRate', new StatsCounters()) == null
+    }
+
+    def "scoreDiff is scoreFor minus scoreAgainst"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['scoreDiff']]))
+        def c = counters(s, Outcome.WIN, Outcome.WIN)
+
+        expect:
+        s.valueOf('scoreDiff', c) == 22d
     }
 }

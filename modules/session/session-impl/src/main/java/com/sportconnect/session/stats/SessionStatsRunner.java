@@ -1,5 +1,6 @@
 package com.sportconnect.session.stats;
 
+import com.sportconnect.sport.api.service.SportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -12,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Set;
 
 /**
  * SESSION-53: drains the statistics queue. Not transactional itself: it picks the sessions that are due, claims each one in
@@ -19,8 +21,8 @@ import java.util.List;
  * records a failure separately, so one bad session never undoes another.
  *
  * <p><b>What is due.</b> Job rows that are due again ({@code RETRY} or {@code FAILED} whose time has come, a {@code RUNNING}
- * claim older than the stale limit), then completed sessions with no job row whose 24-hour guard has passed, oldest guard
- * first. A pass takes at most {@code batch-size} sessions; the drain repeats passes until nothing is due or the time budget
+ * claim older than the stale limit), then completed sessions of the sports that have statistics switched on, with no job row,
+ * whose 24-hour guard has passed, oldest guard first. A pass takes at most {@code batch-size} sessions; the drain repeats passes until nothing is due or the time budget
  * is spent (the next tick carries on), so a backlog drains without ever running unbounded.
  *
  * <p><b>Two at once.</b> A session with no row is claimed by inserting one (the primary key makes the loser fail, and the
@@ -36,6 +38,7 @@ public class SessionStatsRunner {
     private final SessionStatsJobRepository jobRepository;
     private final SessionStatsWriter writer;
     private final SessionStatsProcessor processor;
+    private final SportService sportService;
 
     @Value("${app.stats.job.batch-size:50}")
     private int batchSize = 50;
@@ -87,9 +90,12 @@ public class SessionStatsRunner {
             }
         }
         int room = limit - due.size();
-        if (room > 0) {
+        // Only sports with statistics switched on: a disabled sport's sessions get no job row (switching it on later makes
+        // them due), and the sport service serves the set from its in-memory cache.
+        Set<Long> enabled = room > 0 ? sportService.getStatisticsEnabledSportIds() : Set.of();
+        if (room > 0 && !enabled.isEmpty()) {
             Instant cutoff = now.minus(Duration.ofHours(guardHours));
-            for (Long id : jobRepository.findNewSessionIds(cutoff, PageRequest.of(0, room))) {
+            for (Long id : jobRepository.findNewSessionIds(cutoff, enabled, PageRequest.of(0, room))) {
                 Instant claimedAt = clock.instant().truncatedTo(ChronoUnit.MILLIS);
                 try {
                     writer.insertClaim(id, claimedAt);

@@ -9,21 +9,26 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface SessionStatsJobRepository extends JpaRepository<SessionStatsJob, Long> {
 
     /**
-     * Completed sessions whose 24-hour guard has passed and that have no job row yet, oldest guard first. The guard is the
-     * session's end (its start when it has no end), compared with a cutoff the caller computes in Java, so the query is the
-     * same on PostgreSQL and H2.
+     * Completed sessions of the given sports (those with statistics switched on: a disabled sport's sessions get no job
+     * row, so switching it on later makes them due) whose 24-hour guard has passed and that have no job row yet, oldest guard
+     * first. The guard is the session's end (its start when it has no end), compared with a cutoff the caller computes in
+     * Java, so the query is the same on PostgreSQL and H2. {@code sportIds} must not be empty (an empty {@code IN} is not
+     * portable): the caller does not ask when no sport is enabled.
      */
     @Query("SELECT s.id FROM Session s WHERE s.status = com.sportconnect.session.api.dto.SessionStatus.COMPLETED "
+            + "AND s.sportId IN :sportIds "
             + "AND COALESCE(s.scheduledEndAt, s.scheduledStart) <= :cutoff "
             + "AND NOT EXISTS (SELECT 1 FROM SessionStatsJob j WHERE j.sessionId = s.id) "
             + "ORDER BY COALESCE(s.scheduledEndAt, s.scheduledStart) ASC, s.id ASC")
-    List<Long> findNewSessionIds(@Param("cutoff") Instant cutoff, Pageable page);
+    List<Long> findNewSessionIds(@Param("cutoff") Instant cutoff, @Param("sportIds") Collection<Long> sportIds,
+                                 Pageable page);
 
     /**
      * Job rows that are due again: a {@code RETRY} or {@code FAILED} row whose time has come, or a {@code RUNNING} claim older

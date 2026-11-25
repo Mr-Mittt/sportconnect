@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,20 +45,29 @@ import java.util.stream.Collectors;
  * SESSION-53: counts one completed session, in one {@code REQUIRES_NEW} transaction that either counts everything or
  * nothing (a failure rolls all of it back and the caller records the failure separately).
  *
- * <p>Flow: take the job row's lock and check this attempt still owns the claim; read the sport's schema, the session's
- * records, the confirmations, who is {@code JOINED} and the venue's country and region; read each record through the reader
- * of its type and sort the records into <i>counted</i> and <i>ignored (with a reason)</i>; make sure the participants'
- * statistics rows exist, lock them in one ordered statement, change the blobs in code, upsert the leaderboard entries of
- * every board the games touch, mark those boards dirty, and finish the job row with what was counted.
+ * <p>Flow: take the job row's lock and check this attempt still owns the claim; read the sport's schema and check the sport
+ * still has statistics switched on and its schema collects something; read the session's records, the confirmations, who is
+ * {@code JOINED} and the venue's country and region; read each record through the reader of its type and sort the records
+ * into <i>counted</i> and <i>ignored (with a reason)</i>; make sure the participants' statistics rows exist, lock them in one
+ * ordered statement, change the blobs in code, mark every board the games touch dirty, and finish the job row with what was
+ * counted. <b>The engine writes nothing to {@code leaderboard_entry}</b> (owner, 2026-11-25): SESSION-54's job builds and ranks
+ * the boards from the blobs, and only needs to be told which boards changed.
  *
  * <p><b>What counts.</b> A record is counted when the reader says it is valid with a complete score and the first team ahead
  * (a record with no score, or one the reader cannot turn into a result, is ignored with the reader's reason), and every
  * player named in it is still {@code JOINED} in the session (reason {@code PLAYER_NOT_JOINED}). A counted game is a
  * <b>ranking game</b> when it was proposed and every named player confirmed its current revision (SESSION-72); otherwise it
  * is a normal game. Every counted game feeds the players' personal counters and, in a group session, the group member
- * counters and the group board; a ranking game also feeds the region and country scopes of the <b>venue</b> for every player,
- * wherever the player lives, and those boards (owner, 2026-11-23). A venue with no country or no region gets no counter for
- * the missing place, and the job's {@code notes} say so.
+ * counters; a ranking game also feeds the region and country scopes of the <b>venue</b> for every player, wherever the
+ * player lives (owner, 2026-11-23). A venue with no country or no region gets no counter for the missing place, and the
+ * job's {@code notes} say so. Only the stats the sport's {@code record.scoreboard.columns} need are counted. In a group
+ * session of a sport grouped by {@code PARTNER}, a game of two pairs also counts in the group's head-to-head
+ * ({@link GroupH2hDoc}).
+ *
+ * <p><b>Two refusals before anything is counted.</b> A sport whose statistics were switched off after the session was picked
+ * (the runner only picks enabled sports) gives its job row back: the row is deleted, so switching the sport on later counts
+ * the session. A sport whose schema collects nothing ({@code STATISTICS_NOT_CONFIGURED}) is {@code SKIPPED} for good, so
+ * the runner does not meet the same sessions at every tick; a column added later has no history until the SESSION-77 rebuild.
  */
 @Slf4j
 @Service
@@ -82,6 +91,10 @@ public class SessionStatsProcessor {
     private record Ignored(Long recordId, String reason) {
     }
 
+    /** A board a game touched; SESSION-54 ranks it. */
+    private record Board(String scopeType, Long scopeId, Long sportId) {
+    }
+
     private final SessionStatsJobRepository jobRepository;
     private final SessionRepository sessionRepository;
     private final SessionRecordRepository recordRepository;
@@ -92,8 +105,8 @@ public class SessionStatsProcessor {
     private final SportService sportService;
     private final LocationService locationService;
     private final UserSportStatsRepository userStatsRepository;
-    private final GroupMemberStatsRepository groupStatsRepository;
-    private final LeaderboardEntryRepository leaderboardRepository;
+    private final GroupMemberStatsRepository groupMemberStatsRepository;
+    private final GroupStatsRepository groupStatsRepository;
     private final StatBoardRunRepository boardRunRepository;
     private final SessionStatsWriter writer;
 
@@ -138,6 +151,18 @@ public class SessionStatsProcessor {
         if (skip.isPresent()) {
             return finish(job, now, List.of(), List.of(), List.of(skip.get()));
         }
+        if (!sportService.isStatisticsEnabled(session.getSportId())) {
+            // Switched off after the runner picked this session: give the row back, so that switching the sport on later
+            // makes the session due again. The runner never picks a disabled sport's sessions, so it is not met again now.
+            jobRepository.delete(job);
+            log.info("Statistics for session {} not counted: statistics are switched off for sport {}", sessionId,
+                    session.getSportId());
+            return new Result(SessionStatsJob.Status.SKIPPED, 0, 0);
+        }
+        StatisticsSchema stats = StatisticsSchema.of(schema);
+        if (!stats.collects()) {
+            return finish(job, now, List.of(), List.of(), List.of("STATISTICS_NOT_CONFIGURED"));
+        }
 
         List<SessionRecord> records = recordRepository.findBySessionIdOrderByIdAsc(sessionId);
         if (records.isEmpty()) {
@@ -174,7 +199,7 @@ public class SessionStatsProcessor {
                 notes.add("NO_VENUE_REGION");
             }
         }
-        List<CountedGame> countedIds = apply(session, StatisticsSchema.of(schema), games, venue, ignored, now);
+        List<CountedGame> countedIds = apply(session, stats, games, venue, ignored, now);
         return finish(job, now, countedIds, ignored, notes);
     }
 
@@ -219,7 +244,7 @@ public class SessionStatsProcessor {
     }
 
     /**
-     * Changes the blobs and the projection for the counted games.
+     * Changes the blobs for the counted games and marks the boards they touch dirty.
      *
      * @return the records actually counted, each with whether it counted as a ranking game (a record whose history pointer
      *         already exists is not counted again and is added to {@code ignored} as {@code ALREADY_COUNTED})
@@ -228,17 +253,22 @@ public class SessionStatsProcessor {
                              List<Ignored> ignored, Instant now) {
         Long sportId = session.getSportId();
         Long groupId = session.getGroupId();
-        Set<UUID> users = new TreeSet<>(java.util.Comparator.comparing(UUID::toString));
+        Set<UUID> users = new TreeSet<>(Comparator.comparing(UUID::toString));
         games.forEach(game -> users.addAll(game.facts().players()));
 
+        // The one lock order: user rows, then group-member rows, then the group's own row, each table in one ordered pass.
         Map<UUID, UserSportStats> userRows = lockUserRows(sportId, users);
         Map<UUID, PlayerStatsDoc> players = new LinkedHashMap<>();
         userRows.forEach((id, row) -> players.put(id, PlayerStatsDoc.read(row)));
         Map<UUID, GroupMemberStats> groupRows = groupId == null ? Map.of() : lockGroupRows(groupId, sportId, users);
         Map<UUID, GroupStatsDoc> members = new LinkedHashMap<>();
         groupRows.forEach((id, row) -> members.put(id, GroupStatsDoc.read(row)));
+        boolean headToHead = groupId != null && stats.groupsByPartner() && games.stream().anyMatch(this::isTwoPairs);
+        GroupStats h2hRow = headToHead ? lockGroupStatsRow(groupId, sportId) : null;
+        GroupH2hDoc h2h = h2hRow == null ? null : GroupH2hDoc.read(h2hRow);
 
-        Map<LeaderboardEntry.Key, StatsCounters> touched = new LinkedHashMap<>();
+        Set<Board> boards = new TreeSet<>(Comparator.comparing((Board b) -> b.scopeType())
+                .thenComparing(b -> String.format("%020d", b.scopeId())));
         List<CountedGame> counted = new ArrayList<>();
         for (Game game : games) {
             long recordId = game.record().getId();
@@ -251,30 +281,28 @@ public class SessionStatsProcessor {
             for (RecordFacts.Participant participant : game.facts().participants()) {
                 List<UUID> team = game.facts().teams().get(participant.team());
                 Map<String, List<String>> groups = groupKeys(stats, participant.userId(), team);
-                List<String> combos = groups.getOrDefault(StatisticsSchema.TEAM, List.of());
                 PlayerStatsDoc doc = players.get(participant.userId());
                 countPlayer(doc, participant, groups, game.ranking(), stats, venue);
                 doc.addPointer(recordId, session.getId(), game.ranking());
                 if (groupId != null) {
                     GroupStatsDoc member = members.get(participant.userId());
-                    member.counters().add(participant.outcome(), participant.metrics(), stats.metrics());
+                    member.counters().add(participant.outcome(), participant.metrics(), stats.collected());
                     addToGroups(groups, member::group, participant, stats);
                     member.addPointer(recordId, session.getId(), game.ranking());
-                    touch(touched, "GROUP", groupId, sportId, participant.userId(), member.counters(), combos,
-                            key -> member.group(StatisticsSchema.TEAM, key));
+                    boards.add(new Board("GROUP", groupId, sportId));
                 }
                 if (game.ranking()) {
                     if (venue.regionId() != null) {
-                        PlayerStatsDoc.Scope region = doc.scope("REGION", venue.countryId(), venue.regionId());
-                        touch(touched, "REGION", venue.regionId(), sportId, participant.userId(), region.counters(), combos,
-                                key -> region.group(StatisticsSchema.TEAM, key));
+                        boards.add(new Board("REGION", venue.regionId(), sportId));
                     }
                     if (venue.countryId() != null) {
-                        PlayerStatsDoc.Scope country = doc.scope("COUNTRY", venue.countryId(), null);
-                        touch(touched, "COUNTRY", venue.countryId(), sportId, participant.userId(), country.counters(),
-                                combos, key -> country.group(StatisticsSchema.TEAM, key));
+                        boards.add(new Board("COUNTRY", venue.countryId(), sportId));
                     }
                 }
+            }
+            if (h2h != null && isTwoPairs(game)) {
+                h2h.addGame(game.facts().teams().get(0), game.facts().teams().get(1), outcomeOfFirstTeam(game),
+                        stats.allowDraws());
             }
         }
 
@@ -284,16 +312,31 @@ public class SessionStatsProcessor {
         });
         groupRows.forEach((id, row) -> {
             members.get(id).writeTo(row);
-            groupStatsRepository.save(row);
+            groupMemberStatsRepository.save(row);
         });
-        upsertEntries(touched, stats, now);
-        markBoardsDirty(touched.keySet(), now);
+        if (h2hRow != null) {
+            h2h.writeTo(h2hRow);
+            groupStatsRepository.save(h2hRow);
+        }
+        markBoardsDirty(boards, now);
         return counted;
     }
 
+    /** A game of two teams of exactly two players: the only game the head-to-head counts. */
+    private boolean isTwoPairs(Game game) {
+        List<List<UUID>> teams = game.facts().teams();
+        return teams.size() == 2 && teams.get(0).size() == 2 && teams.get(1).size() == 2;
+    }
+
+    /** How the game ended for the first team, from the outcome of its first player. */
+    private RecordFacts.Outcome outcomeOfFirstTeam(Game game) {
+        return game.facts().participants().stream().filter(p -> p.team() == 0).map(RecordFacts.Participant::outcome)
+                .findFirst().orElse(RecordFacts.Outcome.NONE);
+    }
+
     /**
-     * The group keys of one player in one game, by dimension, for the groupings the sport's schema asks for: {@code PARTNER}
-     * (each other member of the team) and {@code TEAM} (every team of the schema's size the player is in).
+     * The group keys of one player in one game, by dimension, for the grouping the sport's schema asks for: {@code PARTNER}
+     * (each other member of the team) or {@code TEAM} (every team of the schema's size the player is in).
      */
     private Map<String, List<String>> groupKeys(StatisticsSchema stats, UUID player, List<UUID> team) {
         Map<String, List<String>> keys = new LinkedHashMap<>();
@@ -310,38 +353,28 @@ public class SessionStatsProcessor {
     /** Adds one player's game to the counters of each of their groups. */
     private void addToGroups(Map<String, List<String>> groups, BiFunction<String, String, StatsCounters> counters,
                              RecordFacts.Participant p, StatisticsSchema stats) {
-        groups.forEach((by, keys) -> keys.forEach(key -> counters.apply(by, key).add(p.outcome(), p.metrics(), stats.metrics())));
+        groups.forEach((by, keys) -> keys.forEach(key -> counters.apply(by, key).add(p.outcome(), p.metrics(), stats.collected())));
     }
 
     /** The counters of one player for one game: personal, every group of their team, and the venue's scopes (ranking games). */
     private void countPlayer(PlayerStatsDoc doc, RecordFacts.Participant p, Map<String, List<String>> groups, boolean ranking,
                              StatisticsSchema stats, Venue venue) {
-        doc.personal().all().add(p.outcome(), p.metrics(), stats.metrics());
+        doc.personal().all().add(p.outcome(), p.metrics(), stats.collected());
         addToGroups(groups, (by, key) -> doc.group(by, key).all(), p, stats);
         if (!ranking) {
             return;
         }
-        doc.personal().ranked().add(p.outcome(), p.metrics(), stats.metrics());
+        doc.personal().ranked().add(p.outcome(), p.metrics(), stats.collected());
         addToGroups(groups, (by, key) -> doc.group(by, key).ranked(), p, stats);
         if (venue.regionId() != null) {
             PlayerStatsDoc.Scope region = doc.scope("REGION", venue.countryId(), venue.regionId());
-            region.counters().add(p.outcome(), p.metrics(), stats.metrics());
+            region.counters().add(p.outcome(), p.metrics(), stats.collected());
             addToGroups(groups, region::group, p, stats);
         }
         if (venue.countryId() != null) {
             PlayerStatsDoc.Scope country = doc.scope("COUNTRY", venue.countryId(), null);
-            country.counters().add(p.outcome(), p.metrics(), stats.metrics());
+            country.counters().add(p.outcome(), p.metrics(), stats.collected());
             addToGroups(groups, country::group, p, stats);
-        }
-    }
-
-    /** Remembers the board entries a player's game touched, each pointing at the live counters it will be computed from. */
-    private void touch(Map<LeaderboardEntry.Key, StatsCounters> touched, String scopeType, Long scopeId, Long sportId,
-                       UUID player, StatsCounters single, List<String> combos, Function<String, StatsCounters> comboCounters) {
-        touched.putIfAbsent(new LeaderboardEntry.Key(scopeType, scopeId, sportId, "SINGLE", player.toString()), single);
-        for (String combo : combos) {
-            touched.putIfAbsent(new LeaderboardEntry.Key(scopeType, scopeId, sportId, "COMBO", combo),
-                    comboCounters.apply(combo));
         }
     }
 
@@ -366,7 +399,7 @@ public class SessionStatsProcessor {
     }
 
     private Map<UUID, GroupMemberStats> lockGroupRows(Long groupId, Long sportId, Set<UUID> users) {
-        Set<UUID> existing = new HashSet<>(groupStatsRepository.findExistingUserIds(groupId, sportId, users));
+        Set<UUID> existing = new HashSet<>(groupMemberStatsRepository.findExistingUserIds(groupId, sportId, users));
         for (UUID user : users) {
             if (!existing.contains(user)) {
                 try {
@@ -376,53 +409,29 @@ public class SessionStatsProcessor {
                 }
             }
         }
-        return groupStatsRepository.lockAll(groupId, sportId, users).stream()
+        return groupMemberStatsRepository.lockAll(groupId, sportId, users).stream()
                 .collect(Collectors.toMap(GroupMemberStats::getUserId, Function.identity(), (a, b) -> a, LinkedHashMap::new));
     }
 
-    /**
-     * One upsert per touched entry, written once from the final counters of the session. The entry's own player rows are
-     * locked, and any other writer of the same entry holds the same player locks, so a plain read then write is safe here.
-     */
-    private void upsertEntries(Map<LeaderboardEntry.Key, StatsCounters> touched, StatisticsSchema stats, Instant now) {
-        Map<LeaderboardEntry.Key, LeaderboardEntry> existing = leaderboardRepository.findAllById(touched.keySet()).stream()
-                .collect(Collectors.toMap(e -> new LeaderboardEntry.Key(e.getScopeType(), e.getScopeId(), e.getSportId(),
-                        e.getKind(), e.getSubjectKey()), Function.identity()));
-        List<LeaderboardEntry> toSave = new ArrayList<>();
-        touched.forEach((key, counters) -> {
-            LeaderboardEntry entry = existing.get(key);
-            if (entry == null) {
-                entry = new LeaderboardEntry(key.getScopeType(), key.getScopeId(), key.getSportId(), key.getKind(),
-                        key.getSubjectKey(), null, null, null, 0, null, null, now);
-            }
-            List<StatisticsSchema.SortKey> sort = stats.sort();
-            entry.setK1(sort.size() > 0 ? stats.valueOf(sort.get(0).by(), counters) : null);
-            entry.setK2(sort.size() > 1 ? stats.valueOf(sort.get(1).by(), counters) : null);
-            entry.setK3(sort.size() > 2 ? stats.valueOf(sort.get(2).by(), counters) : null);
-            entry.setGames((int) counters.games());
-            entry.setUpdatedAt(now);
-            toSave.add(entry);
-        });
-        leaderboardRepository.saveAll(toSave);
+    /** The group's head-to-head row, created if missing (its own small transaction) and then locked: the last lock taken. */
+    private GroupStats lockGroupStatsRow(Long groupId, Long sportId) {
+        try {
+            writer.ensureGroupStatsRow(groupId, sportId);
+        } catch (DataIntegrityViolationException e) {
+            log.info("Group head-to-head row race absorbed: group {} sport {}", groupId, sportId);
+        }
+        return groupStatsRepository.lockOne(groupId, sportId).orElseThrow();
     }
 
     /** Marks each touched board dirty, boards in one sorted order so two sessions touching the same boards cannot deadlock. */
-    private void markBoardsDirty(Collection<LeaderboardEntry.Key> keys, Instant now) {
-        Set<String> boards = new TreeSet<>();
-        Map<String, LeaderboardEntry.Key> byBoard = new LinkedHashMap<>();
-        for (LeaderboardEntry.Key key : keys) {
-            String board = key.getScopeType() + ":" + String.format("%020d", key.getScopeId());
-            boards.add(board);
-            byBoard.putIfAbsent(board, key);
-        }
-        for (String board : boards) {
-            LeaderboardEntry.Key key = byBoard.get(board);
+    private void markBoardsDirty(Set<Board> boards, Instant now) {
+        for (Board board : boards) {
             try {
-                writer.ensureBoardRun(key.getSportId(), key.getScopeType(), key.getScopeId());
+                writer.ensureBoardRun(board.sportId(), board.scopeType(), board.scopeId());
             } catch (DataIntegrityViolationException e) {
-                log.info("Board run row race absorbed: {} {}", key.getScopeType(), key.getScopeId());
+                log.info("Board run row race absorbed: {} {}", board.scopeType(), board.scopeId());
             }
-            boardRunRepository.markDirty(key.getSportId(), key.getScopeType(), key.getScopeId(), now);
+            boardRunRepository.markDirty(board.sportId(), board.scopeType(), board.scopeId(), now);
         }
     }
 

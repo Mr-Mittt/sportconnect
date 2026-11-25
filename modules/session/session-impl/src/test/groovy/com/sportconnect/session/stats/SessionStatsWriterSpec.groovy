@@ -11,13 +11,14 @@ class SessionStatsWriterSpec extends Specification {
 
     SessionStatsJobRepository jobRepository = Mock()
     UserSportStatsRepository userStatsRepository = Mock()
-    GroupMemberStatsRepository groupStatsRepository = Mock()
+    GroupMemberStatsRepository groupMemberStatsRepository = Mock()
+    GroupStatsRepository groupStatsRepository = Mock()
     StatBoardRunRepository boardRunRepository = Mock()
     Instant now = Instant.parse('2026-11-23T10:00:00Z')
     Instant claimed = now.minusSeconds(30)
 
     @Subject
-    SessionStatsWriter writer = new SessionStatsWriter(jobRepository, userStatsRepository, groupStatsRepository, boardRunRepository)
+    SessionStatsWriter writer = new SessionStatsWriter(jobRepository, userStatsRepository, groupMemberStatsRepository, groupStatsRepository, boardRunRepository)
 
     SessionStatsJob job(int attempts) {
         SessionStatsJob.builder().sessionId(7L).status(SessionStatsJob.Status.RUNNING).attempts(attempts).claimedAt(claimed).build()
@@ -82,6 +83,18 @@ class SessionStatsWriterSpec extends Specification {
         1 * jobRepository.insertClaim(7L, now) >> 1
         0 * jobRepository.save(*_)
         0 * jobRepository.saveAndFlush(*_)
+    }
+
+    def "the group's head-to-head row is created only when it is missing"() {
+        when:
+        writer.ensureGroupStatsRow(1234L, 1L)
+
+        then:
+        1 * groupStatsRepository.existsById({ it.groupId == 1234L && it.sportId == 1L }) >> exists
+        (exists ? 0 : 1) * groupStatsRepository.saveAndFlush({ it.groupId == 1234L && it.sportId == 1L })
+
+        where:
+        exists << [false, true]
     }
 
     def "a due row is claimed through the compare-and-set update"() {

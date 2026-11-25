@@ -27,7 +27,7 @@ GET    /api/sports/{sportId}                               public
 GET    /api/sports/all                                     includes inactive — ROLE_ADMIN
 GET    /api/sports/category/{category}                     public
 POST   /api/sports                                         ROLE_ADMIN
-PUT    /api/sports/{sportId}                               ROLE_ADMIN
+PUT    /api/sports/{sportId}                               ROLE_ADMIN — partial; `statisticsEnabled` switches statistics and ranking on or off (SESSION-53 rework)
 DELETE /api/sports/{sportId}                               soft delete — ROLE_ADMIN
 
 POST   /api/sports/profiles                                 ROLE_USER — userId from JWT principal
@@ -46,6 +46,7 @@ DELETE /api/sports/profiles/{profileId}                    ROLE_USER
 
 ## Gotchas
 
+- **`sports.statistics_enabled`** (entity `Sport.statisticsEnabled`, off by default, V105) is the one switch for statistics and ranking: `SportService.isStatisticsEnabled(sportId)` (active sports only, a 404 otherwise) and `getStatisticsEnabledSportIds()` (one in-memory pass over the cached active sports) are what the session module's statistics runner and ranking proposal read, so every write that changes it must evict `SportLookupCache` (`updateSport` and `createSport` do). It does not affect logging results, which needs only `result_schema`. Which stats a sport counts is not stored here: it is the result schema's `record.scoreboard.columns` (`documentation/md/RECORD_SCHEMA_CONTRACT.md`).
 - `getAllSports()` uses `findAll()` (returns inactive records too); `getAllActiveSports()` uses `findByIsActiveTrue()`. There is no global `isActive` filter — always call the correct method explicitly.
 - `UserSportProfile` stores `sportId` (Long) as a plain column, no `@ManyToOne`. The service fetches `Sport` by ID for each profile in `getUserProfiles()` — potential N+1 on large lists.
 - Image PNGs: `src/main/resources/images/sports/*.png` (12 files). V013 migration sets `icon_url` to `/images/sports/{name}.png`. `WebConfig` serves them; `SecurityConfig` (in auth-impl) must have `permitAll("/images/**")`.

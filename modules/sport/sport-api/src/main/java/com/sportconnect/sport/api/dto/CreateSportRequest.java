@@ -33,4 +33,7 @@ public class CreateSportRequest {
 
     @Min(value = 1, message = "Maximum players must be at least 1")
     private Integer maxPlayers;
+
+    /** Optional: statistics and ranking on for the new sport; absent means off. */
+    private Boolean statisticsEnabled;
 }

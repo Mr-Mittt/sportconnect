@@ -21,10 +21,7 @@
           "playersPerSide": { "min": 1, "max": 11 },
           "score": { "slot": [ { "required": true, "rule": ">=0" } ] }
         },
-        "statistics": {
-          "metrics": [ { "key": "scoreFor", "aggregate": "MAX" }, { "key": "scoreAgainst", "aggregate": "MIN" } ],
-          "derived": [ { "key": "goalDiff", "formula": "scoreFor-scoreAgainst" } ]
-        }
+        "scoreboard": { "columns": [ "games", "winRate", "scoreFor" ] }
       }
     },
     "noScore": {

@@ -32,4 +32,7 @@ public class UpdateSportRequest {
     private Integer maxPlayers;
 
     private Boolean isActive;
+
+    /** Optional: switches statistics and ranking on or off; absent leaves it as it is. */
+    private Boolean statisticsEnabled;
 }

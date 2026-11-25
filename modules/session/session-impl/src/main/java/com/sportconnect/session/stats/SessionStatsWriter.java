@@ -22,7 +22,8 @@ public class SessionStatsWriter {
 
     private final SessionStatsJobRepository jobRepository;
     private final UserSportStatsRepository userStatsRepository;
-    private final GroupMemberStatsRepository groupStatsRepository;
+    private final GroupMemberStatsRepository groupMemberStatsRepository;
+    private final GroupStatsRepository groupStatsRepository;
     private final StatBoardRunRepository boardRunRepository;
 
     @Value("${app.stats.job.max-attempts:4}")
@@ -76,8 +77,16 @@ public class SessionStatsWriter {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureGroupRow(Long groupId, UUID userId, Long sportId) {
-        if (!groupStatsRepository.existsById(new GroupMemberStats.Key(groupId, userId, sportId))) {
-            groupStatsRepository.saveAndFlush(new GroupMemberStats(groupId, userId, sportId));
+        if (!groupMemberStatsRepository.existsById(new GroupMemberStats.Key(groupId, userId, sportId))) {
+            groupMemberStatsRepository.saveAndFlush(new GroupMemberStats(groupId, userId, sportId));
+        }
+    }
+
+    /** Creates the group's head-to-head row ({@link GroupStats}) when it has none; the caller locks it afterwards. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void ensureGroupStatsRow(Long groupId, Long sportId) {
+        if (!groupStatsRepository.existsById(new GroupStats.Key(groupId, sportId))) {
+            groupStatsRepository.saveAndFlush(new GroupStats(groupId, sportId));
         }
     }
 

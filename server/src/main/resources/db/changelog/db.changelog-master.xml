@@ -274,4 +274,7 @@
     <!-- SESSION-53: statistics engine: the job queue, the per-user and per-group-member statistic blobs, the ranking projection and the board runs -->
     <include file="db/changelog/changes/V104__session_statistics_engine.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-53 rework: the group head-to-head table (group_stats) and the sport's statistics switch (sports.statistics_enabled); V104 is left as merged -->
+    <include file="db/changelog/changes/V105__session_statistics_rework.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

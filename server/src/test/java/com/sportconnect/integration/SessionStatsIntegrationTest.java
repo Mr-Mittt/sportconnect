@@ -18,10 +18,12 @@ import com.sportconnect.session.record.SessionRecordVerification;
 import com.sportconnect.session.record.SessionRecordVerificationRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.session.stats.GroupH2hDoc;
 import com.sportconnect.session.stats.GroupMemberStats;
 import com.sportconnect.session.stats.GroupMemberStatsRepository;
+import com.sportconnect.session.stats.GroupStats;
 import com.sportconnect.session.stats.GroupStatsDoc;
-import com.sportconnect.session.stats.LeaderboardEntry;
+import com.sportconnect.session.stats.GroupStatsRepository;
 import com.sportconnect.session.stats.LeaderboardEntryRepository;
 import com.sportconnect.session.stats.PlayerStatsDoc;
 import com.sportconnect.session.stats.SessionStatsJob;
@@ -65,10 +67,13 @@ import java.util.stream.Collectors;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * SESSION-53: the statistics engine through the real Spring context and the H2 schema: a completed session whose guard has
- * passed is counted once (personal, pair, group member and venue-scope counters, the history, the leaderboard entries, the
- * dirty boards), invalid and planned records are ignored with their reason, a failure is retried and given up, and two
- * workers never count a session twice nor lose a player's update.
+ * SESSION-53 (reworked 2026-11-25): the statistics engine through the real Spring context and the H2 schema: a completed
+ * session of a sport with statistics switched on, whose guard has passed, is counted once with exactly the stats the sport's
+ * {@code record.scoreboard.columns} need (personal, partner, group member and venue-scope counters, the history, the dirty
+ * boards, and in a group session the head-to-head of its pairs); the engine writes nothing to {@code leaderboard_entry}; a
+ * sport with the switch off is never picked and one with no columns collects nothing; invalid and planned records are
+ * ignored with their reason; a failure is retried and given up; two workers never count a session twice nor lose a player's
+ * or a group's update.
  *
  * <p>The tick and its worker thread are off in the test profile; the tests call {@link SessionStatsRunner#processDue()}.
  * This suite runs on H2 in one JVM: the threads prove the portable claim and row-lock logic, not PostgreSQL's own lock
@@ -84,7 +89,8 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     @Autowired private SessionStatsRunner runner;
     @Autowired private SessionStatsJobRepository jobRepository;
     @Autowired private UserSportStatsRepository userStatsRepository;
-    @Autowired private GroupMemberStatsRepository groupStatsRepository;
+    @Autowired private GroupMemberStatsRepository groupMemberStatsRepository;
+    @Autowired private GroupStatsRepository groupH2hRepository;
     @Autowired private LeaderboardEntryRepository leaderboardRepository;
     @Autowired private StatBoardRunRepository boardRunRepository;
     @Autowired private SessionRepository sessionRepository;
@@ -118,7 +124,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         bobId = createUser("bob");
         carolId = createUser("carol");
         danId = createUser("dan");
-        sportId = newSport(badmintonSchema());
+        sportId = newSport(badmintonSchema(), true);
         groupId = groupRepository.save(Group.builder().groupName("Stats " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
@@ -136,7 +142,8 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     private void clearAll() {
         boardRunRepository.deleteAll();
         leaderboardRepository.deleteAll();
-        groupStatsRepository.deleteAll();
+        groupH2hRepository.deleteAll();
+        groupMemberStatsRepository.deleteAll();
         userStatsRepository.deleteAll();
         jobRepository.deleteAll();
         commentRepository.deleteAll();
@@ -158,7 +165,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     // ---- the counting itself ------------------------------------------------------------------------------------
 
     @Test
-    void aGroupSessionIsCountedForEveryPlayerAndEveryBoardItTouches() {
+    void aGroupSessionIsCountedForEveryPlayerWithExactlyTheStatsTheColumnsNeed() {
         Long sessionId = completedSession(groupId, venueId, 2);
         Long ranked = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
         propose(ranked, aliceId, List.of(aliceId, bobId, carolId, danId));
@@ -173,69 +180,85 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         // the job's result says, for each counted game, whether it counted as a ranking game (as the history pointer does)
         assertThat(rankingMarks(job)).containsOnly(Map.entry(ranked, true), Map.entry(normal, false));
 
-        // alice: two games, one won and one lost; the first one was a ranking game
+        // alice: two games, one won and one lost; the first one was a ranking game. The columns are games, wins, scoreFor and
+        // scoreAgainst, so losses (not listed) is not stored at all.
         PlayerStatsDoc alice = player(aliceId);
-        assertThat(alice.personal().all().core("games")).isEqualTo(2.0);
-        assertThat(alice.personal().all().core("wins")).isEqualTo(1.0);
-        assertThat(alice.personal().all().core("losses")).isEqualTo(1.0);
-        assertThat(alice.personal().all().metric("scoreFor")).isEqualTo(39.0);      // 21 + 18
-        assertThat(alice.personal().all().metric("scoreAgainst")).isEqualTo(36.0);  // 15 + 21
-        assertThat(alice.personal().ranked().core("games")).isEqualTo(1.0);
-        assertThat(alice.personal().ranked().core("wins")).isEqualTo(1.0);
-        assertThat(alice.personal().ranked().metric("scoreFor")).isEqualTo(21.0);
+        assertThat(alice.personal().all().value("games")).isEqualTo(2.0);
+        assertThat(alice.personal().all().value("wins")).isEqualTo(1.0);
+        assertThat(alice.personal().all().value("scoreFor")).isEqualTo(39.0);      // 21 + 18
+        assertThat(alice.personal().all().value("scoreAgainst")).isEqualTo(36.0);  // 15 + 21
+        assertThat(alice.personal().all().value("losses")).isNull();
+        assertThat(alice.personal().ranked().value("games")).isEqualTo(1.0);
+        assertThat(alice.personal().ranked().value("wins")).isEqualTo(1.0);
+        assertThat(alice.personal().ranked().value("scoreFor")).isEqualTo(21.0);
 
-        // the pair alice + bob: every game they played together, and the ranking one among them
-        assertThat(alice.group("TEAM", pair(aliceId, bobId)).all().core("games")).isEqualTo(2.0);
-        assertThat(alice.group("TEAM", pair(aliceId, bobId)).ranked().core("games")).isEqualTo(1.0);
-
-        // per partner: bob, and only bob (carol and dan were the opponents), with his own wins and the ranking split
-        assertThat(alice.group("PARTNER", bobId.toString()).all().core("games")).isEqualTo(2.0);
-        assertThat(alice.group("PARTNER", bobId.toString()).all().core("wins")).isEqualTo(1.0);
-        assertThat(alice.group("PARTNER", bobId.toString()).ranked().core("games")).isEqualTo(1.0);
-        assertThat(alice.group("PARTNER", bobId.toString()).ranked().core("wins")).isEqualTo(1.0);
+        // the one grouping is PARTNER: bob, and only bob (carol and dan were the opponents), with the ranking split
+        assertThat(alice.group("PARTNER", bobId.toString()).all().value("games")).isEqualTo(2.0);
+        assertThat(alice.group("PARTNER", bobId.toString()).all().value("wins")).isEqualTo(1.0);
+        assertThat(alice.group("PARTNER", bobId.toString()).ranked().value("games")).isEqualTo(1.0);
+        assertThat(alice.group("PARTNER", bobId.toString()).ranked().value("wins")).isEqualTo(1.0);
         UserSportStats aliceRow = userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow();
+        assertThat(aliceRow.getGroupings().keySet()).containsExactly("PARTNER");
         assertThat(keysOf(aliceRow, "PARTNER")).containsExactly(bobId.toString());
-        assertThat(keysOf(aliceRow, "TEAM")).containsExactly(pair(aliceId, bobId));
 
         // a ranking game counts at the venue's region and country, though no player has a region of their own
-        assertThat(alice.scope("REGION", COUNTRY, REGION).counters().core("games")).isEqualTo(1.0);
-        assertThat(alice.scope("COUNTRY", COUNTRY, null).counters().core("games")).isEqualTo(1.0);
-        assertThat(alice.scope("REGION", COUNTRY, REGION).group("PARTNER", bobId.toString()).core("wins")).isEqualTo(1.0);
-        assertThat(player(carolId).scope("REGION", COUNTRY, REGION).counters().core("losses")).isEqualTo(1.0);
+        assertThat(alice.scope("REGION", COUNTRY, REGION).counters().value("games")).isEqualTo(1.0);
+        assertThat(alice.scope("COUNTRY", COUNTRY, null).counters().value("games")).isEqualTo(1.0);
+        assertThat(alice.scope("REGION", COUNTRY, REGION).group("PARTNER", bobId.toString()).value("wins")).isEqualTo(1.0);
+        assertThat(player(carolId).scope("REGION", COUNTRY, REGION).counters().value("wins")).isEqualTo(0.0);
 
-        // the group member's counters cover both games; history is newest first with the ranking mark
+        // the group member's counters cover both games, with no ranked split; history is newest first with the ranking mark
         GroupStatsDoc member = member(aliceId);
-        assertThat(member.counters().core("games")).isEqualTo(2.0);
-        assertThat(member.group("TEAM", pair(aliceId, bobId)).core("games")).isEqualTo(2.0);
-        assertThat(member.group("PARTNER", bobId.toString()).core("games")).isEqualTo(2.0);
-        assertThat(member.group("PARTNER", bobId.toString()).core("wins")).isEqualTo(1.0);
+        assertThat(member.counters().value("games")).isEqualTo(2.0);
+        assertThat(member.group("PARTNER", bobId.toString()).value("games")).isEqualTo(2.0);
+        assertThat(member.group("PARTNER", bobId.toString()).value("wins")).isEqualTo(1.0);
+        assertThat(userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow().getHistory()).hasSize(2);
         UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow();
-        assertThat(row.getHistory()).hasSize(2);
         assertThat(((Map<?, ?>) row.getHistory().get(0)).get("ranking")).isEqualTo(false);
         assertThat(((Map<?, ?>) row.getHistory().get(1)).get("ranking")).isEqualTo(true);
 
-        // the ranking projection: the sort values are computed once, from the sport's sort keys (winDiff, winRate, games)
-        LeaderboardEntry groupEntry = entry("GROUP", groupId, "SINGLE", aliceId.toString());
-        assertThat(groupEntry.getGames()).isEqualTo(2);
-        assertThat(groupEntry.getK1()).isEqualTo(0.0);
-        assertThat(groupEntry.getK2()).isEqualTo(0.5);
-        assertThat(groupEntry.getK3()).isEqualTo(2.0);
-        LeaderboardEntry regionEntry = entry("REGION", REGION, "SINGLE", aliceId.toString());
-        assertThat(regionEntry.getGames()).isEqualTo(1);
-        assertThat(regionEntry.getK1()).isEqualTo(1.0);
-        assertThat(entry("REGION", REGION, "COMBO", pair(aliceId, bobId)).getGames()).isEqualTo(1);
-        assertThat(entry("COUNTRY", COUNTRY, "COMBO", pair(carolId, danId)).getGames()).isEqualTo(1);
-        assertThat(entry("GROUP", groupId, "COMBO", pair(carolId, danId)).getGames()).isEqualTo(2);
-        // a partner grouping is a personal view: it never becomes a board entry
-        assertThat(leaderboardRepository.findAll()).allMatch(e -> e.getKind().equals("SINGLE")
-                ? !e.getSubjectKey().contains(",") : e.getKind().equals("COMBO") && e.getSubjectKey().contains(","));
-        assertThat(leaderboardRepository.findAll()).noneMatch(e -> e.getKind().equals("COMBO")
-                && e.getSubjectKey().equals(bobId.toString()));
-
-        // every touched board is marked for the nightly ranking
+        // the engine writes nothing to leaderboard_entry (SESSION-54 builds the boards), but tells which boards changed
+        assertThat(leaderboardRepository.findAll()).isEmpty();
         assertThat(dirty("GROUP", groupId)).isTrue();
         assertThat(dirty("REGION", REGION)).isTrue();
         assertThat(dirty("COUNTRY", COUNTRY)).isTrue();
+    }
+
+    @Test
+    void aGroupSessionOfAPartnerSportKeepsTheHeadToHeadOfItsPairs() {
+        Long sessionId = completedSession(groupId, venueId, 2);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);    // alice and bob win
+        game(sessionId, List.of(carolId, danId), List.of(aliceId, bobId), 21, 18);    // carol and dan win
+
+        runner.processDue();
+
+        GroupStats row = groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow();
+        GroupH2hDoc h2h = GroupH2hDoc.read(row);
+        assertThat(h2h.size()).isEqualTo(1);
+        assertThat(h2h.seq()).isEqualTo(2);
+        // alice and bob appear first, so they are 1 and 2 and carol and dan 3 and 4: the key is "1.2-3.4", one win each
+        assertThat(h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))).containsExactly(1L, 1L, 2L);
+        assertThat(h2h.matchup(List.of(danId, carolId), List.of(bobId, aliceId))).containsExactly(1L, 1L, 2L);
+        assertThat(keySetOf(row.getH2h().get("h2h"))).containsExactly("1.2-3.4");
+    }
+
+    @Test
+    void theHeadToHeadGrowsAcrossTheSessionsOfOneGroup() {
+        Long first = completedSession(groupId, venueId, 3);
+        game(first, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        Long second = completedSession(groupId, venueId, 2);
+        game(second, List.of(carolId, danId), List.of(aliceId, bobId), 21, 10);
+        game(second, List.of(aliceId, carolId), List.of(bobId, danId), 21, 19);
+
+        assertThat(runner.processDue()).isEqualTo(2);
+
+        GroupH2hDoc h2h = GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow());
+        assertThat(h2h.size()).isEqualTo(2);
+        assertThat(h2h.seq()).isEqualTo(3);
+        assertThat(h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))).containsExactly(1L, 1L, 2L);
+        // alice and carol (1 and 3) beat bob and dan (2 and 4) as the first team: the first pair of the key won
+        assertThat(h2h.matchup(List.of(aliceId, carolId), List.of(bobId, danId))).containsExactly(1L, 0L, 3L);
+        assertThat(h2h.matchup(List.of(bobId, danId), List.of(aliceId, carolId))).containsExactly(1L, 0L, 3L);
     }
 
     @Test
@@ -246,23 +269,23 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         runner.processDue();
 
         PlayerStatsDoc alice = player(aliceId);
-        assertThat(alice.personal().all().core("games")).isEqualTo(1.0);
-        assertThat(alice.personal().ranked().core("games")).isEqualTo(0.0);
+        assertThat(alice.personal().all().value("games")).isEqualTo(1.0);
+        assertThat(alice.personal().ranked().value("games")).isNull();
         assertThat(userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow().getScopes()).isEmpty();
-        assertThat(leaderboardRepository.findAll()).allMatch(e -> e.getScopeType().equals("GROUP"));
         assertThat(boardRunRepository.findAll()).extracting(StatBoardRun::getScopeType).containsOnly("GROUP");
     }
 
     @Test
-    void aStandaloneSessionWritesNoGroupStatisticsAndNoGroupBoard() {
+    void aStandaloneSessionWritesNoGroupStatisticsNoHeadToHeadAndNoGroupBoard() {
         Long sessionId = completedSession(null, venueId, 2);
         game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
 
         runner.processDue();
 
-        assertThat(player(aliceId).personal().all().core("games")).isEqualTo(1.0);
-        assertThat(groupStatsRepository.findAll()).isEmpty();
-        assertThat(leaderboardRepository.findAll()).isEmpty();
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+        assertThat(groupMemberStatsRepository.findAll()).isEmpty();
+        assertThat(groupH2hRepository.findAll()).isEmpty();
+        assertThat(boardRunRepository.findAll()).isEmpty();
     }
 
     @Test
@@ -275,7 +298,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         runner.processDue();
 
         PlayerStatsDoc alice = player(aliceId);
-        assertThat(alice.scope("COUNTRY", COUNTRY, null).counters().core("games")).isEqualTo(1.0);
+        assertThat(alice.scope("COUNTRY", COUNTRY, null).counters().value("games")).isEqualTo(1.0);
         assertThat(userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow().getScopes()).hasSize(1);
         assertThat(boardRunRepository.findAll()).extracting(StatBoardRun::getScopeType).containsOnly("COUNTRY");
         assertThat(notes(sessionId)).containsExactly("NO_VENUE_REGION");
@@ -290,7 +313,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
 
         runner.processDue();
 
-        assertThat(player(aliceId).personal().ranked().core("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().ranked().value("games")).isEqualTo(1.0);
         assertThat(userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow().getScopes()).isEmpty();
         assertThat(boardRunRepository.findAll()).isEmpty();
         assertThat(notes(sessionId)).containsExactly("NO_VENUE_COUNTRY");
@@ -304,8 +327,8 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
 
         runner.processDue();
 
-        assertThat(player(aliceId).personal().all().core("games")).isEqualTo(1.0);
-        assertThat(player(aliceId).personal().ranked().core("games")).isEqualTo(0.0);
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().ranked().value("games")).isNull();
     }
 
     @Test
@@ -327,7 +350,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
                 .containsEntry(duplicate, "DUPLICATE_PLAYER")
                 .containsEntry(reversed, "FIRST_TEAM_NOT_AHEAD");
         assertThat(counted(job)).containsExactly(good);
-        assertThat(player(aliceId).personal().all().core("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
     }
 
     @Test
@@ -348,7 +371,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
 
     @Test
     void aSessionWhoseSportHasNoResultSchemaIsSkipped() {
-        Long noSchema = newSport(null);
+        Long noSchema = newSport(null, true);
         Long sessionId = completedSession(null, venueId, 2, noSchema);
         game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
 
@@ -368,9 +391,110 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(jobRepository.findById(sessionId).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.SKIPPED);
     }
 
+    // ---- the sport's switch and its config ----------------------------------------------------------------------------
+
     @Test
-    void aSportWithNoGroupingsAndMaxMinMetricsUsesItsOwnSchema() {
-        Long football = newSport(footballSchema(List.of()));
+    void aSportWithStatisticsSwitchedOffIsNeverPickedAndItsSessionsAreCountedOnceItIsSwitchedOn() {
+        Long off = newSport(badmintonSchema(), false);
+        Long sessionId = completedSession(null, venueId, 2, off);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        assertThat(runner.processDue()).isZero();
+        assertThat(jobRepository.findAll()).isEmpty();               // no job row: the session was never seen
+        assertThat(userStatsRepository.findAll()).isEmpty();
+
+        switchStatistics(off, true);
+
+        assertThat(runner.processDue()).isEqualTo(1);                // the old session is now due, like any other
+        assertThat(jobRepository.findById(sessionId).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
+        assertThat(userStatsRepository.findById(new UserSportStats.Key(aliceId, off)).orElseThrow()).isNotNull();
+    }
+
+    @Test
+    void aJobRowOfASportSwitchedOffAfterItWasPickedGivesItsRowBackAndCountsNothing() {
+        Long sessionId = completedSession(null, venueId, 2);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        Instant now = Instant.now();
+        jobRepository.save(SessionStatsJob.builder().sessionId(sessionId).status(SessionStatsJob.Status.RUNNING).attempts(1)
+                .claimedAt(now.minus(Duration.ofMinutes(30))).counted(0).ignored(0).createdAt(now).updatedAt(now).build());
+        switchStatistics(sportId, false);
+
+        assertThat(runner.processDue()).isEqualTo(1);                // the stale claim is taken over, then refused
+
+        assertThat(jobRepository.findById(sessionId)).isEmpty();     // the row is gone, so the session is not marked as seen
+        assertThat(userStatsRepository.findAll()).isEmpty();
+
+        switchStatistics(sportId, true);
+
+        assertThat(runner.processDue()).isEqualTo(1);
+        assertThat(jobRepository.findById(sessionId).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+    }
+
+    @Test
+    void aSportThatListsNoScoreboardColumnsCollectsNothingAndIsSkippedForGood() {
+        Long bare = newSport(doublesSchema(null, null), true);
+        Long sessionId = completedSession(groupId, venueId, 2, bare);
+        Long ranked = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        propose(ranked, aliceId, List.of(aliceId, bobId, carolId, danId));
+
+        runner.processDue();
+
+        SessionStatsJob job = jobRepository.findById(sessionId).orElseThrow();
+        assertThat(job.getStatus()).isEqualTo(SessionStatsJob.Status.SKIPPED);
+        assertThat(notes(sessionId)).containsExactly("STATISTICS_NOT_CONFIGURED");
+        assertThat(userStatsRepository.findAll()).isEmpty();
+        assertThat(groupMemberStatsRepository.findAll()).isEmpty();
+        assertThat(groupH2hRepository.findAll()).isEmpty();
+        assertThat(boardRunRepository.findAll()).isEmpty();
+
+        // adding the columns later does not recount a session already seen: that is the rebuild (SESSION-77)
+        Sport sport = sportRepository.findById(bare).orElseThrow();
+        sport.setResultSchema(badmintonSchema());
+        sportRepository.save(sport);
+        cacheManager.getCache("sports").clear();
+        assertThat(runner.processDue()).isZero();
+        assertThat(userStatsRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void theOldStatisticsBlockIsNotReadSoASportThatOnlyHasItCollectsNothing() {
+        Map<String, Object> old = Map.of("version", 1, "maxRecords", 100, "record", Map.of(
+                "data", doublesData(),
+                "statistics", Map.of("counters", List.of("games", "wins"), "groupBy", List.of(Map.of("by", "PARTNER")))));
+        Long legacy = newSport(old, true);
+        Long sessionId = completedSession(null, venueId, 2, legacy);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        runner.processDue();
+
+        assertThat(notes(sessionId)).containsExactly("STATISTICS_NOT_CONFIGURED");
+        assertThat(userStatsRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void aSportWithColumnsAndNoGroupByCountsTotalsOnlyAndKeepsNoGroupingNoHeadToHead() {
+        Long plain = newSport(doublesSchema(Map.of("columns", List.of("games", "wins", "scoreFor")), null), true);
+        Long sessionId = completedSession(groupId, venueId, 2, plain);
+        Long ranked = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        propose(ranked, aliceId, List.of(aliceId, bobId, carolId, danId));
+
+        runner.processDue();
+
+        UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, plain)).orElseThrow();
+        assertThat(row.getGroupings()).isEmpty();                    // missing groupBy means no grouping at all
+        PlayerStatsDoc alice = PlayerStatsDoc.read(row);
+        assertThat(alice.personal().all().value("games")).isEqualTo(1.0);
+        assertThat(alice.personal().all().value("scoreFor")).isEqualTo(21.0);
+        assertThat(alice.personal().all().value("scoreAgainst")).isNull();    // not a column, so not counted
+        assertThat(alice.scope("REGION", COUNTRY, REGION).counters().value("wins")).isEqualTo(1.0);
+        assertThat(((Map<?, ?>) row.getScopes().get(0)).get("groupings")).isEqualTo(Map.of());
+        assertThat(groupH2hRepository.findAll()).isEmpty();          // no head-to-head without PARTNER
+    }
+
+    @Test
+    void aFormulaColumnStoresItsOperandsOnlyAndASportWithNoGroupingKeepsTheTotals() {
+        Long football = newSport(footballSchema(List.of()), true);
         Long sessionId = completedSession(null, venueId, 2, football);
         participantRepository.save(SessionParticipant.builder().sessionId(sessionId).userId(createUser("eve"))
                 .status(ParticipantStatus.JOINED).build());
@@ -380,39 +504,20 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         runner.processDue();
 
         UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, football)).orElseThrow();
-        assertThat(row.getGroupings()).isEmpty();      // no groupBy: no partner and no team counters
+        assertThat(row.getGroupings()).isEmpty();
+        // the columns are games, winRate and scoreFor: winRate stores games and wins, nothing else is stored
+        assertThat(keySetOf(row.getPersonal().get("all"))).containsExactlyInAnyOrder("games", "wins", "scoreFor");
         PlayerStatsDoc alice = PlayerStatsDoc.read(row);
-        assertThat(alice.personal().all().core("wins")).isEqualTo(2.0);
-        assertThat(alice.personal().all().metric("scoreFor")).isEqualTo(5.0);      // MAX of 3 and 5
-        assertThat(alice.personal().all().metric("scoreAgainst")).isEqualTo(1.0);  // MIN of 1 and 4
+        assertThat(alice.personal().all().value("wins")).isEqualTo(2.0);
+        assertThat(alice.personal().all().value("scoreFor")).isEqualTo(8.0);       // a plain sum: 3 + 5
         PlayerStatsDoc dan = PlayerStatsDoc.read(userStatsRepository.findById(new UserSportStats.Key(danId, football)).orElseThrow());
-        assertThat(dan.personal().all().metric("scoreFor")).isEqualTo(4.0);         // MAX of 1 and 4
-        assertThat(dan.personal().all().metric("scoreAgainst")).isEqualTo(3.0);     // MIN of 3 and 5
-        assertThat(leaderboardRepository.findAll()).isEmpty();   // standalone: no group board, nothing ranked
-    }
-
-    @Test
-    void aSportWithNoStatisticsBlockCountsTotalsOnlyAndGroupsByNothing() {
-        Long doubles = newSport(badmintonWithoutStatisticsSchema());
-        Long sessionId = completedSession(groupId, venueId, 2, doubles);
-        Long ranked = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
-        propose(ranked, aliceId, List.of(aliceId, bobId, carolId, danId));
-
-        runner.processDue();
-
-        UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, doubles)).orElseThrow();
-        assertThat(row.getGroupings()).isEmpty();                    // no partner and no team counters
-        PlayerStatsDoc alice = PlayerStatsDoc.read(row);
-        assertThat(alice.personal().all().core("games")).isEqualTo(1.0);
-        assertThat(alice.personal().all().metric("scoreFor")).isEqualTo(21.0);   // the default metrics still apply
-        assertThat(alice.scope("REGION", COUNTRY, REGION).counters().core("wins")).isEqualTo(1.0);
-        assertThat(((Map<?, ?>) row.getScopes().get(0)).get("groupings")).isEqualTo(Map.of());
-        assertThat(leaderboardRepository.findAll()).allMatch(e -> e.getKind().equals("SINGLE"));   // no pair board
+        assertThat(dan.personal().all().value("wins")).isEqualTo(0.0);
+        assertThat(dan.personal().all().value("scoreFor")).isEqualTo(5.0);         // 1 + 4
     }
 
     @Test
     void aSportThatGroupsByPartnerOnlyCountsEachTeammateAndKeepsNoTeamCounters() {
-        Long football = newSport(footballSchema(List.of(Map.of("by", "PARTNER"))));
+        Long football = newSport(footballSchema(List.of(Map.of("by", "PARTNER"))), true);
         Long sessionId = completedSession(null, venueId, 2, football);
         participantRepository.save(SessionParticipant.builder().sessionId(sessionId).userId(createUser("eve"))
                 .status(ParticipantStatus.JOINED).build());
@@ -424,12 +529,43 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, football)).orElseThrow();
         assertThat(row.getGroupings().keySet()).containsExactly("PARTNER");
         PlayerStatsDoc alice = PlayerStatsDoc.read(row);
-        assertThat(alice.group("PARTNER", bobId.toString()).all().core("games")).isEqualTo(2.0);   // both games
-        assertThat(alice.group("PARTNER", bobId.toString()).all().core("wins")).isEqualTo(1.0);
-        assertThat(alice.group("PARTNER", carolId.toString()).all().core("games")).isEqualTo(1.0); // only the first
-        assertThat(alice.group("PARTNER", carolId.toString()).all().core("wins")).isEqualTo(1.0);
+        assertThat(alice.group("PARTNER", bobId.toString()).all().value("games")).isEqualTo(2.0);   // both games
+        assertThat(alice.group("PARTNER", bobId.toString()).all().value("wins")).isEqualTo(1.0);
+        assertThat(alice.group("PARTNER", carolId.toString()).all().value("games")).isEqualTo(1.0); // only the first
+        assertThat(alice.group("PARTNER", carolId.toString()).all().value("wins")).isEqualTo(1.0);
         assertThat(keysOf(row, "PARTNER")).containsExactlyInAnyOrder(bobId.toString(), carolId.toString());
-        assertThat(alice.personal().all().core("games")).isEqualTo(2.0);
+        assertThat(alice.personal().all().value("games")).isEqualTo(2.0);
+    }
+
+    @Test
+    void aPartnerSportBuildsNoHeadToHeadFromGamesThatAreNotTwoPairs() {
+        Long football = newSport(footballSchema(List.of(Map.of("by", "PARTNER"))), true);
+        Long sessionId = completedSession(groupId, venueId, 2, football);
+        game(sessionId, List.of(aliceId, bobId, carolId), List.of(danId, hostId), 3, 1);    // three against two
+        game(sessionId, List.of(aliceId), List.of(danId), 2, 0);                            // a single
+
+        runner.processDue();
+
+        assertThat(jobRepository.findById(sessionId).orElseThrow().getCounted()).isEqualTo(2);
+        assertThat(groupH2hRepository.findAll()).isEmpty();          // not a single pair against a pair: no row at all
+        assertThat(groupMemberStatsRepository.findAll()).isNotEmpty();
+    }
+
+    @Test
+    void aTeamGroupedSportCountsTeamCountersAndBuildsNoHeadToHead() {
+        Long teamSport = newSport(doublesSchema(Map.of("columns", List.of("games", "wins"),
+                "groupBy", List.of(Map.of("by", "TEAM", "size", 2))), null), true);
+        Long sessionId = completedSession(groupId, venueId, 2, teamSport);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        runner.processDue();
+
+        UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, teamSport)).orElseThrow();
+        assertThat(row.getGroupings().keySet()).containsExactly("TEAM");
+        assertThat(keysOf(row, "TEAM")).containsExactly(pair(aliceId, bobId));
+        assertThat(PlayerStatsDoc.read(row).group("TEAM", pair(aliceId, bobId)).all().value("wins")).isEqualTo(1.0);
+        assertThat(groupH2hRepository.findAll()).isEmpty();
+        assertThat(leaderboardRepository.findAll()).isEmpty();
     }
 
     // ---- what is due, and when -----------------------------------------------------------------------------------
@@ -461,8 +597,10 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         jobRepository.save(job);
         assertThat(runner.processDue()).isEqualTo(1);
 
-        assertThat(player(aliceId).personal().all().core("games")).isEqualTo(1.0);
-        assertThat(member(aliceId).counters().core("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+        assertThat(member(aliceId).counters().value("games")).isEqualTo(1.0);
+        assertThat(GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow()).seq())
+                .isEqualTo(1);                                       // the head-to-head is not counted twice either
         SessionStatsJob again = jobRepository.findById(sessionId).orElseThrow();
         assertThat(again.getStatus()).isEqualTo(SessionStatsJob.Status.SKIPPED);
         assertThat(ignoredReasons(again).values()).containsOnly("ALREADY_COUNTED");
@@ -473,7 +611,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         Long sessionId = completedSession(groupId, venueId, 2);
         game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
         JdbcTemplate jdbc = new JdbcTemplate(dataSource);
-        jdbc.execute("ALTER TABLE leaderboard_entry RENAME TO leaderboard_entry_gone");   // makes the counting fail
+        jdbc.execute("ALTER TABLE stat_board_runs RENAME TO stat_board_runs_gone");   // makes the counting fail
         try {
             assertThat(runner.processDue()).isEqualTo(1);
             SessionStatsJob first = jobRepository.findById(sessionId).orElseThrow();
@@ -482,8 +620,9 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
             assertThat(first.getLastError()).isNotBlank();
             assertThat(first.getNextAttemptAt()).isAfter(Instant.now().plus(Duration.ofMinutes(10)))
                     .isBefore(Instant.now().plus(Duration.ofMinutes(20)));
-            // nothing was counted: the failed attempt rolled back as a whole
-            assertThat(player(aliceId).personal().all().core("games")).isEqualTo(0.0);
+            // nothing was counted: the failed attempt rolled back as a whole, the head-to-head included
+            assertThat(player(aliceId).personal().all().value("games")).isNull();
+            assertThat(groupH2hRepository.findAll().stream().map(g -> GroupH2hDoc.read(g).seq())).containsOnly(0L);
 
             // not due yet: the next tick leaves it alone
             assertThat(runner.processDue()).isZero();
@@ -498,14 +637,14 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
             assertThat(failed.getStatus()).isEqualTo(SessionStatsJob.Status.FAILED);
             assertThat(failed.getNextAttemptAt()).isAfter(Instant.now().plus(Duration.ofHours(5)));
         } finally {
-            jdbc.execute("ALTER TABLE leaderboard_entry_gone RENAME TO leaderboard_entry");
+            jdbc.execute("ALTER TABLE stat_board_runs_gone RENAME TO stat_board_runs");
         }
 
         // once the cause is gone and the long wait has passed, the same session is counted
         makeDue(sessionId);
         assertThat(runner.processDue()).isEqualTo(1);
         assertThat(jobRepository.findById(sessionId).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
-        assertThat(player(aliceId).personal().all().core("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
     }
 
     @Test
@@ -538,8 +677,10 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
 
         assertThat(attempted.stream().mapToInt(Integer::intValue).sum()).isEqualTo(1);
         assertThat(jobRepository.findById(sessionId).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
-        assertThat(player(aliceId).personal().all().core("games")).isEqualTo(1.0);
-        assertThat(member(aliceId).counters().core("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+        assertThat(member(aliceId).counters().value("games")).isEqualTo(1.0);
+        assertThat(GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow()).seq())
+                .isEqualTo(1);
     }
 
     @Test
@@ -560,10 +701,52 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(jobRepository.findAll().stream().map(j -> j.getStatus() + " " + j.getLastError() + " " + j.getResult()).toList())
                 .as("every session is counted, none left to retry").allMatch(s -> s.startsWith("DONE"));
         for (UUID player : List.of(aliceId, bobId, carolId, danId)) {
-            assertThat(player(player).personal().all().core("games")).as("games of %s", player).isEqualTo(4.0);
-            assertThat(member(player).counters().core("games")).as("group games of %s", player).isEqualTo(4.0);
-            assertThat(entry("GROUP", groupId, "SINGLE", player.toString()).getGames()).isEqualTo(4);
+            assertThat(player(player).personal().all().value("games")).as("games of %s", player).isEqualTo(4.0);
+            assertThat(member(player).counters().value("games")).as("group games of %s", player).isEqualTo(4.0);
         }
+        // the group's head-to-head row is the last lock every session takes: no game lost there either
+        GroupH2hDoc h2h = GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow());
+        assertThat(h2h.seq()).isEqualTo(4);
+        assertThat(h2h.size()).isEqualTo(2);
+        long[] first = h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId));
+        long[] second = h2h.matchup(List.of(carolId, aliceId), List.of(danId, bobId));
+        assertThat(first[0] + first[1]).isEqualTo(2);
+        assertThat(second[0] + second[1]).isEqualTo(2);
+    }
+
+    @Test
+    void sessionsOfOneGroupWithDisjointPlayersLoseNoGameOfTheHeadToHead() throws Exception {
+        // two foursomes who share nobody: the group's head-to-head row is the only row the sessions have in common, so
+        // only the lock on that row (taken last, after the player rows) stands between two sessions and a lost update
+        UUID eve = createUser("eve");
+        UUID fay = createUser("fay");
+        UUID gus = createUser("gus");
+        UUID hal = createUser("hal");
+        for (int i = 0; i < 8; i++) {
+            Long sessionId = completedSession(groupId, venueId, 2 + i);
+            for (UUID extra : List.of(eve, fay, gus, hal)) {
+                participantRepository.save(SessionParticipant.builder().sessionId(sessionId).userId(extra)
+                        .status(ParticipantStatus.JOINED).build());
+            }
+            if (i % 2 == 0) {
+                game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+            } else {
+                game(sessionId, List.of(eve, fay), List.of(gus, hal), 21, 15);
+            }
+        }
+
+        inParallel(4, runner::processDue);
+
+        assertThat(jobRepository.findAll()).hasSize(8);
+        assertThat(jobRepository.findAll().stream().map(j -> j.getStatus() + " " + j.getLastError()).toList())
+                .as("every session is counted, none left to retry").allMatch(s -> s.startsWith("DONE"));
+        GroupH2hDoc h2h = GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow());
+        assertThat(h2h.seq()).isEqualTo(8);
+        assertThat(h2h.size()).isEqualTo(2);
+        assertThat(h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))[0]
+                + h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))[1]).isEqualTo(4);
+        assertThat(h2h.matchup(List.of(eve, fay), List.of(gus, hal))[0]
+                + h2h.matchup(List.of(eve, fay), List.of(gus, hal))[1]).isEqualTo(4);
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------------
@@ -595,18 +778,23 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         jobRepository.save(job);
     }
 
+    private void switchStatistics(Long sport, boolean on) {
+        Sport row = sportRepository.findById(sport).orElseThrow();
+        row.setStatisticsEnabled(on);
+        sportRepository.save(row);
+        if (cacheManager.getCache("sports") != null) {
+            cacheManager.getCache("sports").clear();
+        }
+    }
+
     private PlayerStatsDoc player(UUID userId) {
         return userStatsRepository.findById(new UserSportStats.Key(userId, sportId))
                 .map(PlayerStatsDoc::read).orElseGet(() -> PlayerStatsDoc.read(new UserSportStats(userId, sportId)));
     }
 
     private GroupStatsDoc member(UUID userId) {
-        GroupMemberStats row = groupStatsRepository.findById(new GroupMemberStats.Key(groupId, userId, sportId)).orElseThrow();
+        GroupMemberStats row = groupMemberStatsRepository.findById(new GroupMemberStats.Key(groupId, userId, sportId)).orElseThrow();
         return GroupStatsDoc.read(row);
-    }
-
-    private LeaderboardEntry entry(String scopeType, Long scopeId, String kind, String subject) {
-        return leaderboardRepository.findById(new LeaderboardEntry.Key(scopeType, scopeId, sportId, kind, subject)).orElseThrow();
     }
 
     private boolean dirty(String scopeType, Long scopeId) {
@@ -660,9 +848,9 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         return userRepository.save(user).getId();
     }
 
-    private Long newSport(Map<String, Object> schema) {
+    private Long newSport(Map<String, Object> schema, boolean statisticsEnabled) {
         Long id = sportRepository.save(Sport.builder().name("SESSION-53 " + UUID.randomUUID()).isActive(true)
-                .resultSchema(schema).build()).getId();
+                .statisticsEnabled(statisticsEnabled).resultSchema(schema).build()).getId();
         if (cacheManager.getCache("sports") != null) {
             cacheManager.getCache("sports").clear();
         }
@@ -741,31 +929,38 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     }
 
     /**
-     * Badminton: doubles, one required score slot of 0 to 30, and a statistics block that asks for partner and pair counters
-     * (the default metrics and derived columns written out, because a declared block is taken as written).
+     * Badminton: doubles, one required score slot of 0 to 30, a scoreboard of games, wins and the two score sums grouped by
+     * partner, and a ranking order. The one config the client and the server share (SESSION-53 rework).
      */
     private static Map<String, Object> badmintonSchema() {
-        return Map.of("version", 1, "maxRecords", 100, "record", Map.of(
-                "data", badmintonData(),
-                "statistics", Map.of(
-                        "counters", List.of("games", "wins"),
-                        "metrics", List.of(Map.of("key", "scoreFor", "aggregate", "SUM"),
-                                Map.of("key", "scoreAgainst", "aggregate", "SUM")),
-                        "derived", List.of(Map.of("key", "winRate", "formula", "wins/games"),
-                                Map.of("key", "winDiff", "formula", "wins-losses"),
-                                Map.of("key", "scoreDiff", "formula", "scoreFor-scoreAgainst")),
-                        "groupBy", List.of(Map.of("by", "PARTNER"), Map.of("by", "TEAM", "size", 2)))));
+        return doublesSchema(Map.of(
+                "columns", List.of("games", "wins", "scoreFor", "scoreAgainst"),
+                "groupBy", List.of(Map.of("by", "PARTNER"))),
+                Map.of("sort", List.of(Map.of("by", "wins", "dir", "DESC"), Map.of("by", "games", "dir", "ASC"))));
     }
 
-    /** The same doubles sport with no statistics block: the defaults apply, which group by nothing. */
-    private static Map<String, Object> badmintonWithoutStatisticsSchema() {
-        return Map.of("version", 1, "maxRecords", 100, "record", Map.of("data", badmintonData()));
+    /** The doubles sport with the given scoreboard and ranking blocks; {@code null} leaves the block out. */
+    private static Map<String, Object> doublesSchema(Map<String, Object> scoreboard, Map<String, Object> ranking) {
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("data", doublesData());
+        if (scoreboard != null) {
+            record.put("scoreboard", scoreboard);
+        }
+        if (ranking != null) {
+            record.put("ranking", ranking);
+        }
+        return Map.of("version", 1, "maxRecords", 100, "record", record);
     }
 
-    private static Map<String, Object> badmintonData() {
+    private static Map<String, Object> doublesData() {
         return Map.of("type", "COMPETITIVE",
                 "playersPerSide", Map.of("min", 1, "max", 2),
                 "score", Map.of("slot", List.of(Map.of("required", true, "rule", ">=0&<=30"))));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.Set<String> keySetOf(Object map) {
+        return ((Map<String, Object>) map).keySet();
     }
 
     /** The keys stored under one dimension of a row's {@code groupings} (the partner ids, or the team keys). */
@@ -774,19 +969,18 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         return ((Map<String, Object>) row.getGroupings().get(by)).keySet();
     }
 
-    /** A football-like sport: up to 11 a side, the given groupBy, the best and the worst of a team's goals, a derived goal difference. */
+    /** A football-like sport: up to 11 a side, games, win rate and the goals scored as the scoreboard, the given groupBy. */
     private static Map<String, Object> footballSchema(List<Object> groupBy) {
+        Map<String, Object> scoreboard = new LinkedHashMap<>();
+        scoreboard.put("columns", List.of("games", "winRate", "scoreFor"));
+        scoreboard.put("groupBy", groupBy);
         return Map.of("version", 1, "maxRecords", 100, "record", Map.of(
                 "data", Map.of(
                         "type", "COMPETITIVE",
                         "playersPerSide", Map.of("min", 1, "max", 11),
                         "score", Map.of("slot", List.of(Map.of("required", true, "rule", ">=0")))),
-                "statistics", Map.of(
-                        "metrics", List.of(Map.of("key", "scoreFor", "aggregate", "MAX"),
-                                Map.of("key", "scoreAgainst", "aggregate", "MIN")),
-                        "derived", List.of(Map.of("key", "goalDiff", "formula", "scoreFor-scoreAgainst")),
-                        "groupBy", groupBy),
+                "scoreboard", scoreboard,
                 "ranking", Map.of("sort", List.of(Map.of("by", "wins", "dir", "DESC"),
-                        Map.of("by", "goalDiff", "dir", "DESC")))));
+                        Map.of("by", "winRate", "dir", "DESC")))));
     }
 }

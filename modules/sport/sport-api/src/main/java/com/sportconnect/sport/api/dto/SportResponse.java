@@ -21,6 +21,8 @@ public class SportResponse {
     private Integer minPlayers;
     private Integer maxPlayers;
     private Boolean isActive;
+    /** Statistics and ranking on or off for this sport (SESSION-53 rework). */
+    private Boolean statisticsEnabled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

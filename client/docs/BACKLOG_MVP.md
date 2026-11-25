@@ -2,7 +2,7 @@
 
 **Version:** MVP v1  
 **Module:** `client` (new SportHub app — the existing CRA app in this folder is being dropped and rebuilt, see `client/CLAUDE.md`)  
-**Last updated:** 2026-11-23 (statistic and ranking chain designed: CLIENT-SESSION-54, 55, 56 filed; CLIENT-SESSION-41 and 42 rewritten)
+**Last updated:** 2026-11-25 (SESSION-53 rework: SPORT-19 and CLIENT-SESSION-59 filed)
 
 ---
 
@@ -91,6 +91,8 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 25 | [HF-22](MVP/HF-22_E2E_FLAKE_MSW_SETUP_GOTO_THEN_EVALUATE_RACE.md) | e2e flake in `msw-setup.spec.ts`: each test runs `fetch` inside `page.evaluate` right after `page.goto`, so the load redirect can destroy the context ("Execution context was destroyed", "Failed to fetch"); 5 of 10 runs fail on `master` (2026-11-14); wait for the page to settle or use `page.request`; **2026-11-18: also `matches-journey` step 8c (Discover filters, failed in two large runs, passes alone) and 7 `home-feed-journey` sign-in timeouts under load, folded in** | `TODO` |
 | 26 | [CLIENT-MOBILE-SUPPORT-1](MVP/CLIENT-MOBILE-SUPPORT-1_MOBILE_VIEWPORT_SUPPORT.md) | Mobile viewport support: a **standing collector** (like `BASELINE-UPDATE-1`) for mobile-viewport problems noticed while building other client tickets, each added as a row (after a duplicate check) and solved together later; first points (owner, 2026-11-20, not investigated): less horizontal padding on the main div under the root, horizontal group tabs under the banner (selected = icon + label, the rest icon only), no horizontal scroll from the main navigator | `TODO` |
 | 27 | [CLIENT-SESSION-53](MVP/CLIENT-SESSION-53_SHARE_DIALOG_API_SEARCH_FOR_FRIENDS_AND_GROUP_MEMBERS.md) | Share dialog: search through the API for friends and group members instead of filtering only what is loaded (the group half needs nothing new, the friend half needs U29); follow-up of CLIENT-GROUP-SESSION-3 | `TODO` |
+| 30 | [SPORT-19](MVP/SPORT-19_ADMIN_SWITCH_FOR_A_SPORTS_STATISTICS_AND_RANKING.md) | Admin: the sport's statistics and ranking switch (`statisticsEnabled`) on the sport detail, and the field in the sport type and MSW mocks (server side in SESSION-53, rework 2026-11-25) | `TODO` |
+| 31 | [CLIENT-SESSION-59](MVP/CLIENT-SESSION-59_THE_SCOREBOARD_HAS_NO_DEFAULT_COLUMNS.md) | The scoreboard has no default columns: no `record.scoreboard.columns`, no scoreboard (one config with the server, which collects nothing without it; SESSION-53 rework) | `TODO` |
 
 #### Removed / Deferred
 
