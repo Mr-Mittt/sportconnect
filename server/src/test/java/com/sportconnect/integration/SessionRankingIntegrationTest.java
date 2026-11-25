@@ -103,7 +103,7 @@ class SessionRankingIntegrationTest extends RedisBaseIT {
         neverJoinedId = createUser("never");
         requestedId = createUser("requested");
         sportId = sportRepository.save(Sport.builder().name("SESSION-72 " + UUID.randomUUID()).isActive(true)
-                .resultSchema(badmintonSchema()).build()).getId();
+                .statisticsEnabled(true).resultSchema(badmintonSchema()).build()).getId();
         evictSportCache();
         groupId = groupRepository.save(Group.builder().groupName("Ranking " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
@@ -140,6 +140,13 @@ class SessionRankingIntegrationTest extends RedisBaseIT {
     }
 
     /** Badminton: doubles, one required score slot of 0 to 30. */
+    private void switchStatistics(boolean on) {
+        Sport sport = sportRepository.findById(sportId).orElseThrow();
+        sport.setStatisticsEnabled(on);
+        sportRepository.save(sport);
+        evictSportCache();
+    }
+
     private static Map<String, Object> badmintonSchema() {
         return Map.of("version", 1, "maxRecords", 100, "record", Map.of("data", Map.of(
                 "type", "COMPETITIVE",
@@ -304,6 +311,29 @@ class SessionRankingIntegrationTest extends RedisBaseIT {
         verify(sessionId, recordId, bobId)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_RECORD_NOT_PROPOSED"));
+    }
+
+    @Test
+    void aSportWithStatisticsSwitchedOff_hasNoRankingGames_proposingAndConfirmingAre409UntilItIsSwitchedOn() throws Exception {
+        Long sessionId = ongoing();
+        Long recordId = addGame(sessionId, aliceId, 21, 18);       // logging a game does not depend on the switch
+
+        switchStatistics(false);
+
+        propose(sessionId, recordId, aliceId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_RECORD_RANKING_NOT_AVAILABLE"));
+        verify(sessionId, recordId, bobId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_RECORD_RANKING_NOT_AVAILABLE"));
+        assertThat(events()).isEmpty();
+        assertThat(verificationRepository.count()).isZero();
+        assertThat(ranking(sessionId, recordId, aliceId).path("status").asText()).isEqualTo("NORMAL");
+
+        switchStatistics(true);
+
+        propose(sessionId, recordId, aliceId).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ranking.status").value("PROPOSED"));
     }
 
     @Test

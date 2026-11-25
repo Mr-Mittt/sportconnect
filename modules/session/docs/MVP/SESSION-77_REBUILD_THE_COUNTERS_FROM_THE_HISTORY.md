@@ -7,3 +7,9 @@
 An ADMIN-only operation that recomputes the blobs and the projection rows of one sport (or one group) from the job results, the records and the confirmations, in batches, marking the boards dirty, safe to repeat, with a count of what changed. Job rows pruned by SESSION-75 are recomputed from `session_records` directly. Decide at pickup how it avoids racing the statistics tick (a per-sport lock row).
 
 **Tests:** Spock and an integration test (a changed counter is repaired; the history is untouched).
+
+## Hand-over from the SESSION-53 rework (2026-11-25, owner)
+
+- **The rebuild covers what a rule change leaves behind.** A stat added to a sport's `record.scoreboard.columns`, or a `groupBy` added later, has **no history until this rebuild**, and a session the engine marked `SKIPPED` with the note `STATISTICS_NOT_CONFIGURED` (the sport had no columns then) is final in `session_stats_jobs`, so the rebuild must reprocess sessions from `session_records` and the confirmations, not from the job rows' `counted` lists alone.
+- It rewrites `user_sport_stats`, `group_member_stats` **and `group_stats`** (the group head-to-head: rebuild in the order the sessions ended, so the running game number `seq` is right and the 5,000-matchup cap drops the right entries), and marks every board dirty (the engine writes no `leaderboard_entry`; SESSION-54's job rebuilds the boards from the blobs).
+- Only for a sport with statistics switched on; the collected stats are whatever the sport's current columns (and ranking sort) need (`StatisticsSchema.of(schema).collected()`).

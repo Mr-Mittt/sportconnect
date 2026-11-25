@@ -5,6 +5,22 @@ import spock.lang.Specification
 /** SESSION-53: the derived columns: two operands and one of + - * /, an empty result instead of an error. */
 class StatsFormulasSpec extends Specification {
 
+    def "operands are the keys a formula reads, never a plain number, and nothing for an invalid formula"() {
+        expect:
+        StatsFormulas.operands(formula) == operands
+
+        where:
+        formula                  | operands
+        'wins/games'             | ['wins', 'games']
+        ' scoreFor - scoreAgainst ' | ['scoreFor', 'scoreAgainst']
+        'games*2'                | ['games']
+        'games*2.5'              | ['games']
+        'wins'                   | []
+        '1+2'                    | []
+        ''                       | []
+        null                     | []
+    }
+
     def values = [wins: 6d, losses: 2d, games: 8d, scoreFor: 150d, scoreAgainst: 120d]
 
     def "#formula evaluates to #expected"() {

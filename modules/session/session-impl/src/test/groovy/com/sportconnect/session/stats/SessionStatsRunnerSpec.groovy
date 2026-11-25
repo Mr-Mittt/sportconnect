@@ -1,5 +1,6 @@
 package com.sportconnect.session.stats
 
+import com.sportconnect.sport.api.service.SportService
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.data.domain.Pageable
 import spock.lang.Specification
@@ -16,13 +17,15 @@ class SessionStatsRunnerSpec extends Specification {
     SessionStatsJobRepository jobRepository = Mock()
     SessionStatsWriter writer = Mock()
     SessionStatsProcessor processor = Mock()
+    SportService sportService = Mock()
     Instant now = Instant.parse('2026-11-23T10:00:00Z')
 
     @Subject
-    SessionStatsRunner runner = new SessionStatsRunner(jobRepository, writer, processor)
+    SessionStatsRunner runner = new SessionStatsRunner(jobRepository, writer, processor, sportService)
 
     def setup() {
         runner.setClock(Clock.fixed(now, ZoneOffset.UTC))
+        sportService.getStatisticsEnabledSportIds() >> ([1L, 2L] as Set)
     }
 
     def "a due job row is claimed by compare-and-set and counted with the claim time it took"() {
@@ -33,7 +36,7 @@ class SessionStatsRunnerSpec extends Specification {
         1 * jobRepository.findDueSessionIds(now, now.minus(Duration.ofMinutes(10)), { Pageable p -> p.pageSize == 10 }) >> [7L]
         1 * writer.claimDue(7L, now, now.minus(Duration.ofMinutes(10))) >> true
         1 * processor.process(7L, now)
-        1 * jobRepository.findNewSessionIds(_, _) >> []
+        1 * jobRepository.findNewSessionIds(_, _, _) >> []
         attempted == 1
     }
 
@@ -57,7 +60,8 @@ class SessionStatsRunnerSpec extends Specification {
         1 * jobRepository.findDueSessionIds(*_) >> [1L, 2L]
         2 * writer.claimDue(*_) >> true
         2 * processor.process(*_)
-        1 * jobRepository.findNewSessionIds(now.minus(Duration.ofHours(24)), { Pageable p -> p.pageSize == 1 }) >> [9L]
+        1 * jobRepository.findNewSessionIds(now.minus(Duration.ofHours(24)), { it == ([1L, 2L] as Set) },
+                { Pageable p -> p.pageSize == 1 }) >> [9L]
         1 * writer.insertClaim(9L, now)
         1 * processor.process(9L, now)
         attempted == 3
@@ -72,6 +76,30 @@ class SessionStatsRunnerSpec extends Specification {
         2 * writer.claimDue(*_) >> true
         2 * processor.process(*_)
         0 * jobRepository.findNewSessionIds(*_)
+        0 * sportService.getStatisticsEnabledSportIds()
+    }
+
+    def "only the sessions of sports that have statistics switched on are looked up"() {
+        when:
+        runner.pass(10)
+
+        then:
+        1 * jobRepository.findDueSessionIds(*_) >> []
+        1 * sportService.getStatisticsEnabledSportIds() >> ([5L, 8L] as Set)
+        1 * jobRepository.findNewSessionIds(_, { it == ([5L, 8L] as Set) }, _) >> []
+    }
+
+    def "with no sport switched on no new session is looked up, but a due job row still runs"() {
+        when:
+        def attempted = runner.pass(10)
+
+        then:
+        1 * jobRepository.findDueSessionIds(*_) >> [7L]
+        1 * writer.claimDue(7L, _, _) >> true
+        1 * processor.process(7L, now)
+        1 * sportService.getStatisticsEnabledSportIds() >> ([] as Set)
+        0 * jobRepository.findNewSessionIds(*_)
+        attempted == 1
     }
 
     def "a session another worker inserted first is skipped and the others go on"() {

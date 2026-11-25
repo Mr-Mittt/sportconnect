@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS sports (
     session_attributes_schema JSON,
     -- SESSION-50 (sport-impl): per-sport RESULT schema (V089). Same H2 JSON / Postgres JSONB substitution.
     result_schema JSON,
+    -- SESSION-53 rework (sport-impl): statistics and ranking switched on or off for the sport (V104).
+    statistics_enabled BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
@@ -539,6 +541,15 @@ CREATE TABLE IF NOT EXISTS group_member_stats (
     version INTEGER NOT NULL DEFAULT 0,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (group_id, user_id, sport_id)
+);
+
+CREATE TABLE IF NOT EXISTS group_stats (
+    group_id BIGINT NOT NULL,
+    sport_id BIGINT NOT NULL,
+    h2h JSON NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (group_id, sport_id)
 );
 
 CREATE TABLE IF NOT EXISTS leaderboard_entry (

@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -68,6 +69,7 @@ public class SportServiceImpl implements SportService {
                 .minPlayers(request.getMinPlayers())
                 .maxPlayers(request.getMaxPlayers())
                 .isActive(true)
+                .statisticsEnabled(Boolean.TRUE.equals(request.getStatisticsEnabled()))
                 .build();
 
         Sport savedSport = sportRepository.save(sport);
@@ -197,6 +199,9 @@ public class SportServiceImpl implements SportService {
         if (request.getIsActive() != null) {
             sport.setIsActive(request.getIsActive());
         }
+        if (request.getStatisticsEnabled() != null) {
+            sport.setStatisticsEnabled(request.getStatisticsEnabled());
+        }
 
         Sport updatedSport = sportRepository.save(sport);
         sportLookupCache.evictAll();
@@ -227,6 +232,23 @@ public class SportServiceImpl implements SportService {
         return sportRepository.existsByName(name);
     }
 
+    /** {@inheritDoc} Active-only, via the sport cache: an unknown or deactivated sport is a 404. */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isStatisticsEnabled(Long sportId) {
+        return Boolean.TRUE.equals(requireActiveSport(sportId).getStatisticsEnabled());
+    }
+
+    /** {@inheritDoc} One in-memory pass over the cached active sports. */
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> getStatisticsEnabledSportIds() {
+        return sportLookupCache.getActiveSportsById().values().stream()
+                .filter(sport -> Boolean.TRUE.equals(sport.getStatisticsEnabled()))
+                .map(Sport::getId)
+                .collect(Collectors.toSet());
+    }
+
     private SportResponse toSportResponse(Sport sport) {
         return SportResponse.builder()
                 .id(sport.getId())
@@ -237,6 +259,7 @@ public class SportServiceImpl implements SportService {
                 .minPlayers(sport.getMinPlayers())
                 .maxPlayers(sport.getMaxPlayers())
                 .isActive(sport.getIsActive())
+                .statisticsEnabled(sport.getStatisticsEnabled())
                 .createdAt(sport.getCreatedAt())
                 .updatedAt(sport.getUpdatedAt())
                 .build();

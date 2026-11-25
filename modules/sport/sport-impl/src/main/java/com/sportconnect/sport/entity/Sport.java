@@ -100,6 +100,17 @@ public class Sport {
     @Column(name = "result_schema", columnDefinition = "jsonb")
     private Map<String, Object> resultSchema;
 
+    /**
+     * SESSION-53 rework: statistics and ranking switched on or off for this sport together (owner, 2026-11-25). Off by
+     * default. Results logging is not affected (it needs only a result schema). The statistics runner picks only the
+     * sessions of sports that have this on, the ranking proposal refuses a sport that has it off, and the statistics reads
+     * answer as for an unknown sport. Read through {@code SportService.isStatisticsEnabled} and
+     * {@code getStatisticsEnabledSportIds}; written through {@code PUT /api/sports/{sportId}} by an admin.
+     */
+    @Column(name = "statistics_enabled", nullable = false)
+    @Builder.Default
+    private Boolean statisticsEnabled = false;
+
     @Column(name = "is_active")
     @Builder.Default
     private Boolean isActive = true;

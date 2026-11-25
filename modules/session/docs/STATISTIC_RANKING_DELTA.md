@@ -1,5 +1,7 @@
 # Statistics and ranking: what the BA document should change
 
+> **Revised 2026-11-25 (SESSION-53 rework).** For the BA: a sport now has an on/off switch for statistics and ranking, and counts only the statistics its scoreboard lists (the same list the app's scoreboard shows; a sport that lists none counts nothing, there are no defaults); a pair's statistics belong to each player (partner counters are personal data); and a group keeps the head-to-head record of its pairs (latest 5,000 matchups). Where sections below say otherwise they describe the plan of 2026-11-23. Details: `STATISTICS_CONFIG_PAIRS_AND_H2H_DESIGN_DRAFT.md`.
+
 **Status:** Draft for the BA, 2026-11-23. Kept up to date as each ticket of the chain is built (section 5); when the chain is finished it goes back to the BA for the final app behaviour, the same way `BA_GAME_LOGGING_DELTA.md` did for game logging.
 **Compares:** the statistics, leaderboard, season, KPI, adjustment, guest, sharing and non-functional text of `D:\Planning\business-analyst\Requirements - Games, Statistics and Leaderboards (revised 2026-11-23).md` against the owner's specification `GROUP_AND_REGION_STATISTIC_RANKING.md` and the design `STATISTIC_RANKING_DESIGN.md` (decisions of 2026-11-23).
 **Tickets:** SESSION-72, SESSION-53, SESSION-73, SESSION-54 (server), CLIENT-SESSION-54, 41, 42 (client), prerequisite LOC-5; later SESSION-52, 55, 56 and CLIENT-SESSION-40, 43, 44, 48; follow-ups SESSION-74 to 77, CLIENT-SESSION-55, 56.

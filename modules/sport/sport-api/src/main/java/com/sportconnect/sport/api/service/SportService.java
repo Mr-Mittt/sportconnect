@@ -9,6 +9,7 @@ import com.sportconnect.sport.api.dto.UpdateSportRequest;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Sport service interface
@@ -253,4 +254,20 @@ public interface SportService {
      * @throws com.sportconnect.common.exception.ResourceNotFoundException if no sport has this id
      */
     Map<String, Object> replaceResultSchema(Long sportId, Map<String, Object> schema);
+
+    /**
+     * SESSION-53 rework: whether statistics and ranking are switched on for this sport (the flag an admin sets with
+     * {@link #updateSport}; off by default). Logging results does not depend on it.
+     *
+     * @param sportId the sport to read
+     * @return {@code true} when the sport has the feature on
+     * @throws com.sportconnect.common.exception.ResourceNotFoundException if no active sport has this id
+     */
+    boolean isStatisticsEnabled(Long sportId);
+
+    /**
+     * SESSION-53 rework: the ids of every <strong>active</strong> sport that has statistics and ranking switched on, in one
+     * call served from the sport cache (the statistics runner asks every few minutes). A deactivated sport is not in it.
+     */
+    Set<Long> getStatisticsEnabledSportIds();
 }

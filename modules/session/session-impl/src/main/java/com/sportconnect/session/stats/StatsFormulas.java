@@ -1,5 +1,7 @@
 package com.sportconnect.session.stats;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -21,6 +23,24 @@ public final class StatsFormulas {
     /** Whether the text is a formula this class can evaluate (so a bad schema entry can be dropped on read). */
     public static boolean isValid(String formula) {
         return formula != null && FORMULA.matcher(formula).matches();
+    }
+
+    /** The keys a formula reads (a plain number is not a key); empty for a formula that is not valid. */
+    public static List<String> operands(String formula) {
+        if (formula == null) {
+            return List.of();
+        }
+        Matcher matcher = FORMULA.matcher(formula);
+        if (!matcher.matches()) {
+            return List.of();
+        }
+        List<String> keys = new ArrayList<>();
+        keys.add(matcher.group(1));
+        String right = matcher.group(3);
+        if (!Character.isDigit(right.charAt(0))) {
+            keys.add(right);
+        }
+        return keys;
     }
 
     /**

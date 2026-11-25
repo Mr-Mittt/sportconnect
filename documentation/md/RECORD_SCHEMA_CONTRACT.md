@@ -58,7 +58,7 @@ The **first team is the winner** (by position). `scores` has one entry per score
 
 ## Scoreboard (client; CLIENT-GL-49)
 
-The session detail's Result section shows a scoreboard of the whole session above the record list. Like everything else here it is the sport's choice, written in `record.scoreboard` (next to `record.data` and `record.UI`) from what the client's catalog (`record-ui-v1.json`, `COMPETITIVE.scoreboard`) supports. Every key is optional; a schema without the block gets the default basic scoreboard.
+The session detail's Result section shows a scoreboard of the whole session above the record list. Like everything else here it is the sport's choice, written in `record.scoreboard` (next to `record.data` and `record.UI`) from what the client's catalog (`record-ui-v1.json`, `COMPETITIVE.scoreboard`) supports. Every key is optional, but **`columns` is also what the server collects (SESSION-53 rework, owner 2026-11-25): a schema with no usable `columns` shows no scoreboard and collects no statistics, there is no default.** (The client's own fallback to `games`, `wins`, `losses` is removed by CLIENT-SESSION-59; until then it still draws it.)
 
 ```json
 "scoreboard": {
@@ -66,15 +66,17 @@ The session detail's Result section shows a scoreboard of the whole session abov
   "columns": ["games", "wins", "losses", "winDiff", "scoreDiff"],
   "titles": { "scoreDiff": { "en": "Points +/-", "vi": "Hiệu số điểm" } },
   "sort": [ { "by": "wins", "dir": "DESC" }, { "by": "scoreDiff", "dir": "DESC" }, { "by": "name", "dir": "ASC" } ],
-  "scoreSlot": 0
+  "scoreSlot": 0,
+  "groupBy": [ { "by": "PARTNER" } ]
 }
 ```
 
 - `enabled`: `false` hides the scoreboard for the sport (default `true`).
-- `columns`: the columns after the player's name, in the order drawn. Supported: `games`, `wins`, `losses`, `winRate` (wins over games, shown as a percentage), `winDiff` (wins minus losses), `scoreFor`, `scoreAgainst`, `scoreDiff` (score for minus against). Unknown and repeated entries are dropped; none left means the default `games`, `wins`, `losses`.
+- `columns`: the columns after the player's name, in the order drawn. Supported: `games`, `wins`, `losses`, `winRate` (wins over games, shown as a percentage), `winDiff` (wins minus losses), `scoreFor`, `scoreAgainst`, `scoreDiff` (score for minus against). Unknown and repeated entries are dropped; none left means **no scoreboard** (no default). The server collects exactly these stats, from the same catalog.
 - `titles`: a column's title per language, replacing the client's default (en and vi ship for every column). Without it, or without that language, the other language and then the default are used.
 - `sort`: row order, first key first. Keys: any column above or `name`; `dir` is `ASC` or `DESC`. A player with no value for a key sorts after the others, whichever the direction. Default: `wins` DESC, `winDiff` DESC, `games` ASC, `name` ASC.
 - `scoreSlot`: the score slot (0 = the first) the score columns count; without it every slot is summed. A number that is not a slot of the sport counts every slot.
+- `groupBy`: read by the server only (the client ignores it): the one grouping of the statistics, see "What the server collects" below.
 
 **What is counted.** One row per JOINED participant, plus anyone named in a valid record (a player who left keeps their games and reads "Former player"). The first team of a record won and the second lost; every player of a team gets the game. Score columns add the counted slots only where both teams filled the slot, so a game logged without scores adds to games, wins and losses and not to the score columns. The table starts with a `#` index column numbering the rows in the order shown. A cell with no data shows "-": a player with no game (every column), a win rate over no games, a score column with no scored record. The scoreboard is the whole session: the "my results" switch does not change it, and the caller's own row is highlighted. It is drawn above the record list in the Result section and above the rows in the record dialog, where it follows the rows as they are edited (every valid row that is not struck through).
 
@@ -84,42 +86,32 @@ Admin: the "Record schema" section of the sport detail at `/admin/sports/:sportI
 
 ## The server reads part of the schema (SESSION-53, built 2026-11-23)
 
-The statistics engine (`modules/session/docs/STATISTIC_RANKING_DESIGN.md`) makes the server read `record.data` (`type`, `playersPerSide`, `score.slot` with its `required` and `rule`, and `record.ranking.scoreSlot`) when it counts a session after its 24-hour guard, and two new optional blocks, `record.statistics` and `record.ranking`, so the same engine serves every sport. One **reader** per record type turns a record into neutral facts (valid, rankable, the teams, one participant per player with the outcome and the numbers); `COMPETITIVE` is the only reader. A record that fails the reader is ignored by the statistics with a reason and is **never rejected at write time**. The server reads the schema **leniently**: an entry it cannot use is dropped, never an error, so editing the schema can never stop a session being counted. The server still validates only `maxRecords` and the 16 KB size when the schema is saved.
+The statistics engine (`modules/session/docs/STATISTIC_RANKING_DESIGN.md`, revised by `STATISTICS_CONFIG_PAIRS_AND_H2H_DESIGN_DRAFT.md`) makes the server read `record.data` (`type`, `playersPerSide`, `score.slot` with its `required` and `rule`, and `record.ranking.scoreSlot`) when it counts a session after its 24-hour guard, and, since the rework of 2026-11-25, the sport's `record.scoreboard` (`columns`, `groupBy`), `record.ranking` and `record.data.allowDraws`, so the same engine serves every sport. One **reader** per record type turns a record into neutral facts (valid, rankable, the teams, one participant per player with the outcome and the numbers); `COMPETITIVE` is the only reader. A record that fails the reader is ignored by the statistics with a reason and is **never rejected at write time**. The server reads the schema **leniently**: an entry it cannot use is dropped, never an error, so editing the schema can never stop a session being counted. The server still validates only `maxRecords` and the 16 KB size when the schema is saved.
 
 **COMPETITIVE, what the reader does.** Valid: exactly two teams; each with between `playersPerSide.min` and `.max` players (defaults 1 and 10); every player a UUID, none twice; the scores consistent (at most one entry per slot, each empty or a whole number; a slot filled by both teams or by neither; a filled score satisfies the slot's `rule`; a team with any score fills every `required` slot). A game with no score at all is valid and *planned*. The first team is the winner by position, so a game is **counted** only when the ranking slot (`record.ranking.scoreSlot`, default the first) is filled by both teams with the first strictly ahead; a game with no score, or one the first team does not win (no draws yet, SESSION-59), is ignored with the reason `NO_SCORE` or `FIRST_TEAM_NOT_AHEAD`; a sport with no score slot is ignored with `RANKING_NOT_AVAILABLE`. The reader gives each player the two numbers `scoreFor` (their team's sum over every slot both teams filled) and `scoreAgainst`. The ignore reasons are stable upper-case tokens: `TEAMS`, `PLAYERS_PER_SIDE`, `PLAYER_ID`, `DUPLICATE_PLAYER`, `SCORE_SHAPE`, `SCORE_INCOMPLETE`, `SCORE_RULE`, `NO_SCORE`, `FIRST_TEAM_NOT_AHEAD`, `RANKING_NOT_AVAILABLE`, and from the engine `PLAYER_NOT_JOINED` (a named player is no longer `JOINED` in the session) and `ALREADY_COUNTED`.
 
-**`record.statistics`** (optional; the keys are the scoreboard's where they overlap):
+**What the server collects: `record.scoreboard`, `record.ranking`, `record.data.allowDraws` (SESSION-53 rework, owner 2026-11-25).** **One config, shared with the client.** The sport lists the statistics it shows in `record.scoreboard.columns`, chosen from the catalog of its record type, and the server collects exactly what those columns need:
 
 ```json
-"statistics": {
-  "counters": [ "games", "wins" ],
-  "metrics": [ { "key": "scoreFor", "aggregate": "SUM" }, { "key": "scoreAgainst", "aggregate": "SUM" } ],
-  "derived": [ { "key": "winRate", "formula": "wins/games" }, { "key": "winDiff", "formula": "wins-losses" },
-               { "key": "scoreDiff", "formula": "scoreFor-scoreAgainst" } ],
-  "groupBy": [ { "by": "PARTNER" }, { "by": "TEAM", "size": 2 } ]
+"scoreboard": {
+  "columns": [ "games", "wins", "scoreFor", "scoreAgainst" ],
+  "groupBy": [ { "by": "PARTNER" } ]
+},
+"ranking": {
+  "sort": [ { "by": "wins", "dir": "DESC" }, { "by": "games", "dir": "ASC" } ],
+  "minGames": { "single": 0, "combo": 5 }
 }
 ```
 
 The shape the engine stores these counters in, and everything else it writes as jsonb, is in `documentation/md/STATISTICS_JSONB_REFERENCE.md`.
 
-- **Core counters** every sport has and cannot redeclare: `games`, `wins`, `losses`, `draws`. All four are always stored; **`counters`** lists the ones the sport shows (any of the four; default `["games", "wins"]`; a name that is not a core counter is dropped). A **metric** is one of the numbers the reader gives (`scoreFor` and `scoreAgainst` for COMPETITIVE); its `aggregate` is `SUM`, `MAX` or `MIN` (case-insensitive); a number not declared is not counted; an unknown aggregate drops the entry.
-- A **derived** column is a formula of exactly two operands and one of `+ - * /`: the first a key (a core counter, a metric or another derived key, at most three levels deep), the second a key or a plain number; no brackets. A division by zero, or an operand with no value, gives no value. Nothing derived is stored: the leaderboard stores the three sort values computed when a game is counted.
-- **`groupBy`** lists the dimensions that get counters of their own beside the totals (`all` games and `ranked` games each), at most one of each, a repeat or an unknown `by` dropped:
-  - **`{ "by": "PARTNER" }`**: one set of counters per teammate (player A's games and wins *with* B). A team with more than 100 other members gets none.
-  - **`{ "by": "TEAM", "size": 2 }`** (`size` 2 or more; an entry with no usable size is dropped): one set per group of that many players of one team that includes the player (badminton: the pair); a team with more than 100 such groups gets none. This is the only dimension that becomes a **leaderboard entry** (a `COMBO` board); a partner grouping is a personal view.
-  - Replaces the first build's `combos: { "size": n }` (never merged; read nowhere now).
-- **Defaults.** A schema with **no** `record.statistics` block gets the block above **without `groupBy`**: no partner and no team counters until the sport declares `groupBy` (owner, 2026-11-24). Badminton's stored schema must therefore declare `groupBy` (and its `metrics` and `derived`, since a block that is present is taken as written) to have pair and partner statistics and a pair board. A block that is present is taken as written: a part left out is empty (no `groupBy` means no groupings), except `counters`, which defaults to `["games", "wins"]`.
+- **The catalog** (`StatsCatalog`; for `COMPETITIVE`): `games`, `wins`, `losses` are counted (every game, the games won, the games lost), `scoreFor` and `scoreAgainst` are sums of the numbers the reader gives each player, and `winRate` (`wins/games`), `winDiff` (`wins-losses`) and `scoreDiff` (`scoreFor-scoreAgainst`) are formulas that are **never stored**: a formula column makes the server store its operands (`winRate` stores `games` and `wins`, which are not shown unless listed). The list is the client's `COMPETITIVE.scoreboard.columns` in `record-ui-v1.json`, in the same order: the server's `StatsCatalogSpec` reads that file and fails when the two differ, so adding a stat is a change to both. A record type with no catalog (an unknown type, or a metric type before SESSION-58) supports nothing. Unknown and repeated entries are dropped.
+- **No defaults at all.** A schema with no `record.scoreboard.columns`, or none the catalog knows, collects **nothing**: the session is `SKIPPED` with the note `STATISTICS_NOT_CONFIGURED`. There are no fixed counters, no custom metrics and no `record.statistics` block (the first build's block is not read any more: a sport that only has it collects nothing), so a sport such as running or swimming, which has no wins, is not forced into them. A column added to a sport later has no history until a rebuild (SESSION-77).
+- **The sport's switch.** Statistics and ranking are on only for a sport whose `statisticsEnabled` is true (`sports.statistics_enabled`, off by default, set by an admin with `PUT /api/sports/{sportId}`; SPORT-19 is the client screen). The runner picks only sessions of enabled sports, so a disabled sport gets no job row and switching it on counts its finished sessions in the usual passes; ranking games cannot be proposed or confirmed for a disabled sport (409 `SESSION_RECORD_RANKING_NOT_AVAILABLE`). Logging results needs only the result schema, not the switch.
+- **`ranking.sort`** has at most three keys, each a key of the catalog (the ranking job stores three sort values per board entry, SESSION-54; the player's name is only the final tiebreak and is not stored). A key beyond the third, an unknown key, an unknown direction (`ASC` or `DESC`) and a repeated key are dropped. A key of the sort also makes the server collect what it needs, so the ranking can order by a stat that is not shown, but only for a sport that lists columns. **There is no default sort**: a sport that names none has no ranking order. `minGames` (per board kind, `single` and `combo`; defaults 0 and 5) is applied by the ranking job: an entry below it shows in statistics but has no rank. `scoreSlot` is the zero-based score slot that decides the winner (default 0).
+- **`groupBy`** (inside `scoreboard`) names the **one** dimension that gets counters of its own beside the totals (`all` games and `ranked` games each). It is a list, and the **first usable entry** is kept, so a sport is grouped one way or not at all (a repeat of the same two-player team would be the same numbers twice): `{ "by": "PARTNER" }` is one set of counters per teammate (player A's games and wins *with* B; badminton; a team with more than 100 other members gets none), and `{ "by": "TEAM", "size": 5 }` (`size` 2 or more) is one set per group of that many players of one team that includes the player (football; a team with more than 100 such groups gets none). **Missing means no grouping at all.** The grouping is the sport's current one: a read (SESSION-73) shows only that dimension, though a row may still hold another from before a schema edit.
+- **The group head-to-head.** In a **group session** of a sport grouped by `PARTNER`, a game of two teams of exactly two players also counts in the group's head-to-head (`group_stats.h2h`, one document per group and sport: a member dictionary and, per matchup of two pairs, the wins of each and the game number, the latest 5,000 matchups kept). A sport with a `TEAM` grouping, or none, builds none; a game outside a group has none.
+- **Draws.** `record.data.allowDraws` (boolean, default `false`) says the sport's games can end in a draw; the head-to-head then keeps a draws number. The `COMPETITIVE` reader still refuses a game the first team did not win, so no game is a draw end to end until SESSION-59 makes the reader give `DRAW`.
+- **The engine writes nothing to `leaderboard_entry`.** It marks the boards a game touched dirty (`stat_board_runs`); SESSION-54's job builds and ranks every board (group, region, country; singles and pairs) from the blobs.
 
-**`record.ranking`** (optional):
-
-```json
-"ranking": {
-  "sort": [ { "by": "winDiff", "dir": "DESC" }, { "by": "winRate", "dir": "DESC" }, { "by": "games", "dir": "DESC" } ],
-  "minGames": { "single": 0, "combo": 5 },
-  "scoreSlot": 0
-}
-```
-
-`record.ranking.sort` has **at most three keys** (each a core counter, a metric or a derived key): the ranking projection stores three sort values per board entry (SESSION-54), and the player's name is only the final tiebreak when listing and is not stored. The server **drops** a key beyond the third, an unknown key, an unknown direction (`ASC` or `DESC`) and a repeated key when it reads the schema. With no `sort` the default is the three keys above. `minGames` (per board kind, `single` and `combo`; defaults 0 and 5) is applied by the ranking job: an entry below it shows in statistics but has no rank. `scoreSlot` is the zero-based score slot that decides the winner (default 0).
-
-**The shared fixture** is `modules/session/session-impl/src/test/resources/record-reader/competitive-v1-cases.json`: two real schemas (badminton, and a football-like one with up to 11 a side, MAX and MIN metrics and no `groupBy`) and 21 cases, each with the expected `valid`, `rankable`, reason and players. The server's `CompetitiveRecordReaderFixtureSpec` runs every case; the client's Vitest will run the same file (client ticket CLIENT-SESSION-58, not built yet), so until then the two readers are held together only by review. A case changed there is a decision for both sides.
+**The shared fixture** is `modules/session/session-impl/src/test/resources/record-reader/competitive-v1-cases.json`: two real schemas (badminton, and a football-like one with up to 11 a side) and 21 cases, each with the expected `valid`, `rankable`, reason and players. The server's `CompetitiveRecordReaderFixtureSpec` runs every case; the client's Vitest will run the same file (client ticket CLIENT-SESSION-58, not built yet), so until then the two readers are held together only by review. A case changed there is a decision for both sides.

@@ -498,7 +498,7 @@ public class SessionRecordServiceImpl implements SessionRecordService {
                     "Only a participant who joined the session can propose a ranking game", null);
         }
         Map<String, Object> schema = requireSchema(session.getSportId());
-        RecordTypeReader reader = requireRankingReader(schema);
+        RecordTypeReader reader = requireRankingReader(session.getSportId(), schema);
         SessionRecord record = lockRecord(sessionId, recordId);
         RecordFacts facts = reader.read(schema, record.getData());
         // A game with no score yet can be proposed (it is set up before play); one whose score is wrong cannot.
@@ -525,7 +525,7 @@ public class SessionRecordServiceImpl implements SessionRecordService {
         Instant now = clock.instant();
         requireLoggable(session, now);
         Map<String, Object> schema = requireSchema(session.getSportId());
-        RecordTypeReader reader = requireRankingReader(schema);
+        RecordTypeReader reader = requireRankingReader(session.getSportId(), schema);
         SessionRecord record = lockRecord(sessionId, recordId);
         RecordFacts facts = reader.read(schema, record.getData());
         if (!facts.valid() || !facts.players().contains(callerId)) {
@@ -544,8 +544,15 @@ public class SessionRecordServiceImpl implements SessionRecordService {
         return toDtos(List.of(record), schema).get(0);
     }
 
-    /** The reader of this sport's records, when the sport lets them be ranked (it defines a score). */
-    private RecordTypeReader requireRankingReader(Map<String, Object> schema) {
+    /**
+     * The reader of this sport's records, when the sport lets them be ranked: statistics and ranking are switched on for the
+     * sport (SESSION-53 rework) and the schema defines a score.
+     */
+    private RecordTypeReader requireRankingReader(Long sportId, Map<String, Object> schema) {
+        if (!sportService.isStatisticsEnabled(sportId)) {
+            throw new ConflictException("SESSION_RECORD_RANKING_NOT_AVAILABLE",
+                    "Ranking games are not available for this sport", null);
+        }
         return readers.forSchema(schema).filter(r -> r.supportsRanking(schema))
                 .orElseThrow(() -> new ConflictException("SESSION_RECORD_RANKING_NOT_AVAILABLE",
                         "Ranking games are not available for this sport", null));
