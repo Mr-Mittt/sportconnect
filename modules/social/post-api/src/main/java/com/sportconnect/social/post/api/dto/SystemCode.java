@@ -26,6 +26,9 @@ package com.sportconnect.social.post.api.dto;
  * carry {@code day} (the weekday number 1 to 7, Monday first, or the day of the month, per {@code mode}) and {@code time}
  * ({@code HH:mm}, empty if none); {@code GROUP_SESSION_MODE_CHANGED} carries {@code mode} as the new mode.
  * {@code GROUP_SESSION_GENERATION_ON} and {@code _OFF} carry {@code name} and {@code mode}.
+ *
+ * <p>SESSION-78: {@code GROUP_STATISTICS_ON} and {@code GROUP_STATISTICS_OFF} are the {@code GROUP_SYSTEM} posts written when the
+ * owner or an admin switches the group's statistics and leaderboard; they carry {@code name} only.
  */
 public enum SystemCode {
     SESSION_JOINED,
@@ -54,5 +57,7 @@ public enum SystemCode {
     GROUP_SESSION_RECURRENCE_DELETED,
     GROUP_SESSION_GENERATION_ON,
     GROUP_SESSION_GENERATION_OFF,
-    GROUP_SESSION_MODE_CHANGED
+    GROUP_SESSION_MODE_CHANGED,
+    GROUP_STATISTICS_ON,
+    GROUP_STATISTICS_OFF
 }

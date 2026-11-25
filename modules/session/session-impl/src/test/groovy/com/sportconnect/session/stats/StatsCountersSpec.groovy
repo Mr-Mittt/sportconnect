@@ -44,7 +44,7 @@ class StatsCountersSpec extends Specification {
         then:
         c.value('losses') == null
         c.value('scoreFor') == null
-        c.toMap().keySet() == ['games', 'wins'] as Set
+        c.encode() == '2,1'                  // games and wins only: losses and the sums are not collected
     }
 
     def "a collected counted stat is written as zero by a game that adds nothing to it, so 'none yet' differs from 'not collected'"() {
@@ -56,7 +56,7 @@ class StatsCountersSpec extends Specification {
 
         then:
         c.value('wins') == 0d
-        c.toMap() == [games: 1, wins: 0]
+        c.encode() == '1,0'
     }
 
     def "scoreFor and scoreAgainst are sums of what each game gives; a game that lacks one leaves it alone"() {
@@ -84,7 +84,7 @@ class StatsCountersSpec extends Specification {
         then:
         c.value('scoreFor') == 21d
         c.value('scoreAgainst') == null
-        c.toMap() == [scoreFor: 21]
+        c.encode() == ',,,21'               // scoreFor is id 4: the slots before it are empty, and the unset scoreAgainst after it is cut
     }
 
     def "a formula is never stored: collecting winRate stores its operands only"() {
@@ -95,32 +95,66 @@ class StatsCountersSpec extends Specification {
         c.add(Outcome.WIN, [:], collected('winRate'))
 
         then:
-        c.toMap().keySet() == ['games', 'wins'] as Set
+        c.encode() == '1,1'
     }
 
-    def "the blob round trip keeps every stored stat, and whole sums are written as whole numbers"() {
+    def "the stored string has the value of the stat with id n in its n-th slot"() {
+        given:
+        def c = new StatsCounters()
+        c.add(Outcome.WIN, [scoreFor: 21d, scoreAgainst: 15d], collected('games', 'wins', 'losses', 'scoreFor', 'scoreAgainst'))
+        c.add(Outcome.LOSS, [scoreFor: 10d, scoreAgainst: 21d], collected('games', 'wins', 'losses', 'scoreFor', 'scoreAgainst'))
+
+        expect: "games 2, wins 1, losses 1, scoreFor 31, scoreAgainst 36"
+        c.encode() == '2,1,1,31,36'
+    }
+
+    def "the round trip keeps every stored stat; whole sums have no decimal part, fractions and negatives are kept"() {
         given:
         def c = new StatsCounters()
         c.add(Outcome.WIN, [scoreFor: 21d, scoreAgainst: 15.5d], collected('games', 'wins', 'scoreFor', 'scoreAgainst'))
+        c.add(Outcome.LOSS, [scoreFor: -30d, scoreAgainst: 0d], collected('games', 'wins', 'scoreFor', 'scoreAgainst'))
 
         when:
-        def map = c.toMap()
-        def back = StatsCounters.fromMap(map)
+        def text = c.encode()
+        def back = StatsCounters.decode(text)
 
         then:
-        map.games == 1L
-        map.scoreFor == 21L
-        map.scoreFor instanceof Long
-        map.scoreAgainst == 15.5d
+        text == '2,1,,-9,15.5'
+        back.value('games') == 2d
         back.value('wins') == 1d
-        back.value('scoreFor') == 21d
+        back.value('losses') == null
+        back.value('scoreFor') == -9d
         back.value('scoreAgainst') == 15.5d
+    }
+
+    def "nothing counted is an empty string, and it reads back as nothing"() {
+        expect:
+        new StatsCounters().encode() == ''
+        StatsCounters.decode('').isEmpty()
+    }
+
+    def "a slot that is empty, not a number, has no stat id, or a trailing separator is skipped; nothing throws"() {
+        expect:
+        StatsCounters.decode('3,,x,7,1e1,').value('wins') == null
+        StatsCounters.decode('3,,x,7,1e1,').value('games') == 3d
+        StatsCounters.decode('3,,x,7,1e1,').value('scoreFor') == 7d
+        StatsCounters.decode('3,,x,7,1e1,').value('scoreAgainst') == 10d
+        StatsCounters.decode('1,2,3,4,5,6,7,8,9,10').value('scoreDiff') == null          // ids above the catalog's, and formulas, are never read
+        StatsCounters.decode('1,NaN,Infinity').value('wins') == null
+        StatsCounters.decode('1,NaN,Infinity').value('losses') == null
+    }
+
+    def "the flat map of the first builds is still read, so an older row never fails"() {
+        expect:
+        StatsCounters.decode([games: 3, wins: 1, scoreFor: 21.5]).value('games') == 3d
+        StatsCounters.decode([games: 3, wins: 1, scoreFor: 21.5]).value('scoreFor') == 21.5d
+        StatsCounters.decode([games: 'x', wins: [a: 'y']]).value('games') == null
     }
 
     def "a missing or malformed blob reads as no games"() {
         expect:
-        StatsCounters.fromMap(null).games() == 0
-        StatsCounters.fromMap('nonsense').games() == 0
-        StatsCounters.fromMap([games: 'x', wins: [a: 'y']]).value('games') == null
+        StatsCounters.decode(null).games() == 0
+        StatsCounters.decode(42).games() == 0
+        StatsCounters.decode(['nonsense']).games() == 0
     }
 }

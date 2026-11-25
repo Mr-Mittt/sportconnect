@@ -23,9 +23,9 @@ class CompetitiveRecordReaderFixtureSpec extends Specification {
 
     def "the fixture has the cases the contract needs"() {
         expect:
-        cases().size() >= 20
+        cases().size() >= 23
         cases()*.id.toSet().size() == cases().size()
-        fixture.schemas.keySet() == ['badminton', 'football', 'noScore'] as Set
+        fixture.schemas.keySet() == ['badminton', 'football', 'noScore', 'draws'] as Set
     }
 
     def "case #tc.id"() {
@@ -38,6 +38,9 @@ class CompetitiveRecordReaderFixtureSpec extends Specification {
         then:
         facts.valid() == tc.expect.valid
         facts.rankable() == tc.expect.rankable
+        facts.countable() == tc.expect.countable
+        facts.notCountableReason() == tc.expect.notCountableReason
+        (facts.participants() ? facts.participants()[0].outcome().name() : null) == tc.expect.outcomeOfFirstTeam
         facts.players()*.toString() == tc.expect.players
         if (tc.expect.valid) {
             assert facts.invalidReason() == null

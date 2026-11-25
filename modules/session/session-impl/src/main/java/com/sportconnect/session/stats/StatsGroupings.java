@@ -33,12 +33,12 @@ final class StatsGroupings {
     }
 
     /** Writes the map back; a dimension with no group is left out. */
-    static <T> Map<String, Object> write(Map<String, Map<String, T>> groupings, Function<T, Map<String, Object>> toMap) {
+    static <T> Map<String, Object> write(Map<String, Map<String, T>> groupings, Function<T, Object> toStored) {
         Map<String, Object> out = new LinkedHashMap<>();
         groupings.forEach((by, keys) -> {
             if (!keys.isEmpty()) {
                 Map<String, Object> inner = new LinkedHashMap<>();
-                keys.forEach((key, value) -> inner.put(key, toMap.apply(value)));
+                keys.forEach((key, value) -> inner.put(key, toStored.apply(value)));
                 out.put(by, inner);
             }
         });

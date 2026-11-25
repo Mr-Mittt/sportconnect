@@ -4,6 +4,7 @@ import com.sportconnect.common.exception.BadRequestException
 import com.sportconnect.common.exception.ForbiddenException
 import com.sportconnect.common.exception.ResourceNotFoundException
 import com.sportconnect.group.api.dto.GroupResponse
+import com.sportconnect.group.api.service.GroupMemberNumberService
 import com.sportconnect.group.api.service.GroupService
 import com.sportconnect.session.entity.Session
 import com.sportconnect.session.record.CompetitiveRecordReader
@@ -32,6 +33,7 @@ class SessionStatisticsServiceSpec extends Specification {
 
     def sportService = Mock(SportService)
     def groupService = Mock(GroupService)
+    def memberNumbers = Mock(GroupMemberNumberService)
     def userService = Mock(UserService)
     def userStatsRepository = Mock(UserSportStatsRepository)
     def groupStatsRepository = Mock(GroupMemberStatsRepository)
@@ -39,7 +41,7 @@ class SessionStatisticsServiceSpec extends Specification {
     def sessionRepository = Mock(SessionRepository)
 
     @Subject
-    def service = new SessionStatisticsServiceImpl(sportService, groupService, userService, userStatsRepository,
+    def service = new SessionStatisticsServiceImpl(sportService, groupService, memberNumbers, userService, userStatsRepository,
             groupStatsRepository, recordRepository, sessionRepository, new RecordReaders([new CompetitiveRecordReader()]))
 
     def alice = UUID.fromString('00000000-0000-0000-0000-00000000000a')
@@ -68,6 +70,11 @@ class SessionStatisticsServiceSpec extends Specification {
         def board = [columns: ['games', 'wins', 'scoreFor', 'scoreAgainst', 'winRate', 'winDiff'], groupBy: [[by: 'PARTNER']]]
         board.putAll(scoreboard)
         [record: [data: data, scoreboard: board]]
+    }
+
+    /** The group's member numbers of the four players (SESSION-81): a group's rows are keyed by these, not by user id. */
+    Map<Integer, UUID> userOfNumber() {
+        [(1): alice, (2): bob, (3): carol, (4): dan]
     }
 
     UserSummaryResponse user(UUID id, String name) {
@@ -406,9 +413,10 @@ class SessionStatisticsServiceSpec extends Specification {
         Session.builder().id(id).title(title).scheduledStart(start).build()
     }
 
+    /** pointers are [record, session, ranking]: the record carries its own session, so the history keeps only record and mark */
     UserSportStats withHistory(List pointers) {
         playerRow(alice, t1) { doc ->
-            pointers.reverse().each { p -> doc.addPointer(p[0] as long, p[1] as long, p[2] as boolean) }
+            pointers.reverse().each { p -> doc.addPointer(p[0] as long, p[2] as boolean) }
         }
     }
 
@@ -548,7 +556,7 @@ class SessionStatisticsServiceSpec extends Specification {
         size << [0, -1, 51, 1000]
     }
 
-    def "the outcome is empty when the sport's schema can no longer read the record, the teams still show"() {
+    def "the outcome is empty when the sport's schema has no reader for the record type any more, the teams still show"() {
         given:
         def row = withHistory([[101, 10, true]])
 
@@ -556,7 +564,7 @@ class SessionStatisticsServiceSpec extends Specification {
         def page = service.getMyGames(alice, SPORT, null, 20)
 
         then:
-        1 * sportService.getResultSchema(SPORT) >> schema([:], false)       // no score slot: nothing to count any more
+        1 * sportService.getResultSchema(SPORT) >> [record: [data: [type: 'UNKNOWN_TYPE']]]       // no reader reads it any more
         1 * userStatsRepository.findById(_) >> Optional.of(row)
         1 * recordRepository.findAllById(_) >> [game(101, 10, [alice, bob], [carol, dan], 21, 15)]
         1 * sessionRepository.findAllById(_) >> [session(10, 'S', t1)]
@@ -679,9 +687,9 @@ class SessionStatisticsServiceSpec extends Specification {
         given:
         def row = groupRow(bob, t2) { d ->
             wins(d.counters(), 4, 2)
-            wins(d.group('TEAM', "${alice},${bob}".toString()), 1, 0)
-            wins(d.group('TEAM', "${bob},${carol}".toString()), 3, 2)
-            wins(d.group('PARTNER', dan.toString()), 1, 0)       // from before a schema edit: not the sport's grouping now
+            wins(d.group('TEAM', '1,2'), 1, 0)            // alice and bob, by their group member numbers
+            wins(d.group('TEAM', '2,3'), 3, 2)            // bob and carol
+            wins(d.group('PARTNER', '4'), 1, 0)           // from before a schema edit: not the sport's grouping now
         }
 
         when:
@@ -691,6 +699,7 @@ class SessionStatisticsServiceSpec extends Specification {
         1 * groupService.isGroupMember(GROUP, alice) >> true
         1 * sportService.getResultSchema(SPORT) >> schema(groupBy: [[by: 'TEAM', size: 2]])
         1 * groupStatsRepository.findById(new GroupMemberStats.Key(GROUP, bob, SPORT)) >> Optional.of(row)
+        1 * memberNumbers.getUserIdsByMemberNumbers(GROUP, { it as Set == [1, 2, 3] as Set }) >> userOfNumber()
         1 * userService.getUserSummariesByIds({ it as Set == [alice, bob, carol] as Set }) >> known()
         0 * userService.getUserSummariesByIds(_)
         r.member().fullName() == 'Bob'
@@ -711,9 +720,9 @@ class SessionStatisticsServiceSpec extends Specification {
         given:
         def row = groupRow(bob, t2) { d ->
             wins(d.counters(), 4, 2)
-            wins(d.group('PARTNER', alice.toString()), 1, 0)
-            wins(d.group('PARTNER', carol.toString()), 3, 2)
-            wins(d.group('TEAM', "${bob},${dan}".toString()), 9, 0)       // from before a schema edit
+            wins(d.group('PARTNER', '1'), 1, 0)            // alice
+            wins(d.group('PARTNER', '3'), 3, 2)            // carol
+            wins(d.group('TEAM', '2,4'), 9, 0)             // from before a schema edit
         }
 
         when:
@@ -723,6 +732,7 @@ class SessionStatisticsServiceSpec extends Specification {
         1 * groupService.isGroupMember(GROUP, alice) >> true
         1 * sportService.getResultSchema(SPORT) >> schema(groupBy: [[by: 'PARTNER']])
         1 * groupStatsRepository.findById(_) >> Optional.of(row)
+        1 * memberNumbers.getUserIdsByMemberNumbers(GROUP, { it as Set == [1, 3] as Set }) >> userOfNumber()
         1 * userService.getUserSummariesByIds({ it as Set == [alice, bob, carol] as Set }) >> known()
         r.partners().collect { it.players()*.id() } == [[carol], [alice]]
         r.partnersTotal() == 2
@@ -759,7 +769,7 @@ class SessionStatisticsServiceSpec extends Specification {
         given:
         def others = (1..130).collect { UUID.randomUUID() }
         def row = groupRow(bob, t1) { d ->
-            others.eachWithIndex { id, i -> wins(d.group('PARTNER', id.toString()), i + 1, 0) }
+            others.eachWithIndex { id, i -> wins(d.group('PARTNER', "${i + 11}".toString()), i + 1, 0) }       // member numbers 11 .. 140
         }
 
         when:
@@ -769,6 +779,7 @@ class SessionStatisticsServiceSpec extends Specification {
         1 * groupService.isGroupMember(GROUP, alice) >> true
         1 * sportService.getResultSchema(SPORT) >> schema(groupBy: [[by: 'PARTNER']])
         1 * groupStatsRepository.findById(_) >> Optional.of(row)
+        1 * memberNumbers.getUserIdsByMemberNumbers(GROUP, { nums -> nums.size() == 30 }) >> { gid, nums -> nums.collectEntries { n -> [(n): others[n - 11]] } }
         1 * userService.getUserSummariesByIds({ ids -> ids.containsAll(others[0..29]) && ids.size() == 30 + 1 }) >> [:]   // the 101st to the 130th, and bob
         r.partners().size() == 30
         r.partnersTotal() == 130
@@ -799,7 +810,7 @@ class SessionStatisticsServiceSpec extends Specification {
         given:
         def others = (1..130).collect { UUID.randomUUID() }
         def row = groupRow(bob, t1) { d ->
-            others.eachWithIndex { id, i -> wins(d.group('TEAM', "${bob},${id}".toString()), i + 1, 0) }
+            others.eachWithIndex { id, i -> wins(d.group('TEAM', "2,${i + 11}".toString()), i + 1, 0) }       // bob is number 2, the others 11 .. 140
         }
 
         when:
@@ -809,6 +820,7 @@ class SessionStatisticsServiceSpec extends Specification {
         1 * groupService.isGroupMember(GROUP, alice) >> true
         1 * sportService.getResultSchema(SPORT) >> schema(groupBy: [[by: 'TEAM', size: 2]])
         1 * groupStatsRepository.findById(_) >> Optional.of(row)
+        1 * memberNumbers.getUserIdsByMemberNumbers(GROUP, { nums -> nums.size() == 26 }) >> { gid, nums -> nums.collectEntries { n -> [(n): n == 2 ? bob : others[n - 11]] } }
         1 * userService.getUserSummariesByIds({ ids -> ids.containsAll(others[105..129]) && ids.size() == 25 + 1 }) >> [:]
         r.pairs().size() == 25
         r.pairsTotal() == 130

@@ -36,6 +36,11 @@ public final class StatsCatalog {
      */
     public record Stat(String key, Kind kind, String formula) {
 
+        /** The stat's fixed id (the position of its value in a stored counters string), see {@link #idOf}. */
+        public int id() {
+            return idOf(key);
+        }
+
         /** Whether this stat is kept in the counters (the others are computed from those that are). */
         public boolean stored() {
             return kind != Kind.FORMULA;
@@ -43,6 +48,55 @@ public final class StatsCatalog {
     }
 
     private static final Map<String, Map<String, Stat>> BY_TYPE = Map.of("COMPETITIVE", competitive());
+
+    /**
+     * The id of every stat key (SESSION-81, owner 2026-11-25): <b>explicit, global and append-only</b>. A stored counters string
+     * keeps the value of the stat with id {@code n} in its {@code n}-th slot ({@code "7,4,3"} is 7 games, 4 wins, 3 losses), so
+     * an id is never changed, reused or renumbered, and a new stat takes the next free number. It is independent of the order
+     * the client lists the columns in. The client's {@code record-ui-v1.json} carries the same ids ({@code COMPETITIVE.scoreboard.statIds})
+     * and {@code StatsCatalogSpec} fails when the two differ. Stored stats come first so the slots after the last stored one are
+     * cut; the formulas (never stored) take the ids after them.
+     */
+    private static final Map<String, Integer> IDS = Map.of(
+            "games", 1, "wins", 2, "losses", 3, "scoreFor", 4, "scoreAgainst", 5,
+            "winRate", 6, "winDiff", 7, "scoreDiff", 8);
+
+    private static final Map<Integer, String> KEYS_BY_ID = IDS.entrySet().stream()
+            .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
+
+    /** The id of a stat key (every catalog key has one). */
+    public static int idOf(String key) {
+        Integer id = IDS.get(key);
+        if (id == null) {
+            throw new IllegalArgumentException("No stat id for " + key);
+        }
+        return id;
+    }
+
+    /** The stat key of an id, or {@code null} for an id no stat has (a value written by a newer version is skipped, not an error). */
+    public static String keyOfId(int id) {
+        return KEYS_BY_ID.get(id);
+    }
+
+    /** The key of a stat id whose stat is <b>stored</b> (a formula is never in a counters string), or {@code null}. */
+    public static String keyOfStoredId(int id) {
+        String key = KEYS_BY_ID.get(id);
+        if (key == null) {
+            return null;
+        }
+        for (Map<String, Stat> catalog : BY_TYPE.values()) {
+            Stat stat = catalog.get(key);
+            if (stat != null) {
+                return stat.stored() ? key : null;
+            }
+        }
+        return null;
+    }
+
+    /** Every id by stat key, for the contract test against the client's copy. */
+    public static Map<String, Integer> ids() {
+        return IDS;
+    }
 
     private StatsCatalog() {
     }

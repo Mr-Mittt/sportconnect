@@ -42,14 +42,31 @@ public final class PlayerStatsDoc {
 
         Map<String, Object> toMap() {
             Map<String, Object> map = new LinkedHashMap<>();
-            map.put("all", all.toMap());
-            map.put("ranked", ranked.toMap());
+            map.put("all", all.encode());
+            if (!ranked.isEmpty()) {
+                map.put("ranked", ranked.encode());      // a node nothing was counted into is left out (a missing one reads as empty)
+            }
             return map;
         }
 
         static AllRanked fromMap(Object node) {
             Map<?, ?> map = node instanceof Map<?, ?> m ? m : Map.of();
-            return new AllRanked(StatsCounters.fromMap(map.get("all")), StatsCounters.fromMap(map.get("ranked")));
+            return new AllRanked(StatsCounters.decode(map.get("all")), StatsCounters.decode(map.get("ranked")));
+        }
+
+        /** A partner or team entry as one string, {@code "<all>"} or {@code "<all>/<ranked>"} (nothing ranked: no second part). */
+        String toStored() {
+            return ranked.isEmpty() ? all.encode() : all.encode() + "/" + ranked.encode();
+        }
+
+        /** Reads {@link #toStored}; also the {@code {all, ranked}} object of the first builds. */
+        static AllRanked fromStored(Object node) {
+            if (node instanceof String text) {
+                int slash = text.indexOf('/');
+                return slash < 0 ? new AllRanked(StatsCounters.decode(text), new StatsCounters())
+                        : new AllRanked(StatsCounters.decode(text.substring(0, slash)), StatsCounters.decode(text.substring(slash + 1)));
+            }
+            return fromMap(node);
         }
     }
 
@@ -103,15 +120,18 @@ public final class PlayerStatsDoc {
             map.put("scope", scope);
             map.put("countryId", countryId);
             map.put("regionId", regionId);
-            map.put("counters", counters.toMap());
-            map.put("groupings", StatsGroupings.write(groupings, StatsCounters::toMap));
+            map.put("counters", counters.encode());
+            Map<String, Object> grouped = StatsGroupings.write(groupings, StatsCounters::encode);
+            if (!grouped.isEmpty()) {
+                map.put("groupings", grouped);
+            }
             return map;
         }
 
         static Scope fromMap(Map<?, ?> map) {
             return new Scope(String.valueOf(map.get("scope")), longOrNull(map.get("countryId")),
-                    longOrNull(map.get("regionId")), StatsCounters.fromMap(map.get("counters")),
-                    StatsGroupings.read(map.get("groupings"), StatsCounters::fromMap));
+                    longOrNull(map.get("regionId")), StatsCounters.decode(map.get("counters")),
+                    StatsGroupings.read(map.get("groupings"), StatsCounters::decode));
         }
     }
 
@@ -131,7 +151,7 @@ public final class PlayerStatsDoc {
     /** Reads a row's blobs; an empty row (a new player) reads as no games. */
     public static PlayerStatsDoc read(UserSportStats row) {
         AllRanked personal = AllRanked.fromMap(row.getPersonal());
-        Map<String, Map<String, AllRanked>> groupings = StatsGroupings.read(row.getGroupings(), AllRanked::fromMap);
+        Map<String, Map<String, AllRanked>> groupings = StatsGroupings.read(row.getGroupings(), AllRanked::fromStored);
         List<Scope> scopes = new ArrayList<>();
         if (row.getScopes() != null) {
             for (Object entry : row.getScopes()) {
@@ -147,7 +167,7 @@ public final class PlayerStatsDoc {
     /** Writes the blobs back into the row, which the caller holds a lock on. */
     public void writeTo(UserSportStats row) {
         row.setPersonal(personal.toMap());
-        row.setGroupings(StatsGroupings.write(groupings, AllRanked::toMap));
+        row.setGroupings(StatsGroupings.write(groupings, AllRanked::toStored));
         List<Object> scopeList = new ArrayList<>();
         scopes.forEach(scope -> scopeList.add(scope.toMap()));
         row.setScopes(scopeList);
@@ -198,8 +218,8 @@ public final class PlayerStatsDoc {
         return StatsHistory.contains(history, recordId);
     }
 
-    public void addPointer(long recordId, long sessionId, boolean ranking) {
-        history = StatsHistory.prepend(history, recordId, sessionId, ranking);
+    public void addPointer(long recordId, boolean ranking) {
+        history = StatsHistory.prepend(history, recordId, ranking);
     }
 
     private static Long longOrNull(Object value) {

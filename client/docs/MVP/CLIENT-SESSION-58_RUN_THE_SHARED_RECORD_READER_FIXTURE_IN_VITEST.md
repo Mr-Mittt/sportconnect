@@ -13,3 +13,5 @@ SESSION-53 adds `modules/session/session-impl/src/test/resources/record-reader/c
 **Out of scope:** a client reader for new record types (SESSION-58), changing the server reader.
 
 **Tests:** the new Vitest file (one test per case, named by the case id), mutation check by changing a case's expectation.
+
+**Update from SESSION-80 (2026-11-25, owner):** the server reader's rules changed and the fixture with them (24 cases now; new fields `countable`, `notCountableReason`, `outcomeOfFirstTeam`; a third schema `draws`). The outcome follows the score: the higher score wins whichever team is named first, no score in the ranking slot means the first team wins, equal scores are a draw only with `record.data.allowDraws` (else not countable). A ranking game also needs the same number of players on both sides (`TEAM_SIZES_DIFFER`). The client's record validation and scoreboard (`recordData.ts`, CLIENT-GL-49) must follow when this ticket runs the fixture: a tie, which the scoreboard counts as a first-team win today, is not countable on the server for a sport without draws.

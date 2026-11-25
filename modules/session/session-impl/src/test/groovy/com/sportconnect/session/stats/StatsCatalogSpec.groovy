@@ -36,6 +36,36 @@ class StatsCatalogSpec extends Specification {
         competitive.keySet() as List == client.COMPETITIVE.scoreboard.columns
     }
 
+    def "the stat ids are exactly the client's COMPETITIVE.scoreboard.statIds"() {
+        given:
+        def client = new ObjectMapper().readValue(clientCatalog(), Map)
+
+        expect:
+        competitive.values().collectEntries { [(it.key()): it.id()] } == client.COMPETITIVE.scoreboard.statIds
+    }
+
+    def "the stat ids are the frozen, append-only contract: one per key, unique, starting at 1, stored stats first"() {
+        expect: "a change here is a decision: an id is never changed or reused, a new stat takes the next number"
+        StatsCatalog.ids() == [games: 1, wins: 2, losses: 3, scoreFor: 4, scoreAgainst: 5, winRate: 6, winDiff: 7, scoreDiff: 8]
+        StatsCatalog.ids().values().toSet().size() == StatsCatalog.ids().size()
+        competitive.keySet().every { StatsCatalog.ids().containsKey(it) }
+        competitive.values().findAll { it.stored() }*.id().max() < competitive.values().findAll { !it.stored() }*.id().min()
+    }
+
+    def "an id and its key convert both ways; an id no stat has, and a key no stat has, are refused or empty"() {
+        expect:
+        StatsCatalog.keyOfId(2) == 'wins'
+        StatsCatalog.idOf('scoreAgainst') == 5
+        StatsCatalog.keyOfId(99) == null
+        StatsCatalog.keyOfId(0) == null
+
+        when:
+        StatsCatalog.idOf('nonsense')
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
     def "every key the client lets a scoreboard sort by is a stat of the catalog (plus the player's name)"() {
         given:
         def client = new ObjectMapper().readValue(clientCatalog(), Map)

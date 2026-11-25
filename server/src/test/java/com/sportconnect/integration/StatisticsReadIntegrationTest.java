@@ -5,6 +5,8 @@ import com.sportconnect.group.entity.Group;
 import com.sportconnect.group.entity.GroupMember;
 import com.sportconnect.group.repository.GroupMemberRepository;
 import com.sportconnect.group.repository.GroupRepository;
+import com.sportconnect.session.entity.GroupSessionSettings;
+import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.location.entity.Location;
 import com.sportconnect.location.repository.LocationRepository;
 import com.sportconnect.session.api.dto.FeeType;
@@ -80,6 +82,7 @@ class StatisticsReadIntegrationTest extends RedisBaseIT {
     @Autowired private SessionRecordRepository recordRepository;
     @Autowired private SessionRecordVerificationRepository verificationRepository;
     @Autowired private GroupRepository groupRepository;
+    @Autowired private GroupSessionSettingsRepository groupSettingsRepository;
     @Autowired private GroupMemberRepository groupMemberRepository;
     @Autowired private LocationRepository locationRepository;
     @Autowired private UserRepository userRepository;
@@ -118,6 +121,7 @@ class StatisticsReadIntegrationTest extends RedisBaseIT {
         groupId = groupRepository.save(Group.builder().groupName("Reads " + UUID.randomUUID()).sportId(sportId)
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
+        groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());   // SESSION-78: off by default
         for (UUID member : List.of(aliceId, bobId, carolId, danId)) {
             groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(member).roleId(ROLE_MEMBER).build());
         }
@@ -148,6 +152,7 @@ class StatisticsReadIntegrationTest extends RedisBaseIT {
         participantRepository.deleteAll();
         sessionRepository.deleteAll();
         groupMemberRepository.deleteAll();
+        groupSettingsRepository.deleteAll();
         groupRepository.deleteAll();
         locationRepository.deleteAll();
         postRepository.deleteAll();

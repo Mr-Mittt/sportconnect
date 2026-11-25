@@ -289,9 +289,9 @@ class SessionRecordRankingSpec extends Specification {
         saved.isEmpty()
     }
 
-    def "a scored game whose first team is not ahead cannot be proposed, with the reason as a parameter"() {
+    def "a scored game with equal scores cannot be proposed when the sport allows no draws, with the reason as a parameter"() {
         given:
-        stored = record(game([proposer], [p2], 10, 21))
+        stored = record(game([proposer], [p2], 21, 21))
 
         when:
         service.requestRanking(SESSION_ID, RECORD_ID, proposer)
@@ -299,8 +299,39 @@ class SessionRecordRankingSpec extends Specification {
         then:
         def e = thrown(ConflictException)
         e.errorCode == "SESSION_RECORD_RANKING_NOT_RANKABLE"
-        e.errorParams == [reason: 'FIRST_TEAM_NOT_AHEAD']
+        e.errorParams == [reason: 'SCORES_EQUAL']
         stored.rankingRequestedAt == null
+    }
+
+    def "a game whose sides have a different number of players cannot be proposed, scored or not"() {
+        given:
+        stored = record(game([proposer, p3], [p2], s1, s2))
+
+        when:
+        service.requestRanking(SESSION_ID, RECORD_ID, proposer)
+
+        then:
+        def e = thrown(ConflictException)
+        e.errorCode == "SESSION_RECORD_RANKING_NOT_RANKABLE"
+        e.errorParams == [reason: 'TEAM_SIZES_DIFFER']
+        stored.rankingRequestedAt == null
+
+        where:
+        s1   | s2
+        21   | 10
+        null | null
+    }
+
+    def "a scored game the second team won can be proposed: the higher score wins whoever is named first"() {
+        given:
+        stored = record(game([proposer], [p2], 10, 21))
+
+        when:
+        service.requestRanking(SESSION_ID, RECORD_ID, proposer)
+
+        then:
+        noExceptionThrown()
+        stored.rankingRequestedAt != null
     }
 
     def "an unknown or other session's record is 404 SESSION_RECORD_NOT_FOUND"() {

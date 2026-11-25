@@ -59,6 +59,16 @@
         "scoreAgainst",
         "scoreDiff"
       ],
+      "statIds": {
+        "games": 1,
+        "wins": 2,
+        "losses": 3,
+        "scoreFor": 4,
+        "scoreAgainst": 5,
+        "winRate": 6,
+        "winDiff": 7,
+        "scoreDiff": 8
+      },
       "defaultColumns": [
         "games",
         "wins",

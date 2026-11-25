@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /** SESSION-GROUP-4 — keyed by the group id. */
 public interface GroupSessionSettingsRepository extends JpaRepository<GroupSessionSettings, Long> {
 
+    /** SESSION-78 — whether the group has switched its statistics and leaderboard on (no row means off); a primary-key read. */
+    boolean existsByGroupIdAndStatisticsEnabledTrue(Long groupId);
+
     /** SESSION-GROUP-5 — the groups that have regular-session generation on (the startup recovery's starting point). */
     java.util.List<GroupSessionSettings> findByEnabledTrue();
 

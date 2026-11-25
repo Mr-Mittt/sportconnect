@@ -57,7 +57,7 @@ class StatsReadHelpersSpec extends Specification {
         all.minus(none).value('scoreFor') == 7d
         all.minus(tooMany).value('games') == 0d
         all.minus(tooMany).value('scoreFor') == 0d
-        new StatsCounters().minus(onlyRanked).toMap() == [:]
+        new StatsCounters().minus(onlyRanked).isEmpty()
     }
 
     def "minus does not change either operand"() {
@@ -109,15 +109,13 @@ class StatsReadHelpersSpec extends Specification {
     def "the history pointers read back newest first, and an entry that is not a pointer is skipped"() {
         given:
         def row = new UserSportStats(alice, 1L)
-        row.history = [[recordId: 9, sessionId: 3, ranking: true], 'junk', [recordId: 'x', sessionId: 3],
-                       [recordId: 4L, sessionId: 2L, ranking: false], [recordId: 1, sessionId: 1]]
+        row.history = ['1-9', 'junk', '0-x', '0-4', '0-1']
 
         when:
         def pointers = PlayerStatsDoc.read(row).pointers()
 
         then:
         pointers*.recordId() == [9L, 4L, 1L]
-        pointers*.sessionId() == [3L, 2L, 1L]
         pointers*.ranking() == [true, false, false]
     }
 

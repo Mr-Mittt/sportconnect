@@ -17,6 +17,7 @@ import com.sportconnect.session.entity.GroupSessionRecurrence
 import com.sportconnect.session.entity.GroupSessionSettings
 import com.sportconnect.session.entity.Session
 import com.sportconnect.session.repository.SessionRepository
+import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.session.api.dto.RegularSessionScope
 import com.sportconnect.session.api.dto.SessionStatus
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository
@@ -47,15 +48,17 @@ class GroupSessionConfigServiceImplSpec extends Specification {
     ApplicationEventPublisher eventPublisher = Mock()
     RegularSessionCanceller regularSessionCanceller = Mock()
     SessionRepository sessionRepository = Mock()
+    SportService sportService = Mock()
     UUID other = UUID.randomUUID()
 
     @Subject
     GroupSessionConfigServiceImpl service = new GroupSessionConfigServiceImpl(
             settingsRepository, recurrenceRepository, groupService, locationService, postService,
             userService, attributeResolver, eventPublisher,
-            regularSessionCanceller, sessionRepository)
+            regularSessionCanceller, sessionRepository, sportService)
 
     UUID admin = UUID.randomUUID()
+    UUID admin6 = UUID.randomUUID()
     UUID owner = UUID.randomUUID()
 
     def setup() {
@@ -65,6 +68,7 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         groupService.isGroupMember(5L, admin) >> true
         groupService.getGroupOwnerId(5L) >> owner
         groupService.getGroup(5L, admin) >> GroupResponse.builder().id(5L).sportId(1L).build()
+        sportService.getStatisticsEnabledSportIds() >> ([1L] as Set)      // SESSION-78: the group's sport has statistics on
         userService.getUserSummariesByIds([admin]) >> [(admin): UserSummaryResponse.builder().id(admin).fullName("Alice Admin").build()]
         recurrenceRepository.save(_ as GroupSessionRecurrence) >> { GroupSessionRecurrence r -> r.id = r.id ?: 77L; r }
     }
@@ -162,6 +166,104 @@ class GroupSessionConfigServiceImplSpec extends Specification {
         result.groupId == 5L
         !result.enabled
         result.mode == RecurrenceMode.WEEKLY
+    }
+
+    def "a group with no settings row, or a row that never switched it on, has its statistics off"() {
+        when:
+        def none = service.getSettings(5L, admin)
+        def row = service.getSettings(5L, admin)
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.empty()
+        1 * settingsRepository.findById(5L) >> Optional.of(GroupSessionSettings.builder().groupId(5L).enabled(true).build())
+        !none.statisticsEnabled
+        !row.statisticsEnabled
+    }
+
+    def "while the group's sport has statistics off the setting is null in the answer, and a change to it is refused with nothing saved"() {
+        given:
+        def settings = GroupSessionSettings.builder().groupId(5L).statisticsEnabled(true).build()
+
+        when: "read"
+        def read = service.getSettings(5L, admin)
+
+        then:
+        1 * sportService.getStatisticsEnabledSportIds() >> ([2L] as Set)
+        1 * settingsRepository.findById(5L) >> Optional.of(settings)
+        read.statisticsEnabled == null
+
+        when: "a change, on or off, is refused"
+        service.updateSettings(5L, admin, UpdateGroupSessionSettingsRequest.builder().statisticsEnabled(value).build())
+
+        then:
+        1 * sportService.getStatisticsEnabledSportIds() >> ([] as Set)
+        0 * settingsRepository.save(_)
+        0 * postService.createSystemPost(*_)
+        def e = thrown(ConflictException)
+        e.errorCode == 'SESSION_GROUP_STATISTICS_NOT_AVAILABLE'
+
+        where:
+        value << [true, false]
+    }
+
+    def "a group with no sport has no statistics setting either, and the other settings still change"() {
+        when:
+        def result = service.updateSettings(6L, admin6, UpdateGroupSessionSettingsRequest.builder().mode(RecurrenceMode.MONTHLY).build())
+
+        then:
+        groupService.isGroupActive(6L) >> true
+        groupService.canManageMembers(6L, admin6) >> true
+        groupService.isGroupMember(6L, admin6) >> true
+        groupService.getGroupOwnerId(6L) >> owner
+        groupService.getGroup(6L, admin6) >> GroupResponse.builder().id(6L).sportId(null).build()
+        userService.getUserSummariesByIds([admin6]) >> [(admin6): UserSummaryResponse.builder().id(admin6).fullName('Bob').build()]
+        1 * settingsRepository.findById(6L) >> Optional.empty()
+        1 * settingsRepository.save(_ as GroupSessionSettings) >> { GroupSessionSettings s -> s }
+        1 * postService.createSystemPost(6L, owner, _, SystemCode.GROUP_SESSION_MODE_CHANGED, _)
+        result.mode == RecurrenceMode.MONTHLY
+        result.statisticsEnabled == null
+    }
+
+    def "switching the statistics on saves only that field, writes one post with the actor's name, and asks nothing of the generator"() {
+        given:
+        def existing = GroupSessionSettings.builder().groupId(5L).enabled(true).mode(RecurrenceMode.MONTHLY).build()
+
+        when:
+        def result = service.updateSettings(5L, admin, UpdateGroupSessionSettingsRequest.builder().statisticsEnabled(true).build())
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.of(existing)
+        1 * settingsRepository.save({ GroupSessionSettings s -> s.statisticsEnabled && s.enabled && s.mode == RecurrenceMode.MONTHLY }) >> { GroupSessionSettings s -> s }
+        1 * postService.createSystemPost(5L, owner, "Alice Admin turned on statistics and the leaderboard", SystemCode.GROUP_STATISTICS_ON,
+                [name: "Alice Admin"])
+        0 * eventPublisher._
+        0 * regularSessionCanceller._
+        result.statisticsEnabled
+        result.enabled
+    }
+
+    def "switching the statistics off writes the off post, and a call that sends the value it already has writes nothing"() {
+        given:
+        def existing = GroupSessionSettings.builder().groupId(5L).statisticsEnabled(true).build()
+
+        when:
+        def off = service.updateSettings(5L, admin, UpdateGroupSessionSettingsRequest.builder().statisticsEnabled(false).build())
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.of(existing)
+        1 * settingsRepository.save(_ as GroupSessionSettings) >> { GroupSessionSettings s -> s }
+        1 * postService.createSystemPost(5L, owner, "Alice Admin turned off statistics and the leaderboard", SystemCode.GROUP_STATISTICS_OFF,
+                [name: "Alice Admin"])
+        !off.statisticsEnabled
+
+        when:
+        def same = service.updateSettings(5L, admin, UpdateGroupSessionSettingsRequest.builder().statisticsEnabled(false).build())
+
+        then:
+        1 * settingsRepository.findById(5L) >> Optional.of(GroupSessionSettings.builder().groupId(5L).build())
+        0 * settingsRepository.save(_)
+        0 * postService.createSystemPost(*_)
+        !same.statisticsEnabled
     }
 
     def "turning generation on saves it and writes one GROUP_SYSTEM post authored as the owner, with the actor's name and the mode"() {
