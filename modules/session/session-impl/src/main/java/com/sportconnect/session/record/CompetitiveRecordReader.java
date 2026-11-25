@@ -11,8 +11,8 @@ import java.util.UUID;
 
 /**
  * The reader of {@code COMPETITIVE} records (SESSION-72, shared with the statistics engine, SESSION-53): two teams, a
- * score per team and score slot, the first team is the winner by position
- * ({@code documentation/md/RECORD_SCHEMA_CONTRACT.md}).
+ * score per team and score slot (rewritten 2026-11-25 by the owner: the outcome follows the score,
+ * {@code documentation/md/RECORD_SCHEMA_CONTRACT.md}).
  *
  * <p><b>Valid</b> when the record has exactly two teams, each with between {@code playersPerSide.min} and {@code .max}
  * players (defaults 1 and 10), every player a UUID, no player twice (inside a team or across them) and the scores
@@ -20,9 +20,14 @@ import java.util.UUID;
  * both teams fill it or neither does, a filled score satisfies the slot's {@code rule}, and a team with any score filled
  * fills all its {@code required} slots. A record with no score at all is valid: a planned game.
  *
- * <p><b>Rankable</b> when valid and the ranking slot ({@code record.ranking.scoreSlot}, default the first) is filled by
- * both teams with the first team strictly ahead. Not rankable reasons: {@code NO_SCORE} (a planned game),
- * {@code FIRST_TEAM_NOT_AHEAD}, or the invalid reason.
+ * <p><b>The outcome</b> is read from the ranking slot ({@code record.ranking.scoreSlot}, default the first): the team with the
+ * higher score wins whichever team is named first; equal scores are a {@code DRAW} when the sport allows draws
+ * ({@code record.data.allowDraws}), else the game is <b>not countable</b> ({@code SCORES_EQUAL}); with <b>no score in that slot</b>
+ * (or a sport that defines no score) the first team wins by position. <b>Countable</b> = valid and an outcome exists.
+ *
+ * <p><b>Rankable</b> (may be a ranking game) = countable, the ranking slot is scored, and both teams have the same number of
+ * players. Not rankable reasons, in this order: the invalid reason, {@code TEAM_SIZES_DIFFER}, {@code RANKING_NOT_AVAILABLE}
+ * (the sport defines no score), {@code NO_SCORE} (a planned game), {@code SCORES_EQUAL}.
  *
  * <p>Pure: never throws for a malformed record, it answers {@code valid = false}.
  */
@@ -91,41 +96,64 @@ public class CompetitiveRecordReader implements RecordTypeReader {
 
         List<UUID> named = List.copyOf(players);
         List<List<UUID>> sides = List.copyOf(teamPlayers);
+        boolean equalSides = sides.get(0).size() == sides.get(1).size();
+        boolean allowDraws = Boolean.TRUE.equals(map(map(schema, "record"), "data").get("allowDraws"));
+
         if (slots.isEmpty()) {
-            return new RecordFacts(true, null, false, "RANKING_NOT_AVAILABLE", named, sides, List.of());
+            // The sport defines no score: nothing to compare, so the first team wins by position and no game can be a ranking game.
+            String reason = equalSides ? "RANKING_NOT_AVAILABLE" : "TEAM_SIZES_DIFFER";
+            return new RecordFacts(true, null, false, reason, true, null, named, sides,
+                    participants(sides, scores, RecordFacts.Outcome.WIN));
         }
         int rankingSlot = rankingSlot(schema, slots.size());
         Long first = scores.get(0).get(rankingSlot);
         Long second = scores.get(1).get(rankingSlot);
         if (first == null && second == null) {
-            return new RecordFacts(true, null, false, "NO_SCORE", named, sides, List.of());
+            // A game with no score in the ranking slot: the first team wins (a normal game); a ranking game needs a score.
+            String reason = equalSides ? "NO_SCORE" : "TEAM_SIZES_DIFFER";
+            return new RecordFacts(true, null, false, reason, true, null, named, sides,
+                    participants(sides, scores, RecordFacts.Outcome.WIN));
         }
         // Both filled here: checkScores already refused a slot filled by one team only.
-        if (first <= second) {
-            return new RecordFacts(true, null, false, "FIRST_TEAM_NOT_AHEAD", named, sides, List.of());
+        RecordFacts.Outcome firstOutcome = first > second ? RecordFacts.Outcome.WIN
+                : first < second ? RecordFacts.Outcome.LOSS : RecordFacts.Outcome.DRAW;
+        boolean countable = firstOutcome != RecordFacts.Outcome.DRAW || allowDraws;
+        if (!countable) {
+            String reason = equalSides ? "SCORES_EQUAL" : "TEAM_SIZES_DIFFER";
+            return new RecordFacts(true, null, false, reason, false, "SCORES_EQUAL", named, sides, List.of());
         }
-        return new RecordFacts(true, null, true, null, named, sides, participants(sides, scores));
+        List<RecordFacts.Participant> participants = participants(sides, scores, firstOutcome);
+        if (!equalSides) {
+            return new RecordFacts(true, null, false, "TEAM_SIZES_DIFFER", true, null, named, sides, participants);
+        }
+        return new RecordFacts(true, null, true, null, true, null, named, sides, participants);
     }
 
     /**
-     * SESSION-53: the first team wins by position (the contract), the second loses. The numbers each player gets are the
-     * team's: {@code scoreFor} is the sum of the team's scores over every slot both teams filled, {@code scoreAgainst} the
-     * other team's sum.
+     * SESSION-53: the participants of a countable game. {@code firstOutcome} is how it ended for the first team (the second
+     * team gets the opposite; a draw is a draw for both). The numbers each player gets are the team's: {@code scoreFor} is the
+     * sum of the team's scores over every slot both teams filled, {@code scoreAgainst} the other team's sum; a game with no
+     * score filled gives no numbers at all (an ungiven sum is absent, not 0).
      */
-    private static List<RecordFacts.Participant> participants(List<List<UUID>> sides, List<List<Long>> scores) {
+    private static List<RecordFacts.Participant> participants(List<List<UUID>> sides, List<List<Long>> scores,
+                                                              RecordFacts.Outcome firstOutcome) {
         double[] sum = new double[2];
+        boolean anyScore = false;
         for (int slot = 0; slot < scores.get(0).size(); slot++) {
             Long a = scores.get(0).get(slot);
             Long b = scores.get(1).get(slot);
             if (a != null && b != null) {
                 sum[0] += a;
                 sum[1] += b;
+                anyScore = true;
             }
         }
+        RecordFacts.Outcome secondOutcome = firstOutcome == RecordFacts.Outcome.WIN ? RecordFacts.Outcome.LOSS
+                : firstOutcome == RecordFacts.Outcome.LOSS ? RecordFacts.Outcome.WIN : firstOutcome;
         List<RecordFacts.Participant> result = new ArrayList<>();
         for (int team = 0; team < 2; team++) {
-            Map<String, Double> metrics = Map.of("scoreFor", sum[team], "scoreAgainst", sum[1 - team]);
-            RecordFacts.Outcome outcome = team == 0 ? RecordFacts.Outcome.WIN : RecordFacts.Outcome.LOSS;
+            Map<String, Double> metrics = anyScore ? Map.of("scoreFor", sum[team], "scoreAgainst", sum[1 - team]) : Map.of();
+            RecordFacts.Outcome outcome = team == 0 ? firstOutcome : secondOutcome;
             for (UUID player : sides.get(team)) {
                 result.add(new RecordFacts.Participant(player, team, outcome, metrics));
             }

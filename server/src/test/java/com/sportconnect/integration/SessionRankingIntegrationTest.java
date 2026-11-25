@@ -470,15 +470,28 @@ class SessionRankingIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void aScoredGameWhoseFirstTeamIsNotAhead_cannotBeProposed() throws Exception {
+    void aScoredGameWithEqualScores_cannotBeProposedWhenTheSportAllowsNoDraws() throws Exception {
         Long sessionId = ongoing();
-        Long recordId = addGame(sessionId, aliceId, 10, 21);
+        Long recordId = addGame(sessionId, aliceId, 21, 21);
 
         propose(sessionId, recordId, aliceId)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_RECORD_RANKING_NOT_RANKABLE"))
-                .andExpect(jsonPath("$.errorParams.reason").value("FIRST_TEAM_NOT_AHEAD"));
+                .andExpect(jsonPath("$.errorParams.reason").value("SCORES_EQUAL"));
         assertThat(ranking(sessionId, recordId, aliceId).path("status").asText()).isEqualTo("NORMAL");
+    }
+
+    @Test
+    void aScoredGameTheSecondTeamWon_canBeProposedAndVerified() throws Exception {
+        Long sessionId = ongoing();
+        Long recordId = addGame(sessionId, aliceId, 10, 21);
+
+        propose(sessionId, recordId, aliceId).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ranking.status").value("PROPOSED"));
+        for (UUID player : List.of(bobId, carolId, danId)) {
+            verify(sessionId, recordId, player).andExpect(status().isOk());
+        }
+        assertThat(ranking(sessionId, recordId, aliceId).path("status").asText()).isEqualTo("VERIFIED");
     }
 
     // ---- an edit makes confirmations stale; a delete removes them ---------------------------------

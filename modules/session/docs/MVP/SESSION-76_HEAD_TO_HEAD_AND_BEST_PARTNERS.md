@@ -14,3 +14,5 @@ Read at request time from the player's history pointers (the latest 500 games, r
 - **Not stored, so not available from it:** a head-to-head outside a group, per region or country, and an individual A-against-X inside doubles. The text of this ticket that reads the history (the latest 500 pointers) for these is its fallback; decide at pickup whether they are wanted (they cost a history read, and "the opponent a player loses to most" can only come from there).
 - **Best partners** come from `user_sport_stats.groupings.PARTNER` (and `group_member_stats.stats.groupings.PARTNER` for a group), a `PARTNER` sport only.
 - The sport must have statistics switched on; a sport with the switch off answers as an unknown sport.
+
+**Hand-over from SESSION-81 (2026-11-25):** `group_stats.h2h` keeps **no `members` dictionary**: the numbers in a key (`"1.2-3.4"`) are the group's permanent member numbers (`GroupMemberNumberService`, `getUserIdsByMemberNumbers` turns them back into users in one batch call). A member who left keeps their number.

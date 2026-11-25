@@ -25,18 +25,20 @@ class CompetitiveRecordReaderSpec extends Specification {
         [teams: [[players: one*.toString(), scores: scoreOne], [players: two*.toString(), scores: scoreTwo]]]
     }
 
-    def "a doubles game with a complete score and the first team ahead is valid and rankable, players in team order"() {
+    def "a doubles game with a complete score and the first team ahead is valid, countable and rankable, players in team order"() {
         when:
         def facts = reader.read(schema(), game([a, b], [c, d]))
 
         then:
         facts.valid()
         facts.rankable()
+        facts.countable()
+        facts.notCountableReason() == null
         facts.notRankableReason() == null
         facts.players() == [a, b, c, d]
     }
 
-    def "a game with no score at all is valid but a planned game, not rankable"() {
+    def "a game with no score at all is valid and countable (the first team wins) but a planned game, not rankable"() {
         when:
         def facts = reader.read(schema(), game([a], [b], [null], [null]))
 
@@ -45,6 +47,9 @@ class CompetitiveRecordReaderSpec extends Specification {
         !facts.rankable()
         facts.notRankableReason() == 'NO_SCORE'
         facts.isPlanned()
+        facts.countable()
+        facts.participants()*.outcome() == [RecordFacts.Outcome.WIN, RecordFacts.Outcome.LOSS]
+        facts.participants()*.metrics() == [[:], [:]]          // no score filled: no numbers at all
     }
 
     def "a record with no scores key at all is a planned game too"() {
@@ -56,20 +61,74 @@ class CompetitiveRecordReaderSpec extends Specification {
         facts.isPlanned()
     }
 
-    def "the first team must be strictly ahead: #one to #two is not rankable"() {
+    def "the higher score wins whichever team is named first: #one to #two is rankable and countable"() {
         when:
         def facts = reader.read(schema(), game([a], [b], [one], [two]))
 
         then:
         facts.valid()
-        !facts.rankable()
-        facts.notRankableReason() == 'FIRST_TEAM_NOT_AHEAD'
+        facts.rankable()
+        facts.countable()
+        facts.notRankableReason() == null
+        facts.participants()*.outcome() == outcomes
         !facts.isPlanned()
 
         where:
-        one | two
-        18  | 21
-        21  | 21
+        one | two | outcomes
+        21  | 18  | [RecordFacts.Outcome.WIN, RecordFacts.Outcome.LOSS]
+        18  | 21  | [RecordFacts.Outcome.LOSS, RecordFacts.Outcome.WIN]
+        0   | 1   | [RecordFacts.Outcome.LOSS, RecordFacts.Outcome.WIN]
+    }
+
+    def "equal scores are not countable and not rankable (SCORES_EQUAL) when the sport allows no draws"() {
+        when:
+        def facts = reader.read(schema(), game([a], [b], [21], [21]))
+
+        then:
+        facts.valid()
+        !facts.rankable()
+        facts.notRankableReason() == 'SCORES_EQUAL'
+        !facts.countable()
+        facts.notCountableReason() == 'SCORES_EQUAL'
+        facts.participants() == []
+        !facts.isPlanned()
+    }
+
+    def "equal scores are a draw for both teams, countable and rankable, when record.data.allowDraws is true"() {
+        when:
+        def facts = reader.read(schema(allowDraws: true), game([a], [b], [21], [21]))
+
+        then:
+        facts.rankable()
+        facts.countable()
+        facts.participants()*.outcome() == [RecordFacts.Outcome.DRAW, RecordFacts.Outcome.DRAW]
+        facts.participants()*.metrics() == [[scoreFor: 21d, scoreAgainst: 21d], [scoreFor: 21d, scoreAgainst: 21d]]
+    }
+
+    def "allowDraws must be exactly true: anything else keeps draws out"() {
+        expect:
+        !reader.read(schema(allowDraws: value), game([a], [b], [21], [21])).countable()
+
+        where:
+        value << ['true', 1, false, null]
+    }
+
+    def "a ranking game needs the same number of players on both sides; a normal game does not"() {
+        when:
+        def scored = reader.read(schema(), game([a, b], [c], [21], [18]))
+        def planned = reader.read(schema(), game([a, b], [c], [null], [null]))
+        def tie = reader.read(schema(), game([a, b], [c], [21], [21]))
+
+        then: "counted all the same, but never rankable"
+        scored.valid() && scored.countable() && !scored.rankable()
+        scored.notRankableReason() == 'TEAM_SIZES_DIFFER'
+        scored.participants()*.outcome() == [RecordFacts.Outcome.WIN, RecordFacts.Outcome.WIN, RecordFacts.Outcome.LOSS]
+        planned.countable() && !planned.rankable()
+        planned.notRankableReason() == 'TEAM_SIZES_DIFFER'          // the sides come before "no score"
+        !planned.isPlanned()                                        // so it cannot be proposed
+        !tie.countable() && !tie.rankable()
+        tie.notRankableReason() == 'TEAM_SIZES_DIFFER'
+        tie.notCountableReason() == 'SCORES_EQUAL'
     }
 
     def "a score only one team filled is invalid (SCORE_INCOMPLETE)"() {
@@ -119,14 +178,15 @@ class CompetitiveRecordReaderSpec extends Specification {
         reader.read(twoSlots, game([a], [b], [21, null], [10, null])).rankable()
     }
 
-    def "record.ranking.scoreSlot picks the slot the first team must lead in"() {
+    def "record.ranking.scoreSlot picks the slot that decides the outcome"() {
         given:
         def s = schema(score: [slot: [[required: true], [required: true]]])
         s.record.ranking = [scoreSlot: 1]
 
-        expect:
-        reader.read(s, game([a], [b], [10, 21], [20, 18])).rankable()
-        !reader.read(s, game([a], [b], [30, 10], [5, 18])).rankable()
+        expect: "the second slot decides: 21 against 18 for the first team, then 10 against 18 for the second"
+        reader.read(s, game([a], [b], [10, 21], [20, 18])).participants()*.outcome() == [RecordFacts.Outcome.WIN, RecordFacts.Outcome.LOSS]
+        reader.read(s, game([a], [b], [30, 10], [5, 18])).participants()*.outcome() == [RecordFacts.Outcome.LOSS, RecordFacts.Outcome.WIN]
+        reader.read(s, game([a], [b], [30, 10], [5, 18])).rankable()
     }
 
     def "teams must be exactly two"() {
@@ -156,7 +216,7 @@ class CompetitiveRecordReaderSpec extends Specification {
         reader.read(schema(), game([a], [a])).invalidReason() == 'DUPLICATE_PLAYER'
     }
 
-    def "a sport with no score slot cannot be ranked: scores are not read and the record is valid"() {
+    def "a sport with no score slot cannot be ranked, but its games count: the first team wins, with no numbers"() {
         given:
         def noScore = schema(score: [slot: []])
 
@@ -167,6 +227,9 @@ class CompetitiveRecordReaderSpec extends Specification {
         facts.valid()
         !facts.rankable()
         facts.notRankableReason() == 'RANKING_NOT_AVAILABLE'
+        facts.countable()
+        facts.participants()*.outcome() == [RecordFacts.Outcome.WIN, RecordFacts.Outcome.LOSS]
+        facts.participants()*.metrics() == [[:], [:]]
         !reader.supportsRanking(noScore)
         reader.supportsRanking(schema())
     }

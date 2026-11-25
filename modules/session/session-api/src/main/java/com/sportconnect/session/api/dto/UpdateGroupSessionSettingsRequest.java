@@ -22,6 +22,12 @@ public class UpdateGroupSessionSettingsRequest {
     private RecurrenceMode mode;
 
     /**
+     * SESSION-78 — switch the group's member statistics and leaderboard on or off (owner or admin, like every field here).
+     * Omitted = unchanged. Independent of {@code enabled}: a call that sends only this changes nothing else.
+     */
+    private Boolean statisticsEnabled;
+
+    /**
      * SESSION-GROUP-6 — when this call turns generation <b>off</b> or <b>switches the mode</b>, also cancel every scheduled
      * regular session of the group (the audience and the players are told). Omitted or {@code false} = "leave them there".
      * Ignored by a call that does neither.

@@ -10,7 +10,8 @@ Design and reasons: `modules/session/docs/STATISTIC_RANKING_DESIGN.md`, revised 
 - **A stat the sport does not collect is absent.** The counters hold only the stats the sport's `record.scoreboard.columns` need (section 2): a sport that lists `games` and `wins` has no `losses` key at all, and "absent" there means "not collected", never "zero". (A collected stat no game has added to yet is written as `0`, so the two can be told apart.)
 - **Ignore keys you do not know.** A new stat is added by changing the catalog and a sport's schema, with no migration.
 - **Formulas are not stored.** `winRate`, `winDiff`, `scoreDiff` are computed from the stored counters with the catalog's formulas (`StatisticsSchema.valueOf`); a formula whose operands the sport does not collect has no value.
-- **Counts are numbers, not strings.** A whole number is written as an integer (`31`), a sum with a fraction as a decimal. Ids are numbers (`countryId`, `regionId`, `recordId`, `sessionId`) or UUID strings (`userId`, partner ids).
+- **A node nothing was counted into is not written (owner, 2026-11-25).** A partner with no ranking game has no `ranked` node, a place entry with no grouping has no `groupings`, a group member with no grouping has no `groupings`. A reader treats a missing key as empty (the same rule as for an old shape), so a player with 300 partners and no ranking game does not carry 300 empty nodes (measured: 54 KB with them, 48 KB without).
+- **A counters object is one short string (SESSION-81, owner 2026-11-25), see section 2**, not a map: the value of the stat with id `n` is in the `n`-th slot (`"7,4,3"` is 7 games, 4 wins, 3 losses). Ids elsewhere are numbers (`countryId`, `regionId`) or UUID strings (`userId`; the partner ids of a **player's** own row). **A group's rows name members by the group's permanent member number**, not by user id (sections 4 and 5).
 - **`all` includes `ranked`.** `all` is every counted game; `ranked` is the subset that was a ranking game (proposed and confirmed by every player, SESSION-72). A normal game adds to `all` only; a ranking game adds to both.
 
 ## 1. Where the configuration lives: the sport's `result_schema` and `statistics_enabled`
@@ -46,14 +47,20 @@ The server reads the schema leniently: an entry it cannot use (a column not in t
 
 ## 2. The counters object
 
-One shape, used everywhere a set of counters is stored (`StatsCounters.toMap`), flat, only the collected stats:
+One shape, used everywhere a set of counters is stored (`StatsCounters.encode` and `decode`): **one string**, the value of the stat whose id is `n` in the `n`-th slot, slots separated by `,`, only the collected stats:
 
 ```json
-{ "games": 17, "wins": 7, "scoreFor": 312, "scoreAgainst": 340 }
+"17,7,,312,340"
 ```
 
-- `games`, `wins`, `losses`: counts. A game whose outcome is unknown, or a draw, adds to `games` only. A collected count is written as `0` by a game that adds nothing to it (a loss adds `0` to `wins`).
-- `scoreFor`, `scoreAgainst`: sums of what each game gave the player. A sum no game has given yet is absent, not `0`.
+The ids are explicit, global and **append-only** (`StatsCatalog.ids()`; the client's `record-ui-v1.json` carries the same ones as `COMPETITIVE.scoreboard.statIds`, and `StatsCatalogSpec` fails when they differ): `games` 1, `wins` 2, `losses` 3, `scoreFor` 4, `scoreAgainst` 5, then the formulas (never stored) `winRate` 6, `winDiff` 7, `scoreDiff` 8. An id is never changed, reused or renumbered; a new stat takes the next number. The id is not the display order of the columns.
+
+- **Empty slot** = not collected (or no value yet). The slots after the last value are cut, so a sport collecting `games` and `wins` stores `"17,7"`. **Nothing counted is `""`.**
+- **A whole number** has no decimal part (`312`), a sum with a fraction keeps it (`15.5`), a negative sum keeps its sign (`-9`). The separator is `,` because `-` would clash with a minus sign.
+- A reader skips a slot that is empty, not a number, or whose id has no stored stat (a formula id, or an id a newer version added); it never fails. The flat object of the first builds (`{"games": 17}`) is still read.
+- (Measured with `pg_column_size`, 300 partners: 48 KB as objects with stat names, 30 KB as arrays, **18 KB as one string per partner**.)
+- `games`, `wins`, `losses`: counts. A game whose outcome is unknown, or a draw, adds to `games` only. A collected count is written as `0` by a game that adds nothing to it (a loss adds `0` to `wins`), so "collected, none yet" (`0`) and "not collected" (empty slot) differ.
+- `scoreFor`, `scoreAgainst`: sums of what each game gave the player. A sum no game has given yet is an empty slot, not `0`.
 - Nothing else: no `draws` counter, no formula, no custom metric.
 
 ## 3. `user_sport_stats` (one row per user and sport)
@@ -63,20 +70,20 @@ Primary key `(user_id, sport_id)`; `version` (optimistic lock) and `updated_at` 
 ### 3.1 `personal`
 
 ```json
-{ "all": <counters>, "ranked": <counters> }
+{ "all": "<counters>", "ranked": "<counters>" }
 ```
 
-The player's totals in the sport: every counted game (`all`) and the ranking games among them (`ranked`; empty until a ranking game is counted).
+The player's totals in the sport (the counters are the strings of section 2): every counted game (`all`) and the ranking games among them (`ranked`; empty until a ranking game is counted).
 
 ### 3.2 `groupings`
 
 ```json
 {
-  "PARTNER": { "<partnerUserId>": { "all": <counters>, "ranked": <counters> } }
+  "PARTNER": { "<partnerUserId>": "<all>/<ranked>" }
 }
 ```
 
-or, for a sport grouped by team, `"TEAM": { "<memberIdA>,<memberIdB>": { "all": <counters>, "ranked": <counters> } }`. **One dimension at most**: the sport's `groupBy` keeps one grouping, so a row holds a second dimension only from before the sport's schema was edited.
+Each entry is **one string**: the `all` counters, then `/` and the `ranked` counters; **nothing ranked is no `/` part** (`"7,3"` or `"7,3/2,1"`). For a sport grouped by team: `"TEAM": { "<memberIdA>,<memberIdB>": "<all>/<ranked>" }`. A player's own row keeps **user ids** as keys: their partners come from many groups, so a group's member number cannot name them. **One dimension at most**: the sport's `groupBy` keeps one grouping, so a row holds a second dimension only from before the sport's schema was edited.
 
 - The first level is the `by` of the sport's `groupBy`. A dimension with no group yet is absent; a sport with no `groupBy` has `{}`.
 - **`PARTNER`** key: the other player's user id. A player's own row never holds their own id. The counters are the games this player played **on the same team** as that partner. Games against a player are not counted. The same game is also in the partner's row, under this player (accepted duplication: pair statistics are personal data, owner 2026-11-25).
@@ -92,11 +99,13 @@ or, for a sport grouped by team, `"TEAM": { "<memberIdA>,<memberIdB>": { "all": 
     "scope": "REGION",              // or "COUNTRY"
     "countryId": 1,
     "regionId": 2,                  // null for a COUNTRY entry
-    "counters": <counters>,
-    "groupings": { "PARTNER": { "<partnerUserId>": <counters> } }
+    "counters": "<counters>",
+    "groupings": { "PARTNER": { "<partnerUserId>": "<counters>" } }      // left out when empty
   }
 ]
 ```
+
+The fields that identify a place (`scope`, `countryId`, `regionId`) stay plain jsonb on purpose: SESSION-54 may index or query them (finding every player at a region). Only the counters are strings.
 
 - The player's **ranking games only**, counted at the **venue's** region and country (where the game was played, not where the player lives). A normal game adds nothing here.
 - One `REGION` entry per region and one `COUNTRY` entry per country, created when the first ranking game is counted there. The `COUNTRY` entry is the sum of that country's `REGION` entries and of games at venues with a country but no region.
@@ -106,10 +115,10 @@ or, for a sport grouped by team, `"TEAM": { "<memberIdA>,<memberIdB>": { "all": 
 ### 3.4 `history`
 
 ```json
-[ { "recordId": 9012, "sessionId": 457, "ranking": true } ]
+[ "0-9031", "1-9027", "0-9019" ]
 ```
 
-Pointers to the counted games, **newest first, at most 500** (the oldest fall off). Details of a game are read from `session_records` and the session by id when a page is shown; the pointer holds none. `ranking` says whether it counted as a ranking game. The history is also the second guard against counting a record twice.
+One string per counted game, `"<ranking>-<recordId>"`: `1` when it counted as a ranking game, `0` when not, then the record id. **Newest first, at most 500** (the oldest fall off). **There is no session id and no other detail**: a page of history reads the records by id from `session_records` (each row names its session) and then the sessions. The history is also the second guard against counting a record twice. The one place that knows this format is `StatsHistory`. (It was a list of `{recordId, sessionId, ranking}` objects, 36 KB for 500 entries; as strings it is 5 KB, measured with `pg_column_size`, and smaller than a list of numbers, which jsonb stores as `numeric`.)
 
 ## 4. `group_member_stats` (one row per group, user and sport)
 
@@ -119,12 +128,12 @@ Primary key `(group_id, user_id, sport_id)`; written only for the games of a **g
 
 ```json
 {
-  "counters":  <counters>,
-  "groupings": { "PARTNER": { "<partnerUserId>": <counters> } }
+  "counters":  "<counters>",
+  "groupings": { "PARTNER": { "<partnerMemberNo>": "<counters>" } }      // left out when empty
 }
 ```
 
-The same keys as in section 3, with **no `all` / `ranked` split** (owner, 2026-11-25): this is every game of the group's sessions.
+The same shape as in section 3, with **no `all` / `ranked` split** (owner, 2026-11-25): this is every game of the group's sessions. **The keys are the group's permanent member numbers** (SESSION-81): a partner is `"3"`, a team the members' numbers sorted as numbers and joined by commas (`"3,7"`). The group module owns the numbers (`GroupMemberNumberService`, table `group_member_numbers`: unique inside the group, never reused, kept when a member leaves, allocated the first time they are asked for; members from before V107 were numbered in joined order). A reader turns a number back into a user id with one batch call (`getUserIdsByMemberNumbers`). Measured: 300 partners in a group member's row are 8 KB with small-integer keys and string counters (48 KB before).
 
 ### 4.2 `history`
 
@@ -136,8 +145,6 @@ Primary key `(group_id, sport_id)`; `version` and `updated_at` plain columns; on
 
 ```json
 {
-  "members":    { "<userId>": 1, "<userId>": 2, "<userId>": 3, "<userId>": 4 },
-  "lastMember": 4,
   "seq":        4711,
   "h2h": {
     "1.2-3.4": [2, 1, 4711],
@@ -146,7 +153,7 @@ Primary key `(group_id, sport_id)`; `version` and `updated_at` plain columns; on
 }
 ```
 
-- **`members`**: a small number per member, handed out in the order members first appear and **never reused** (a member who leaves keeps theirs); `lastMember` is the last number given. The document is self-contained, so it needs no pair table.
+- **The numbers are the group's permanent member numbers** (section 4.1), owned by the group module: the document keeps **no member dictionary of its own** (an older document's `members` and `lastMember` are ignored). It needs no pair table.
 - **A pair** is its two member numbers, the smaller first (`"1.2"`). **A matchup key is the smaller pair first** (compared by the first number, then the second): `"1.2-3.4"`. One helper (`GroupH2hDoc.matchupKey`) is the only rule, so a lookup never tries both orders.
 - **The value** is `[wins of the first pair of the key, wins of the second, seq]`, or `[wins1, wins2, draws, seq]` for a sport whose `record.data.allowDraws` is true (the length says which; an entry gains the draws number when the sport starts allowing draws). The wins follow the **key order**, not the order of the game's teams.
 - **`seq`**: the group's running game number (`seq` at the top is the last one given); each entry's last number is the game number of the last game of that matchup.
@@ -157,14 +164,14 @@ Primary key `(group_id, sport_id)`; `version` and `updated_at` plain columns; on
 
 ```json
 {
-  "counted": [ { "recordId": 9012, "ranking": true }, { "recordId": 9013, "ranking": false } ],
-  "ignored": [ { "recordId": 9014, "reason": "FIRST_TEAM_NOT_AHEAD" } ],
+  "counted": [ "1-9012", "0-9013" ],
+  "ignored": [ "9014:SCORES_EQUAL" ],
   "notes":   [ "NO_VENUE_REGION" ]
 }
 ```
 
-- `counted`: one entry per game that was counted: its `recordId` and `ranking`, whether it counted as a ranking game (the same mark as `ranking` in a history pointer, section 3.4). A rebuild or an operator reads from here why a game is, or is not, in a region or country counter.
-- `ignored`: a record that was read and not counted, with its reason: the reader's invalid or not-rankable reasons (`NO_SCORE`, `FIRST_TEAM_NOT_AHEAD`, `SCORE_*`, ...), `PLAYER_NOT_JOINED` (a named player is no longer `JOINED`) or `ALREADY_COUNTED` (a history pointer exists).
+- `counted`: one entry per game that was counted, in the history's format `"<ranking>-<recordId>"` (section 3.4): whether it counted as a ranking game and its record id. A rebuild or an operator reads from here why a game is, or is not, in a region or country counter.
+- `ignored`: one entry per record that was read and not counted, `"<recordId>:<REASON>"`, the reason being: the reader's invalid reasons (`SCORE_*`, `DUPLICATE_PLAYER`, ...) or `SCORES_EQUAL` (equal scores in a sport that allows no draws; a game with no score is not ignored, the first team wins it), `PLAYER_NOT_JOINED` (a named player is no longer `JOINED`) or `ALREADY_COUNTED` (a history pointer exists).
 - `notes`: things an operator should know: `NO_RECORDS`, `NO_VENUE_COUNTRY`, `NO_VENUE_REGION`, `NO_RESULT_SCHEMA`, `NO_READER`, `SESSION_NOT_COMPLETED`, and **`STATISTICS_NOT_CONFIGURED`** (the sport's schema lists no usable `scoreboard.columns`: the session is `SKIPPED` for good; adding columns later does not recount it, SESSION-77 does).
 - Also on the row (plain columns): `status` (`RUNNING`, `DONE`, `SKIPPED`, `RETRY`, `FAILED`), `attempts`, `next_attempt_at`, `claimed_at`, `last_error`, `counted` and `ignored` (the counts), `finished_at`.
 - A sport whose statistics are switched off has **no job row**: the runner does not pick its sessions, and a row claimed just before the switch was turned off is deleted by the processor, so switching the sport on later counts the session.
@@ -185,17 +192,17 @@ Primary key `(group_id, sport_id)`; `version` and `updated_at` plain columns; on
 
 ## 8. Worked example: a badminton player in two regions
 
-The sport: columns `games` and `wins`, `groupBy` `PARTNER`. Player A has played 17 ranking games, 7 at venues in region 1 (3 won) and 10 in region 2 (4 won), both regions in country 1. Games with B were all in region 1. The row in `user_sport_stats` (counters abbreviated to `games/wins`):
+The sport: columns `games` and `wins`, `groupBy` `PARTNER`. Player A has played 17 ranking games, 7 at venues in region 1 (3 won) and 10 in region 2 (4 won), both regions in country 1. Games with B were all in region 1. The row in `user_sport_stats` (the counters are the strings of section 2: games, then wins):
 
 ```json
-personal:  { "all": 17/7, "ranked": 17/7 }
-groupings: { "PARTNER": { "<B>": { "all": 7/3, "ranked": 7/3 } } }
+personal:  { "all": "17,7", "ranked": "17,7" }
+groupings: { "PARTNER": { "<B>": "7,3/7,3" } }
 scopes: [
-  { "scope": "REGION",  "countryId": 1, "regionId": 1,    "counters": 7/3,  "groupings": { "PARTNER": { "<B>": 7/3 } } },
-  { "scope": "REGION",  "countryId": 1, "regionId": 2,    "counters": 10/4, "groupings": {} },
-  { "scope": "COUNTRY", "countryId": 1, "regionId": null, "counters": 17/7, "groupings": { "PARTNER": { "<B>": 7/3 } } }
+  { "scope": "REGION",  "countryId": 1, "regionId": 1,    "counters": "7,3",  "groupings": { "PARTNER": { "<B>": "7,3" } } },
+  { "scope": "REGION",  "countryId": 1, "regionId": 2,    "counters": "10,4" },
+  { "scope": "COUNTRY", "countryId": 1, "regionId": null, "counters": "17,7", "groupings": { "PARTNER": { "<B>": "7,3" } } }
 ]
-history: [ 17 pointers, newest first ]
+history: [ "1-9031", "1-9027", ... 17 entries, newest first ]
 ```
 
 If some of the 17 had been normal games, they would be in `personal.all` and `groupings.*.all` but not in `ranked` and not in `scopes`. In the group's `group_stats`, A and B (numbers 1 and 2) against X and Y (3 and 4), after three games of which A and B won two, is `"h2h": { "1.2-3.4": [2, 1, 3] }`.

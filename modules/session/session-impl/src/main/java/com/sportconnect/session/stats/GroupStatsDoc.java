@@ -25,14 +25,17 @@ public final class GroupStatsDoc {
     public static GroupStatsDoc read(GroupMemberStats row) {
         Map<String, Object> stats = row.getStats() == null ? Map.of() : row.getStats();
         List<Object> history = row.getHistory() == null ? new ArrayList<>() : new ArrayList<>(row.getHistory());
-        return new GroupStatsDoc(StatsCounters.fromMap(stats.get("counters")),
-                StatsGroupings.read(stats.get("groupings"), StatsCounters::fromMap), history);
+        return new GroupStatsDoc(StatsCounters.decode(stats.get("counters")),
+                StatsGroupings.read(stats.get("groupings"), StatsCounters::decode), history);
     }
 
     public void writeTo(GroupMemberStats row) {
         Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("counters", counters.toMap());
-        stats.put("groupings", StatsGroupings.write(groupings, StatsCounters::toMap));
+        stats.put("counters", counters.encode());
+        Map<String, Object> grouped = StatsGroupings.write(groupings, StatsCounters::encode);
+        if (!grouped.isEmpty()) {
+            stats.put("groupings", grouped);      // a member with no grouping carries no empty node
+        }
         row.setStats(stats);
         row.setHistory(new ArrayList<>(history));
         row.setUpdatedAt(java.time.Instant.now());
@@ -56,7 +59,7 @@ public final class GroupStatsDoc {
         return StatsHistory.contains(history, recordId);
     }
 
-    public void addPointer(long recordId, long sessionId, boolean ranking) {
-        history = StatsHistory.prepend(history, recordId, sessionId, ranking);
+    public void addPointer(long recordId, boolean ranking) {
+        history = StatsHistory.prepend(history, recordId, ranking);
     }
 }

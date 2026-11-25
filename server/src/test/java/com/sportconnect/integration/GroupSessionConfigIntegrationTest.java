@@ -79,7 +79,7 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         memberId = createUserWithRoles(true, "USER");
         otherMemberId = createUserWithRoles(true, "USER");
         outsiderId = createUserWithRoles(true, "USER");
-        sportId = sportRepository.save(Sport.builder().name("SESSION-GROUP-4 " + UUID.randomUUID()).isActive(true).build()).getId();
+        sportId = sportRepository.save(Sport.builder().name("SESSION-GROUP-4 " + UUID.randomUUID()).isActive(true).statisticsEnabled(true).build()).getId();
         Long otherSportId = sportRepository.save(Sport.builder().name("SESSION-GROUP-4 other " + UUID.randomUUID()).isActive(true).build()).getId();
         evictSportCache();
         locationId = locationRepository.save(Location.builder().sportId(sportId).name("Court").createdBy(ownerId).build()).getId();
@@ -106,6 +106,14 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         locationRepository.deleteAll();
         userRepository.deleteAll();
         sportRepository.deleteAll();
+        evictSportCache();
+    }
+
+    /** Switches the group's sport statistics switch (SESSION-78) and drops the sport cache. */
+    private void setSportStatistics(boolean on) {
+        Sport sport = sportRepository.findById(sportId).orElseThrow();
+        sport.setStatisticsEnabled(on);
+        sportRepository.save(sport);
         evictSportCache();
     }
 
@@ -166,7 +174,8 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         getAs(memberId, "/settings").andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.groupId").value(groupId))
                 .andExpect(jsonPath("$.data.enabled").value(false))
-                .andExpect(jsonPath("$.data.mode").value("WEEKLY"));
+                .andExpect(jsonPath("$.data.mode").value("WEEKLY"))
+                .andExpect(jsonPath("$.data.statisticsEnabled").value(false));
         assertThat(settingsRepository.count()).isZero();
     }
 
@@ -195,6 +204,90 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         sendAs(ownerId, "PUT", "/settings", Map.of("enabled", false, "mode", "WEEKLY")).andExpect(status().isOk());
 
         assertThat(systemPosts()).isEmpty();
+        assertThat(settingsRepository.count()).isZero();
+    }
+
+    @Test
+    void anOwnerAndAnAdmin_switchTheGroupsStatistics_independentlyOfRegularSessions_andEachChangeWritesAGroupPost() throws Exception {
+        sendAs(adminId, "PUT", "/settings", Map.of("statisticsEnabled", true)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statisticsEnabled").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(false))
+                .andExpect(jsonPath("$.data.mode").value("WEEKLY"));
+        assertThat(settingsRepository.findById(groupId).orElseThrow().isStatisticsEnabled()).isTrue();
+        getAs(memberId, "/settings").andExpect(jsonPath("$.data.statisticsEnabled").value(true));
+
+        // the regular-session switch does not touch it, and it does not touch the regular-session switch
+        sendAs(ownerId, "PUT", "/settings", Map.of("enabled", true)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statisticsEnabled").value(true)).andExpect(jsonPath("$.data.enabled").value(true));
+
+        sendAs(ownerId, "PUT", "/settings", Map.of("statisticsEnabled", false)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statisticsEnabled").value(false)).andExpect(jsonPath("$.data.enabled").value(true));
+
+        List<Post> posts = systemPosts();
+        assertThat(posts).extracting(Post::getSystemCode).containsExactlyInAnyOrder(SystemCode.GROUP_STATISTICS_ON,
+                SystemCode.GROUP_SESSION_GENERATION_ON, SystemCode.GROUP_STATISTICS_OFF);
+        assertThat(posts).allSatisfy(p -> assertThat(p.getUserId()).isEqualTo(ownerId));        // authored as the owner, never the admin
+        assertThat(posts.stream().filter(p -> p.getSystemCode() == SystemCode.GROUP_STATISTICS_ON).findFirst().orElseThrow()
+                .getSystemParams()).containsKey("name");
+    }
+
+    @Test
+    void aStatisticsSwitchThatChangesNothing_writesNoPostAndNoRow() throws Exception {
+        sendAs(ownerId, "PUT", "/settings", Map.of("statisticsEnabled", false)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statisticsEnabled").value(false));
+
+        assertThat(systemPosts()).isEmpty();
+        assertThat(settingsRepository.count()).isZero();
+
+        sendAs(ownerId, "PUT", "/settings", Map.of("statisticsEnabled", true)).andExpect(status().isOk());
+        sendAs(ownerId, "PUT", "/settings", Map.of("statisticsEnabled", true)).andExpect(status().isOk());
+        assertThat(systemPosts()).hasSize(1);
+    }
+
+    @Test
+    void whileTheGroupsSportHasStatisticsOff_theSettingIsNull_andAChangeToItIs409_butTheOtherSettingsStillChange() throws Exception {
+        setSportStatistics(false);
+
+        getAs(memberId, "/settings").andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statisticsEnabled").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.data.enabled").value(false));
+        for (boolean value : new boolean[] {true, false}) {
+            sendAs(ownerId, "PUT", "/settings", Map.of("statisticsEnabled", value)).andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_STATISTICS_NOT_AVAILABLE"));
+        }
+        assertThat(settingsRepository.count()).isZero();
+        assertThat(systemPosts()).isEmpty();
+
+        sendAs(ownerId, "PUT", "/settings", Map.of("mode", "MONTHLY")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.mode").value("MONTHLY"))
+                .andExpect(jsonPath("$.data.statisticsEnabled").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void aSettingSwitchedOnIsHiddenWhileTheSportIsOff_andComesBackWhenTheSportIsSwitchedOnAgain() throws Exception {
+        sendAs(ownerId, "PUT", "/settings", Map.of("statisticsEnabled", true)).andExpect(status().isOk());
+
+        setSportStatistics(false);
+        getAs(adminId, "/settings").andExpect(jsonPath("$.data.statisticsEnabled").value(org.hamcrest.Matchers.nullValue()));
+        assertThat(settingsRepository.findById(groupId).orElseThrow().isStatisticsEnabled()).isTrue();      // kept, only not shown
+
+        setSportStatistics(true);
+        getAs(adminId, "/settings").andExpect(jsonPath("$.data.statisticsEnabled").value(true));
+    }
+
+    @Test
+    void aPlainMemberAnOutsiderAndAnInactiveGroup_cannotSwitchTheStatistics() throws Exception {
+        sendAs(memberId, "PUT", "/settings", Map.of("statisticsEnabled", true)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_ADMIN_REQUIRED"));
+        sendAs(outsiderId, "PUT", "/settings", Map.of("statisticsEnabled", true)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_MEMBER_REQUIRED"));
+        assertThat(settingsRepository.count()).isZero();
+
+        Group group = groupRepository.findById(groupId).orElseThrow();
+        group.setIsActive(false);
+        groupRepository.save(group);
+        sendAs(ownerId, "PUT", "/settings", Map.of("statisticsEnabled", true)).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("GROUP_NOT_FOUND"));
         assertThat(settingsRepository.count()).isZero();
     }
 

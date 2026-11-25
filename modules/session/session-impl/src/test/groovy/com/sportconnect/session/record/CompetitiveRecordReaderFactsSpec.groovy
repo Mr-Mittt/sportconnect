@@ -15,8 +15,8 @@ class CompetitiveRecordReaderFactsSpec extends Specification {
     UUID c = UUID.randomUUID()
     UUID d = UUID.randomUUID()
 
-    Map schema(List slots = [[required: true, rule: '>=0&<=30']]) {
-        [maxRecords: 50, record: [data: [type: 'COMPETITIVE', playersPerSide: [min: 1, max: 2], score: [slot: slots]]]]
+    Map schema(List slots = [[required: true, rule: '>=0&<=30']], boolean allowDraws = false) {
+        [maxRecords: 50, record: [data: [type: 'COMPETITIVE', playersPerSide: [min: 1, max: 2], score: [slot: slots], allowDraws: allowDraws]]]
     }
 
     Map game(List one, List two, List scoreOne, List scoreTwo) {
@@ -31,7 +31,7 @@ class CompetitiveRecordReaderFactsSpec extends Specification {
         facts.teams() == [[a, b], [c, d]]
     }
 
-    def "a rankable game has one participant per player: the first team wins, the second loses"() {
+    def "a game has one participant per player: the first team wins when it scored more, the second loses"() {
         when:
         def facts = reader.read(schema(), game([a, b], [c], [21], [18]))
 
@@ -63,15 +63,27 @@ class CompetitiveRecordReaderFactsSpec extends Specification {
         facts.participants().find { it.userId() == c }.metrics() == [scoreFor: 31d, scoreAgainst: 36d]
     }
 
-    def "a planned game, a game the first team does not win and an invalid record have no participants"() {
+    def "a planned game counts as a first team win with no numbers, and the second team winning counts the other way"() {
         expect:
-        reader.read(schema(), game([a], [c], [null], [null])).participants() == []
-        reader.read(schema(), game([a], [c], [15], [21])).participants() == []
+        reader.read(schema(), game([a], [c], [null], [null])).participants()*.outcome() == [Outcome.WIN, Outcome.LOSS]
+        reader.read(schema(), game([a], [c], [null], [null])).participants()*.metrics() == [[:], [:]]
+        reader.read(schema(), game([a], [c], [15], [21])).participants()*.outcome() == [Outcome.LOSS, Outcome.WIN]
+        reader.read(schema(), game([a], [c], [15], [21])).participants().find { it.userId() == c }.metrics() == [scoreFor: 21d, scoreAgainst: 15d]
+    }
+
+    def "an equal score is a draw for everyone when the sport allows draws, and has no participants when it does not"() {
+        expect:
+        reader.read(schema([[required: true]], true), game([a], [c], [10], [10])).participants()*.outcome() == [Outcome.DRAW, Outcome.DRAW]
+        reader.read(schema(), game([a], [c], [10], [10])).participants() == []
+    }
+
+    def "an invalid record has no participants and no teams"() {
+        expect:
         reader.read(schema(), game([a, a], [c], [21], [18])).participants() == []
         reader.read(schema(), game([a, a], [c], [21], [18])).teams() == []
     }
 
-    def "a game of a sport with no score slot has its teams but no participants"() {
+    def "a game of a sport with no score slot has its teams, and the first team wins with no numbers"() {
         when:
         def facts = reader.read([record: [data: [type: 'COMPETITIVE', playersPerSide: [min: 1, max: 2]]]],
                 [teams: [[players: [a.toString()]], [players: [c.toString()]]]])
@@ -79,7 +91,8 @@ class CompetitiveRecordReaderFactsSpec extends Specification {
         then:
         facts.valid()
         facts.teams() == [[a], [c]]
-        facts.participants() == []
+        facts.participants()*.outcome() == [Outcome.WIN, Outcome.LOSS]
+        facts.participants()*.metrics() == [[:], [:]]
     }
 
     def "the short constructor SESSION-72 uses leaves the teams and participants empty"() {

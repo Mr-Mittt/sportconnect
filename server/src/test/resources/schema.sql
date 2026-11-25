@@ -422,7 +422,22 @@ CREATE TABLE IF NOT EXISTS group_session_settings (
     group_id BIGINT PRIMARY KEY,
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     mode VARCHAR(10) NOT NULL DEFAULT 'WEEKLY',
+    statistics_enabled BOOLEAN NOT NULL DEFAULT FALSE,   -- SESSION-78 (V106)
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- SESSION-81 (V107): a permanent number for every member of a group, and the last number handed out.
+CREATE TABLE IF NOT EXISTS group_member_numbers (
+    group_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    member_no INTEGER NOT NULL,
+    PRIMARY KEY (group_id, user_id),
+    CONSTRAINT unique_group_member_no UNIQUE (group_id, member_no)
+);
+
+CREATE TABLE IF NOT EXISTS group_member_number_counters (
+    group_id BIGINT PRIMARY KEY,
+    last_no INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS group_session_recurrences (

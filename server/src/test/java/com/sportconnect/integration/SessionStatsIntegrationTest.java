@@ -1,9 +1,12 @@
 package com.sportconnect.integration;
 
+import com.sportconnect.group.api.service.GroupMemberNumberService;
 import com.sportconnect.group.entity.Group;
 import com.sportconnect.group.entity.GroupMember;
 import com.sportconnect.group.repository.GroupMemberRepository;
 import com.sportconnect.group.repository.GroupRepository;
+import com.sportconnect.session.entity.GroupSessionSettings;
+import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.location.entity.Location;
 import com.sportconnect.location.repository.LocationRepository;
 import com.sportconnect.session.api.dto.FeeType;
@@ -30,6 +33,7 @@ import com.sportconnect.session.stats.SessionStatsJob;
 import com.sportconnect.session.stats.SessionStatsJobRepository;
 import com.sportconnect.session.stats.SessionStatsRunner;
 import com.sportconnect.session.stats.StatBoardRun;
+import com.sportconnect.session.stats.StatsHistory;
 import com.sportconnect.session.stats.StatBoardRunRepository;
 import com.sportconnect.session.stats.UserSportStats;
 import com.sportconnect.session.stats.UserSportStatsRepository;
@@ -91,6 +95,9 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     @Autowired private UserSportStatsRepository userStatsRepository;
     @Autowired private GroupMemberStatsRepository groupMemberStatsRepository;
     @Autowired private GroupStatsRepository groupH2hRepository;
+    @Autowired private GroupMemberNumberService memberNumbers;
+    @Autowired private com.sportconnect.group.repository.GroupMemberNumberRepository memberNumberRepository;
+    @Autowired private com.sportconnect.group.repository.GroupMemberNumberCounterRepository memberNumberCounterRepository;
     @Autowired private LeaderboardEntryRepository leaderboardRepository;
     @Autowired private StatBoardRunRepository boardRunRepository;
     @Autowired private SessionRepository sessionRepository;
@@ -98,6 +105,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     @Autowired private SessionRecordRepository recordRepository;
     @Autowired private SessionRecordVerificationRepository verificationRepository;
     @Autowired private GroupRepository groupRepository;
+    @Autowired private GroupSessionSettingsRepository groupSettingsRepository;
     @Autowired private GroupMemberRepository groupMemberRepository;
     @Autowired private LocationRepository locationRepository;
     @Autowired private UserRepository userRepository;
@@ -128,6 +136,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         groupId = groupRepository.save(Group.builder().groupName("Stats " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
+        groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());   // SESSION-78: off by default
         for (UUID member : List.of(aliceId, bobId, carolId, danId)) {
             groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(member).roleId(ROLE_MEMBER).build());
         }
@@ -143,6 +152,8 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         boardRunRepository.deleteAll();
         leaderboardRepository.deleteAll();
         groupH2hRepository.deleteAll();
+        memberNumberRepository.deleteAll();
+        memberNumberCounterRepository.deleteAll();
         groupMemberStatsRepository.deleteAll();
         userStatsRepository.deleteAll();
         jobRepository.deleteAll();
@@ -152,6 +163,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         participantRepository.deleteAll();
         sessionRepository.deleteAll();
         groupMemberRepository.deleteAll();
+        groupSettingsRepository.deleteAll();
         groupRepository.deleteAll();
         locationRepository.deleteAll();
         postRepository.deleteAll();
@@ -210,12 +222,16 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         // the group member's counters cover both games, with no ranked split; history is newest first with the ranking mark
         GroupStatsDoc member = member(aliceId);
         assertThat(member.counters().value("games")).isEqualTo(2.0);
-        assertThat(member.group("PARTNER", bobId.toString()).value("games")).isEqualTo(2.0);
-        assertThat(member.group("PARTNER", bobId.toString()).value("wins")).isEqualTo(1.0);
+        // a group's rows name the partner by the group's permanent member number, not by user id (SESSION-81)
+        assertThat(member.group("PARTNER", String.valueOf(no(bobId))).value("games")).isEqualTo(2.0);
+        assertThat(member.group("PARTNER", String.valueOf(no(bobId))).value("wins")).isEqualTo(1.0);
+        assertThat(keySetOf(((Map<?, ?>) groupMemberStatsRepository.findById(new GroupMemberStats.Key(groupId, aliceId, sportId))
+                .orElseThrow().getStats().get("groupings")).get("PARTNER"))).containsExactly(String.valueOf(no(bobId)));
         assertThat(userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow().getHistory()).hasSize(2);
         UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, sportId)).orElseThrow();
-        assertThat(((Map<?, ?>) row.getHistory().get(0)).get("ranking")).isEqualTo(false);
-        assertThat(((Map<?, ?>) row.getHistory().get(1)).get("ranking")).isEqualTo(true);
+        assertThat(row.getHistory()).containsExactly(StatsHistory.entry(normal, false), StatsHistory.entry(ranked, true));
+        assertThat(groupMemberStatsRepository.findById(new GroupMemberStats.Key(groupId, aliceId, sportId)).orElseThrow().getHistory())
+                .containsExactly(StatsHistory.entry(normal, false), StatsHistory.entry(ranked, true));       // the same entries in the group member's row
 
         // the engine writes nothing to leaderboard_entry (SESSION-54 builds the boards), but tells which boards changed
         assertThat(leaderboardRepository.findAll()).isEmpty();
@@ -236,10 +252,12 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         GroupH2hDoc h2h = GroupH2hDoc.read(row);
         assertThat(h2h.size()).isEqualTo(1);
         assertThat(h2h.seq()).isEqualTo(2);
-        // alice and bob appear first, so they are 1 and 2 and carol and dan 3 and 4: the key is "1.2-3.4", one win each
-        assertThat(h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))).containsExactly(1L, 1L, 2L);
-        assertThat(h2h.matchup(List.of(danId, carolId), List.of(bobId, aliceId))).containsExactly(1L, 1L, 2L);
-        assertThat(keySetOf(row.getH2h().get("h2h"))).containsExactly("1.2-3.4");
+        // the members are named by the group's permanent member numbers; one win each
+        assertThat(h2h.matchup(nums(aliceId, bobId), nums(carolId, danId))).containsExactly(1L, 1L, 2L);
+        assertThat(h2h.matchup(nums(danId, carolId), nums(bobId, aliceId))).containsExactly(1L, 1L, 2L);
+        assertThat(keySetOf(row.getH2h().get("h2h"))).containsExactly(GroupH2hDoc.matchupKey(
+                GroupH2hDoc.order(no(aliceId), no(bobId)), GroupH2hDoc.order(no(carolId), no(danId))));
+        assertThat(row.getH2h()).doesNotContainKey("members");       // the group module owns the numbers: no dictionary here
     }
 
     @Test
@@ -255,10 +273,10 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         GroupH2hDoc h2h = GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow());
         assertThat(h2h.size()).isEqualTo(2);
         assertThat(h2h.seq()).isEqualTo(3);
-        assertThat(h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))).containsExactly(1L, 1L, 2L);
-        // alice and carol (1 and 3) beat bob and dan (2 and 4) as the first team: the first pair of the key won
-        assertThat(h2h.matchup(List.of(aliceId, carolId), List.of(bobId, danId))).containsExactly(1L, 0L, 3L);
-        assertThat(h2h.matchup(List.of(bobId, danId), List.of(aliceId, carolId))).containsExactly(1L, 0L, 3L);
+        assertThat(h2h.matchup(nums(aliceId, bobId), nums(carolId, danId))).containsExactly(1L, 1L, 2L);
+        // alice and carol beat bob and dan as the first team: the win is the first pair of the key's, whichever numbers they have
+        assertThat(h2h.matchup(nums(aliceId, carolId), nums(bobId, danId))).containsExactly(1L, 0L, 3L);
+        assertThat(h2h.matchup(nums(bobId, danId), nums(aliceId, carolId))).containsExactly(1L, 0L, 3L);
     }
 
     @Test
@@ -286,6 +304,49 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(groupMemberStatsRepository.findAll()).isEmpty();
         assertThat(groupH2hRepository.findAll()).isEmpty();
         assertThat(boardRunRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void aGroupWithItsSwitchOffOrNoSettingsRowIsCountedForThePlayersOnlyAndOnlyLaterSessionsReachTheGroup() {
+        groupSettingsRepository.deleteAll();                                                       // no row: off (SESSION-78)
+        Long first = completedSession(groupId, venueId, 3);
+        Long ranked = game(first, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        propose(ranked, aliceId, List.of(aliceId, bobId, carolId, danId));
+
+        assertThat(runner.processDue()).isEqualTo(1);
+
+        assertThat(jobRepository.findById(first).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);              // the players are counted
+        assertThat(player(aliceId).group("PARTNER", bobId.toString()).all().value("games")).isEqualTo(1.0);
+        assertThat(groupMemberStatsRepository.findAll()).isEmpty();                                // the group rows are not written
+        assertThat(groupH2hRepository.findAll()).isEmpty();
+        assertThat(boardRunRepository.findAll()).extracting(StatBoardRun::getScopeType).doesNotContain("GROUP");
+
+        // the owner switches it on: only sessions counted from now on reach the group
+        groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());
+        Long second = completedSession(groupId, venueId, 2);
+        game(second, List.of(aliceId, bobId), List.of(carolId, danId), 21, 10);
+
+        assertThat(runner.processDue()).isEqualTo(1);
+
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(2.0);
+        assertThat(groupMemberStatsRepository.findAll()).hasSize(4);
+        assertThat(GroupStatsDoc.read(groupMemberStatsRepository.findById(new GroupMemberStats.Key(groupId, aliceId, sportId))
+                .orElseThrow()).counters().value("games")).isEqualTo(1.0);                          // the first session never reached it
+        assertThat(boardRunRepository.findAll()).extracting(StatBoardRun::getScopeType).contains("GROUP");
+    }
+
+    @Test
+    void aGroupWhoseSwitchIsExplicitlyOffIsCountedLikeOneWithNoRow() {
+        groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(false).build());
+        Long sessionId = completedSession(groupId, venueId, 2);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        runner.processDue();
+
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+        assertThat(groupMemberStatsRepository.findAll()).isEmpty();
+        assertThat(groupH2hRepository.findAll()).isEmpty();
     }
 
     @Test
@@ -332,25 +393,76 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void invalidAndPlannedRecordsAreIgnoredWithTheirReasonAndTheGoodOneIsCounted() {
+    void theOutcomeFollowsTheScoreAndOnlyInvalidAndEqualRecordsAreIgnoredWithTheirReason() {
         Long sessionId = completedSession(null, venueId, 2);
         Long good = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
-        Long planned = recordWithScores(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), null, null);
+        Long planned = recordWithScores(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), null, null);   // no score: the first team wins
         Long duplicate = game(sessionId, List.of(aliceId, aliceId), List.of(carolId, danId), 21, 15);
-        Long reversed = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 15, 21);
+        Long reversed = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 15, 21);                 // the second team has the higher score
+        Long tie = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 21);                      // no draws in this sport
 
         runner.processDue();
 
         SessionStatsJob job = jobRepository.findById(sessionId).orElseThrow();
         assertThat(job.getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
-        assertThat(job.getCounted()).isEqualTo(1);
-        assertThat(job.getIgnored()).isEqualTo(3);
+        assertThat(job.getCounted()).isEqualTo(3);
+        assertThat(job.getIgnored()).isEqualTo(2);
         Map<Long, String> reasons = ignoredReasons(job);
-        assertThat(reasons).containsEntry(planned, "NO_SCORE")
-                .containsEntry(duplicate, "DUPLICATE_PLAYER")
-                .containsEntry(reversed, "FIRST_TEAM_NOT_AHEAD");
-        assertThat(counted(job)).containsExactly(good);
+        assertThat(reasons).containsEntry(duplicate, "DUPLICATE_PLAYER").containsEntry(tie, "SCORES_EQUAL").hasSize(2);
+        assertThat(counted(job)).containsExactlyInAnyOrder(good, planned, reversed);
+        // alice and bob won the good game and the planned one (first team) and lost the reversed one
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(3.0);
+        assertThat(player(aliceId).personal().all().value("wins")).isEqualTo(2.0);
+        assertThat(player(aliceId).personal().all().value("scoreFor")).isEqualTo(36.0);       // 21 + 15: the planned game gives no numbers
+        assertThat(player(aliceId).personal().all().value("scoreAgainst")).isEqualTo(36.0);   // 15 + 21
+        assertThat(player(carolId).personal().all().value("wins")).isEqualTo(1.0);            // the reversed game
+    }
+
+    @Test
+    void equalScoresAreADrawWhenTheSportAllowsDrawsAndAreCountedAsNeitherAWinNorALoss() {
+        Long draws = newSport(drawsSchema(), true);
+        Long sessionId = completedSession(null, venueId, 2, draws);
+        Long tie = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 21);
+
+        runner.processDue();
+
+        SessionStatsJob job = jobRepository.findById(sessionId).orElseThrow();
+        assertThat(job.getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
+        assertThat(counted(job)).containsExactly(tie);
+        UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, draws)).orElseThrow();
+        PlayerStatsDoc alice = PlayerStatsDoc.read(row);
+        assertThat(alice.personal().all().value("games")).isEqualTo(1.0);
+        assertThat(alice.personal().all().value("wins")).isEqualTo(0.0);
+        assertThat(alice.personal().all().value("losses")).isEqualTo(0.0);
+    }
+
+    @Test
+    void aRankingGameTheSecondTeamWonCountsAsAWinForItsPlayersWhoeverIsNamedFirst() {
+        Long sessionId = completedSession(null, venueId, 2);
+        Long ranked = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 15, 21);
+        propose(ranked, aliceId, List.of(aliceId, bobId, carolId, danId));
+
+        runner.processDue();
+
+        assertThat(rankingMarks(jobRepository.findById(sessionId).orElseThrow())).containsOnly(Map.entry(ranked, true));
+        assertThat(player(carolId).personal().ranked().value("wins")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().ranked().value("wins")).isEqualTo(0.0);
+        assertThat(player(aliceId).personal().ranked().value("games")).isEqualTo(1.0);
+    }
+
+    @Test
+    void aGameWithDifferentSideSizesCountsAsANormalGameEvenIfItWasProposedAndConfirmed() {
+        Long sessionId = completedSession(null, venueId, 2);
+        Long game = game(sessionId, List.of(aliceId, bobId), List.of(carolId), 21, 15);
+        propose(game, aliceId, List.of(aliceId, bobId, carolId));
+
+        runner.processDue();
+
+        SessionStatsJob job = jobRepository.findById(sessionId).orElseThrow();
+        assertThat(counted(job)).containsExactly(game);
+        assertThat(rankingMarks(job)).containsOnly(Map.entry(game, false));
         assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().ranked().value("games")).isNull();
     }
 
     @Test
@@ -488,7 +600,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(alice.personal().all().value("scoreFor")).isEqualTo(21.0);
         assertThat(alice.personal().all().value("scoreAgainst")).isNull();    // not a column, so not counted
         assertThat(alice.scope("REGION", COUNTRY, REGION).counters().value("wins")).isEqualTo(1.0);
-        assertThat(((Map<?, ?>) row.getScopes().get(0)).get("groupings")).isEqualTo(Map.of());
+        assertThat(((Map<?, ?>) row.getScopes().get(0)).containsKey("groupings")).isFalse();     // no grouping: no empty node either
         assertThat(groupH2hRepository.findAll()).isEmpty();          // no head-to-head without PARTNER
     }
 
@@ -506,7 +618,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         UserSportStats row = userStatsRepository.findById(new UserSportStats.Key(aliceId, football)).orElseThrow();
         assertThat(row.getGroupings()).isEmpty();
         // the columns are games, winRate and scoreFor: winRate stores games and wins, nothing else is stored
-        assertThat(keySetOf(row.getPersonal().get("all"))).containsExactlyInAnyOrder("games", "wins", "scoreFor");
+        assertThat(row.getPersonal().get("all")).isEqualTo("2,2,,8");        // games 2, wins 2, (no losses), scoreFor 8: nothing else is stored
         PlayerStatsDoc alice = PlayerStatsDoc.read(row);
         assertThat(alice.personal().all().value("wins")).isEqualTo(2.0);
         assertThat(alice.personal().all().value("scoreFor")).isEqualTo(8.0);       // a plain sum: 3 + 5
@@ -708,8 +820,8 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         GroupH2hDoc h2h = GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow());
         assertThat(h2h.seq()).isEqualTo(4);
         assertThat(h2h.size()).isEqualTo(2);
-        long[] first = h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId));
-        long[] second = h2h.matchup(List.of(carolId, aliceId), List.of(danId, bobId));
+        long[] first = h2h.matchup(nums(aliceId, bobId), nums(carolId, danId));
+        long[] second = h2h.matchup(nums(carolId, aliceId), nums(danId, bobId));
         assertThat(first[0] + first[1]).isEqualTo(2);
         assertThat(second[0] + second[1]).isEqualTo(2);
     }
@@ -743,10 +855,10 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         GroupH2hDoc h2h = GroupH2hDoc.read(groupH2hRepository.findById(new GroupStats.Key(groupId, sportId)).orElseThrow());
         assertThat(h2h.seq()).isEqualTo(8);
         assertThat(h2h.size()).isEqualTo(2);
-        assertThat(h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))[0]
-                + h2h.matchup(List.of(aliceId, bobId), List.of(carolId, danId))[1]).isEqualTo(4);
-        assertThat(h2h.matchup(List.of(eve, fay), List.of(gus, hal))[0]
-                + h2h.matchup(List.of(eve, fay), List.of(gus, hal))[1]).isEqualTo(4);
+        assertThat(h2h.matchup(nums(aliceId, bobId), nums(carolId, danId))[0]
+                + h2h.matchup(nums(aliceId, bobId), nums(carolId, danId))[1]).isEqualTo(4);
+        assertThat(h2h.matchup(nums(eve, fay), nums(gus, hal))[0]
+                + h2h.matchup(nums(eve, fay), nums(gus, hal))[1]).isEqualTo(4);
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------------
@@ -792,6 +904,16 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
                 .map(PlayerStatsDoc::read).orElseGet(() -> PlayerStatsDoc.read(new UserSportStats(userId, sportId)));
     }
 
+    /** The group's permanent member numbers of these users, in this order (allocated the first time, as the engine does). */
+    private List<Integer> nums(UUID... users) {
+        Map<UUID, Integer> numbers = memberNumbers.getMemberNumbers(groupId, List.of(users));
+        return java.util.Arrays.stream(users).map(numbers::get).toList();
+    }
+
+    private int no(UUID user) {
+        return memberNumbers.getMemberNumbers(groupId, List.of(user)).get(user);
+    }
+
     private GroupStatsDoc member(UUID userId) {
         GroupMemberStats row = groupMemberStatsRepository.findById(new GroupMemberStats.Key(groupId, userId, sportId)).orElseThrow();
         return GroupStatsDoc.read(row);
@@ -801,20 +923,23 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         return boardRunRepository.findById(new StatBoardRun.Key(sportId, scopeType, scopeId)).orElseThrow().getDirty();
     }
 
+    /** The ignored records of a job as {@code recordId -> reason}; an entry is {@code "<recordId>:<REASON>"}. */
     @SuppressWarnings("unchecked")
     private static Map<Long, String> ignoredReasons(SessionStatsJob job) {
         Map<Long, String> reasons = new LinkedHashMap<>();
         for (Object entry : (List<Object>) job.getResult().get("ignored")) {
-            Map<String, Object> map = (Map<String, Object>) entry;
-            reasons.put(((Number) map.get("recordId")).longValue(), (String) map.get("reason"));
+            String text = (String) entry;
+            int colon = text.indexOf(':');
+            reasons.put(Long.parseLong(text.substring(0, colon)), text.substring(colon + 1));
         }
         return reasons;
     }
 
+    /** The counted record ids of a job; an entry is {@code "<0|1>-<recordId>"}. */
     @SuppressWarnings("unchecked")
     private static List<Long> counted(SessionStatsJob job) {
         return ((List<Object>) job.getResult().get("counted")).stream()
-                .map(entry -> ((Number) ((Map<String, Object>) entry).get("recordId")).longValue()).toList();
+                .map(entry -> Long.parseLong(((String) entry).substring(2))).toList();
     }
 
     /** Whether each counted record counted as a ranking game, by record id, as the job's result says. */
@@ -822,8 +947,8 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     private static Map<Long, Boolean> rankingMarks(SessionStatsJob job) {
         Map<Long, Boolean> marks = new LinkedHashMap<>();
         for (Object entry : (List<Object>) job.getResult().get("counted")) {
-            Map<String, Object> map = (Map<String, Object>) entry;
-            marks.put(((Number) map.get("recordId")).longValue(), (Boolean) map.get("ranking"));
+            String text = (String) entry;
+            marks.put(Long.parseLong(text.substring(2)), text.charAt(0) == '1');
         }
         return marks;
     }
@@ -950,6 +1075,14 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
             record.put("ranking", ranking);
         }
         return Map.of("version", 1, "maxRecords", 100, "record", record);
+    }
+
+    /** A doubles sport whose games can end in a draw (record.data.allowDraws), listing games, wins and losses. */
+    private static Map<String, Object> drawsSchema() {
+        Map<String, Object> data = new LinkedHashMap<>(doublesData());
+        data.put("allowDraws", true);
+        return Map.of("version", 1, "maxRecords", 100, "record", Map.of("data", data,
+                "scoreboard", Map.of("columns", List.of("games", "wins", "losses"))));
     }
 
     private static Map<String, Object> doublesData() {

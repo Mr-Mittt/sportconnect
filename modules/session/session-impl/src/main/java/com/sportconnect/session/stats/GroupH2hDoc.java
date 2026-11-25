@@ -6,36 +6,34 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.UUID;
 
 /**
- * SESSION-53 rework (owner, 2026-11-25): the head-to-head of a group's pairs, the working copy of one {@link GroupStats}
- * row's {@code h2h} document. One document per group and sport, self-contained:
+ * SESSION-53 rework (owner, 2026-11-25), SESSION-81: the head-to-head of a group's pairs, the working copy of one
+ * {@link GroupStats} row's {@code h2h} document. One document per group and sport:
  *
  * <pre>
- * { "members": { "&lt;userId&gt;": 1, "&lt;userId&gt;": 2, ... },      a small number per member, never reused
- *   "lastMember": 5,                                       the last number handed out
- *   "seq": 4711,                                           the group's running game number
+ * { "seq": 4711,                                           the group's running game number
  *   "h2h": { "1.2-3.4": [2, 1, 4711],                      pair 1.2 beat pair 3.4 twice, lost once, last played game 4711
  *            "1.5-3.4": [1, 0, 1, 4650] } }                with draws: [wins1, wins2, draws, seq]
  * </pre>
  *
- * A pair is its two member numbers, the smaller first ({@code "a.b"}); a matchup key is the <b>smaller pair first</b>
- * ({@link #matchupKey}, the one rule, so a lookup never has to try both orders), and the wins in the value follow the key:
- * the first number is the wins of the first pair of the key. The value's length says whether draws are kept (3 without, 4
- * with: a sport whose {@code record.data.allowDraws} is true). The document keeps the latest {@value #MAX_MATCHUPS}
- * matchups: when a new one would pass the cap, the least recently played (the smallest {@code seq}) is dropped.
+ * The numbers in a key are the members' <b>permanent group member numbers</b> ({@code GroupMemberNumberService}, owned by the
+ * group module: unique inside the group, never reused, kept when a member leaves), so this document keeps no member
+ * dictionary of its own. A pair is its two numbers, the smaller first ({@code "a.b"}); a matchup key is the <b>smaller pair
+ * first</b> ({@link #matchupKey}, the one rule, so a lookup never has to try both orders), and the wins in the value follow
+ * the key: the first number is the wins of the first pair of the key. The value's length says whether draws are kept (3
+ * without, 4 with: a sport whose {@code record.data.allowDraws} is true). The last number is the {@code seq} of the game the
+ * matchup was last played in. The document keeps the latest {@value #MAX_MATCHUPS} matchups: when a new one would pass the
+ * cap, the least recently played (the smallest {@code seq}) is dropped.
  *
- * <p>Only a game of two pairs (two teams of exactly two players) is a matchup; anything else adds nothing here.
+ * <p>Only a game of two pairs (two teams of exactly two players) is a matchup; anything else adds nothing here. A document
+ * written before SESSION-81 may still hold a {@code members} dictionary; it is ignored (the statistics tables are rebuilt).
  */
 public final class GroupH2hDoc {
 
     /** The matchups kept per group and sport: the least recently played is dropped beyond it (measured: 5,000 is about 55 KB). */
     public static final int MAX_MATCHUPS = 5000;
 
-    private final Map<String, Integer> members = new TreeMap<>();
-    private int lastMember;
     private long seq;
     private final Map<String, long[]> matchups = new LinkedHashMap<>();
 
@@ -46,15 +44,6 @@ public final class GroupH2hDoc {
     public static GroupH2hDoc read(GroupStats row) {
         GroupH2hDoc doc = new GroupH2hDoc();
         Map<String, Object> h2h = row.getH2h() == null ? Map.of() : row.getH2h();
-        if (h2h.get("members") instanceof Map<?, ?> memberMap) {
-            memberMap.forEach((user, number) -> {
-                if (number instanceof Number n) {
-                    doc.members.put(String.valueOf(user), n.intValue());
-                }
-            });
-        }
-        doc.lastMember = h2h.get("lastMember") instanceof Number n ? n.intValue() : doc.members.values().stream()
-                .mapToInt(Integer::intValue).max().orElse(0);
         doc.seq = h2h.get("seq") instanceof Number n ? n.longValue() : 0L;
         if (h2h.get("h2h") instanceof Map<?, ?> matchupMap) {
             matchupMap.forEach((key, value) -> {
@@ -74,8 +63,6 @@ public final class GroupH2hDoc {
     /** Writes the document back into the row, which the caller holds a lock on. */
     public void writeTo(GroupStats row) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("members", new LinkedHashMap<String, Object>(members));
-        out.put("lastMember", lastMember);
         out.put("seq", seq);
         Map<String, Object> h2h = new LinkedHashMap<>();
         matchups.forEach((key, entry) -> {
@@ -93,14 +80,14 @@ public final class GroupH2hDoc {
     /**
      * Counts one game between two pairs.
      *
-     * @param teamA       the two players of the first team
-     * @param teamB       the two players of the second team
+     * @param teamA       the two members of the first team, by their group member numbers
+     * @param teamB       the two members of the second team, by their group member numbers
      * @param outcomeOfA  how the game ended for the first team; {@code NONE}, and a {@code DRAW} when the sport does not
      *                    allow draws, are not recorded
      * @param allowDraws  whether the sport keeps draws (the value then has a draws element)
      * @return whether the game was recorded
      */
-    public boolean addGame(List<UUID> teamA, List<UUID> teamB, Outcome outcomeOfA, boolean allowDraws) {
+    public boolean addGame(List<Integer> teamA, List<Integer> teamB, Outcome outcomeOfA, boolean allowDraws) {
         if (teamA.size() != 2 || teamB.size() != 2) {
             return false;
         }
@@ -108,8 +95,8 @@ public final class GroupH2hDoc {
         if (outcomeOfA == Outcome.NONE || (draw && !allowDraws)) {
             return false;
         }
-        int[] pairA = pair(teamA);
-        int[] pairB = pair(teamB);
+        int[] pairA = order(teamA.get(0), teamA.get(1));
+        int[] pairB = order(teamB.get(0), teamB.get(1));
         boolean aFirst = comparePairs(pairA, pairB) < 0;
         String key = matchupKey(pairA, pairB);
         seq++;
@@ -137,21 +124,9 @@ public final class GroupH2hDoc {
     }
 
     /** The matchup of two pairs as {@code [winsOfFirst, winsOfSecond(, draws), seq]} in key order, or null; for tests and reads. */
-    public long[] matchup(List<UUID> teamA, List<UUID> teamB) {
-        Integer a1 = members.get(teamA.get(0).toString());
-        Integer a2 = members.get(teamA.get(1).toString());
-        Integer b1 = members.get(teamB.get(0).toString());
-        Integer b2 = members.get(teamB.get(1).toString());
-        if (a1 == null || a2 == null || b1 == null || b2 == null) {
-            return null;
-        }
-        long[] entry = matchups.get(matchupKey(order(a1, a2), order(b1, b2)));
+    public long[] matchup(List<Integer> teamA, List<Integer> teamB) {
+        long[] entry = matchups.get(matchupKey(order(teamA.get(0), teamA.get(1)), order(teamB.get(0), teamB.get(1))));
         return entry == null ? null : entry.clone();
-    }
-
-    /** The number of a member, or null when the member has none yet. */
-    public Integer memberNumber(UUID user) {
-        return members.get(user.toString());
     }
 
     public int size() {
@@ -178,14 +153,6 @@ public final class GroupH2hDoc {
     private static int comparePairs(int[] x, int[] y) {
         int byFirst = Integer.compare(x[0], y[0]);
         return byFirst != 0 ? byFirst : Integer.compare(x[1], y[1]);
-    }
-
-    private int[] pair(List<UUID> team) {
-        return order(numberOf(team.get(0)), numberOf(team.get(1)));
-    }
-
-    private int numberOf(UUID user) {
-        return members.computeIfAbsent(user.toString(), id -> ++lastMember);
     }
 
     private void dropLeastRecent() {

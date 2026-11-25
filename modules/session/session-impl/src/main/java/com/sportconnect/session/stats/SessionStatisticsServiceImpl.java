@@ -2,6 +2,7 @@ package com.sportconnect.session.stats;
 
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ForbiddenException;
+import com.sportconnect.group.api.service.GroupMemberNumberService;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.session.api.dto.GroupMemberStatisticsResponse;
 import com.sportconnect.session.api.dto.GroupStatisticsMemberDto;
@@ -43,10 +44,12 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.ToLongFunction;
 import java.util.stream.Collectors;
 
@@ -68,6 +71,8 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
 
     private final SportService sportService;
     private final GroupService groupService;
+    // SESSION-81: a group's rows name the members by the group's member numbers; this turns them back into user ids.
+    private final GroupMemberNumberService memberNumberService;
     private final UserService userService;
     private final UserSportStatsRepository userStatsRepository;
     private final GroupMemberStatsRepository groupStatsRepository;
@@ -90,9 +95,9 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         PlayerStatsDoc doc = PlayerStatsDoc.read(row.orElseGet(() -> new UserSportStats(userId, sportId)));
 
         List<Map.Entry<String, PlayerStatsDoc.AllRanked>> allPairs = declaredGroups(stats.comboSize() > 0,
-                doc.groupings().getOrDefault(StatisticsSchema.TEAM, Map.of()), c -> c.all().games());
+                doc.groupings().getOrDefault(StatisticsSchema.TEAM, Map.of()), c -> c.all().games(), SessionStatisticsServiceImpl::isUserKey);
         List<Map.Entry<String, PlayerStatsDoc.AllRanked>> allPartners = declaredGroups(stats.groupsByPartner(),
-                doc.groupings().getOrDefault(StatisticsSchema.PARTNER, Map.of()), c -> c.all().games());
+                doc.groupings().getOrDefault(StatisticsSchema.PARTNER, Map.of()), c -> c.all().games(), SessionStatisticsServiceImpl::isUserKey);
         List<Map.Entry<String, PlayerStatsDoc.AllRanked>> pairs = pageOf(allPairs, page, size);
         List<Map.Entry<String, PlayerStatsDoc.AllRanked>> partners = pageOf(allPartners, page, size);
         Set<UUID> ids = new LinkedHashSet<>();
@@ -150,8 +155,9 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
 
         Map<Long, SessionRecord> records = recordRepository.findAllById(slice.stream().map(StatsHistory.Pointer::recordId).toList())
                 .stream().collect(Collectors.toMap(SessionRecord::getId, Function.identity()));
+        // The entry carries no session id: it is the record's own, read from the records just loaded.
         Map<Long, Session> sessions = sessionRepository.findAllById(
-                        slice.stream().map(StatsHistory.Pointer::sessionId).distinct().toList())
+                        records.values().stream().map(SessionRecord::getSessionId).distinct().toList())
                 .stream().collect(Collectors.toMap(Session::getId, Function.identity()));
         Optional<RecordTypeReader> reader = recordReaders.forSchema(schema);
 
@@ -161,7 +167,7 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         Set<UUID> ids = new LinkedHashSet<>();
         for (StatsHistory.Pointer pointer : slice) {
             SessionRecord record = records.get(pointer.recordId());
-            Session session = sessions.get(pointer.sessionId());
+            Session session = record == null ? null : sessions.get(record.getSessionId());
             if (record == null || session == null) {
                 continue;
             }
@@ -246,21 +252,28 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         Optional<GroupMemberStats> row = groupStatsRepository.findById(new GroupMemberStats.Key(groupId, memberId, sportId));
         GroupStatsDoc doc = GroupStatsDoc.read(row.orElseGet(() -> new GroupMemberStats(groupId, memberId, sportId)));
 
+        // A group's rows name the members by the group's member numbers (SESSION-81), not by user id.
         List<Map.Entry<String, StatsCounters>> allPairs = declaredGroups(stats.comboSize() > 0,
-                doc.groupings().getOrDefault(StatisticsSchema.TEAM, Map.of()), StatsCounters::games);
+                doc.groupings().getOrDefault(StatisticsSchema.TEAM, Map.of()), StatsCounters::games, SessionStatisticsServiceImpl::isNumberKey);
         List<Map.Entry<String, StatsCounters>> allPartners = declaredGroups(stats.groupsByPartner(),
-                doc.groupings().getOrDefault(StatisticsSchema.PARTNER, Map.of()), StatsCounters::games);
+                doc.groupings().getOrDefault(StatisticsSchema.PARTNER, Map.of()), StatsCounters::games, SessionStatisticsServiceImpl::isNumberKey);
         List<Map.Entry<String, StatsCounters>> pairs = pageOf(allPairs, page, size);
         List<Map.Entry<String, StatsCounters>> partners = pageOf(allPartners, page, size);
+        // One batch call turns the numbers of the page back into user ids; a number nobody has is left out of that entry.
+        Set<Integer> numbers = new LinkedHashSet<>();
+        pairs.forEach(e -> numbers.addAll(numbersOfKey(e.getKey())));
+        partners.forEach(e -> numbers.addAll(numbersOfKey(e.getKey())));
+        Map<Integer, UUID> userOf = numbers.isEmpty() ? Map.of() : memberNumberService.getUserIdsByMemberNumbers(groupId, numbers);
+        Function<String, List<UUID>> playersOf = key -> numbersOfKey(key).stream().map(userOf::get).filter(Objects::nonNull).toList();
         Set<UUID> ids = new LinkedHashSet<>();
         ids.add(memberId);
-        pairs.forEach(e -> ids.addAll(playersOfKey(e.getKey())));
-        partners.forEach(e -> ids.addAll(playersOfKey(e.getKey())));
+        pairs.forEach(e -> ids.addAll(playersOf.apply(e.getKey())));
+        partners.forEach(e -> ids.addAll(playersOf.apply(e.getKey())));
         Map<UUID, StatsPlayerDto> names = players(ids);
 
         return new GroupMemberStatisticsResponse(sportId, stats.columns(), player(names, memberId),
-                stats.valuesOf(doc.counters()), memberEntries(stats, pairs, names), allPairs.size(),
-                memberEntries(stats, partners, names), allPartners.size(), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
+                stats.valuesOf(doc.counters()), memberEntries(stats, pairs, names, playersOf), allPairs.size(),
+                memberEntries(stats, partners, names, playersOf), allPartners.size(), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
     }
 
     /** The group's own sport (a group has at most one); a group with none has no statistics (400 SESSION_SPORT_REQUIRED, as for its sessions). */
@@ -314,9 +327,9 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
      * Every group of one dimension that holds a player id, most games first (then by key). The stored groups are not capped
      * (a player gains a partner for every new teammate), so a response lists one {@link #pageOf page} of them.
      */
-    private static <T> List<Map.Entry<String, T>> mostPlayed(Map<String, T> byKey, ToLongFunction<T> games) {
+    private static <T> List<Map.Entry<String, T>> mostPlayed(Map<String, T> byKey, ToLongFunction<T> games, Predicate<String> validKey) {
         return byKey.entrySet().stream()
-                .filter(e -> !playersOfKey(e.getKey()).isEmpty())
+                .filter(e -> validKey.test(e.getKey()))
                 .sorted(Comparator.comparingLong((Map.Entry<String, T> e) -> games.applyAsLong(e.getValue())).reversed()
                         .thenComparing(Map.Entry::getKey))
                 .toList();
@@ -327,8 +340,32 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
      * is the sport's, and no {@code groupBy} means no grouping at all). Groups stored under another dimension, from before a
      * schema edit, stay in the row but are not shown.
      */
-    private static <T> List<Map.Entry<String, T>> declaredGroups(boolean declared, Map<String, T> byKey, ToLongFunction<T> games) {
-        return declared ? mostPlayed(byKey, games) : List.of();
+    private static <T> List<Map.Entry<String, T>> declaredGroups(boolean declared, Map<String, T> byKey, ToLongFunction<T> games,
+                                                                  Predicate<String> validKey) {
+        return declared ? mostPlayed(byKey, games, validKey) : List.of();
+    }
+
+    /** A key of a player's own row: one user id, or a team's ids joined by commas. */
+    private static boolean isUserKey(String key) {
+        return !playersOfKey(key).isEmpty();
+    }
+
+    /** A key of a group's row: one member number, or a team's numbers joined by commas. */
+    private static boolean isNumberKey(String key) {
+        return !numbersOfKey(key).isEmpty();
+    }
+
+    /** The member numbers in a group key; empty if any part is not a number. */
+    private static List<Integer> numbersOfKey(String key) {
+        List<Integer> numbers = new ArrayList<>();
+        for (String part : key.split(",")) {
+            try {
+                numbers.add(Integer.parseInt(part.trim()));
+            } catch (NumberFormatException e) {
+                return List.of();
+            }
+        }
+        return numbers;
     }
 
     /** One page of a sorted list (empty past the end): what a response shows, the whole count being in its total. */
@@ -339,10 +376,11 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
 
     /** A member's pairs, or partners, in a group as the detail shows them, in the order given (one map of values each). */
     private static List<GroupMemberStatisticsResponse.GroupEntryDto> memberEntries(
-            StatisticsSchema stats, List<Map.Entry<String, StatsCounters>> entries, Map<UUID, StatsPlayerDto> names) {
+            StatisticsSchema stats, List<Map.Entry<String, StatsCounters>> entries, Map<UUID, StatsPlayerDto> names,
+            Function<String, List<UUID>> playersOf) {
         return entries.stream()
                 .map(e -> new GroupMemberStatisticsResponse.GroupEntryDto(
-                        playersOfKey(e.getKey()).stream().map(id -> player(names, id)).toList(),
+                        playersOf.apply(e.getKey()).stream().map(id -> player(names, id)).toList(),
                         stats.valuesOf(e.getValue())))
                 .toList();
     }

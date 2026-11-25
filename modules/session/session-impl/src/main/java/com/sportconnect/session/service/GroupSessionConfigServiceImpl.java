@@ -24,6 +24,7 @@ import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.user.api.dto.UserSummaryResponse;
@@ -76,6 +77,8 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     // SESSION-GROUP-6: cancels the scheduled regular sessions when the owner asks for it.
     private final RegularSessionCanceller regularSessionCanceller;
     private final SessionRepository sessionRepository;
+    // SESSION-78: the group's statistics setting only exists while the group's sport has statistics switched on.
+    private final SportService sportService;
 
     // ---- settings -------------------------------------------------------------------------------------------------
 
@@ -83,22 +86,30 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     @Transactional(readOnly = true)
     public GroupSessionSettingsResponse getSettings(Long groupId, UUID callerId) {
         requireMember(groupId, callerId);
-        return toSettingsResponse(groupId, settingsRepository.findById(groupId).orElse(null));
+        return toSettingsResponse(groupId, settingsRepository.findById(groupId).orElse(null), statisticsAvailable(groupId, callerId));
     }
 
     @Override
     @Transactional
     public GroupSessionSettingsResponse updateSettings(Long groupId, UUID callerId, UpdateGroupSessionSettingsRequest request) {
         requireManager(groupId, callerId);
+        // SESSION-78: while the group's sport has statistics off the statistics setting is not shown and cannot be changed (any value, on or off).
+        boolean statisticsAvailable = statisticsAvailable(groupId, callerId);
+        if (request.getStatisticsEnabled() != null && !statisticsAvailable) {
+            throw new ConflictException("SESSION_GROUP_STATISTICS_NOT_AVAILABLE",
+                    "This group's sport does not have statistics switched on", null);
+        }
         GroupSessionSettings existing = settingsRepository.findById(groupId).orElse(null);
         boolean currentEnabled = existing != null && existing.isEnabled();
         RecurrenceMode currentMode = existing != null ? existing.getMode() : RecurrenceMode.WEEKLY;
 
         boolean enabledChanged = request.getEnabled() != null && request.getEnabled() != currentEnabled;
         boolean modeChanged = request.getMode() != null && request.getMode() != currentMode;
-        if (!enabledChanged && !modeChanged) {
+        boolean currentStatistics = existing != null && existing.isStatisticsEnabled();
+        boolean statisticsChanged = request.getStatisticsEnabled() != null && request.getStatisticsEnabled() != currentStatistics;
+        if (!enabledChanged && !modeChanged && !statisticsChanged) {
             // Nothing to change: no row is created for a no-op, no post is written.
-            return toSettingsResponse(groupId, existing);
+            return toSettingsResponse(groupId, existing, statisticsAvailable);
         }
 
         GroupSessionSettings settings = existing != null ? existing : GroupSessionSettings.builder().groupId(groupId).build();
@@ -107,6 +118,9 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         }
         if (modeChanged) {
             settings.setMode(request.getMode());
+        }
+        if (statisticsChanged) {
+            settings.setStatisticsEnabled(request.getStatisticsEnabled());
         }
         GroupSessionSettings saved = settingsRepository.save(settings);
 
@@ -134,12 +148,19 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
                     name + " switched regular sessions to " + modeWord(saved.getMode()),
                     params(name, saved.getMode(), null, null));
         }
-        log.info("Group {} session settings changed by {}: enabled={}, mode={}", groupId, callerId, saved.isEnabled(), saved.getMode());
+        if (statisticsChanged) {
+            // SESSION-78: told in the group like the other settings; no push notification. Statistics counted from now on only.
+            boolean on = saved.isStatisticsEnabled();
+            announce(groupId, on ? SystemCode.GROUP_STATISTICS_ON : SystemCode.GROUP_STATISTICS_OFF,
+                    name + (on ? " turned on" : " turned off") + " statistics and the leaderboard", new HashMap<>(Map.of("name", name)));
+        }
+        log.info("Group {} session settings changed by {}: enabled={}, mode={}, statisticsEnabled={}", groupId, callerId,
+                saved.isEnabled(), saved.getMode(), saved.isStatisticsEnabled());
         // SESSION-GROUP-5: switching generation ON, or switching the mode while it is on, makes slots due: queue and generate them.
         if (saved.isEnabled() && (enabledChanged || modeChanged)) {
             eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
         }
-        GroupSessionSettingsResponse response = toSettingsResponse(groupId, saved);
+        GroupSessionSettingsResponse response = toSettingsResponse(groupId, saved, statisticsAvailable);
         response.setCancelledSessions(cancelled);
         return response;
     }
@@ -345,11 +366,18 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         return missing;
     }
 
-    private GroupSessionSettingsResponse toSettingsResponse(Long groupId, GroupSessionSettings settings) {
+    /** Whether the group's sport exists and has statistics switched on (one group read, one cached sport-set read). */
+    private boolean statisticsAvailable(Long groupId, UUID callerId) {
+        Long groupSportId = groupService.getGroup(groupId, callerId).getSportId();
+        return groupSportId != null && sportService.getStatisticsEnabledSportIds().contains(groupSportId);
+    }
+
+    private GroupSessionSettingsResponse toSettingsResponse(Long groupId, GroupSessionSettings settings, boolean statisticsAvailable) {
         return GroupSessionSettingsResponse.builder()
                 .groupId(groupId)
                 .enabled(settings != null && settings.isEnabled())
                 .mode(settings != null ? settings.getMode() : RecurrenceMode.WEEKLY)
+                .statisticsEnabled(statisticsAvailable ? Boolean.valueOf(settings != null && settings.isStatisticsEnabled()) : null)
                 .build();
     }
 

@@ -277,4 +277,10 @@
     <!-- SESSION-53 rework: the group head-to-head table (group_stats) and the sport's statistics switch (sports.statistics_enabled); V104 is left as merged -->
     <include file="db/changelog/changes/V105__session_statistics_rework.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-78: a group's switch for its statistics and leaderboard (group_session_settings.statistics_enabled) -->
+    <include file="db/changelog/changes/V106__group_statistics_setting.sql" relativeToChangelogFile="false"/>
+
+    <!-- SESSION-81: a permanent number for every member of a group (group_member_numbers, group_member_number_counters) -->
+    <include file="db/changelog/changes/V107__group_member_numbers.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

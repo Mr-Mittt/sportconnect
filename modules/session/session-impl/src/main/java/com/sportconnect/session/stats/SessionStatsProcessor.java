@@ -2,6 +2,7 @@ package com.sportconnect.session.stats;
 
 import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.location.api.dto.LocationResponse;
+import com.sportconnect.group.api.service.GroupMemberNumberService;
 import com.sportconnect.location.api.service.LocationService;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.SessionStatus;
@@ -15,6 +16,7 @@ import com.sportconnect.session.record.SessionRecord;
 import com.sportconnect.session.record.SessionRecordRepository;
 import com.sportconnect.session.record.SessionRecordVerification;
 import com.sportconnect.session.record.SessionRecordVerificationRepository;
+import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.repository.SessionParticipantRepository;
 import com.sportconnect.session.repository.SessionRepository;
 import com.sportconnect.sport.api.service.SportService;
@@ -107,6 +109,9 @@ public class SessionStatsProcessor {
     private final UserSportStatsRepository userStatsRepository;
     private final GroupMemberStatsRepository groupMemberStatsRepository;
     private final GroupStatsRepository groupStatsRepository;
+    private final GroupSessionSettingsRepository groupSettingsRepository;
+    // SESSION-81: the group's own member numbers, the keys of a group's partner counters and of its head-to-head.
+    private final GroupMemberNumberService memberNumbers;
     private final StatBoardRunRepository boardRunRepository;
     private final SessionStatsWriter writer;
 
@@ -178,8 +183,8 @@ public class SessionStatsProcessor {
             RecordFacts facts = reader.read(schema, record.getData());
             if (!facts.valid()) {
                 ignored.add(new Ignored(record.getId(), facts.invalidReason()));
-            } else if (!facts.rankable()) {
-                ignored.add(new Ignored(record.getId(), facts.notRankableReason()));
+            } else if (!facts.countable()) {
+                ignored.add(new Ignored(record.getId(), facts.notCountableReason()));
             } else if (!joined.containsAll(facts.players())) {
                 ignored.add(new Ignored(record.getId(), "PLAYER_NOT_JOINED"));
             } else {
@@ -210,7 +215,8 @@ public class SessionStatsProcessor {
         }
         Set<UUID> confirmed = new HashSet<>(rankingSupport.confirmedPlayers(record,
                 byRecord.getOrDefault(record.getId(), List.of())));
-        return confirmed.containsAll(facts.players());
+        // Rankable = a score in the ranking slot, the same number of players on both sides and an outcome (SESSION-72/80).
+        return facts.rankable() && confirmed.containsAll(facts.players());
     }
 
     private Map<Long, List<SessionRecordVerification>> confirmationsOf(List<SessionRecord> records) {
@@ -252,9 +258,16 @@ public class SessionStatsProcessor {
     private List<CountedGame> apply(Session session, StatisticsSchema stats, List<Game> games, Venue venue,
                              List<Ignored> ignored, Instant now) {
         Long sportId = session.getSportId();
-        Long groupId = session.getGroupId();
+        // SESSION-78: a group session is counted into the group's own rows (member statistics, head-to-head, the GROUP board)
+        // only while the group has its switch on, read now, at counting time; the players' own statistics are counted either way.
+        Long groupId = session.getGroupId() != null && groupSettingsRepository.existsByGroupIdAndStatisticsEnabledTrue(session.getGroupId())
+                ? session.getGroupId() : null;
         Set<UUID> users = new TreeSet<>(Comparator.comparing(UUID::toString));
         games.forEach(game -> users.addAll(game.facts().players()));
+        // SESSION-81: a group's rows name its members by the group's permanent member numbers, not by user id. They are read (and
+        // allocated, in a short transaction of their own) before anything is locked; a sport with no grouping needs none.
+        Map<UUID, Integer> numbers = groupId != null && !stats.groupBy().isEmpty()
+                ? memberNumbers.getMemberNumbers(groupId, users) : Map.of();
 
         // The one lock order: user rows, then group-member rows, then the group's own row, each table in one ordered pass.
         Map<UUID, UserSportStats> userRows = lockUserRows(sportId, users);
@@ -283,12 +296,12 @@ public class SessionStatsProcessor {
                 Map<String, List<String>> groups = groupKeys(stats, participant.userId(), team);
                 PlayerStatsDoc doc = players.get(participant.userId());
                 countPlayer(doc, participant, groups, game.ranking(), stats, venue);
-                doc.addPointer(recordId, session.getId(), game.ranking());
+                doc.addPointer(recordId, game.ranking());
                 if (groupId != null) {
                     GroupStatsDoc member = members.get(participant.userId());
                     member.counters().add(participant.outcome(), participant.metrics(), stats.collected());
-                    addToGroups(groups, member::group, participant, stats);
-                    member.addPointer(recordId, session.getId(), game.ranking());
+                    addToGroups(memberKeys(groups, numbers), member::group, participant, stats);
+                    member.addPointer(recordId, game.ranking());
                     boards.add(new Board("GROUP", groupId, sportId));
                 }
                 if (game.ranking()) {
@@ -301,8 +314,8 @@ public class SessionStatsProcessor {
                 }
             }
             if (h2h != null && isTwoPairs(game)) {
-                h2h.addGame(game.facts().teams().get(0), game.facts().teams().get(1), outcomeOfFirstTeam(game),
-                        stats.allowDraws());
+                h2h.addGame(numbersOf(game.facts().teams().get(0), numbers), numbersOf(game.facts().teams().get(1), numbers),
+                        outcomeOfFirstTeam(game), stats.allowDraws());
             }
         }
 
@@ -348,6 +361,31 @@ public class SessionStatsProcessor {
             }
         }
         return keys;
+    }
+
+    /**
+     * The same group keys as a group's rows keep them (SESSION-81): a partner is the partner's member number, a team the
+     * members' numbers sorted and joined by commas. (A player's own rows keep the user ids: their partners come from many groups.)
+     */
+    private Map<String, List<String>> memberKeys(Map<String, List<String>> groups, Map<UUID, Integer> numbers) {
+        Map<String, List<String>> converted = new LinkedHashMap<>();
+        groups.forEach((by, keys) -> {
+            List<String> list = new ArrayList<>();
+            for (String key : keys) {
+                List<Integer> parts = new ArrayList<>();
+                for (String id : key.split(",")) {
+                    parts.add(numbers.get(UUID.fromString(id)));
+                }
+                parts.sort(null);
+                list.add(parts.stream().map(String::valueOf).collect(Collectors.joining(",")));
+            }
+            converted.put(by, list);
+        });
+        return converted;
+    }
+
+    private static List<Integer> numbersOf(List<UUID> team, Map<UUID, Integer> numbers) {
+        return team.stream().map(numbers::get).toList();
     }
 
     /** Adds one player's game to the counters of each of their groups. */
@@ -442,18 +480,9 @@ public class SessionStatsProcessor {
     private Result finish(SessionStatsJob job, Instant now, List<CountedGame> counted, List<Ignored> ignored,
                           List<String> notes) {
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("counted", counted.stream().map(c -> {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("recordId", c.recordId());
-            entry.put("ranking", c.ranking());
-            return (Object) entry;
-        }).toList());
-        result.put("ignored", ignored.stream().map(i -> {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("recordId", i.recordId());
-            entry.put("reason", i.reason());
-            return (Object) entry;
-        }).toList());
+        // Compact entries (the same format as the history): counted as "<0|1>-<recordId>", ignored as "<recordId>:<REASON>".
+        result.put("counted", counted.stream().map(c -> (Object) StatsHistory.entry(c.recordId(), c.ranking())).toList());
+        result.put("ignored", ignored.stream().map(i -> (Object) (i.recordId() + ":" + i.reason())).toList());
         result.put("notes", notes);
         SessionStatsJob.Status status = counted.isEmpty() ? SessionStatsJob.Status.SKIPPED : SessionStatsJob.Status.DONE;
         job.setStatus(status);

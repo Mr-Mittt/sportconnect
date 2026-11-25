@@ -27,6 +27,18 @@
     "noScore": {
       "version": 1,
       "record": { "data": { "type": "COMPETITIVE", "playersPerSide": { "min": 1, "max": 2 } } }
+    },
+    "draws": {
+      "version": 1,
+      "maxRecords": 50,
+      "record": {
+        "data": {
+          "type": "COMPETITIVE",
+          "playersPerSide": { "min": 1, "max": 2 },
+          "allowDraws": true,
+          "score": { "slot": [ { "required": true, "rule": ">=0&<=30" } ] }
+        }
+      }
     }
   },
   "cases": [
@@ -36,7 +48,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"], "scores": [18] } ] },
-      "expect": { "valid": true, "rankable": true, "notRankableReason": null,
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null, "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "WIN",
         "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"] }
     },
     {
@@ -45,7 +57,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [0] } ] },
-      "expect": { "valid": true, "rankable": true, "notRankableReason": null,
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null, "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "WIN",
         "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
     },
     {
@@ -54,7 +66,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [null] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [null] } ] },
-      "expect": { "valid": true, "rankable": false, "notRankableReason": "NO_SCORE",
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "NO_SCORE", "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "WIN",
         "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
     },
     {
@@ -63,7 +75,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"] },
         { "players": ["33333333-3333-3333-3333-333333333333"] } ] },
-      "expect": { "valid": true, "rankable": false, "notRankableReason": "NO_SCORE",
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "NO_SCORE", "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "WIN",
         "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
     },
     {
@@ -72,7 +84,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [15] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [21] } ] },
-      "expect": { "valid": true, "rankable": false, "notRankableReason": "FIRST_TEAM_NOT_AHEAD",
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null, "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "LOSS",
         "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
     },
     {
@@ -81,7 +93,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [21] } ] },
-      "expect": { "valid": true, "rankable": false, "notRankableReason": "FIRST_TEAM_NOT_AHEAD",
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "SCORES_EQUAL", "countable": false, "notCountableReason": "SCORES_EQUAL", "outcomeOfFirstTeam": null,
         "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
     },
     {
@@ -90,7 +102,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [null] } ] },
-      "expect": { "valid": false, "invalidReason": "SCORE_INCOMPLETE", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "SCORE_INCOMPLETE", "rankable": false, "countable": false, "notCountableReason": "SCORE_INCOMPLETE", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "score-breaks-the-slot-rule",
@@ -98,7 +110,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [31] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
-      "expect": { "valid": false, "invalidReason": "SCORE_RULE", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "SCORE_RULE", "rankable": false, "countable": false, "notCountableReason": "SCORE_RULE", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "score-not-a-whole-number",
@@ -106,7 +118,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21.5] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
-      "expect": { "valid": false, "invalidReason": "SCORE_SHAPE", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "SCORE_SHAPE", "rankable": false, "countable": false, "notCountableReason": "SCORE_SHAPE", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "more-scores-than-slots",
@@ -114,7 +126,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21, 19] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18, 15] } ] },
-      "expect": { "valid": false, "invalidReason": "SCORE_SHAPE", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "SCORE_SHAPE", "rankable": false, "countable": false, "notCountableReason": "SCORE_SHAPE", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "three-players-a-side",
@@ -122,7 +134,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "55555555-5555-5555-5555-555555555555"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
-      "expect": { "valid": false, "invalidReason": "PLAYERS_PER_SIDE", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "PLAYERS_PER_SIDE", "rankable": false, "countable": false, "notCountableReason": "PLAYERS_PER_SIDE", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "no-players-on-a-side",
@@ -130,7 +142,7 @@
       "data": { "teams": [
         { "players": [], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
-      "expect": { "valid": false, "invalidReason": "PLAYERS_PER_SIDE", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "PLAYERS_PER_SIDE", "rankable": false, "countable": false, "notCountableReason": "PLAYERS_PER_SIDE", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "player-twice-in-a-team",
@@ -138,7 +150,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111", "11111111-1111-1111-1111-111111111111"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
-      "expect": { "valid": false, "invalidReason": "DUPLICATE_PLAYER", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "DUPLICATE_PLAYER", "rankable": false, "countable": false, "notCountableReason": "DUPLICATE_PLAYER", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "player-on-both-teams",
@@ -146,7 +158,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [18] } ] },
-      "expect": { "valid": false, "invalidReason": "DUPLICATE_PLAYER", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "DUPLICATE_PLAYER", "rankable": false, "countable": false, "notCountableReason": "DUPLICATE_PLAYER", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "player-id-not-a-uuid",
@@ -154,13 +166,13 @@
       "data": { "teams": [
         { "players": ["not-a-uuid"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] } ] },
-      "expect": { "valid": false, "invalidReason": "PLAYER_ID", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "PLAYER_ID", "rankable": false, "countable": false, "notCountableReason": "PLAYER_ID", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "one-team",
       "schema": "badminton",
       "data": { "teams": [ { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] } ] },
-      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "countable": false, "notCountableReason": "TEAMS", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "three-teams",
@@ -169,13 +181,13 @@
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [18] },
         { "players": ["44444444-4444-4444-4444-444444444444"], "scores": [10] } ] },
-      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "countable": false, "notCountableReason": "TEAMS", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "no-teams-at-all",
       "schema": "badminton",
       "data": { },
-      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "players": [] }
+      "expect": { "valid": false, "invalidReason": "TEAMS", "rankable": false, "countable": false, "notCountableReason": "TEAMS", "outcomeOfFirstTeam": null, "players": [] }
     },
     {
       "id": "football-three-against-two",
@@ -183,7 +195,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "55555555-5555-5555-5555-555555555555"], "scores": [3] },
         { "players": ["33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"], "scores": [1] } ] },
-      "expect": { "valid": true, "rankable": true, "notRankableReason": null,
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "TEAM_SIZES_DIFFER", "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "WIN",
         "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "55555555-5555-5555-5555-555555555555", "33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"] }
     },
     {
@@ -192,7 +204,7 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [0] },
         { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [2] } ] },
-      "expect": { "valid": true, "rankable": false, "notRankableReason": "FIRST_TEAM_NOT_AHEAD",
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null, "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "LOSS",
         "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
     },
     {
@@ -201,8 +213,35 @@
       "data": { "teams": [
         { "players": ["11111111-1111-1111-1111-111111111111"] },
         { "players": ["33333333-3333-3333-3333-333333333333"] } ] },
-      "expect": { "valid": true, "rankable": false, "notRankableReason": "RANKING_NOT_AVAILABLE",
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "RANKING_NOT_AVAILABLE", "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "WIN",
         "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "tie-when-the-sport-allows-draws",
+      "schema": "draws",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111"], "scores": [21] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [21] } ] },
+      "expect": { "valid": true, "rankable": true, "notRankableReason": null, "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "DRAW",
+        "players": ["11111111-1111-1111-1111-111111111111", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "planned-game-with-unequal-sides",
+      "schema": "football",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"], "scores": [null] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [null] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "TEAM_SIZES_DIFFER", "countable": true, "notCountableReason": null, "outcomeOfFirstTeam": "WIN",
+        "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333"] }
+    },
+    {
+      "id": "tie-with-unequal-sides-and-no-draws",
+      "schema": "football",
+      "data": { "teams": [
+        { "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"], "scores": [2] },
+        { "players": ["33333333-3333-3333-3333-333333333333"], "scores": [2] } ] },
+      "expect": { "valid": true, "rankable": false, "notRankableReason": "TEAM_SIZES_DIFFER", "countable": false, "notCountableReason": "SCORES_EQUAL", "outcomeOfFirstTeam": null,
+        "players": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333"] }
     }
   ]
 }

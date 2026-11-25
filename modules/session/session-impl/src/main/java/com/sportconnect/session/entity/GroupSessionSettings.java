@@ -16,7 +16,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
-/** SESSION-GROUP-4 — a group's regular-session settings. No row means OFF and WEEKLY. {@code groupId} is cross-domain: no FK. */
+/** SESSION-GROUP-4 — a group's regular-session settings. No row means OFF and WEEKLY (and, SESSION-78, statistics off). {@code groupId} is cross-domain: no FK. */
 @Entity
 @Table(name = "group_session_settings")
 @Getter
@@ -38,6 +38,14 @@ public class GroupSessionSettings {
     @Column(nullable = false, length = 10)
     @Builder.Default
     private RecurrenceMode mode = RecurrenceMode.WEEKLY;
+
+    /**
+     * SESSION-78 — the group's switch for its member statistics, head-to-head and leaderboard (V106). Off by default; the
+     * statistics engine reads it when it counts a group session, and an owner or admin changes it with the settings.
+     */
+    @Column(name = "statistics_enabled", nullable = false)
+    @Builder.Default
+    private boolean statisticsEnabled = false;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
