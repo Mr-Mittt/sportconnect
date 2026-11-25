@@ -42,6 +42,11 @@ public final class GroupStatsDoc {
         return counters;
     }
 
+    /** SESSION-73: every group the member has counters for, {@code by} dimension then key, for reading only. */
+    public Map<String, Map<String, StatsCounters>> groupings() {
+        return java.util.Collections.unmodifiableMap(groupings);
+    }
+
     /** The counters of one group, {@code by} a partner or a team (created empty the first time). */
     public StatsCounters group(String by, String key) {
         return StatsGroupings.group(groupings, by, key, StatsCounters::new);

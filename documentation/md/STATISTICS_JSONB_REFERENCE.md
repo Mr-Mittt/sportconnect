@@ -200,7 +200,111 @@ history: [ 17 pointers, newest first ]
 
 If some of the 17 had been normal games, they would be in `personal.all` and `groupings.*.all` but not in `ranked` and not in `scopes`. In the group's `group_stats`, A and B (numbers 1 and 2) against X and Y (3 and 4), after three games of which A and B won two, is `"h2h": { "1.2-3.4": [2, 1, 3] }`.
 
-## 9. Changing a shape
+## 9. What the read API returns (SESSION-73)
+
+The client never reads the tables above. It reads four endpoints, which show the stored numbers through the sport's config (section 1). All four need a signed-in, active account. They are read-only.
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /api/stats/me?sportId=&page=&size=` | the caller | their statistics in the sport |
+| `GET /api/stats/me/games?sportId=&cursor=&size=` | the caller | a page of their counted games, newest first |
+| `GET /api/sessions/group/{groupId}/stats?page=&size=` | a member of the group | one totals row per member |
+| `GET /api/sessions/group/{groupId}/stats/members/{userId}?page=&size=` | a member of the group | one member's totals and their pairs or partners (the sport's one grouping) |
+
+- The personal endpoints need `sportId` (a missing one is 400; a missing or deactivated sport is 404 `SPORT_NOT_FOUND`). **The group endpoints take no `sportId`: a group has one sport, and its statistics are that sport's.** A group with no sport is 400 `SESSION_SPORT_REQUIRED` (after the member gate). Every answer carries the `sportId` it used.
+- A non-member, and a group that does not exist or is inactive, get the same 403 `SESSION_GROUP_MEMBER_REQUIRED` on both group endpoints, before anything else is read.
+- **While the sport's `statistics_enabled` switch is off, nothing is shown**: `columns` is empty, every `values` map is empty and there are no pairs or partners (the stored rows are kept; switching it on shows them again). The `games` history is still readable.
+
+### 9.1 Columns and values (common to all four)
+
+`columns` is the sport's `record.scoreboard.columns`: a list of catalog keys (`StatsCatalog`) in the sport's order, an unknown or repeated key dropped. Every `values` map is keyed by those keys.
+
+```json
+"columns": ["games", "wins", "scoreFor", "winRate"]
+```
+
+- **The label of a column, and whether it is a count, a sum or a formula, is the client's**: the catalog is the one list the client's `record-ui-v1.json` also holds, so the key is enough (en and vi label per key).
+- A value is a number, or `null` where there is none: a stat no game has given yet (**a player with no counted game has `null` everywhere, not zeros**; a collected count is written from the first counted game on) or a formula with no value (a division by zero).
+
+### 9.2 `GET /api/stats/me`
+
+```json
+{
+  "sportId": 1,
+  "columns": [ ... ],
+  "totals": { "all": { "games": 3, "wins": 2 }, "ranked": { ... }, "normal": { ... } },
+  "pairs":    [ { "players": [ {id, fullName, avatarUrl}, {id, fullName, avatarUrl} ], "values": { "all": {..}, "ranked": {..}, "normal": {..} } } ],
+  "pairsTotal": 1,
+  "partners": [ { "players": [ {id, fullName, avatarUrl} ], "values": { "all": {..}, "ranked": {..}, "normal": {..} } } ],
+  "partnersTotal": 1,
+  "scopes":   [ { "scope": "REGION", "countryId": 1, "regionId": 11, "values": { ... } } ],
+  "asOf": "2026-11-24T05:31:00Z"
+}
+```
+
+- `normal` is `all` minus `ranked`: every stored stat (counts and sums) subtracts, never below zero, and formulas are **computed on the difference**, never subtracted (a win rate cannot be).
+- A sport has **one grouping only**, so exactly one of `pairs` and `partners` is filled, and both are empty when the sport has no `record.scoreboard.groupBy` (missing means no grouping at all). What is shown follows the sport's **current** config, not what is stored. `pairs`: the `TEAM` groupings, the asking player included in `players`; `partners`: the `PARTNER` groupings, one teammate each (badminton). Most games first (by `all`).
+- **Paged:** `page` (from 0, default 0) and `size` (1 to 50, default 20; anything else is 400) cut the one filled list; `pairsTotal` and `partnersTotal` say how many the player has in all. A page past the end is empty. Names are looked up for the page only. The totals and `scopes` are the same on every page.
+- `scopes`: the ranking games per place, `COUNTRY` and `REGION` entries, most games first. **Ids only** (the client resolves names from `/api/reference`); `regionId` is `null` for a `COUNTRY`; `values` is ranking games only.
+- `asOf` is when this player's row was last updated, `null` for a player with no counted game. Such a player gets `null` values and empty lists, not a 404.
+- Names come from the display lookup, so a deactivated partner keeps their real name; an id the lookup does not know has `fullName: null`.
+
+### 9.3 `GET /api/stats/me/games`
+
+```json
+{
+  "games": [
+    { "recordId": 9012, "sessionId": 457, "title": "Monday night", "playedAt": "2026-11-20T10:00:00Z",
+      "ranking": true, "outcome": "WIN",
+      "teams": [ { "players": [ {id, fullName, avatarUrl}, ... ], "scores": [21] },
+                 { "players": [ ... ], "scores": [15] } ] }
+  ],
+  "nextCursor": 9011
+}
+```
+
+- Newest first, from the player's history pointers (the latest 500 counted games). `size` is 1 to 50 (default 20; anything else is 400).
+- **Paging:** send the previous page's `nextCursor` as `cursor`; it is `null` on the last page. The cursor is the **last record id** of the page, not an offset, so a game counted between two pages is never repeated or skipped. A cursor no longer in the 500 pointers gives an empty last page.
+- `ranking` is the mark the engine recorded. `outcome` is `WIN`, `LOSS` or `DRAW` for the asking player, `null` when the sport's current schema can no longer read the record. `scores` has one entry per score slot (`null` for an empty slot). `title` is `null` when the session has none.
+- A pointer whose record or session is gone is skipped, so a page can hold **fewer than `size` games** and still have a `nextCursor`.
+
+### 9.4 `GET /api/sessions/group/{groupId}/stats`
+
+```json
+{
+  "sportId": 1,
+  "columns": [ ... ],
+  "members": { "content": [ { "member": {id, fullName, avatarUrl}, "values": { "games": 3, "wins": 2 } } ],
+               "totalElements": 4, "totalPages": 1, "number": 0, "size": 20 },
+  "asOf": "2026-11-24T05:31:00Z"
+}
+```
+
+- One row per **current, active** member who has a row: the totals over **all** the group's games (a group row has no `all`/`ranked` split). **Totals only**: a member's pairs or partners are 9.5.
+- Most games first, then most wins (0 when the sport does not collect wins), then user id. A member who left the group or whose account is deactivated is not listed. Paged by member (`page`, `size` 1 to 50 default 20, a larger size is cut to 50).
+- `asOf` is the newest update among **all** the listed members, `null` when the list is empty. Ranks are not here (SESSION-54).
+
+### 9.5 `GET /api/sessions/group/{groupId}/stats/members/{userId}`
+
+```json
+{
+  "sportId": 1,
+  "columns": [ ... ],
+  "member": {id, fullName, avatarUrl},
+  "totals": { "games": 6, "wins": 4 },
+  "pairs": [ { "players": [ {id, fullName, avatarUrl}, {id, fullName, avatarUrl} ], "values": { "games": 5, "wins": 3 } } ],
+  "pairsTotal": 1,
+  "partners": [ { "players": [ {id, fullName, avatarUrl} ], "values": { "games": 5, "wins": 3 } } ],
+  "partnersTotal": 1,
+  "asOf": "2026-11-24T05:31:00Z"
+}
+```
+
+- Any member of the group may open any member's detail. **The member asked about is not checked**: one who left the group or was deactivated is still shown (the group's history; the name comes from the display lookup). A member with no row gets `null` values, empty lists and `asOf: null`.
+- Exactly one of `pairs` and `partners` is filled (both are empty for a sport with no `groupBy`), most games first, **paged like 9.2** (`page`, `size`; the totals say how many there are), each entry with the one map of values (a group has no ranking split).
+- SESSION-74's privacy setting for personal and pair statistics will also gate this endpoint.
+
+## 10. Changing a shape
 
 1. Change `PlayerStatsDoc` / `GroupStatsDoc` / `GroupH2hDoc` / `StatsGroupings` (the only code that touches these maps) and `StatsDocsSpec` / `GroupH2hDocSpec` (which pin the keys).
 2. Change this file in the same change.

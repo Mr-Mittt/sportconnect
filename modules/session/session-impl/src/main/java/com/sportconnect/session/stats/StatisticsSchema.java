@@ -1,6 +1,7 @@
 package com.sportconnect.session.stats;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -138,6 +139,18 @@ public final class StatisticsSchema {
      */
     public Double valueOf(String key, StatsCounters counters) {
         return valueOf(key, counters, 0);
+    }
+
+    /**
+     * SESSION-73: the value of every column of the sport for these counters, in column order ({@code null} where a column has
+     * no value). Empty for a sport with no columns.
+     */
+    public Map<String, Double> valuesOf(StatsCounters counters) {
+        Map<String, Double> values = new LinkedHashMap<>();
+        for (String key : columns) {
+            values.put(key, valueOf(key, counters, 0));
+        }
+        return values;
     }
 
     private Double valueOf(String key, StatsCounters counters, int depth) {

@@ -78,6 +78,16 @@ public final class PlayerStatsDoc {
             return counters;
         }
 
+        /** The country of the place; for a {@code COUNTRY} entry the place itself. */
+        public Long countryId() {
+            return countryId;
+        }
+
+        /** The region of the place; {@code null} for a {@code COUNTRY} entry. */
+        public Long regionId() {
+            return regionId;
+        }
+
         /** The counters of one group (a partner, a team) at this place (created empty the first time). */
         public StatsCounters group(String by, String key) {
             return StatsGroupings.group(groupings, by, key, StatsCounters::new);
@@ -147,6 +157,24 @@ public final class PlayerStatsDoc {
 
     public AllRanked personal() {
         return personal;
+    }
+
+    /**
+     * SESSION-73: every group the player has counters for, {@code by} dimension then key, for reading (it does not create
+     * the empty entry that {@link #group} makes, and it must not be changed).
+     */
+    public Map<String, Map<String, AllRanked>> groupings() {
+        return java.util.Collections.unmodifiableMap(groupings);
+    }
+
+    /** SESSION-73: the place entries, for reading. */
+    public List<Scope> scopes() {
+        return java.util.Collections.unmodifiableList(scopes);
+    }
+
+    /** SESSION-73: the history pointers, newest first. */
+    public List<StatsHistory.Pointer> pointers() {
+        return StatsHistory.read(history);
     }
 
     /** The counters of one group, {@code by} a partner or a team (created empty the first time). */
