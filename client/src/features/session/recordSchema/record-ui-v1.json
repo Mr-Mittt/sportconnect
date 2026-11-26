@@ -57,7 +57,11 @@
         "winDiff",
         "scoreFor",
         "scoreAgainst",
-        "scoreDiff"
+        "scoreDiff",
+        "sessions"
+      ],
+      "historyOnly": [
+        "sessions"
       ],
       "statIds": {
         "games": 1,
@@ -67,7 +71,8 @@
         "scoreAgainst": 5,
         "winRate": 6,
         "winDiff": 7,
-        "scoreDiff": 8
+        "scoreDiff": 8,
+        "sessions": 9
       },
       "defaultColumns": [
         "games",

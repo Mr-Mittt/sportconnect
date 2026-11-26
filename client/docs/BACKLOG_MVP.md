@@ -95,6 +95,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 31 | [CLIENT-SESSION-59](MVP/CLIENT-SESSION-59_THE_SCOREBOARD_HAS_NO_DEFAULT_COLUMNS.md) | The scoreboard has no default columns: no `record.scoreboard.columns`, no scoreboard (one config with the server, which collects nothing without it; SESSION-53 rework) | `TODO` |
 | 32 | [CLIENT-SESSION-60](MVP/CLIENT-SESSION-60_GROUP_STATISTICS_AND_LEADERBOARD_SWITCH.md) | The group's statistics and leaderboard switch: a toggle in the group Settings tab (owner and admin change it, members see it), the empty state on the group statistics screens, en/vi copy for the two new group system posts (depends on SESSION-78) | `TODO` |
 | 33 | [CLIENT-SESSION-61](MVP/CLIENT-SESSION-61_SESSIONS_STAT_COLUMN.md) | The `sessions` stat in the catalog mirror: id, single-only flag (pair tables hide it), en/vi label; ships with SESSION-82 | `TODO` |
+| 34 | [CLIENT-SESSION-62](MVP/CLIENT-SESSION-62_GROUP_SESSIONS_STAT_CONFIG_FIELD.md) | The group's own `sessions` stat config in the group settings screen (owner or admin; "use the sport's setting" by default); depends on SESSION-83 and CLIENT-SESSION-61 | `TODO` |
 
 #### Removed / Deferred
 

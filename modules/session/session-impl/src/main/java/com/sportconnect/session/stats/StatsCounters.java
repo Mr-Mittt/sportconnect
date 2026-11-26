@@ -42,6 +42,17 @@ public final class StatsCounters {
         }
     }
 
+    /**
+     * SESSION-82: counts one session for the player, once, when the sport collects {@code sessions} (a session counts by the sport's
+     * {@link StatisticsSchema.SessionsRule}, decided by the caller, never per game). Does nothing when the stat is not in
+     * {@code collected}.
+     */
+    public void addSession(List<StatsCatalog.Stat> collected) {
+        if (collected.stream().anyMatch(stat -> stat.kind() == StatsCatalog.Kind.SESSIONS)) {
+            values.merge("sessions", 1d, Double::sum);
+        }
+    }
+
     /** Whether nothing was counted into these counters (no stat has a value). */
     public boolean isEmpty() {
         return values.isEmpty();

@@ -223,4 +223,45 @@ class StatisticsSchemaSpec extends Specification {
         expect:
         s.valueOf('scoreDiff', c) == 22d
     }
+
+    // ---- SESSION-82: the sessions stat, its config and the singles-only filter -------------------------------------------
+
+    def "sessions is collected when listed, kept out of the pair and team counters, and counts joined by default"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['games', 'sessions']]))
+
+        expect:
+        s.collectsSessions()
+        keys(s) as Set == ['games', 'sessions'] as Set
+        s.collectedForCombos()*.key() == ['games']
+        s.sessionsRule() == StatisticsSchema.SessionsRule.DEFAULT
+        s.sessionsRule().counts(true, false)
+        !StatisticsSchema.of(schema([columns: ['games']])).collectsSessions()
+    }
+
+    def "the sessions config: joined, atLeast1Game, or both met together (AND) or either (OR, the default)"() {
+        given:
+        def rule = StatisticsSchema.of(schema([columns: ['sessions'], config: [sessions: config]])).sessionsRule()
+
+        expect:
+        rule.counts(true, false) == joinedOnly
+        rule.counts(true, true) == played
+        !rule.counts(false, false)
+
+        where:
+        config                                                          | joinedOnly | played
+        [counts: ['joined']]                                            | true       | true
+        [counts: ['atLeast1Game']]                                      | false      | true
+        [counts: ['joined', 'atLeast1Game'], combine: 'AND']            | false      | true
+        [counts: ['joined', 'atLeast1Game'], combine: 'or']             | true       | true
+        [counts: ['joined', 'atLeast1Game']]                            | true       | true
+    }
+
+    def "an unusable sessions config is the default, never an error"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['sessions'], config: config])).sessionsRule() == StatisticsSchema.SessionsRule.DEFAULT
+
+        where:
+        config << [null, 'joined', [sessions: 'joined'], [sessions: [counts: []]], [sessions: [counts: ['nonsense']]], [sessions: [counts: 'joined']]]
+    }
 }

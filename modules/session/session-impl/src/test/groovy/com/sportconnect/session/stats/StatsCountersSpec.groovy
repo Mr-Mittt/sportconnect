@@ -157,4 +157,29 @@ class StatsCountersSpec extends Specification {
         StatsCounters.decode(42).games() == 0
         StatsCounters.decode(['nonsense']).games() == 0
     }
+
+    def "a session is counted once by addSession, never by a game, and only when the sport collects sessions"() {
+        given:
+        def withSessions = collected('games', 'sessions')
+        def c = new StatsCounters()
+
+        when:
+        c.add(Outcome.WIN, [:], withSessions)
+        c.add(Outcome.LOSS, [:], withSessions)
+        c.addSession(withSessions)
+
+        then: "two games and one session, the slots 3 to 8 empty"
+        c.value('games') == 2d
+        c.value('sessions') == 1d
+        c.encode() == '2,,,,,,,,1'
+        StatsCounters.decode(c.encode()).value('sessions') == 1d
+
+        when: "a sport that does not collect it keeps nothing"
+        def other = new StatsCounters()
+        other.addSession(collected('games'))
+
+        then:
+        other.value('sessions') == null
+        other.isEmpty()
+    }
 }

@@ -62,7 +62,7 @@ import java.util.stream.Collectors;
  * is a normal game. Every counted game feeds the players' personal counters and, in a group session, the group member
  * counters; a ranking game also feeds the region and country scopes of the <b>venue</b> for every player, wherever the
  * player lives (owner, 2026-11-23). A venue with no country or no region gets no counter for the missing place, and the
- * job's {@code notes} say so. Only the stats the sport's {@code record.scoreboard.columns} need are counted. In a group
+ * job's {@code notes} say so. Only the stats the sport's {@code record.scoreboard.columns} need are counted. <b>The {@code sessions} stat (SESSION-82)</b> is counted once per player after the games, for the players the sport's {@link StatisticsSchema.SessionsRule} selects (joined by default): in the player's totals and the group member row, and in the ranked, region and country counters only for a player with a ranking game; a session with no games is still counted when the rule counts joined players, and a job row that already counted sessions never counts them again. In a group
  * session of a sport grouped by {@code PARTNER}, a game of two pairs also counts in the group's head-to-head
  * ({@link GroupH2hDoc}).
  *
@@ -172,11 +172,15 @@ public class SessionStatsProcessor {
         }
 
         List<SessionRecord> records = recordRepository.findBySessionIdOrderByIdAsc(sessionId);
-        if (records.isEmpty()) {
-            return finish(job, now, List.of(), List.of(), List.of("NO_RECORDS"));
-        }
         Set<UUID> joined = participantRepository.findBySessionIdAndStatusIn(sessionId, List.of(ParticipantStatus.JOINED))
                 .stream().map(SessionParticipant::getUserId).collect(Collectors.toSet());
+        // SESSION-82: a revived job row (the second line of defence) must not count the session's players a second time
+        int priorSessions = job.getResult() != null && job.getResult().get("sessions") instanceof Number n ? Math.max(0, n.intValue()) : 0;
+        // SESSION-82: a sport whose `sessions` rule counts a joined player without a game still counts a session with no games
+        boolean sessionsWithoutGames = priorSessions == 0 && stats.collectsSessions() && stats.sessionsRule().counts(true, false) && !joined.isEmpty();
+        if (records.isEmpty() && !sessionsWithoutGames) {
+            return finish(job, now, List.of(), List.of(), List.of("NO_RECORDS"), priorSessions);
+        }
         Map<Long, List<SessionRecordVerification>> confirmations = confirmationsOf(records);
 
         List<Game> games = new ArrayList<>();
@@ -193,8 +197,25 @@ public class SessionStatsProcessor {
                 games.add(new Game(record, facts, isRanking(record, facts, confirmations)));
             }
         }
-        if (games.isEmpty()) {
-            return finish(job, now, List.of(), ignored, List.of());
+        // SESSION-82: who gets +1 in the `sessions` stat, by the sport's rule (joined players only: a counted game needs one)
+        Set<UUID> gamePlayers = new HashSet<>();
+        Set<UUID> rankingPlayers = new HashSet<>();
+        for (Game game : games) {
+            gamePlayers.addAll(game.facts().players());
+            if (game.ranking()) {
+                rankingPlayers.addAll(game.facts().players());
+            }
+        }
+        Set<UUID> sessionPlayers = new TreeSet<>(Comparator.comparing(UUID::toString));
+        if (stats.collectsSessions() && priorSessions == 0) {
+            for (UUID player : joined) {
+                if (stats.sessionsRule().counts(true, gamePlayers.contains(player))) {
+                    sessionPlayers.add(player);
+                }
+            }
+        }
+        if (games.isEmpty() && sessionPlayers.isEmpty()) {
+            return finish(job, now, List.of(), ignored, List.of(), priorSessions);
         }
 
         List<String> notes = new ArrayList<>();
@@ -206,8 +227,8 @@ public class SessionStatsProcessor {
                 notes.add("NO_VENUE_REGION");
             }
         }
-        List<CountedGame> countedIds = apply(session, stats, games, venue, ignored, now);
-        return finish(job, now, countedIds, ignored, notes);
+        Applied applied = apply(session, stats, games, venue, ignored, now, sessionPlayers, rankingPlayers);
+        return finish(job, now, applied.counted(), ignored, notes, priorSessions + applied.sessions());
     }
 
     /** A ranking game: proposed, and every named player confirmed the record's current revision (SESSION-72). */
@@ -257,8 +278,8 @@ public class SessionStatsProcessor {
      * @return the records actually counted, each with whether it counted as a ranking game (a record whose history pointer
      *         already exists is not counted again and is added to {@code ignored} as {@code ALREADY_COUNTED})
      */
-    private List<CountedGame> apply(Session session, StatisticsSchema stats, List<Game> games, Venue venue,
-                             List<Ignored> ignored, Instant now) {
+    private Applied apply(Session session, StatisticsSchema stats, List<Game> games, Venue venue,
+                             List<Ignored> ignored, Instant now, Set<UUID> sessionPlayers, Set<UUID> rankingPlayers) {
         Long sportId = session.getSportId();
         // SESSION-78: a group session is counted into the group's own rows (member statistics, head-to-head, the GROUP board)
         // only while the group has its switch on, read now, at counting time; the players' own statistics are counted either way.
@@ -266,6 +287,7 @@ public class SessionStatsProcessor {
                 ? session.getGroupId() : null;
         Set<UUID> users = new TreeSet<>(Comparator.comparing(UUID::toString));
         games.forEach(game -> users.addAll(game.facts().players()));
+        users.addAll(sessionPlayers);
         // SESSION-81: a group's rows name its members by the group's permanent member numbers, not by user id. They are read (and
         // allocated, in a short transaction of their own) before anything is locked; a sport with no grouping needs none.
         Map<UUID, Integer> numbers = groupId != null && !stats.groupBy().isEmpty()
@@ -287,11 +309,14 @@ public class SessionStatsProcessor {
         // SESSION-54: the players whose entries changed, by board (each player once per board for the whole session)
         Map<Board, Set<UUID>> changed = new LinkedHashMap<>();
         List<CountedGame> counted = new ArrayList<>();
+        // SESSION-82: a player with a game of this session already counted before is not counted for the session again
+        Set<UUID> alreadyCounted = new HashSet<>();
         for (Game game : games) {
             long recordId = game.record().getId();
             boolean already = game.facts().players().stream().anyMatch(p -> players.get(p).hasPointer(recordId));
             if (already) {
                 ignored.add(new Ignored(recordId, "ALREADY_COUNTED"));
+                alreadyCounted.addAll(game.facts().players());
                 continue;
             }
             counted.add(new CountedGame(recordId, game.ranking()));
@@ -323,6 +348,31 @@ public class SessionStatsProcessor {
             }
         }
 
+        // SESSION-82: +1 session for each player the sport's rule counts. Own totals and the group member row follow the rule;
+        // the ranked, region and country counters only count a session in which the player had a ranking game.
+        int sessionsCounted = 0;
+        for (UUID player : sessionPlayers) {
+            if (alreadyCounted.contains(player)) {
+                continue;
+            }
+            sessionsCounted++;
+            PlayerStatsDoc doc = players.get(player);
+            doc.personal().all().addSession(stats.collected());
+            if (rankingPlayers.contains(player)) {
+                doc.personal().ranked().addSession(stats.collected());
+                if (venue.regionId() != null) {
+                    doc.scope("REGION", venue.countryId(), venue.regionId()).counters().addSession(stats.collected());
+                }
+                if (venue.countryId() != null) {
+                    doc.scope("COUNTRY", venue.countryId(), null).counters().addSession(stats.collected());
+                }
+            }
+            if (groupId != null) {
+                members.get(player).counters().addSession(stats.collected());
+                touch(boards, changed, new Board("GROUP", groupId, sportId, null), player);
+            }
+        }
+
         userRows.forEach((id, row) -> {
             players.get(id).writeTo(row);
             userStatsRepository.save(row);
@@ -337,7 +387,7 @@ public class SessionStatsProcessor {
         }
         markBoardsDirty(boards, now);
         recordChanges(changed);
-        return counted;
+        return new Applied(counted, sessionsCounted);
     }
 
     /** Notes that this player's entry on this board changed (and that the board is touched). */
@@ -415,7 +465,7 @@ public class SessionStatsProcessor {
     /** Adds one player's game to the counters of each of their groups. */
     private void addToGroups(Map<String, List<String>> groups, BiFunction<String, String, StatsCounters> counters,
                              RecordFacts.Participant p, StatisticsSchema stats) {
-        groups.forEach((by, keys) -> keys.forEach(key -> counters.apply(by, key).add(p.outcome(), p.metrics(), stats.collected())));
+        groups.forEach((by, keys) -> keys.forEach(key -> counters.apply(by, key).add(p.outcome(), p.metrics(), stats.collectedForCombos())));
     }
 
     /** The counters of one player for one game: personal, every group of their team, and the venue's scopes (ranking games). */
@@ -504,14 +554,25 @@ public class SessionStatsProcessor {
     private record CountedGame(long recordId, boolean ranking) {
     }
 
+    /** SESSION-82: what one session's counting changed: the games counted and the players counted for the session itself. */
+    private record Applied(List<CountedGame> counted, int sessions) {
+    }
+
     private Result finish(SessionStatsJob job, Instant now, List<CountedGame> counted, List<Ignored> ignored,
                           List<String> notes) {
+        return finish(job, now, counted, ignored, notes, 0);
+    }
+
+    /** @param sessions SESSION-82: the players counted for the session itself (the {@code sessions} stat); a session with only those is {@code DONE} too */
+    private Result finish(SessionStatsJob job, Instant now, List<CountedGame> counted, List<Ignored> ignored,
+                          List<String> notes, int sessions) {
         Map<String, Object> result = new LinkedHashMap<>();
         // Compact entries (the same format as the history): counted as "<0|1>-<recordId>", ignored as "<recordId>:<REASON>".
         result.put("counted", counted.stream().map(c -> (Object) StatsHistory.entry(c.recordId(), c.ranking())).toList());
         result.put("ignored", ignored.stream().map(i -> (Object) (i.recordId() + ":" + i.reason())).toList());
         result.put("notes", notes);
-        SessionStatsJob.Status status = counted.isEmpty() ? SessionStatsJob.Status.SKIPPED : SessionStatsJob.Status.DONE;
+        result.put("sessions", sessions);
+        SessionStatsJob.Status status = counted.isEmpty() && sessions == 0 ? SessionStatsJob.Status.SKIPPED : SessionStatsJob.Status.DONE;
         job.setStatus(status);
         job.setCounted(counted.size());
         job.setIgnored(ignored.size());

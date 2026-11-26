@@ -509,6 +509,164 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(jobRepository.findById(sessionId).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.SKIPPED);
     }
 
+    // ---- SESSION-82: the sessions stat -------------------------------------------------------------------------------------
+
+    private static Map<String, Object> sessionsSchema(Map<String, Object> sessionsConfig) {
+        Map<String, Object> scoreboard = new LinkedHashMap<>();
+        scoreboard.put("columns", List.of("games", "wins", "sessions"));
+        scoreboard.put("groupBy", List.of(Map.of("by", "PARTNER")));
+        if (sessionsConfig != null) {
+            scoreboard.put("config", Map.of("sessions", sessionsConfig));
+        }
+        return doublesSchema(scoreboard, Map.of("sort", List.of(Map.of("by", "wins", "dir", "DESC"))));
+    }
+
+    @Test
+    void aSessionCountsEveryJoinedPlayerOnceByDefaultEvenOneWhoPlayedNoGameAndPairsNeverHoldIt() {
+        sportId = newSport(sessionsSchema(null), true);
+        Long first = completedSession(groupId, venueId, 2);
+        game(first, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        game(first, List.of(carolId, danId), List.of(aliceId, bobId), 21, 18);
+        Long second = completedSession(groupId, venueId, 2);
+        game(second, List.of(aliceId, bobId), List.of(carolId, danId), 21, 10);
+
+        assertThat(runner.processDue()).isEqualTo(2);
+
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(3.0);
+        assertThat(player(aliceId).personal().all().value("sessions")).as("two sessions, three games").isEqualTo(2.0);
+        assertThat(player(hostId).personal().all().value("sessions")).as("joined, no game: counted by default").isEqualTo(2.0);
+        assertThat(player(hostId).personal().all().value("games")).isNull();
+        assertThat(member(aliceId).counters().value("sessions")).isEqualTo(2.0);
+        assertThat(member(hostId).counters().value("sessions")).isEqualTo(2.0);
+        assertThat(player(aliceId).group("PARTNER", bobId.toString()).all().value("games")).isEqualTo(3.0);
+        assertThat(player(aliceId).group("PARTNER", bobId.toString()).all().value("sessions")).as("a pair never holds it").isNull();
+        assertThat(member(aliceId).group("PARTNER", String.valueOf(no(bobId))).value("sessions")).isNull();
+        assertThat(jobRepository.findById(first).orElseThrow().getResult().get("sessions")).isEqualTo(5);
+    }
+
+    @Test
+    void theAtLeastOneGameConfigCountsOnlyThePlayersWhoPlayedAndAndOrOrCombineTheTwoConditions() {
+        sportId = newSport(sessionsSchema(Map.of("counts", List.of("atLeast1Game"))), true);
+        Long session = completedSession(groupId, venueId, 2);
+        game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        runner.processDue();
+        assertThat(player(aliceId).personal().all().value("sessions")).isEqualTo(1.0);
+        assertThat(player(hostId).personal().all().value("sessions")).as("the host played nothing").isNull();
+        assertThat(member(aliceId).counters().value("sessions")).isEqualTo(1.0);
+
+        // joined AND atLeast1Game: the same people as atLeast1Game (a counted game needs a joined player)
+        sportId = newSport(sessionsSchema(Map.of("counts", List.of("joined", "atLeast1Game"), "combine", "AND")), true);
+        Long both = completedSession(groupId, venueId, 2);
+        game(both, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        runner.processDue();
+        assertThat(player(aliceId).personal().all().value("sessions")).isEqualTo(1.0);
+        assertThat(player(hostId).personal().all().value("sessions")).isNull();
+
+        // joined OR atLeast1Game: the same people as joined
+        sportId = newSport(sessionsSchema(Map.of("counts", List.of("joined", "atLeast1Game"), "combine", "OR")), true);
+        Long either = completedSession(groupId, venueId, 2);
+        game(either, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        runner.processDue();
+        assertThat(player(aliceId).personal().all().value("sessions")).isEqualTo(1.0);
+        assertThat(player(hostId).personal().all().value("sessions")).isEqualTo(1.0);
+    }
+
+    @Test
+    void aSessionWithNoGamesStillCountsItsJoinedPlayersByDefaultAndIsSkippedWhenTheRuleNeedsAGame() {
+        sportId = newSport(sessionsSchema(null), true);
+        Long session = completedSession(groupId, venueId, 2);
+
+        runner.processDue();
+
+        SessionStatsJob job = jobRepository.findById(session).orElseThrow();
+        assertThat(job.getStatus()).isEqualTo(SessionStatsJob.Status.DONE);
+        assertThat(job.getCounted()).as("no game was counted").isZero();
+        assertThat(job.getResult().get("sessions")).isEqualTo(5);
+        assertThat(player(aliceId).personal().all().value("sessions")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().all().value("games")).isNull();
+        assertThat(member(aliceId).counters().value("sessions")).isEqualTo(1.0);
+        assertThat(dirty("GROUP", groupId)).isTrue();
+
+        sportId = newSport(sessionsSchema(Map.of("counts", List.of("atLeast1Game"))), true);
+        Long other = completedSession(groupId, venueId, 2);
+        runner.processDue();
+        assertThat(jobRepository.findById(other).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.SKIPPED);
+        assertThat(player(aliceId).personal().all().value("sessions")).isNull();
+    }
+
+    @Test
+    void theRankedRegionAndCountryCountersCountASessionOnlyForAPlayerWithARankingGameInIt() {
+        sportId = newSport(sessionsSchema(null), true);
+        Long session = completedSession(groupId, venueId, 2);
+        Long ranked = game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        propose(ranked, aliceId, List.of(aliceId, bobId, carolId, danId));
+        Long normalOnly = completedSession(groupId, venueId, 2);
+        game(normalOnly, List.of(aliceId, bobId), List.of(carolId, danId), 21, 10);
+
+        runner.processDue();
+
+        assertThat(player(aliceId).personal().all().value("sessions")).isEqualTo(2.0);
+        assertThat(player(aliceId).personal().ranked().value("sessions")).as("one session had a ranking game").isEqualTo(1.0);
+        assertThat(player(aliceId).scope("REGION", COUNTRY, REGION).counters().value("sessions")).isEqualTo(1.0);
+        assertThat(player(aliceId).scope("COUNTRY", COUNTRY, null).counters().value("sessions")).isEqualTo(1.0);
+        assertThat(player(hostId).personal().all().value("sessions")).isEqualTo(2.0);
+        assertThat(player(hostId).personal().ranked().value("sessions")).as("no ranking game for the host").isNull();
+        assertThat(player(hostId).scope("REGION", COUNTRY, REGION).counters().value("sessions")).isNull();
+    }
+
+    @Test
+    void aGroupWithItsSwitchOffCountsSessionsForThePlayersOnly() {
+        sportId = newSport(sessionsSchema(null), true);
+        GroupSessionSettings settings = groupSettingsRepository.findById(groupId).orElseThrow();
+        settings.setStatisticsEnabled(false);
+        groupSettingsRepository.save(settings);
+        Long session = completedSession(groupId, venueId, 2);
+        game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        runner.processDue();
+
+        assertThat(player(aliceId).personal().all().value("sessions")).isEqualTo(1.0);
+        assertThat(player(hostId).personal().all().value("sessions")).isEqualTo(1.0);
+        assertThat(groupMemberStatsRepository.findAll()).as("no group rows while the group switch is off").isEmpty();
+    }
+
+    @Test
+    void aRevivedJobRowDoesNotCountTheSessionsOfItsPlayersASecondTime() {
+        sportId = newSport(sessionsSchema(null), true);
+        Long session = completedSession(groupId, venueId, 2);
+        game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        runner.processDue();
+
+        SessionStatsJob job = jobRepository.findById(session).orElseThrow();
+        job.setStatus(SessionStatsJob.Status.RETRY);
+        job.setNextAttemptAt(Instant.now().minusSeconds(5));
+        jobRepository.save(job);
+        assertThat(runner.processDue()).isEqualTo(1);
+
+        assertThat(player(aliceId).personal().all().value("sessions")).isEqualTo(1.0);
+        assertThat(player(hostId).personal().all().value("sessions")).as("no game to point at: the job row guards it").isEqualTo(1.0);
+        assertThat(member(hostId).counters().value("sessions")).isEqualTo(1.0);
+        assertThat(jobRepository.findById(session).orElseThrow().getResult().get("sessions")).isEqualTo(5);
+    }
+
+    @Test
+    void aPlayerWhoseGameWasCountedBeforeIsNotCountedForTheSessionAgainEvenWhenTheJobRowKeptNoSessionsCount() {
+        sportId = newSport(sessionsSchema(null), true);
+        Long session = completedSession(groupId, venueId, 2);
+        game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        runner.processDue();
+
+        SessionStatsJob job = jobRepository.findById(session).orElseThrow();
+        job.setResult(null);                                              // a row from before the stat existed
+        job.setStatus(SessionStatsJob.Status.RETRY);
+        job.setNextAttemptAt(Instant.now().minusSeconds(5));
+        jobRepository.save(job);
+        runner.processDue();
+
+        assertThat(player(aliceId).personal().all().value("games")).isEqualTo(1.0);
+        assertThat(player(aliceId).personal().all().value("sessions")).as("her game's pointer says she was counted").isEqualTo(1.0);
+    }
+
     // ---- the sport's switch and its config ----------------------------------------------------------------------------
 
     @Test

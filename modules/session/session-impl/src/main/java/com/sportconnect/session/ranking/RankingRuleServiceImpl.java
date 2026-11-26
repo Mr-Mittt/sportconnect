@@ -127,9 +127,9 @@ public class RankingRuleServiceImpl implements RankingRuleService {
         StatisticsSchema schema = schemaOf(sportId);
         String kind = kindOf(request.getKind(), schema);
         SortList sort = SortList.parse(request.getSort(), schema.catalog());
-        requireCollected(sort.operands(), schema, "SESSION_RANKING_SORT_INVALID");
+        requireCollected(sort.operands(), schema, kind, "SESSION_RANKING_SORT_INVALID");
         RequireList require = RequireList.parse(request.getRequire(), schema.catalog());
-        requireCollected(require.operands(), schema, "SESSION_RANKING_REQUIRE_INVALID");
+        requireCollected(require.operands(), schema, kind, "SESSION_RANKING_REQUIRE_INVALID");
 
         SportRankingRule.Key key = new SportRankingRule.Key(sportId, scopeType, scopeId, kind);
         SportRankingRule row = rules.findById(key).orElse(null);
@@ -259,10 +259,17 @@ public class RankingRuleServiceImpl implements RankingRuleService {
                 Map.of("reason", reason));
     }
 
-    /** Every stat the keys or conditions read must be one the sport collects, so the numbers a board is built from really exist. */
-    private void requireCollected(Set<String> operands, StatisticsSchema schema, String errorCode) {
+    /** Every stat the keys or conditions read must be one the sport collects, and one that applies to the kind of board (SESSION-82), so the numbers a board is built from really exist. */
+    private void requireCollected(Set<String> operands, StatisticsSchema schema, String kind, String errorCode) {
         Set<String> collected = schema.collected().stream().map(StatsCatalog.Stat::key).collect(Collectors.toSet());
         for (StatsCatalog.Stat needed : StatsCatalog.storedFor(schema.catalog(), operands)) {
+            if (needed.singleOnly() && !RankingRules.SINGLE.equals(kind)) {
+                Map<String, Object> params = new LinkedHashMap<>();
+                params.put("reason", "STAT_NOT_FOR_KIND");
+                params.put("detail", needed.key());
+                throw new BadRequestException(errorCode, needed.key() + " applies to a single player only, so a " + kind
+                        + " board cannot use it", params);
+            }
             if (!collected.contains(needed.key())) {
                 Map<String, Object> params = new LinkedHashMap<>();
                 params.put("reason", "STAT_NOT_COLLECTED");
