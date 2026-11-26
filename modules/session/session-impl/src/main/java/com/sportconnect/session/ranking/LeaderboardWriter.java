@@ -39,6 +39,12 @@ public class LeaderboardWriter {
         return runs.claim(run.getSportId(), run.getScopeType(), run.getScopeId(), now, staleBefore) == 1;
     }
 
+    /** @return true if this call took a group board for a manual refresh (cooldown over, nobody building it); one compare-and-set */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean claimForRefresh(Long sportId, Long groupId, Instant now, Instant builtBefore, Instant staleBefore) {
+        return runs.claimForRefresh(sportId, groupId, now, builtBefore, staleBefore) == 1;
+    }
+
     /** Creates a country board's run row when it has none; a concurrent creator's duplicate-key error is the caller's to absorb. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureBoardRun(Long sportId, String scopeType, Long scopeId, Long countryId) {

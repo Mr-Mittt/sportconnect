@@ -37,4 +37,16 @@ public interface RankingRuleService {
 
     /** Asks the ranking worker to rank every dirty board now (the nightly pass, on demand). */
     void runNow();
+
+    /**
+     * A group's own sort list for one board kind (group owner or admin; the sport is the group's, the request's scope is ignored).
+     * 403 {@code SESSION_GROUP_MEMBER_REQUIRED} / {@code SESSION_GROUP_ADMIN_REQUIRED}; the same coded 400s as an admin rule.
+     */
+    RankingRuleResponse saveGroupRule(UUID callerId, Long groupId, RankingRuleRequest request);
+
+    /** The group's own rules (any member). A kind with none follows the sport's rule. */
+    List<RankingRuleResponse> listGroupRules(UUID callerId, Long groupId);
+
+    /** Removes the group's own rule of a kind (owner or admin): the board goes back to the sport's rule. 404 when there is none. */
+    void deleteGroupRule(UUID callerId, Long groupId, String kind);
 }

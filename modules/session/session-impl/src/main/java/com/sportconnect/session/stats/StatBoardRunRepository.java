@@ -86,4 +86,17 @@ public interface StatBoardRunRepository extends JpaRepository<StatBoardRun, Stat
     @Modifying
     @Query("UPDATE StatBoardRun r SET r.fullRebuild = true, r.dirty = true, r.dirtyAt = :now WHERE r.sportId = :sportId AND r.scopeType = 'GROUP' AND r.scopeId = :groupId")
     int markFullRebuildOfGroup(@Param("sportId") Long sportId, @Param("groupId") Long groupId, @Param("now") Instant now);
+
+    /**
+     * SESSION-54 slice B: claims a group board for a manual refresh by one compare-and-set that checks the cooldown and takes the
+     * board in the same statement, so two refreshes at once cannot both win: 1 for the one that did, 0 when the board was built
+     * after {@code builtBefore} (cooldown) or is claimed by a running build.
+     */
+    @Modifying
+    @Query("UPDATE StatBoardRun r SET r.status = 'RUNNING', r.claimedAt = :now WHERE r.sportId = :sportId "
+            + "AND r.scopeType = 'GROUP' AND r.scopeId = :groupId "
+            + "AND (r.computedAt IS NULL OR r.computedAt <= :builtBefore) "
+            + "AND (r.status <> 'RUNNING' OR r.claimedAt IS NULL OR r.claimedAt < :staleBefore)")
+    int claimForRefresh(@Param("sportId") Long sportId, @Param("groupId") Long groupId, @Param("now") Instant now,
+                        @Param("builtBefore") Instant builtBefore, @Param("staleBefore") Instant staleBefore);
 }

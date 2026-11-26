@@ -2,6 +2,9 @@ package com.sportconnect.integration;
 
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
+import com.sportconnect.common.exception.ForbiddenException;
+import com.sportconnect.common.exception.NotFoundException;
+import com.sportconnect.common.exception.TooManyRequestsException;
 import com.sportconnect.group.api.service.GroupMemberNumberService;
 import com.sportconnect.group.entity.Group;
 import com.sportconnect.group.entity.GroupMember;
@@ -10,10 +13,16 @@ import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.location.entity.Location;
 import com.sportconnect.location.repository.LocationRepository;
 import com.sportconnect.session.api.dto.FeeType;
+import com.sportconnect.session.api.dto.LeaderboardEntryDto;
+import com.sportconnect.session.api.dto.LeaderboardRefreshResponse;
+import com.sportconnect.session.api.dto.LeaderboardResponse;
+import com.sportconnect.session.api.dto.RankingRuleResponse;
+import com.sportconnect.session.api.dto.StatsPlayerDto;
 import com.sportconnect.session.api.dto.ParticipantStatus;
 import com.sportconnect.session.api.dto.RankingRuleRequest;
 import com.sportconnect.session.api.dto.SessionStatus;
 import com.sportconnect.session.api.dto.SessionType;
+import com.sportconnect.session.api.service.LeaderboardService;
 import com.sportconnect.session.api.service.RankingRuleService;
 import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.entity.Session;
@@ -100,6 +109,7 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
     @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Autowired private SessionStatsRunner statsRunner;
     @Autowired private RankingRuleService ruleService;
+    @Autowired private LeaderboardService leaderboardService;
     @Autowired private GroupMemberNumberService memberNumbers;
     @Autowired private LeaderboardEntryRepository entryRepository;
     @Autowired private StatBoardChangeRepository changeRepository;
@@ -145,7 +155,7 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
         carolId = createUser("carol");
         danId = createUser("dan");
         sportId = newSport(badmintonSchema(), true);
-        groupId = groupRepository.save(Group.builder().groupName("Boards " + UUID.randomUUID())
+        groupId = groupRepository.save(Group.builder().groupName("Boards " + UUID.randomUUID()).sportId(sportId)
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
         groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());
@@ -736,6 +746,299 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
         assertThat(run.getStatus()).isEqualTo("IDLE");
         assertThat(inTx(() -> runRepository.finish(sportId, "REGION", REGION, claimed.minusSeconds(5), run.getDirtyAt(), Instant.now(), 1)))
                 .as("a run whose claim was taken over ends nothing").isZero();
+    }
+
+    // ---- slice B: the reads ---------------------------------------------------------------------------------------------------
+
+    private LeaderboardResponse groupBoard(UUID caller, String kind, Integer cursor, int size) {
+        return leaderboardService.getGroupBoard(groupId, caller, kind, cursor, size);
+    }
+
+    private void rankOneGame() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+    }
+
+    private void builtAnHourAgo() {
+        StatBoardRun run = runRepository.findById(new StatBoardRun.Key(sportId, "GROUP", groupId)).orElseThrow();
+        run.setComputedAt(Instant.now().minus(Duration.ofHours(2)));
+        runRepository.save(run);
+    }
+
+    @Test
+    void aMemberReadsTheGroupBoardWithRanksNamesTheSortListAndTheirOwnPlace() {
+        rankOneGame();
+
+        LeaderboardResponse board = groupBoard(carolId, "SINGLE", null, 20);
+
+        assertThat(board.total()).isEqualTo(4);
+        assertThat(board.rankedAt()).isNotNull();
+        assertThat(board.sort()).hasSize(2);
+        assertThat(board.entries()).extracting(LeaderboardEntryDto::rank).containsExactly(1, 1, 3, 3);
+        assertThat(board.entries().get(0).players()).hasSize(1);
+        assertThat(board.entries().get(0).players().get(0).fullName()).isNotBlank();
+        assertThat(board.entries().get(0).values()).containsExactly(1d, 1d);            // wins, games
+        assertThat(board.entries().get(0).prevRank()).as("first build: no previous rank").isNull();
+        assertThat(board.me().rank()).as("carol lost").isEqualTo(3);
+        assertThat(board.me().players().get(0).id()).isEqualTo(carolId);
+        assertThat(board.nextCursor()).isNull();
+
+        LeaderboardResponse pairs = groupBoard(aliceId, "PARTNER", null, 20);
+        assertThat(pairs.entries()).hasSize(2);
+        assertThat(pairs.entries().get(0).players()).extracting(StatsPlayerDto::id).containsExactlyInAnyOrder(aliceId, bobId);
+        assertThat(pairs.me().rank()).isEqualTo(1);
+    }
+
+    @Test
+    void aNonMemberAndAMissingGroupAreRefusedTheSameWay() {
+        rankOneGame();
+        UUID outsider = createUser("outsider");
+
+        assertThatThrownBy(() -> groupBoard(outsider, "SINGLE", null, 20)).isInstanceOf(ForbiddenException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_MEMBER_REQUIRED");
+        assertThatThrownBy(() -> leaderboardService.getGroupBoard(groupId + 9999, aliceId, "SINGLE", null, 20))
+                .isInstanceOf(ForbiddenException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_MEMBER_REQUIRED");
+    }
+
+    @Test
+    void aDeactivatedPlayerAndAMemberWhoLeftAreNotShownAndAPairNeedsBothPlayers() {
+        rankOneGame();
+        User dan = userRepository.findById(danId).orElseThrow();
+        dan.setIsActive(false);
+        userRepository.save(dan);
+        groupMemberRepository.findAll().stream().filter(m -> m.getGroupId().equals(groupId) && m.getUserId().equals(carolId))
+                .forEach(groupMemberRepository::delete);
+
+        LeaderboardResponse board = groupBoard(aliceId, "SINGLE", null, 20);
+        LeaderboardResponse pairs = groupBoard(aliceId, "PARTNER", null, 20);
+
+        assertThat(board.entries()).extracting(e -> e.players().get(0).id()).containsExactlyInAnyOrder(aliceId, bobId);
+        assertThat(board.total()).as("the board itself is unchanged").isEqualTo(4);
+        assertThat(pairs.entries()).hasSize(1);
+        assertThat(pairs.entries().get(0).players()).extracting(StatsPlayerDto::id).containsExactlyInAnyOrder(aliceId, bobId);
+    }
+
+
+    @Test
+    void aPageIsFoundByACursorAndASkippedPlayerDoesNotStallIt() {
+        rankOneGame();
+        User bob = userRepository.findById(bobId).orElseThrow();
+        bob.setIsActive(false);
+        userRepository.save(bob);
+
+        List<UUID> seen = new ArrayList<>();
+        Integer cursor = null;
+        int pages = 0;
+        do {
+            LeaderboardResponse page = groupBoard(aliceId, "SINGLE", cursor, 1);
+            page.entries().forEach(e -> seen.add(e.players().get(0).id()));
+            cursor = page.nextCursor();
+            pages++;
+        } while (cursor != null && pages < 10);
+
+        assertThat(seen).containsExactlyInAnyOrder(aliceId, carolId, danId);
+        assertThat(cursor).isNull();
+        assertThat(pages).isLessThanOrEqualTo(4);
+    }
+
+    @Test
+    void aRegionAndACountryBoardAreReadByAnyUserAndAPlayerSeesTheirBestPair() {
+        rankOneGame();
+        UUID outsider = createUser("outsider");
+
+        LeaderboardResponse region = leaderboardService.getRegionBoard(REGION, sportId, outsider, "SINGLE", null, 20);
+        LeaderboardResponse country = leaderboardService.getCountryBoard(COUNTRY, sportId, aliceId, "PARTNER", null, 20);
+
+        assertThat(region.entries()).hasSize(4);
+        assertThat(region.me()).as("the outsider has no place").isNull();
+        assertThat(country.entries()).hasSize(2);
+        assertThat(country.me().rank()).isEqualTo(1);
+        assertThat(country.me().players()).extracting(StatsPlayerDto::id).containsExactlyInAnyOrder(aliceId, bobId);
+        assertThat(leaderboardService.getRegionBoard(OTHER_REGION, sportId, aliceId, "SINGLE", null, 20).entries()).isEmpty();
+    }
+
+    @Test
+    void aPlayerInTwoPairsSeesTheBestOneAsTheirPlace() {
+        rankOneGame();                                                                      // alice+bob won, carol+dan lost
+        countRankedGame(venueId, List.of(bobId, danId), List.of(aliceId, carolId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);                                         // alice+bob and bob+dan 1; carol+dan and alice+carol 3
+
+        LeaderboardResponse pairs = groupBoard(aliceId, "PARTNER", null, 20);
+
+        assertThat(pairs.entries()).extracting(LeaderboardEntryDto::rank).containsExactly(1, 1, 3, 3);
+        assertThat(pairs.me().rank()).as("alice is in a rank 1 pair and a rank 3 pair").isEqualTo(1);
+        assertThat(pairs.me().players()).extracting(StatsPlayerDto::id).containsExactlyInAnyOrder(aliceId, bobId);
+    }
+
+    @Test
+    void aSportWithItsSwitchOffAnswersAsAnUnknownSportAndABoardNeverBuiltIsEmpty() {
+        rankOneGame();
+        LeaderboardResponse never = leaderboardService.getCountryBoard(COUNTRY + 1, sportId, aliceId, "SINGLE", null, 20);
+        assertThat(never.entries()).isEmpty();
+        assertThat(never.rankedAt()).isNull();
+
+        switchStatistics(sportId, false);
+
+        assertThatThrownBy(() -> groupBoard(aliceId, "SINGLE", null, 20)).isInstanceOf(NotFoundException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SPORT_NOT_FOUND");
+        assertThatThrownBy(() -> leaderboardService.getRegionBoard(REGION, sportId, aliceId, "SINGLE", null, 20))
+                .isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> leaderboardService.getCountryBoard(COUNTRY, 987654L, aliceId, "SINGLE", null, 20))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void aBadKindOrPageSizeIsRefused() {
+        rankOneGame();
+        assertThatThrownBy(() -> groupBoard(aliceId, "TEAM", null, 20)).isInstanceOf(BadRequestException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_KIND_INVALID");
+        assertThatThrownBy(() -> groupBoard(aliceId, "SINGLE", null, 0)).isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> groupBoard(aliceId, "SINGLE", null, 51)).isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> groupBoard(aliceId, "SINGLE", -1, 20)).isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void aBoardPublishedAgainIsReadFreshNotFromTheCache() {
+        rankOneGame();
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries().get(0).values().get(1)).isEqualTo(1d);
+
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries().get(0).values()).as("two wins in two games now").containsExactly(2d, 2d);
+    }
+
+    // ---- slice B: the manual refresh -------------------------------------------------------------------------------------------
+
+    @Test
+    void anOwnerRefreshesAGroupBoardOnceAnHourAndAMemberOrANonMemberMay() {
+        rankOneGame();
+        builtAnHourAgo();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        UUID outsider = createUser("outsider");
+
+        assertThatThrownBy(() -> leaderboardService.refreshGroupBoard(groupId, aliceId)).isInstanceOf(ForbiddenException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_ADMIN_REQUIRED");
+        assertThatThrownBy(() -> leaderboardService.refreshGroupBoard(groupId, outsider)).isInstanceOf(ForbiddenException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_MEMBER_REQUIRED");
+
+        LeaderboardRefreshResponse refreshed = leaderboardService.refreshGroupBoard(groupId, hostId);
+
+        assertThat(refreshed.nextRefreshAt()).isAfter(refreshed.rankedAt());
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries().get(0).values()).as("the new game is on the board").containsExactly(2d, 2d);
+        assertThatThrownBy(() -> leaderboardService.refreshGroupBoard(groupId, hostId)).isInstanceOf(TooManyRequestsException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_COOLDOWN")
+                .satisfies(e -> assertThat((Long) ((TooManyRequestsException) e).getErrorParams().get("retryAfterSeconds"))
+                        .isBetween(3500L, 3600L));
+    }
+
+    @Test
+    void aBoardJustBuiltByTheNightlyRunCannotBeRefreshedAndAGroupWithItsSwitchOffCannotEither() {
+        rankOneGame();
+        assertThatThrownBy(() -> leaderboardService.refreshGroupBoard(groupId, hostId)).isInstanceOf(TooManyRequestsException.class);
+
+        builtAnHourAgo();
+        GroupSessionSettings settings = groupSettingsRepository.findById(groupId).orElseThrow();
+        settings.setStatisticsEnabled(false);
+        groupSettingsRepository.save(settings);
+        assertThatThrownBy(() -> leaderboardService.refreshGroupBoard(groupId, hostId)).isInstanceOf(ConflictException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_STATISTICS_OFF");
+    }
+
+    @Test
+    void aRefreshKeepsThePreviousRanksOfTheLastNightlyBuild() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);                                         // alice, bob 1; carol, dan 3
+        countRankedGame(venueId, List.of(aliceId, carolId), List.of(bobId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);                                         // alice 1; bob, carol 2; dan 4 (previous 1, 1, 3, 3)
+        assertThat(tree("GROUP", groupId, "SINGLE").prevRankOf(String.valueOf(no(bobId)))).isEqualTo(1);
+        builtAnHourAgo();
+        countRankedGame(venueId, List.of(aliceId, carolId), List.of(bobId, danId));
+
+        leaderboardService.refreshGroupBoard(groupId, hostId);
+
+        BoardTree after = tree("GROUP", groupId, "SINGLE");
+        assertThat(after.ranks().get(String.valueOf(no(carolId)))).as("carol now has two wins, alice three").isEqualTo(2);
+        assertThat(after.prevRankOf(String.valueOf(no(bobId)))).as("the nightly build's previous rank, not the rank before this refresh")
+                .isEqualTo(1);
+        assertThat(after.prevRankOf(String.valueOf(no(carolId)))).isEqualTo(3);
+    }
+
+    @Test
+    void aRefreshWhileTheBoardIsBeingBuiltIsToldSoAndAStaleClaimIsTakenOver() {
+        rankOneGame();
+        builtAnHourAgo();
+        StatBoardRun run = runRepository.findById(new StatBoardRun.Key(sportId, "GROUP", groupId)).orElseThrow();
+        run.setStatus(StatBoardRun.RUNNING);
+        run.setClaimedAt(Instant.now().minusSeconds(30));
+        runRepository.save(run);
+
+        assertThatThrownBy(() -> leaderboardService.refreshGroupBoard(groupId, hostId)).isInstanceOf(ConflictException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_IN_PROGRESS");
+
+        run.setClaimedAt(Instant.now().minus(Duration.ofHours(1)));
+        runRepository.save(run);
+        assertThat(leaderboardService.refreshGroupBoard(groupId, hostId).rankedAt()).isNotNull();
+    }
+
+    @Test
+    void twoRefreshesAtOnceBuildTheBoardOnce() throws Exception {
+        rankOneGame();
+        builtAnHourAgo();
+
+        List<String> outcomes = inParallel(2, () -> {
+            try {
+                leaderboardService.refreshGroupBoard(groupId, hostId);
+                return "built";
+            } catch (TooManyRequestsException | ConflictException e) {
+                return "refused";
+            }
+        });
+
+        assertThat(outcomes).containsExactlyInAnyOrder("built", "refused");
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "GROUP", groupId)).orElseThrow().getStatus()).isEqualTo("IDLE");
+    }
+
+    // ---- slice B: a group's own sort list --------------------------------------------------------------------------------------
+
+    @Test
+    void aGroupOwnerSetsTheGroupsOwnSortListAndTheBoardFollowsItWhileAMemberCannot() {
+        rankOneGame();
+
+        RankingRuleResponse saved = ruleService.saveGroupRule(hostId, groupId,
+                request("SPORT", null, "SINGLE", List.of(Map.of("key", "wins", "dir", "ASC")), null));
+
+        assertThat(saved.getScopeType()).as("the scope of the request is ignored").isEqualTo("GROUP");
+        assertThat(saved.getScopeId()).isEqualTo(groupId);
+        assertThatThrownBy(() -> ruleService.saveGroupRule(aliceId, groupId, request("GROUP", groupId, "SINGLE", defaultSort(), null)))
+                .isInstanceOf(ForbiddenException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_ADMIN_REQUIRED");
+        assertThatThrownBy(() -> ruleService.saveGroupRule(createUser("outsider"), groupId, request("GROUP", groupId, "SINGLE", defaultSort(), null)))
+                .isInstanceOf(ForbiddenException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_MEMBER_REQUIRED");
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        LeaderboardResponse board = groupBoard(aliceId, "SINGLE", null, 20);
+        assertThat(board.sort()).hasSize(1);
+        assertThat(board.entries().get(0).values()).as("fewest wins first now").containsExactly(0d);
+        assertThat(board.entries().get(0).prevRank()).as("the previous rank is kept across a rule change").isNotNull();
+        assertThat(leaderboardService.getRegionBoard(REGION, sportId, aliceId, "SINGLE", null, 20).sort()).as("the region board is the sport's").hasSize(2);
+        assertThat(ruleService.listGroupRules(aliceId, groupId)).hasSize(1);
+
+        ruleService.deleteGroupRule(hostId, groupId, "SINGLE");
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).sort()).as("back to the sport's rule").hasSize(2);
+        assertThatThrownBy(() -> ruleService.deleteGroupRule(hostId, groupId, "SINGLE")).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void aGroupRuleIsCheckedAgainstTheSportsSchemaLikeAnAdminRule() {
+        rankOneGame();
+        assertThatThrownBy(() -> ruleService.saveGroupRule(hostId, groupId,
+                request("GROUP", groupId, "SINGLE", List.of(Map.of("key", "scoreDiff", "dir", "DESC")), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SORT_INVALID");
+        assertThatThrownBy(() -> ruleService.saveGroupRule(hostId, groupId, request("GROUP", groupId, "TEAM", defaultSort(), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_KIND_INVALID");
     }
 
     // ---- helpers -----------------------------------------------------------------------------------------------------------

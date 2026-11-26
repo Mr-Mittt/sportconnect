@@ -2,7 +2,9 @@ package com.sportconnect.session.ranking;
 
 import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.common.exception.ConflictException;
+import com.sportconnect.common.exception.ForbiddenException;
 import com.sportconnect.common.exception.NotFoundException;
+import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.session.api.dto.RankingRuleRequest;
 import com.sportconnect.session.api.dto.RankingRuleResponse;
 import com.sportconnect.session.api.service.RankingRuleService;
@@ -46,6 +48,7 @@ public class RankingRuleServiceImpl implements RankingRuleService {
     private final StatBoardRunRepository runs;
     private final SportService sportService;
     private final LeaderboardRankingWorker worker;
+    private final GroupService groupService;
 
     /** Replaceable in tests; not a constructor dependency. */
     private Clock clock = Clock.systemUTC();
@@ -57,9 +60,71 @@ public class RankingRuleServiceImpl implements RankingRuleService {
     @Override
     @Transactional
     public RankingRuleResponse save(UUID adminId, Long sportId, RankingRuleRequest request) {
-        StatisticsSchema schema = schemaOf(sportId);
         String scopeType = scopeTypeOf(request.getScopeType());
-        Long scopeId = scopeIdOf(scopeType, request.getScopeId());
+        return store(adminId, sportId, scopeType, scopeIdOf(scopeType, request.getScopeId()), request);
+    }
+
+    /**
+     * SESSION-54 slice B: a group's own sort list, set by the group's owner or admin. The sport is the group's, the scope is forced
+     * to this group (whatever the request says), and the same validation as an admin rule applies. The group's board rebuilds at the
+     * next run.
+     */
+    @Override
+    @Transactional
+    public RankingRuleResponse saveGroupRule(UUID callerId, Long groupId, RankingRuleRequest request) {
+        Long sportId = requireGroupManager(callerId, groupId);
+        RankingRuleResponse saved = store(callerId, sportId, SportRankingRule.GROUP, groupId, request);
+        nudgeAfterCommit();
+        return saved;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RankingRuleResponse> listGroupRules(UUID callerId, Long groupId) {
+        if (!groupService.isGroupMember(groupId, callerId)) {
+            throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can view this group's ranking", null);
+        }
+        Long sportId = groupSportOf(groupId, callerId);
+        return rules.findAllOfSport(sportId).stream()
+                .filter(row -> SportRankingRule.GROUP.equals(row.getScopeType()) && groupId.equals(row.getScopeId()))
+                .map(this::toResponse).toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteGroupRule(UUID callerId, Long groupId, String kind) {
+        Long sportId = requireGroupManager(callerId, groupId);
+        SportRankingRule.Key key = new SportRankingRule.Key(sportId, SportRankingRule.GROUP, groupId,
+                kind == null ? "" : kind.trim().toUpperCase(Locale.ROOT));
+        if (!rules.existsById(key)) {
+            throw new NotFoundException("SESSION_RANKING_RULE_NOT_FOUND", "There is no such ranking rule", Map.of());
+        }
+        rules.deleteById(key);
+        markRebuild(sportId, SportRankingRule.GROUP, groupId);
+        nudgeAfterCommit();
+    }
+
+    /** The group's sport after the owner/admin gate (403 for a plain member or a non-member, as in the group settings). */
+    private Long requireGroupManager(UUID callerId, Long groupId) {
+        if (!groupService.isGroupMember(groupId, callerId)) {
+            throw new ForbiddenException("SESSION_GROUP_MEMBER_REQUIRED", "Only group members can view this group's ranking", null);
+        }
+        if (!groupService.canManageMembers(groupId, callerId)) {
+            throw new ForbiddenException("SESSION_GROUP_ADMIN_REQUIRED", "Only a group owner or admin can set the ranking order", null);
+        }
+        return groupSportOf(groupId, callerId);
+    }
+
+    private Long groupSportOf(Long groupId, UUID callerId) {
+        Long sportId = groupService.getGroup(groupId, callerId).getSportId();
+        if (sportId == null) {
+            throw new BadRequestException("SESSION_SPORT_REQUIRED", "This group has no sport, so it has no leaderboard", null);
+        }
+        return sportId;
+    }
+
+    private RankingRuleResponse store(UUID adminId, Long sportId, String scopeType, Long scopeId, RankingRuleRequest request) {
+        StatisticsSchema schema = schemaOf(sportId);
         String kind = kindOf(request.getKind(), schema);
         SortList sort = SortList.parse(request.getSort(), schema.catalog());
         requireCollected(sort.operands(), schema, "SESSION_RANKING_SORT_INVALID");
@@ -138,6 +203,8 @@ public class RankingRuleServiceImpl implements RankingRuleService {
         Instant now = clock.instant();
         if (SportRankingRule.COUNTRY.equals(scopeType)) {
             runs.markFullRebuildOfCountry(sportId, scopeId, now);
+        } else if (SportRankingRule.GROUP.equals(scopeType)) {
+            runs.markFullRebuildOfGroup(sportId, scopeId, now);
         } else {
             runs.markFullRebuildOfSport(sportId, now);
         }

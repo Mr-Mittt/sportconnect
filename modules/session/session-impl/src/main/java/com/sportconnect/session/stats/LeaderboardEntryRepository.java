@@ -14,4 +14,10 @@ public interface LeaderboardEntryRepository extends JpaRepository<LeaderboardEnt
             + "AND e.scopeId IN :scopeIds ORDER BY e.scopeId")
     List<LeaderboardEntry> findBoards(@Param("sportId") Long sportId, @Param("scopeType") String scopeType,
                                       @Param("kind") String kind, @Param("scopeIds") Collection<Long> scopeIds);
+
+    /** SESSION-54 slice B: when a board was last published (cheap: the tree is not read), empty when it has none. */
+    @Query("SELECT e.computedAt FROM LeaderboardEntry e WHERE e.sportId = :sportId AND e.scopeType = :scopeType "
+            + "AND e.scopeId = :scopeId AND e.kind = :kind")
+    java.util.Optional<java.time.Instant> findComputedAt(@Param("sportId") Long sportId, @Param("scopeType") String scopeType,
+                                                         @Param("scopeId") Long scopeId, @Param("kind") String kind);
 }

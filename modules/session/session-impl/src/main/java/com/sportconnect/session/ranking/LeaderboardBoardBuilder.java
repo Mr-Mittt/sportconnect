@@ -140,6 +140,14 @@ public class LeaderboardBoardBuilder {
      *                 ({@code null}: the board scans for itself)
      */
     public Computation compute(BoardPlan plan, BoardSet prebuilt) {
+        return compute(plan, prebuilt, false);
+    }
+
+    /**
+     * @param keepPrevious a group's manual refresh: the previous ranks stay as the last nightly build stored them, so "previous"
+     *                     keeps meaning "before the last nightly run" and a refresh does not make every arrow point to nothing
+     */
+    public Computation compute(BoardPlan plan, BoardSet prebuilt, boolean keepPrevious) {
         StatBoardRun run = plan.run();
         Long cutoff = changes.maxId(run.getSportId(), run.getScopeType(), run.getScopeId());
         List<Result> results = new ArrayList<>();
@@ -158,7 +166,7 @@ public class LeaderboardBoardBuilder {
 
         if (plan.isGroup()) {
             BoardSet set = fromGroup(plan);
-            addResults(results, plan, set, previousOf(plan.existingSingle()), previousOf(plan.existingPair()));
+            addResults(results, plan, set, previousOf(plan.existingSingle(), keepPrevious), previousOf(plan.existingPair(), keepPrevious));
         } else if (plan.full()) {
             BoardSet set = prebuilt != null ? prebuilt : scanOwn(plan);
             addResults(results, plan, set, previousOf(plan.existingSingle()), previousOf(plan.existingPair()));
@@ -265,7 +273,15 @@ public class LeaderboardBoardBuilder {
     }
 
     private Map<String, Integer> previousOf(LeaderboardEntry existing) {
-        return existing == null ? Map.of() : BoardTree.fromJson(existing.getTree()).ranks();
+        return previousOf(existing, false);
+    }
+
+    private Map<String, Integer> previousOf(LeaderboardEntry existing, boolean baked) {
+        if (existing == null) {
+            return Map.of();
+        }
+        BoardTree tree = BoardTree.fromJson(existing.getTree());
+        return baked ? tree.bakedRanks() : tree.ranks();
     }
 
     private StatisticsSchema schemaOf(Long sportId) {

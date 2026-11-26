@@ -320,6 +320,23 @@ The client never reads the tables above. It reads four endpoints, which show the
 - Exactly one of `pairs` and `partners` is filled (both are empty for a sport with no `groupBy`), most games first, **paged like 9.2** (`page`, `size`; the totals say how many there are), each entry with the one map of values (a group has no ranking split).
 - SESSION-74's privacy setting for personal and pair statistics will also gate this endpoint.
 
+### 9.6 The leaderboards (SESSION-54 slice B)
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /api/sessions/group/{groupId}/leaderboard?kind=&cursor=&size=` | a member of the group | a page of the group's board (the sport is the group's, as in 9.4) |
+| `GET /api/leaderboards/regions/{regionId}?sportId=&kind=&cursor=&size=` | any signed-in user | a page of the region's board |
+| `GET /api/leaderboards/countries/{countryId}?sportId=&kind=&cursor=&size=` | any signed-in user | a page of the country's board |
+| `POST /api/sessions/group/{groupId}/leaderboard/refresh` | group owner or admin | builds the group's board now; 200 `{rankedAt, nextRefreshAt}`, 429 `SESSION_RANKING_COOLDOWN` (`retryAfterSeconds`), 409 `SESSION_RANKING_IN_PROGRESS` or `SESSION_GROUP_STATISTICS_OFF` |
+| `GET / PUT / DELETE /api/sessions/group/{groupId}/leaderboard/rules` | GET any member; PUT, DELETE group owner or admin | the group's own sort list (`kind`, `sort`, `require`; `scopeType` and `scopeId` are ignored: the rule is this group's); `DELETE ?kind=` |
+
+- **Answer** (`LeaderboardResponse`): `sportId`, `scopeType`, `scopeId`, `kind`, `sort` (the board's own sort list as it was built, so the client knows what `values` are), `total` (entries on the board before anyone is hidden), `entries`, `me`, `nextCursor`, `rankedAt`. An entry is `{rank, prevRank, players, values}`: `rank` is the competition rank (equal entries share it, so ranks skip: 1, 1, 3), `prevRank` the rank in the build before (null when not listed then), `players` one player (`SINGLE`) or two (`PARTNER`) as `{id, fullName, avatarUrl}`, `values` the sort values in the sort list's order (null where there is none). **A page can only show stats that are in the sort list**: the tree holds nothing else.
+- **`kind`** is `SINGLE` (default) or `PARTNER`; anything else is 400 `SESSION_RANKING_KIND_INVALID`. **Paging is by cursor**: send the previous `nextCursor` (a position in the board, not a page number) because the number of hidden entries on a page is not known in advance; `size` 1 to 50 (default 20). One request looks at most 2,000 entries ahead, so `entries` can be shorter than `size` while `nextCursor` is still set.
+- **Who is shown:** a deactivated player on any board, a member who left on a group board, and a pair when either player is not shown, are skipped at read time (the board is unchanged: the next build drops them). `me` is the caller's best entry anywhere on the board (the best pair among those they are in), or null. `rank` is never recomputed at read time, so a hidden entry leaves a gap.
+- **A board never built** (no rule, no ranking game yet, or the nightly run has not reached it) is an empty answer (`entries` empty, `rankedAt` null), not an error. **A sport whose statistics switch is off is 404 `SPORT_NOT_FOUND`** (on the boards and on the refresh), as for an unknown sport. A group board stays readable while the **group's** switch is off: what was ranked before stays (the engine and the job skip such a group).
+- The boards are read from an in-memory copy of each tree (parsed once, valid while the board's `computed_at` is the stored one; `app.stats.ranking.read-cache-boards`, default 8 boards per instance).
+- **Refresh:** one compare-and-set takes the board only when it was built at least the cooldown ago and nobody is building it, so two refreshes, or a refresh and the nightly run, never build it twice. It runs on the request thread (a group board is built from its members' rows), and **keeps the previous ranks of the last nightly build** (so "previous" keeps meaning "before the last nightly run"). Saving or deleting a group's own rule also asks the worker to rebuild that board now.
+
 ## 10. Changing a shape
 
 1. Change `PlayerStatsDoc` / `GroupStatsDoc` / `GroupH2hDoc` / `StatsGroupings` / `BoardTree` / `SortList` (the only code that touches these maps and trees) and `StatsDocsSpec` / `GroupH2hDocSpec` (which pin the keys).

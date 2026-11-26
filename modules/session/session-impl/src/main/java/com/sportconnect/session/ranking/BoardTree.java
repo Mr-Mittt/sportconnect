@@ -101,6 +101,11 @@ public final class BoardTree {
         }
     }
 
+    /** The previous ranks stored with this tree, as they are (what a refresh that is not a new build copies unchanged). */
+    public Map<String, Integer> bakedRanks() {
+        return new HashMap<>(baked);
+    }
+
     /** Calls the consumer for every subject with its sort values (no particular order). */
     public void forEachSubject(BiConsumer<String, SortTuple> consumer) {
         bySubject.forEach(consumer);

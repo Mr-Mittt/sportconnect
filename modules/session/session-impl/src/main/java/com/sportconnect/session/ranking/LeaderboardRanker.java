@@ -125,6 +125,33 @@ public class LeaderboardRanker {
         return published;
     }
 
+    /**
+     * SESSION-54 slice B: builds one group board for a manual refresh, on the caller's thread (a group's board is built from its
+     * members' rows, so it is small). The caller already holds the claim ({@code claimedAt}, taken by
+     * {@code StatBoardRunRepository.claimForRefresh}); the board keeps the previous ranks the last nightly build stored. A failure
+     * is recorded on the board (the retry tick takes it) and thrown to the caller.
+     *
+     * @param board the board's row, read after the claim (its {@code dirtyAt} decides whether the board is clean afterwards)
+     */
+    public void refreshClaimed(StatBoardRun board, Instant claimedAt) {
+        try {
+            LeaderboardBoardBuilder.BoardPlan plan = builder.plan(board);
+            LeaderboardBoardBuilder.Computation computation = builder.compute(plan, null, true);
+            writer.publish(new LeaderboardWriter.Publication(board, claimedAt, clock.instant().truncatedTo(ChronoUnit.MILLIS),
+                    computation, false));
+        } catch (RuntimeException e) {
+            log.warn("Manual refresh of group board {} of sport {} failed", board.getScopeId(), board.getSportId(), e);
+            try {
+                writer.fail(board, claimedAt, e.getClass().getSimpleName() + ": " + e.getMessage(),
+                        clock.instant().plus(Duration.ofMinutes(retryMinutes)));
+            } catch (RuntimeException recordingFailed) {
+                log.error("Could not record the refresh failure of group board {}; the claim goes stale and is taken over",
+                        board.getScopeId(), recordingFailed);
+            }
+            throw e;
+        }
+    }
+
     /** A region's country, a country board's own id, or {@code 0} for a board with no country (each is its own unit of work). */
     private static long countryOf(StatBoardRun board) {
         if ("COUNTRY".equals(board.getScopeType())) {
