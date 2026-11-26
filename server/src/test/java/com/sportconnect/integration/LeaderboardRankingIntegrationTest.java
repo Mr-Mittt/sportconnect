@@ -1041,6 +1041,114 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
                 .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_KIND_INVALID");
     }
 
+    // ---- slice B: more cases ---------------------------------------------------------------------------------
+
+    @Test
+    void aCursorPastTheEndAnswersAnEmptyPageAndPagesOfTwoEndWithoutACursor() {
+        rankOneGame();
+
+        LeaderboardResponse first = groupBoard(aliceId, "SINGLE", null, 2);
+        LeaderboardResponse second = groupBoard(aliceId, "SINGLE", first.nextCursor(), 2);
+        LeaderboardResponse past = groupBoard(aliceId, "SINGLE", 100, 20);
+
+        assertThat(first.entries()).hasSize(2);
+        assertThat(first.nextCursor()).isEqualTo(2);
+        assertThat(second.entries()).hasSize(2);
+        assertThat(second.nextCursor()).as("the last page has no cursor").isNull();
+        assertThat(past.entries()).isEmpty();
+        assertThat(past.nextCursor()).isNull();
+        assertThat(past.total()).isEqualTo(4);
+        assertThat(past.me()).as("the caller's own place does not depend on the page").isNotNull();
+        assertThat(groupBoard(aliceId, "SINGLE", null, 50).entries()).as("the largest page is accepted").hasSize(4);
+    }
+
+    @Test
+    void aMemberWithNoGameHasNoPlaceAndAMemberWhoLeftCannotReadTheBoardAnyMore() {
+        rankOneGame();
+
+        assertThat(groupBoard(hostId, "SINGLE", null, 20).me()).as("the owner played nothing").isNull();
+        groupMemberRepository.findAll().stream().filter(m -> m.getGroupId().equals(groupId) && m.getUserId().equals(carolId))
+                .forEach(groupMemberRepository::delete);
+
+        assertThatThrownBy(() -> groupBoard(carolId, "SINGLE", null, 20)).isInstanceOf(ForbiddenException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_MEMBER_REQUIRED");
+    }
+
+    @Test
+    void aGroupWithoutASportHasNoBoardToRead() {
+        Long noSport = groupRepository.save(Group.builder().groupName("No sport " + UUID.randomUUID()).createdBy(hostId)
+                .isPrivate(true).isActive(true).build()).getId();
+        groupMemberRepository.save(GroupMember.builder().groupId(noSport).userId(hostId).roleId(ROLE_OWNER).build());
+
+        assertThatThrownBy(() -> leaderboardService.getGroupBoard(noSport, hostId, "SINGLE", null, 20))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void aRegionAndACountryBoardRefuseABadKindAndPageSizeToo() {
+        rankOneGame();
+
+        assertThatThrownBy(() -> leaderboardService.getRegionBoard(REGION, sportId, aliceId, "TEAM", null, 20))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_KIND_INVALID");
+        assertThatThrownBy(() -> leaderboardService.getCountryBoard(COUNTRY, sportId, aliceId, "SINGLE", null, 51))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> leaderboardService.getCountryBoard(COUNTRY, sportId, aliceId, "SINGLE", -5, 20))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void theFirstRefreshBuildsABoardNobodyHasBuiltYet() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).rankedAt()).as("nothing built yet").isNull();
+
+        LeaderboardRefreshResponse refreshed = leaderboardService.refreshGroupBoard(groupId, hostId);
+
+        LeaderboardResponse board = groupBoard(aliceId, "SINGLE", null, 20);
+        assertThat(board.total()).isEqualTo(4);
+        assertThat(board.rankedAt()).as("stored when the build is published, a moment after the claim the answer names")
+                .isBetween(refreshed.rankedAt(), refreshed.rankedAt().plusSeconds(5));
+        assertThat(board.entries().get(0).prevRank()).as("no nightly build before it: no previous rank").isNull();
+    }
+
+    @Test
+    void aGroupRuleOfOneGroupDoesNotTouchAnotherGroupOfTheSport() {
+        rankOneGame();
+        Long other = groupRepository.save(Group.builder().groupName("Other " + UUID.randomUUID()).sportId(sportId).createdBy(hostId)
+                .isPrivate(true).isActive(true).build()).getId();
+        groupMemberRepository.save(GroupMember.builder().groupId(other).userId(hostId).roleId(ROLE_OWNER).build());
+
+        ruleService.saveGroupRule(hostId, groupId, request("GROUP", groupId, "SINGLE", List.of(Map.of("key", "wins", "dir", "ASC")), null));
+
+        assertThat(ruleService.listGroupRules(hostId, groupId)).hasSize(1);
+        assertThat(ruleService.listGroupRules(hostId, other)).as("the other group has no rule of its own").isEmpty();
+    }
+
+    @Test
+    void anOutsiderCannotListAGroupsRulesAndAMemberCannotDeleteOne() {
+        rankOneGame();
+        ruleService.saveGroupRule(hostId, groupId, request("GROUP", groupId, "SINGLE", defaultSort(), null));
+
+        assertThatThrownBy(() -> ruleService.listGroupRules(createUser("outsider"), groupId)).isInstanceOf(ForbiddenException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_MEMBER_REQUIRED");
+        assertThatThrownBy(() -> ruleService.deleteGroupRule(aliceId, groupId, "SINGLE")).isInstanceOf(ForbiddenException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_GROUP_ADMIN_REQUIRED");
+        assertThat(ruleService.listGroupRules(aliceId, groupId)).as("the rule is still there").hasSize(1);
+    }
+
+    @Test
+    void aGroupRulesRequireListKeepsPlayersOffTheBoardUntilTheyHaveEnoughGames() {
+        rankOneGame();
+        ruleService.saveGroupRule(hostId, groupId, request("GROUP", groupId, "SINGLE", defaultSort(), atLeastGames(2)));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries()).as("one game each: nobody is listed yet").isEmpty();
+
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries()).as("two games each").hasSize(4);
+    }
+
     // ---- helpers -----------------------------------------------------------------------------------------------------------
 
     private <T> T inTx(java.util.function.Supplier<T> work) {
