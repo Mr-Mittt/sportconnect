@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -60,6 +61,7 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
     @Autowired private SportRepository sportRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private CacheManager cacheManager;
+    @Autowired private com.sportconnect.session.api.service.RankingRuleService ruleService;
 
     private UUID ownerId;
     private UUID adminId;
@@ -165,6 +167,134 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
 
     private List<Post> systemPosts() {
         return postRepository.findAll().stream().filter(p -> p.getPostType() == PostType.GROUP_SYSTEM).toList();
+    }
+
+    // ---- SESSION-83: the group's own stats config --------------------------------------------------------------------------
+
+    private void setSportSchema(Map<String, Object> sessionsConfig) {
+        Map<String, Object> scoreboard = new java.util.LinkedHashMap<>();
+        scoreboard.put("columns", List.of("games", "wins", "sessions"));
+        if (sessionsConfig != null) {
+            scoreboard.put("config", Map.of("sessions", sessionsConfig));
+        }
+        com.sportconnect.sport.entity.Sport sport = sportRepository.findById(sportId).orElseThrow();
+        sport.setResultSchema(Map.of("version", 1, "maxRecords", 100,
+                "record", Map.of("data", Map.of("type", "COMPETITIVE"), "scoreboard", scoreboard)));
+        sportRepository.save(sport);
+        evictSportCache();
+    }
+
+    @Test
+    void anOwnerAndAnAdminSetAndClearTheGroupsStatsConfig_theAnswerShowsTheEffectiveOne_andEachChangeIsAnnounced() throws Exception {
+        setSportSchema(Map.of("when", List.of("atLeast1Game")));
+
+        getAs(memberId, "/settings").andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statsConfig").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(true))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("atLeast1Game"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.combine").value("OR"));
+
+        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("when", List.of("joined")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statsConfig.sessions.when[0]").value("joined"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("joined"));
+        assertThat(settingsRepository.findById(groupId).orElseThrow().getStatsConfig()).isEqualTo(Map.of("sessions", Map.of("when", List.of("joined"))));
+        assertThat(systemPosts()).hasSize(1);
+        assertThat(systemPosts().get(0).getSystemCode()).isEqualTo(com.sportconnect.social.post.api.dto.SystemCode.GROUP_STATS_CONFIG_CHANGED);
+
+        sendAs(adminId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when").doesNotExist());
+        assertThat(systemPosts()).hasSize(2);
+
+        sendAs(adminId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false))))
+                .andExpect(status().isOk());
+        assertThat(systemPosts()).as("the same value again changes nothing").hasSize(2);
+        sendAs(ownerId, "PUT", "/settings", Map.of("mode", "MONTHLY")).andExpect(status().isOk());
+        assertThat(settingsRepository.findById(groupId).orElseThrow().getStatsConfig()).as("omitted keeps it").isNotNull();
+
+        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statsConfig").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("atLeast1Game"));
+        assertThat(settingsRepository.findById(groupId).orElseThrow().getStatsConfig()).as("{} clears it").isNull();
+    }
+
+    @Test
+    void aGroupThatOnlySaysEnabledKeepsTheSportsRuleAndASportThatDoesNotListTheStatCannotBeEnabledByAGroup() throws Exception {
+        setSportSchema(Map.of("when", List.of("atLeast1Game")));
+        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", true)))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("atLeast1Game"));
+
+        com.sportconnect.sport.entity.Sport sport = sportRepository.findById(sportId).orElseThrow();
+        sport.setResultSchema(Map.of("version", 1, "maxRecords", 100, "record", Map.of("data", Map.of("type", "COMPETITIVE"),
+                "scoreboard", Map.of("columns", List.of("games")))));
+        sportRepository.save(sport);
+        evictSportCache();
+        getAs(memberId, "/settings").andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false));
+    }
+
+    @Test
+    void anInvalidStatsConfigIs400WithItsReason_andNothingIsWritten() throws Exception {
+        setSportSchema(null);
+        Object[][] cases = {
+                {"x", "NOT_AN_OBJECT"},
+                {Map.of("nope", Map.of()), "KEY_UNKNOWN"},
+                {Map.of("games", Map.of("enabled", false)), "STAT_NOT_CONFIGURABLE"},
+                {Map.of("sessions", "x"), "NOT_AN_OBJECT"},
+                {Map.of("sessions", Map.of("enabled", "no")), "ENABLED_INVALID"},
+                {Map.of("sessions", Map.of("when", List.of())), "WHEN_INVALID"},
+                {Map.of("sessions", Map.of("when", List.of("joined", "joined"))), "WHEN_INVALID"},
+                {Map.of("sessions", Map.of("when", List.of("played"))), "WHEN_INVALID"},
+                {Map.of("sessions", Map.of("combine", "XOR")), "COMBINE_INVALID"},
+                {Map.of("sessions", Map.of("color", 1)), "KEY_UNKNOWN"}};
+        for (Object[] oneCase : cases) {
+            sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", oneCase[0])).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_STATS_CONFIG_INVALID"))
+                    .andExpect(jsonPath("$.errorParams.reason").value(oneCase[1]));
+        }
+        assertThat(settingsRepository.count()).isZero();
+        assertThat(systemPosts()).isEmpty();
+    }
+
+    @Test
+    void aMemberAndAnOutsiderCannotSetTheStatsConfig_andItIs409WhileTheSportHasStatisticsOff() throws Exception {
+        setSportSchema(null);
+        Map<String, Object> body = Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false)));
+
+        sendAs(memberId, "PUT", "/settings", body).andExpect(status().isForbidden());
+        sendAs(outsiderId, "PUT", "/settings", body).andExpect(status().isForbidden());
+        assertThat(settingsRepository.count()).isZero();
+
+        setSportStatistics(false);
+        sendAs(ownerId, "PUT", "/settings", body).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_STATISTICS_NOT_AVAILABLE"));
+        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of())).andExpect(status().isConflict());
+        getAs(memberId, "/settings").andExpect(jsonPath("$.data.effectiveStatsConfig").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void aStatCannotBeSwitchedOffWhileTheGroupsOwnRuleNamesIt_andANewRuleCannotNameASwitchedOffStat() throws Exception {
+        setSportSchema(null);
+        ruleService.saveGroupRule(ownerId, groupId, com.sportconnect.session.api.dto.RankingRuleRequest.builder().kind("SINGLE")
+                .sort(List.of(Map.of("key", "sessions", "dir", "DESC"))).require(List.of()).build());
+        Map<String, Object> off = Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false)));
+
+        sendAs(ownerId, "PUT", "/settings", off).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_STAT_IN_USE"))
+                .andExpect(jsonPath("$.errorParams.detail").value("sessions"))
+                .andExpect(jsonPath("$.errorParams.kind").value("SINGLE"));
+        assertThat(settingsRepository.findById(groupId).map(row -> row.getStatsConfig()).orElse(null)).isNull();
+
+        ruleService.deleteGroupRule(ownerId, groupId, "SINGLE");
+        sendAs(ownerId, "PUT", "/settings", off).andExpect(status().isOk());
+        assertThatThrownBy(() -> ruleService.saveGroupRule(ownerId, groupId, com.sportconnect.session.api.dto.RankingRuleRequest.builder()
+                .kind("SINGLE").sort(List.of(Map.of("key", "sessions", "dir", "DESC"))).require(List.of()).build()))
+                .isInstanceOf(com.sportconnect.common.exception.BadRequestException.class)
+                .hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SORT_INVALID")
+                .extracting(e -> ((com.sportconnect.common.exception.BadRequestException) e).getErrorParams().get("reason"))
+                .isEqualTo("STAT_NOT_COLLECTED");
+        sendAs(ownerId, "PUT", "/settings", off).andExpect(status().isOk());      // already off: not checked again
     }
 
     // ---- settings ---------------------------------------------------------------------------------------------------

@@ -91,6 +91,8 @@ public class LeaderboardBoardBuilder {
     private final RankingRules rules;
     private final SportService sportService;
     private final GroupMemberNumberService memberNumbers;
+    // SESSION-83: the stats a group switched off for its member row have no value on its board.
+    private final com.sportconnect.session.repository.GroupSessionSettingsRepository groupSettings;
     private final BoardScanner scanner;
 
     /** How many entries of the country's pair board there can be for each region board it is merged from (owner: 1,000). */
@@ -236,8 +238,11 @@ public class LeaderboardBoardBuilder {
         Map<UUID, Integer> numbers = memberNumbers.getMemberNumbers(run.getScopeId(),
                 rows.stream().map(GroupMemberStats::getUserId).collect(Collectors.toList()));
         SubjectNames names = SubjectNames.memberNumbers(numbers);
+        java.util.Set<String> disabled = groupSettings.findById(run.getScopeId())
+                .map(settings -> com.sportconnect.session.stats.StatsConfigs.disabledStats(settings.getStatsConfig()))
+                .orElse(java.util.Set.of());
         for (GroupMemberStats row : rows) {
-            set.apply(names, row.getUserId(), PlayerEntries.ofGroup(GroupStatsDoc.read(row)));
+            set.apply(names, row.getUserId(), PlayerEntries.ofGroup(GroupStatsDoc.read(row), disabled));
         }
         return set;
     }

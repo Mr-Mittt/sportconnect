@@ -46,4 +46,16 @@ public record PlayerEntries(StatsCounters single, Map<String, StatsCounters> par
         Map<String, StatsCounters> partners = doc.groupings().getOrDefault(StatisticsSchema.PARTNER, Map.of());
         return new PlayerEntries(doc.counters().isEmpty() ? null : doc.counters(), partners);
     }
+
+    /**
+     * SESSION-83 (C): the same, for a group that switched some stats off for its member row: those stats have no value (a stored
+     * number from before the switch is not read), so a precondition on one lists nobody and a sort key on one ties everyone.
+     */
+    public static PlayerEntries ofGroup(GroupStatsDoc doc, java.util.Set<String> disabled) {
+        if (disabled.isEmpty()) {
+            return ofGroup(doc);
+        }
+        StatsCounters counters = doc.counters().without(disabled);
+        return new PlayerEntries(counters.isEmpty() ? null : counters, doc.groupings().getOrDefault(StatisticsSchema.PARTNER, Map.of()));
+    }
 }

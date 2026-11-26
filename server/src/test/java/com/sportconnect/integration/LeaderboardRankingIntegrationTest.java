@@ -110,6 +110,7 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
     @Autowired private SessionStatsRunner statsRunner;
     @Autowired private RankingRuleService ruleService;
     @Autowired private LeaderboardService leaderboardService;
+    @Autowired private com.sportconnect.session.api.service.GroupSessionConfigService groupConfigService;
     @Autowired private GroupMemberNumberService memberNumbers;
     @Autowired private LeaderboardEntryRepository entryRepository;
     @Autowired private StatBoardChangeRepository changeRepository;
@@ -1177,6 +1178,30 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
                 List.of(Map.of("key", "sessions", "op", ">=", "value", 2))));
         ranker.run(LeaderboardRanker.Mode.NIGHTLY);
         assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries()).as("nobody has two sessions yet").isEmpty();
+    }
+
+    @Test
+    void aSportRuleThatNamesAStatAGroupSwitchedOffReadsItAsNoValueForThatGroup() {
+        switchToASportThatCollectsSessions();
+        List<Object> sort = List.of(Map.of("key", "sessions", "dir", "DESC"), Map.of("key", "wins", "dir", "DESC"));
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", sort, List.of(Map.of("key", "sessions", "op", ">=", "value", 1))));
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).total()).as("everyone has played a session").isEqualTo(5);
+
+        groupConfigService.updateSettings(groupId, hostId, com.sportconnect.session.api.dto.UpdateGroupSessionSettingsRequest.builder()
+                .statsConfig(Map.of("sessions", Map.of("enabled", false))).build());      // the board is marked for a rebuild by the change itself
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries()).as("a precondition on a stat the group does not collect lists nobody").isEmpty();
+
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", sort, null));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        LeaderboardResponse board = groupBoard(aliceId, "SINGLE", null, 20);
+        assertThat(board.total()).as("the owner has nothing but the stat, so no value at all: not listed").isEqualTo(4);
+        assertThat(board.entries()).allSatisfy(entry -> assertThat(entry.values().get(0)).as("the stat has no value").isNull());
+        assertThat(board.entries()).extracting(LeaderboardEntryDto::rank).as("a sort key on it ties everyone, wins splits them").startsWith(1, 1);
+        assertThat(leaderboardService.getRegionBoard(REGION, sportId, aliceId, "SINGLE", null, 20).entries())
+                .as("the region board is not the group's: it still has the stat").allSatisfy(entry -> assertThat(entry.values().get(0)).isNotNull());
     }
 
     @Test

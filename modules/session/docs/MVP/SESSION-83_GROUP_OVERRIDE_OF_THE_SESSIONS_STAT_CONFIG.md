@@ -1,6 +1,6 @@
 # SESSION-83 · A group's own `sessions` stat config for its member row and board
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-27)
 **Type:** Enhancement · **Depends on:** SESSION-82 (the `sessions` stat and the config in the sport's schema), SESSION-78 (the group's settings row); **better after** SESSION-77 (no history before the rebuild)
 **Filed:** 2026-11-26, owner question at the pickup of SESSION-82: "how can a group override this session stat on the sport's `record.scoreboard` config". Duplicate check: no ticket in the session or client backlog, the drafts file or the ticket folders names a per-group stat config (searched `sessions_config`, group override, per-group config).
 
@@ -13,3 +13,35 @@ SESSION-82 puts the config of the `sessions` stat (`counts` of `joined` and `atL
 **Out of scope:** a group-specific count in a player's own totals, seasons, any other stat's config.
 
 **Tests:** `SessionStatsIntegrationTest` (a group config beats the sport's for the member row and not for the own totals, null falls back, a switch-off group ignores it); the settings call (owner or admin only, member and outsider refused, an invalid config 400); mutation-check each.
+
+## Decisions at the pickup, 2026-11-27 (owner)
+- An invalid `sessionsConfig` on the settings call is refused with `400` (a coded error), never read leniently, because the owner sees the result at once.
+- The field is partial like the others: omitted or `null` keeps the stored value, an empty object `{}` clears it back to the sport's config.
+
+## Scope change 2026-11-27 (owner, at the pickup): a per-stat config with `enabled`, and what a disabled stat does to the ranking rules
+- The config is general and per stat: `config.{stat}` carries `enabled` (default `true`) and the stat's own settings. The field that lists what makes a session count is renamed **`when`** (was `counts`, which read like a count and clashed with `StatsCatalog.counts`); it is renamed in SESSION-82 first. The sport's `config.sessions.enabled: false` means the sport lists the column but does not collect it.
+- **The group's config** is the column `stats_config` (jsonb, nullable) of `group_session_settings`, keyed by stat: `{ "sessions": { "enabled": false } }` or `{ "sessions": { "when": ["atLeast1Game"] } }`; request field `statsConfig` (omitted or `null` keeps, `{}` clears), response `statsConfig` (the group's own) and `effectiveStatsConfig`. A group can only **narrow** the sport's list (disable a stat the sport collects, or change its `when`); it cannot enable a stat the sport does not list. **Only `sessions` is accepted now**; any other stat key is `400` reason `STAT_NOT_CONFIGURABLE` (turning `games` or `wins` off touches formulas, group rule validation and the read API: filed as SESSION-84). The group's config **replaces** the sport's rule for the group member row, no field merge.
+- **Disabled stat and the ranking rules (A, B, C):** (A) a new group rule that names a stat the group disabled is refused with the existing `STAT_NOT_COLLECTED`; (B) disabling a stat while the group's own rule names it is `409 SESSION_GROUP_STAT_IN_USE` (`detail` the rule's kind), the owner edits or deletes the rule first; (C) a board built with a rule (the sport's, by fallback) that names a stat the group does not collect treats the stat as having **no value** for that group: a `require` on it lists nobody and a sort key on it ties everyone; documented, not refused.
+- The 400 for an invalid config is `SESSION_GROUP_STATS_CONFIG_INVALID` (reasons `NOT_AN_OBJECT`, `KEY_UNKNOWN`, `STAT_NOT_CONFIGURABLE`, `ENABLED_INVALID`, `WHEN_INVALID`, `COMBINE_INVALID`).
+
+## Built (2026-11-27)
+
+**Design as approved** (the plan of the pickup, with the owner's changes): the group's own stats config in a nullable jsonb column, keyed by stat, replacing the sport's rule for the group's member row and board only; strict validation with a coded 400; `{}` clears, `null` keeps; the three ranking-rule cases A, B and C; the engine reads the group's settings row once.
+
+**What was built**
+- `V109__group_stats_config.sql` (`group_session_settings.stats_config JSONB`, nullable, no default), the changelog entry, the H2 mirror in `schema.sql`; `GroupSessionSettings.statsConfig`.
+- `StatsConfigs` (stats package): strict `parse` (`SESSION_GROUP_STATS_CONFIG_INVALID`, reasons `NOT_AN_OBJECT`, `KEY_UNKNOWN`, `STAT_NOT_CONFIGURABLE`, `ENABLED_INVALID`, `WHEN_INVALID`, `COMBINE_INVALID`), `disables`/`disabledStats`, `sessionsRule` (the group's `when` or the sport's), `effective`. `StatisticsSchema.SessionsRule` gained `of` and `toConfig`; `StatsCounters.without`.
+- `UpdateGroupSessionSettingsRequest.statsConfig` (typed `Object` so a wrong type is our own `NOT_AN_OBJECT` and not a parse error) and `GroupSessionSettingsResponse.statsConfig` / `effectiveStatsConfig`; the system code `GROUP_STATS_CONFIG_CHANGED` in post-api.
+- `GroupSessionConfigServiceImpl.updateSettings`: parse first, then the 409 while the sport's statistics are off, the change counts toward the no-op shortcut, case B (`409 SESSION_GROUP_STAT_IN_USE` with `detail` and `kind`), the board marked for a full rebuild, the group post, the answer with the effective config.
+- Case A in `RankingRuleServiceImpl.requireCollected` (the group's disabled stats leave the collected set); case C in `LeaderboardBoardBuilder.fromGroup` (`PlayerEntries.ofGroup(doc, disabled)`).
+- `SessionStatsProcessor`: reads the group's settings row once; `groupSessionPlayers` chosen by the group's rule; a group that switched the stat off gets none; the group rows (`groupUsers`) are only those of players the group counts; the no-games exit also looks at the group's rule.
+
+**Divergences and findings**
+- The request field is typed `Object`, not `Map`: with a `Map` a string value was a generic `MALFORMED_REQUEST`, and the owner's `NOT_AN_OBJECT` reason was unreachable.
+- A group row for a player the group does not count is not created any more (the first build created an empty one through the shared `users` set): an owner who only joined, under a group rule of `atLeast1Game`, has no group row.
+- A member whose only value on the group's board was the switched-off stat has no value at all and is not listed (case C): documented in the reference and the client ticket.
+- `effectiveStatsConfig.sessions.enabled` is `false` for a sport that does not list the stat, so the client shows it off without a second call.
+
+**Tests:** `StatsConfigsSpec` 26 (parsing and every refusal, `disables`, the rule, the effective config, `without`); `GroupSessionConfigIntegrationTest` 28 (+5: set, clear and announce, enabled-only keeps the sport's `when`, every invalid case, permissions and the 409 while the sport is off, cases A and B); `SessionStatsIntegrationTest` 43 (+3: the group's `when` replaces the sport's for the group row only, the stat switched off, a group `joined` over a sport `atLeast1Game` with no games); `LeaderboardRankingIntegrationTest` 53 (+1: case C, also proving the change marks the board for a rebuild); `GroupSessionConfigServiceImplSpec` constructor updated. **Mutation:** 12 mutants, all killed (a disabled stat never read, the group using the sport's rule, a switch-off ignored, the no-games exit, group rows for everyone, case B unchecked, case A unchecked, case C ignored, the no-op shortcut, no rebuild mark, the group's `when` ignored, `{}` not clearing); G10 first reported "survived" because its mutation did not compile and was redone.
+**Not run:** the full `:server:test`, PostgreSQL (V109 only ran on H2 through `schema.sql`), two real instances, the client `e2e` project (no client source changed; the client work is CLIENT-SESSION-62), a live server.
+**Visual-regression expectation:** no client change.

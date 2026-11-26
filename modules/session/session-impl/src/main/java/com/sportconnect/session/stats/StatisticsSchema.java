@@ -53,6 +53,37 @@ public final class StatisticsSchema {
 
         public static final SessionsRule DEFAULT = new SessionsRule(true, false, false);
 
+        /** SESSION-83: the rule for these conditions ({@code AND} when {@code and}); an unusable list is {@link #DEFAULT}. */
+        public static SessionsRule of(List<?> when, boolean and) {
+            boolean joined = false;
+            boolean game = false;
+            if (when != null) {
+                for (Object entry : when) {
+                    if ("joined".equals(entry)) {
+                        joined = true;
+                    } else if ("atLeast1Game".equals(entry)) {
+                        game = true;
+                    }
+                }
+            }
+            return !joined && !game ? DEFAULT : new SessionsRule(joined, game, and);
+        }
+
+        /** SESSION-83: the rule as a config ({@code {"when": [...], "combine": "OR"}}), what a settings answer shows. */
+        public Map<String, Object> toConfig() {
+            List<String> when = new ArrayList<>();
+            if (joined) {
+                when.add("joined");
+            }
+            if (atLeast1Game) {
+                when.add("atLeast1Game");
+            }
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("when", when);
+            config.put("combine", and ? "AND" : "OR");
+            return config;
+        }
+
         /** Whether a player who {@code wasJoined} and {@code hadGame} counts for the session. */
         public boolean counts(boolean wasJoined, boolean hadGame) {
             if (joined && atLeast1Game) {
@@ -268,22 +299,8 @@ public final class StatisticsSchema {
     /** SESSION-82: the {@code sessions} config, lenient: unknown entries dropped, nothing usable is {@link SessionsRule#DEFAULT}. */
     private static SessionsRule readSessionsRule(Map<String, Object> config) {
         Map<String, Object> sessions = map(config, "sessions");
-        boolean joined = false;
-        boolean game = false;
-        if (sessions.get("when") instanceof List<?> counts) {
-            for (Object entry : counts) {
-                if ("joined".equals(entry)) {
-                    joined = true;
-                } else if ("atLeast1Game".equals(entry)) {
-                    game = true;
-                }
-            }
-        }
-        if (!joined && !game) {
-            return SessionsRule.DEFAULT;
-        }
         boolean and = sessions.get("combine") instanceof String combine && combine.trim().equalsIgnoreCase("AND");
-        return new SessionsRule(joined, game, and);
+        return SessionsRule.of(sessions.get("when") instanceof List<?> when ? when : null, and);
     }
 
     private static int intOf(Object value, int fallback) {

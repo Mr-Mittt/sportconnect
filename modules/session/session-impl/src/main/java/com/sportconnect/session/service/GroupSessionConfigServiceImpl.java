@@ -24,6 +24,14 @@ import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.repository.GroupSessionRecurrenceRepository;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.session.ranking.RequireList;
+import com.sportconnect.session.ranking.SortList;
+import com.sportconnect.session.stats.SportRankingRule;
+import com.sportconnect.session.stats.SportRankingRuleRepository;
+import com.sportconnect.session.stats.StatBoardRunRepository;
+import com.sportconnect.session.stats.StatisticsSchema;
+import com.sportconnect.session.stats.StatsCatalog;
+import com.sportconnect.session.stats.StatsConfigs;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.social.post.api.dto.SystemCode;
 import com.sportconnect.social.post.api.service.PostService;
@@ -79,6 +87,10 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     private final SessionRepository sessionRepository;
     // SESSION-78: the group's statistics setting only exists while the group's sport has statistics switched on.
     private final SportService sportService;
+    // SESSION-83: a stat cannot be disabled for a group while the group's own ranking rule names it.
+    private final SportRankingRuleRepository rankingRuleRepository;
+    // SESSION-83: a changed stats config makes the group's board rebuild whole at the next ranking run.
+    private final StatBoardRunRepository boardRunRepository;
 
     // ---- settings -------------------------------------------------------------------------------------------------
 
@@ -86,20 +98,32 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     @Transactional(readOnly = true)
     public GroupSessionSettingsResponse getSettings(Long groupId, UUID callerId) {
         requireMember(groupId, callerId);
-        return toSettingsResponse(groupId, settingsRepository.findById(groupId).orElse(null), statisticsAvailable(groupId, callerId));
+        return toSettingsResponse(groupId, callerId, settingsRepository.findById(groupId).orElse(null), statisticsAvailable(groupId, callerId));
     }
 
     @Override
     @Transactional
     public GroupSessionSettingsResponse updateSettings(Long groupId, UUID callerId, UpdateGroupSessionSettingsRequest request) {
         requireManager(groupId, callerId);
+        // SESSION-83: a stats config is checked first (pure, a wrong one is 400 whatever else is true); an empty object clears it
+        boolean statsConfigRequested = request.getStatsConfig() != null;
+        Map<String, Object> newStatsConfig = null;
+        if (statsConfigRequested) {
+            Map<String, Object> parsed = StatsConfigs.parse(request.getStatsConfig());
+            newStatsConfig = parsed.isEmpty() ? null : parsed;
+        }
         // SESSION-78: while the group's sport has statistics off the statistics setting is not shown and cannot be changed (any value, on or off).
         boolean statisticsAvailable = statisticsAvailable(groupId, callerId);
-        if (request.getStatisticsEnabled() != null && !statisticsAvailable) {
+        if ((request.getStatisticsEnabled() != null || statsConfigRequested) && !statisticsAvailable) {
             throw new ConflictException("SESSION_GROUP_STATISTICS_NOT_AVAILABLE",
                     "This group's sport does not have statistics switched on", null);
         }
         GroupSessionSettings existing = settingsRepository.findById(groupId).orElse(null);
+        Map<String, Object> currentStatsConfig = existing == null ? null : existing.getStatsConfig();
+        boolean statsConfigChanged = statsConfigRequested && !Objects.equals(newStatsConfig, currentStatsConfig);
+        if (statsConfigChanged) {
+            requireNoOwnRuleNaming(groupId, callerId, StatsConfigs.disabledStats(newStatsConfig), StatsConfigs.disabledStats(currentStatsConfig));
+        }
         boolean currentEnabled = existing != null && existing.isEnabled();
         RecurrenceMode currentMode = existing != null ? existing.getMode() : RecurrenceMode.WEEKLY;
 
@@ -107,9 +131,9 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         boolean modeChanged = request.getMode() != null && request.getMode() != currentMode;
         boolean currentStatistics = existing != null && existing.isStatisticsEnabled();
         boolean statisticsChanged = request.getStatisticsEnabled() != null && request.getStatisticsEnabled() != currentStatistics;
-        if (!enabledChanged && !modeChanged && !statisticsChanged) {
+        if (!enabledChanged && !modeChanged && !statisticsChanged && !statsConfigChanged) {
             // Nothing to change: no row is created for a no-op, no post is written.
-            return toSettingsResponse(groupId, existing, statisticsAvailable);
+            return toSettingsResponse(groupId, callerId, existing, statisticsAvailable);
         }
 
         GroupSessionSettings settings = existing != null ? existing : GroupSessionSettings.builder().groupId(groupId).build();
@@ -121,6 +145,11 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         }
         if (statisticsChanged) {
             settings.setStatisticsEnabled(request.getStatisticsEnabled());
+        }
+        if (statsConfigChanged) {
+            settings.setStatsConfig(newStatsConfig);
+            // the group's board (if it has one) is rebuilt whole at the next run: a switched-off stat has no value there now
+            boardRunRepository.markFullRebuildOfGroup(groupService.getGroup(groupId, callerId).getSportId(), groupId, java.time.Instant.now());
         }
         GroupSessionSettings saved = settingsRepository.save(settings);
 
@@ -154,13 +183,18 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
             announce(groupId, on ? SystemCode.GROUP_STATISTICS_ON : SystemCode.GROUP_STATISTICS_OFF,
                     name + (on ? " turned on" : " turned off") + " statistics and the leaderboard", new HashMap<>(Map.of("name", name)));
         }
-        log.info("Group {} session settings changed by {}: enabled={}, mode={}, statisticsEnabled={}", groupId, callerId,
-                saved.isEnabled(), saved.getMode(), saved.isStatisticsEnabled());
+        if (statsConfigChanged) {
+            // SESSION-83: told in the group like the statistics switch; no push notification. Counted from the next session on.
+            announce(groupId, SystemCode.GROUP_STATS_CONFIG_CHANGED, name + " changed how statistics are counted for the group",
+                    new HashMap<>(Map.of("name", name)));
+        }
+        log.info("Group {} session settings changed by {}: enabled={}, mode={}, statisticsEnabled={}, statsConfigChanged={}", groupId,
+                callerId, saved.isEnabled(), saved.getMode(), saved.isStatisticsEnabled(), statsConfigChanged);
         // SESSION-GROUP-5: switching generation ON, or switching the mode while it is on, makes slots due: queue and generate them.
         if (saved.isEnabled() && (enabledChanged || modeChanged)) {
             eventPublisher.publishEvent(new GroupSessionGenerationEvents.ConfigChanged(groupId));
         }
-        GroupSessionSettingsResponse response = toSettingsResponse(groupId, saved, statisticsAvailable);
+        GroupSessionSettingsResponse response = toSettingsResponse(groupId, callerId, saved, statisticsAvailable);
         response.setCancelledSessions(cancelled);
         return response;
     }
@@ -372,13 +406,58 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         return groupSportId != null && sportService.getStatisticsEnabledSportIds().contains(groupSportId);
     }
 
-    private GroupSessionSettingsResponse toSettingsResponse(Long groupId, GroupSessionSettings settings, boolean statisticsAvailable) {
+    private GroupSessionSettingsResponse toSettingsResponse(Long groupId, UUID callerId, GroupSessionSettings settings,
+                                                            boolean statisticsAvailable) {
+        Map<String, Object> own = settings == null ? null : settings.getStatsConfig();
         return GroupSessionSettingsResponse.builder()
                 .groupId(groupId)
                 .enabled(settings != null && settings.isEnabled())
                 .mode(settings != null ? settings.getMode() : RecurrenceMode.WEEKLY)
                 .statisticsEnabled(statisticsAvailable ? Boolean.valueOf(settings != null && settings.isStatisticsEnabled()) : null)
+                .statsConfig(own)
+                .effectiveStatsConfig(statisticsAvailable ? StatsConfigs.effective(sportSchema(groupId, callerId), own) : null)
                 .build();
+    }
+
+    /** The statistics side of the group's sport's result schema (an empty schema, which collects nothing, when the sport has none). */
+    private StatisticsSchema sportSchema(Long groupId, UUID callerId) {
+        Long sportId = groupService.getGroup(groupId, callerId).getSportId();
+        try {
+            return StatisticsSchema.of(sportService.getResultSchema(sportId));
+        } catch (ResourceNotFoundException e) {
+            return StatisticsSchema.of(Map.of());
+        }
+    }
+
+    /**
+     * SESSION-83 (B): a stat cannot be switched off for the group while the group's own ranking rule names it, because the board
+     * would keep ordering by numbers that no longer change. {@code 409 SESSION_GROUP_STAT_IN_USE}, {@code detail} the stat and
+     * {@code kind} the rule's. A stat that was already off is not checked again.
+     */
+    private void requireNoOwnRuleNaming(Long groupId, UUID callerId, Set<String> nowOff, Set<String> wasOff) {
+        Set<String> newlyOff = new HashSet<>(nowOff);
+        newlyOff.removeAll(wasOff);
+        if (newlyOff.isEmpty()) {
+            return;
+        }
+        Long sportId = groupService.getGroup(groupId, callerId).getSportId();
+        Map<String, StatsCatalog.Stat> catalog = sportSchema(groupId, callerId).catalog();
+        for (SportRankingRule rule : rankingRuleRepository.findAllOfSport(sportId)) {
+            if (!SportRankingRule.GROUP.equals(rule.getScopeType()) || !groupId.equals(rule.getScopeId())) {
+                continue;
+            }
+            Set<String> operands = new HashSet<>(SortList.fromStored(rule.getSort()).operands());
+            operands.addAll(RequireList.fromStored(rule.getConditions()).operands());
+            for (StatsCatalog.Stat stat : StatsCatalog.storedFor(catalog, operands)) {
+                if (newlyOff.contains(stat.key())) {
+                    Map<String, Object> params = new HashMap<>();
+                    params.put("detail", stat.key());
+                    params.put("kind", rule.getKind());
+                    throw new ConflictException("SESSION_GROUP_STAT_IN_USE",
+                            "The group's own ranking rule uses " + stat.key() + ": change or delete it first", params);
+                }
+            }
+        }
     }
 
     /** Name and avatar of the given members in one display lookup (deactivated accounts included, unknown ids absent); no call without ids. */
