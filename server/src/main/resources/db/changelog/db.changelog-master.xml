@@ -283,4 +283,7 @@
     <!-- SESSION-81: a permanent number for every member of a group (group_member_numbers, group_member_number_counters) -->
     <include file="db/changelog/changes/V107__group_member_numbers.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-54: leaderboard boards as one tree per board, the engine's change rows, the server-only sort rules, and the board runs' new columns -->
+    <include file="db/changelog/changes/V108__leaderboard_boards_rules_and_changes.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

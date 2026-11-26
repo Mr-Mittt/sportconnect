@@ -27,7 +27,7 @@
 | 6 | [SESSION-47](MVP/SESSION-47_DISCOVER_FILTERS_FOR_GENDER_SLOTS_AND_GAME_MOOD.md) | Discover filters for per-gender slots and game mood (deferred from SESSION-46; depends on it) | `TODO` |
 | 7 | [SESSION-48](MVP/SESSION-48_REMOVE_DESCRIPTION_FROM_THE_SESSION_API.md) | Remove description from the session API (deferred from CLIENT-SESSION-34; depends on it) | `TODO` |
 | 8 | [SESSION-GL-51](MVP/SESSION-GL-51_SESSION_THREAD_CHAT_COMMANDS_FOR_RESULTS.md) | Chat commands `:add`, `:del`, `:upd` in the session post thread | `POSTPONED` (2026-11-14, see CLIENT-GL-39) |
-| 12 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Ranking jobs and boards (rewritten 2026-11-23): the nightly ranking job, group, region and country boards from the sport's order, the manual group refresh with a one-hour cooldown (client pair CLIENT-SESSION-42). **Review gate 2 follows it** | `TODO` |
+| 12 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Ranking jobs and boards (rewritten 2026-11-23): the nightly ranking job, group, region and country boards from the sport's order, the manual group refresh with a one-hour cooldown (client pair CLIENT-SESSION-42). **Review gate 2 follows it** | `IN PROGRESS` |
 | 13 | [SESSION-52](MVP/SESSION-52_GUESTS_IN_SESSION_RESULTS.md) | Guests in session results (BA GU-1 to GU-4); rewritten note 2026-11-23: a guest game is not a ranking game and is not counted | `TODO` |
 | 14 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `TODO` |
 | 15 | [SESSION-56](MVP/SESSION-56_POINT_ADJUSTMENTS.md) | Admin point adjustments with a reason and history (BA AD-1 to AD-4) | `TODO` |

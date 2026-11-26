@@ -84,6 +84,11 @@ public final class StatisticsSchema {
                 Boolean.TRUE.equals(data.get("allowDraws")));
     }
 
+    /** SESSION-54: the stats the sport's record type supports (the catalog the ranking rules are checked against); empty for a type with none. */
+    public Map<String, StatsCatalog.Stat> catalog() {
+        return catalog;
+    }
+
     /** Whether the sport collects anything at all: false for a schema with no usable {@code scoreboard.columns}. */
     public boolean collects() {
         return !collected.isEmpty();

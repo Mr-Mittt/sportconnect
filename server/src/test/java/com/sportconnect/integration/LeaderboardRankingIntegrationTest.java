@@ -1,0 +1,922 @@
+package com.sportconnect.integration;
+
+import com.sportconnect.common.exception.BadRequestException;
+import com.sportconnect.common.exception.ConflictException;
+import com.sportconnect.group.api.service.GroupMemberNumberService;
+import com.sportconnect.group.entity.Group;
+import com.sportconnect.group.entity.GroupMember;
+import com.sportconnect.group.repository.GroupMemberRepository;
+import com.sportconnect.group.repository.GroupRepository;
+import com.sportconnect.location.entity.Location;
+import com.sportconnect.location.repository.LocationRepository;
+import com.sportconnect.session.api.dto.FeeType;
+import com.sportconnect.session.api.dto.ParticipantStatus;
+import com.sportconnect.session.api.dto.RankingRuleRequest;
+import com.sportconnect.session.api.dto.SessionStatus;
+import com.sportconnect.session.api.dto.SessionType;
+import com.sportconnect.session.api.service.RankingRuleService;
+import com.sportconnect.session.entity.GroupSessionSettings;
+import com.sportconnect.session.entity.Session;
+import com.sportconnect.session.entity.SessionParticipant;
+import com.sportconnect.session.ranking.BoardTree;
+import com.sportconnect.session.ranking.LeaderboardRanker;
+import com.sportconnect.session.record.SessionRecord;
+import com.sportconnect.session.record.SessionRecordRepository;
+import com.sportconnect.session.record.SessionRecordVerification;
+import com.sportconnect.session.record.SessionRecordVerificationRepository;
+import com.sportconnect.session.repository.GroupSessionSettingsRepository;
+import com.sportconnect.session.repository.SessionParticipantRepository;
+import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.session.stats.GroupMemberStatsRepository;
+import com.sportconnect.session.stats.GroupStatsRepository;
+import com.sportconnect.session.stats.LeaderboardEntry;
+import com.sportconnect.session.stats.LeaderboardEntryRepository;
+import com.sportconnect.session.stats.SessionStatsJobRepository;
+import com.sportconnect.session.stats.SessionStatsRunner;
+import com.sportconnect.session.stats.SportRankingRule;
+import com.sportconnect.session.stats.SportRankingRuleRepository;
+import com.sportconnect.session.stats.StatBoardChange;
+import com.sportconnect.session.stats.StatBoardChangeRepository;
+import com.sportconnect.session.stats.StatBoardRun;
+import com.sportconnect.session.stats.StatBoardRunRepository;
+import com.sportconnect.session.stats.UserSportStatsRepository;
+import com.sportconnect.social.post.api.dto.PostType;
+import com.sportconnect.social.post.entity.Post;
+import com.sportconnect.social.post.repository.CommentRepository;
+import com.sportconnect.social.post.repository.PostRepository;
+import com.sportconnect.sport.entity.Sport;
+import com.sportconnect.sport.repository.SportRepository;
+import com.sportconnect.user.entity.User;
+import com.sportconnect.user.repository.UserRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import javax.sql.DataSource;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * SESSION-54: the leaderboards through the real Spring context and the H2 schema. A ranking game counted by the statistics engine
+ * leaves one change row per player and board; the ranking pass rebuilds those players' entries into the region, country and group
+ * boards (one tree per board, ranks derived, the previous rank baked in), moves a pair whose numbers changed, takes a country's
+ * pair at its best region only, rebuilds a board whole when its rule changes, skips a sport or a group that is switched off, records
+ * a failure and retries it, and never publishes a board a claim was taken from. The rules admin service refuses what the sport's
+ * own schema cannot support.
+ *
+ * <p>The nightly and retry ticks and the worker thread are off in the test profile; the tests call
+ * {@link LeaderboardRanker#run}. H2 in one JVM: the threads prove the portable claim logic, not PostgreSQL's own behaviour, the
+ * cost of a large jsonb tree, or two real instances.
+ */
+class LeaderboardRankingIntegrationTest extends RedisBaseIT {
+
+    private static final Integer ROLE_OWNER = 1;
+    private static final Integer ROLE_MEMBER = 3;
+    private static final long COUNTRY = 84L;
+    private static final long REGION = 79L;
+    private static final long OTHER_REGION = 80L;
+
+    @Autowired private LeaderboardRanker ranker;
+    @Autowired private com.sportconnect.session.ranking.LeaderboardBoardBuilder builder;
+    @Autowired private com.sportconnect.session.ranking.LeaderboardWriter writer;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Autowired private SessionStatsRunner statsRunner;
+    @Autowired private RankingRuleService ruleService;
+    @Autowired private GroupMemberNumberService memberNumbers;
+    @Autowired private LeaderboardEntryRepository entryRepository;
+    @Autowired private StatBoardChangeRepository changeRepository;
+    @Autowired private StatBoardRunRepository runRepository;
+    @Autowired private SportRankingRuleRepository ruleRepository;
+    @Autowired private com.sportconnect.group.repository.GroupMemberNumberRepository memberNumberRepository;
+    @Autowired private com.sportconnect.group.repository.GroupMemberNumberCounterRepository memberNumberCounterRepository;
+    @Autowired private GroupStatsRepository groupH2hRepository;
+    @Autowired private GroupMemberStatsRepository groupMemberStatsRepository;
+    @Autowired private UserSportStatsRepository userStatsRepository;
+    @Autowired private SessionStatsJobRepository jobRepository;
+    @Autowired private SessionRepository sessionRepository;
+    @Autowired private SessionParticipantRepository participantRepository;
+    @Autowired private SessionRecordRepository recordRepository;
+    @Autowired private SessionRecordVerificationRepository verificationRepository;
+    @Autowired private GroupRepository groupRepository;
+    @Autowired private GroupSessionSettingsRepository groupSettingsRepository;
+    @Autowired private GroupMemberRepository groupMemberRepository;
+    @Autowired private LocationRepository locationRepository;
+    @Autowired private UserRepository userRepository;
+    @Autowired private SportRepository sportRepository;
+    @Autowired private PostRepository postRepository;
+    @Autowired private CommentRepository commentRepository;
+    @Autowired private CacheManager cacheManager;
+    @Autowired private DataSource dataSource;
+
+    private UUID hostId;
+    private UUID aliceId;
+    private UUID bobId;
+    private UUID carolId;
+    private UUID danId;
+    private Long sportId;
+    private Long groupId;
+    private Long venueId;
+    private Long otherVenueId;
+
+    @BeforeEach
+    void setUpFixtures() {
+        clearAll();
+        hostId = createUser("host");
+        aliceId = createUser("alice");
+        bobId = createUser("bob");
+        carolId = createUser("carol");
+        danId = createUser("dan");
+        sportId = newSport(badmintonSchema(), true);
+        groupId = groupRepository.save(Group.builder().groupName("Boards " + UUID.randomUUID())
+                .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
+        groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
+        groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());
+        for (UUID member : List.of(aliceId, bobId, carolId, danId)) {
+            groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(member).roleId(ROLE_MEMBER).build());
+        }
+        venueId = venue(COUNTRY, REGION);
+        otherVenueId = venue(COUNTRY, OTHER_REGION);
+    }
+
+    @AfterEach
+    void tearDownFixtures() {
+        clearAll();
+    }
+
+    private void clearAll() {
+        changeRepository.deleteAll();
+        runRepository.deleteAll();
+        entryRepository.deleteAll();
+        ruleRepository.deleteAll();
+        groupH2hRepository.deleteAll();
+        memberNumberRepository.deleteAll();
+        memberNumberCounterRepository.deleteAll();
+        groupMemberStatsRepository.deleteAll();
+        userStatsRepository.deleteAll();
+        jobRepository.deleteAll();
+        commentRepository.deleteAll();
+        verificationRepository.deleteAll();
+        recordRepository.deleteAll();
+        participantRepository.deleteAll();
+        sessionRepository.deleteAll();
+        groupMemberRepository.deleteAll();
+        groupSettingsRepository.deleteAll();
+        groupRepository.deleteAll();
+        locationRepository.deleteAll();
+        postRepository.deleteAll();
+        userRepository.deleteAll();
+        sportRepository.deleteAll();
+        if (cacheManager.getCache("sports") != null) {
+            cacheManager.getCache("sports").clear();
+        }
+    }
+
+    // ---- the engine leaves change rows -------------------------------------------------------------------------------
+
+    @Test
+    void theEngineAppendsOneChangeRowPerPlayerAndBoardForTheWholeSession() {
+        Long sessionId = completedSession(groupId, venueId, 2);
+        Long first = game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        propose(first, aliceId, List.of(aliceId, bobId, carolId, danId));
+        Long second = game(sessionId, List.of(carolId, danId), List.of(aliceId, bobId), 21, 18);
+        propose(second, carolId, List.of(aliceId, bobId, carolId, danId));
+
+        statsRunner.processDue();
+
+        // two ranking games, four players: each player once on the group, region and country board (not once per game)
+        List<StatBoardChange> rows = changeRepository.findAll();
+        assertThat(rows).hasSize(12);
+        for (String board : List.of("GROUP", "REGION", "COUNTRY")) {
+            Long scope = board.equals("GROUP") ? groupId : board.equals("REGION") ? REGION : COUNTRY;
+            assertThat(rows.stream().filter(r -> r.getScopeType().equals(board) && r.getScopeId().equals(scope)
+                    && r.getSportId().equals(sportId)).map(StatBoardChange::getUserId).toList())
+                    .containsExactlyInAnyOrder(aliceId, bobId, carolId, danId);
+        }
+        // a region board knows its country, a country board is its own
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow().getCountryId()).isEqualTo(COUNTRY);
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "COUNTRY", COUNTRY)).orElseThrow().getCountryId()).isEqualTo(COUNTRY);
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "GROUP", groupId)).orElseThrow().getCountryId()).isNull();
+    }
+
+    @Test
+    void aNormalGameChangesOnlyTheGroupBoard() {
+        Long sessionId = completedSession(groupId, venueId, 2);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        statsRunner.processDue();
+
+        assertThat(changeRepository.findAll()).extracting(StatBoardChange::getScopeType).containsOnly("GROUP");
+    }
+
+    // ---- ranking a region and a country ------------------------------------------------------------------------------
+
+    @Test
+    void aRankingGameAppearsOnTheRegionAndTheCountryBoardsAndTheChangeRowsAreCleared() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+
+        assertThat(ranker.run(LeaderboardRanker.Mode.NIGHTLY)).isEqualTo(3);     // region, country, group
+
+        BoardTree single = tree("REGION", REGION, "SINGLE");
+        assertThat(single.size()).isEqualTo(4);
+        assertThat(single.ranks().get(aliceId.toString())).isEqualTo(1);
+        assertThat(single.ranks().get(bobId.toString())).isEqualTo(1);
+        assertThat(single.ranks().get(carolId.toString())).isEqualTo(3);
+        assertThat(single.ranks().get(danId.toString())).isEqualTo(3);
+
+        BoardTree pairs = tree("REGION", REGION, "PARTNER");
+        assertThat(pairs.size()).isEqualTo(2);
+        assertThat(pairs.ranks()).containsEntry(pair(aliceId, bobId), 1).containsEntry(pair(carolId, danId), 2);
+
+        assertThat(tree("COUNTRY", COUNTRY, "SINGLE").size()).isEqualTo(4);
+        assertThat(tree("COUNTRY", COUNTRY, "PARTNER").ranks()).containsEntry(pair(aliceId, bobId), 1).containsEntry(pair(carolId, danId), 2);
+
+        assertThat(changeRepository.findAll().stream().filter(c -> !c.getScopeType().equals("GROUP"))).isEmpty();
+        for (String type : List.of("REGION", "COUNTRY")) {
+            Long scope = type.equals("REGION") ? REGION : COUNTRY;
+            StatBoardRun run = runRepository.findById(new StatBoardRun.Key(sportId, type, scope)).orElseThrow();
+            assertThat(run.getDirty()).as("%s dirty", type).isFalse();
+            assertThat(run.getStatus()).isEqualTo("IDLE");
+            assertThat(run.getComputedAt()).isNotNull();
+        }
+        assertThat(entryRepository.findById(new LeaderboardEntry.Key(sportId, "REGION", REGION, "SINGLE")).orElseThrow().getEntries()).isEqualTo(4);
+    }
+
+    @Test
+    void aLaterGameMovesPairsAndPlayersAndBakesThePreviousRank() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        countRankedGame(venueId, List.of(aliceId, carolId), List.of(bobId, danId));
+        assertThat(ranker.run(LeaderboardRanker.Mode.NIGHTLY)).isEqualTo(3);
+
+        BoardTree single = tree("REGION", REGION, "SINGLE");
+        // alice 2 wins in 2 games, bob and carol 1 in 2, dan none
+        assertThat(single.ranks().get(aliceId.toString())).isEqualTo(1);
+        assertThat(single.ranks().get(bobId.toString())).isEqualTo(2);
+        assertThat(single.ranks().get(carolId.toString())).isEqualTo(2);
+        assertThat(single.ranks().get(danId.toString())).isEqualTo(4);
+        // the rank each had before this run: alice and bob shared 1, carol and dan shared 3
+        assertThat(single.prevRankOf(aliceId.toString())).isEqualTo(1);
+        assertThat(single.prevRankOf(bobId.toString())).isEqualTo(1);
+        assertThat(single.prevRankOf(carolId.toString())).isEqualTo(3);
+        assertThat(single.prevRankOf(danId.toString())).isEqualTo(3);
+
+        BoardTree pairs = tree("REGION", REGION, "PARTNER");
+        assertThat(pairs.size()).isEqualTo(4);
+        assertThat(pairs.ranks()).containsEntry(pair(aliceId, bobId), 1).containsEntry(pair(aliceId, carolId), 1)
+                .containsEntry(pair(carolId, danId), 3).containsEntry(pair(bobId, danId), 3);
+        assertThat(pairs.prevRankOf(pair(aliceId, bobId))).isEqualTo(1);
+        assertThat(pairs.prevRankOf(pair(carolId, danId))).isEqualTo(2);
+        assertThat(pairs.prevRankOf(pair(aliceId, carolId))).as("a pair new on the board has no previous rank").isNull();
+
+        // the group board counts every game and follows the later game too: it is rebuilt from the members\x27 rows, named by number
+        BoardTree group = tree("GROUP", groupId, "SINGLE");
+        assertThat(group.ranks().get(String.valueOf(no(aliceId)))).isEqualTo(1);
+        assertThat(group.ranks().get(String.valueOf(no(bobId)))).isEqualTo(2);
+        assertThat(group.ranks().get(String.valueOf(no(carolId)))).isEqualTo(2);
+        assertThat(group.ranks().get(String.valueOf(no(danId)))).isEqualTo(4);
+        assertThat(group.prevRankOf(String.valueOf(no(carolId)))).isEqualTo(3);
+        assertThat(tree("GROUP", groupId, "PARTNER").size()).isEqualTo(4);
+    }
+
+    @Test
+    void aSportWithNoRulesHasNoBoardsKeepsNothingPendingAndGetsThemWhenARuleIsSet() {
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+
+        assertThat(ranker.run(LeaderboardRanker.Mode.NIGHTLY)).as("the boards are visited, none is built").isEqualTo(3);
+
+        assertThat(entryRepository.findAll()).isEmpty();
+        assertThat(changeRepository.findAll()).as("the change rows are consumed, they do not pile up").isEmpty();
+        assertThat(runRepository.findAll()).allSatisfy(run -> {
+            assertThat(run.getDirty()).isFalse();
+            assertThat(run.getStatus()).isEqualTo("IDLE");
+        });
+
+        // the rules come later: nothing is lost, each board has no tree yet and is built whole from what the players hold
+        setRules();
+        ruleService.rebuild(sportId);       // the test profile runs the pass on the calling thread
+
+        assertThat(tree("REGION", REGION, "SINGLE").size()).isEqualTo(4);
+        assertThat(tree("REGION", REGION, "PARTNER").size()).isEqualTo(2);
+        assertThat(tree("COUNTRY", COUNTRY, "PARTNER").size()).isEqualTo(2);
+        assertThat(tree("GROUP", groupId, "SINGLE").size()).isEqualTo(4);
+    }
+
+    @Test
+    void aCountryTakesAPairAtItsBestRegionOnlyAndItsSinglesAreSummed() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));            // region 79: alice+bob win
+        countRankedGame(otherVenueId, List.of(carolId, danId), List.of(aliceId, bobId));       // region 80: alice+bob lose
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        // the pair played one game in each region; the country shows its best region's entry (1 win in 1 game), not 1 win in 2
+        BoardTree countryPairs = tree("COUNTRY", COUNTRY, "PARTNER");
+        BoardTree regionPairs = tree("REGION", REGION, "PARTNER");
+        assertThat(countryPairs.tupleOf(pair(aliceId, bobId))).isEqualTo(regionPairs.tupleOf(pair(aliceId, bobId)));
+        assertThat(countryPairs.tupleOf(pair(aliceId, bobId)).get(0)).isEqualTo(1.0);       // wins
+        assertThat(countryPairs.tupleOf(pair(aliceId, bobId)).get(1)).isEqualTo(1.0);       // games
+        assertThat(countryPairs.size()).isEqualTo(2);
+        // a player's single entry at country level adds the regions up: alice won 1 and lost 1, 2 games
+        BoardTree countrySingles = tree("COUNTRY", COUNTRY, "SINGLE");
+        assertThat(countrySingles.tupleOf(aliceId.toString()).get(0)).isEqualTo(1.0);
+        assertThat(countrySingles.tupleOf(aliceId.toString()).get(1)).isEqualTo(2.0);
+        assertThat(tree("REGION", OTHER_REGION, "SINGLE").size()).isEqualTo(4);
+    }
+
+    @Test
+    void theCountryPairBoardIsCappedAtTheSlotsOfEachRegionBoardItIsMergedFrom() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        org.springframework.test.util.ReflectionTestUtils.setField(builder, "slotsPerRegion", 1);
+        try {
+            ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(builder, "slotsPerRegion", 1000);
+        }
+
+        // one region board is merged, so the country keeps one pair: the better one
+        BoardTree countryPairs = tree("COUNTRY", COUNTRY, "PARTNER");
+        assertThat(countryPairs.size()).isEqualTo(1);
+        assertThat(countryPairs.contains(pair(aliceId, bobId))).isTrue();
+        // the region itself is not capped
+        assertThat(tree("REGION", REGION, "PARTNER").size()).isEqualTo(2);
+    }
+
+    // ---- rules ---------------------------------------------------------------------------------------------------------
+
+    @Test
+    void aChangedRuleRebuildsTheBoardsWholeAndKeepsThePreviousRanks() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(tree("REGION", REGION, "SINGLE").ranks().get(carolId.toString())).isEqualTo(3);
+
+        // the order is turned round: the fewest wins first
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", List.of(Map.of("key", "wins", "dir", "ASC")), null));
+        StatBoardRun marked = runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow();
+        assertThat(marked.getFullRebuild()).isTrue();
+        assertThat(marked.getDirty()).isTrue();
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        BoardTree single = tree("REGION", REGION, "SINGLE");
+        assertThat(single.sort().keys().get(0).descending()).isFalse();
+        assertThat(single.ranks().get(carolId.toString())).isEqualTo(1);
+        assertThat(single.ranks().get(aliceId.toString())).isEqualTo(3);
+        assertThat(single.prevRankOf(carolId.toString())).as("the rank before the new rule").isEqualTo(3);
+        assertThat(single.prevRankOf(aliceId.toString())).isEqualTo(1);
+        StatBoardRun after = runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow();
+        assertThat(after.getFullRebuild()).isFalse();
+        assertThat(after.getRulesVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void aTreeBuiltWithAnotherRuleIsRebuiltEvenWhenNothingFlaggedIt() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(tree("REGION", REGION, "SINGLE").ranks().get(carolId.toString())).isEqualTo(3);
+
+        // the rule row is changed behind the service (no flag set): the stored sort list no longer matches it
+        SportRankingRule row = ruleRepository.findById(new SportRankingRule.Key(sportId, "SPORT", 0L, "SINGLE")).orElseThrow();
+        row.setSort(new ArrayList<>(List.of(Map.of("key", "wins", "dir", "ASC"))));
+        row.setVersion(row.getVersion() + 1);
+        ruleRepository.save(row);
+        inTx(() -> runRepository.markDirty(sportId, "REGION", REGION, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)));
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(tree("REGION", REGION, "SINGLE").ranks().get(carolId.toString())).isEqualTo(1);
+        assertThat(tree("REGION", REGION, "SINGLE").sort().keys().get(0).descending()).isFalse();
+    }
+
+    @Test
+    void aMinimumChangedBehindTheServiceRebuildsTheBoardToo() {
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", defaultSort(), null));
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(tree("REGION", REGION, "SINGLE").size()).isEqualTo(4);
+
+        SportRankingRule row = ruleRepository.findById(new SportRankingRule.Key(sportId, "SPORT", 0L, "SINGLE")).orElseThrow();
+        row.setConditions(new ArrayList<>(atLeastGames(5)));
+        ruleRepository.save(row);
+        inTx(() -> runRepository.markDirty(sportId, "REGION", REGION, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)));
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(tree("REGION", REGION, "SINGLE").size()).as("nobody has 5 games").isZero();
+    }
+
+    @Test
+    void aRegionPublicationMarksItsCountryDirtySoTheCountryIsRebuiltInThePass() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        Instant countryBuilt = runRepository.findById(new StatBoardRun.Key(sportId, "COUNTRY", COUNTRY)).orElseThrow().getComputedAt();
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "COUNTRY", COUNTRY)).orElseThrow().getDirty()).isFalse();
+
+        // only the region is told to rebuild; the country has no work of its own
+        inTx(() -> runRepository.markFullRebuildOfCountry(sportId, COUNTRY, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)));
+        StatBoardRun country = runRepository.findById(new StatBoardRun.Key(sportId, "COUNTRY", COUNTRY)).orElseThrow();
+        country.setDirty(false);
+        country.setFullRebuild(false);
+        runRepository.save(country);
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        StatBoardRun after = runRepository.findById(new StatBoardRun.Key(sportId, "COUNTRY", COUNTRY)).orElseThrow();
+        assertThat(after.getComputedAt()).as("the country was rebuilt in the same pass").isAfter(countryBuilt);
+        assertThat(after.getDirty()).isFalse();
+    }
+
+    @Test
+    void theMinimumGamesKeepsAnEntryOffTheBoardUntilItHasPlayedEnough() {
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", defaultSort(), atLeastGames(2)));
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(tree("REGION", REGION, "SINGLE").size()).isZero();
+
+        countRankedGame(venueId, List.of(aliceId, carolId), List.of(bobId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(tree("REGION", REGION, "SINGLE").size()).isEqualTo(4);
+        assertThat(entryRepository.findById(new LeaderboardEntry.Key(sportId, "REGION", REGION, "PARTNER"))).isEmpty();   // no PARTNER rule: no pair board
+    }
+
+    @Test
+    void aCountryRuleBeatsTheSportDefaultForItsRegionsAndItsCountryBoard() {
+        setRules();
+        ruleService.save(hostId, sportId, request("COUNTRY", COUNTRY, "SINGLE", List.of(Map.of("key", "games", "dir", "DESC")), null));
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(tree("REGION", REGION, "SINGLE").sort().keys().get(0).stat()).isEqualTo("games");
+        assertThat(tree("COUNTRY", COUNTRY, "SINGLE").sort().keys().get(0).stat()).isEqualTo("games");
+        assertThat(tree("REGION", REGION, "PARTNER").sort().keys().get(0).stat()).as("the pair rule is the default's").isEqualTo("wins");
+    }
+
+    @Test
+    void theRulesServiceRefusesWhatTheSportsSchemaCannotSupport() {
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", List.of(Map.of("key", "speed", "dir", "DESC")), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SORT_INVALID");
+        assertThatCode(() -> ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", List.of(Map.of("key", "winRate", "dir", "DESC")), null)))
+                .as("winRate needs wins and games, which the sport collects").doesNotThrowAnyException();
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", List.of(Map.of("key", "losses", "dir", "DESC")), null)))
+                .isInstanceOf(BadRequestException.class).extracting(e -> ((BadRequestException) e).getErrorParams().get("reason")).isEqualTo("STAT_NOT_COLLECTED");
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("SPORT", null, "TEAM", defaultSort(), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_KIND_INVALID")
+                .hasFieldOrPropertyWithValue("errorParams", Map.of("reason", "TEAM_NOT_AVAILABLE"));
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("REGION", 5L, "SINGLE", defaultSort(), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SCOPE_INVALID");
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("COUNTRY", null, "SINGLE", defaultSort(), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SCOPE_INVALID");
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", defaultSort(), List.of(Map.of("key", "games", "op", "!=", "value", 1)))))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_REQUIRE_INVALID")
+                .hasFieldOrPropertyWithValue("errorParams", Map.of("reason", "OP_INVALID", "detail", "!="));
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", defaultSort(), List.of(Map.of("key", "losses", "op", ">=", "value", 1)))))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_REQUIRE_INVALID")
+                .extracting(e -> ((BadRequestException) e).getErrorParams().get("reason")).isEqualTo("STAT_NOT_COLLECTED");
+
+        Long noPartners = newSport(doublesSchema(Map.of("columns", List.of("games", "wins"))), true);
+        assertThatThrownBy(() -> ruleService.save(hostId, noPartners, request("SPORT", null, "PARTNER", defaultSort(), null)))
+                .isInstanceOf(BadRequestException.class).extracting(e -> ((BadRequestException) e).getErrorParams().get("reason")).isEqualTo("SPORT_NOT_GROUPED_BY_PARTNER");
+        Long noColumns = newSport(doublesSchema(null), true);
+        assertThatThrownBy(() -> ruleService.save(hostId, noColumns, request("SPORT", null, "SINGLE", defaultSort(), null)))
+                .isInstanceOf(ConflictException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_STATISTICS_NOT_CONFIGURED");
+        assertThat(ruleRepository.findAllOfSport(noPartners)).isEmpty();
+    }
+
+    @Test
+    void savingARuleAgainRaisesItsVersionAndAGamesMinimumNeedsGamesCollected() {
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", defaultSort(), null));
+        var second = ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", defaultSort(), atLeastGames(3)));
+        assertThat(second.getVersion()).isEqualTo(2);
+        assertThat(second.getRequire()).isEqualTo(List.of(Map.of("key", "games", "op", ">=", "value", 3L)));
+        assertThat(ruleService.list(sportId)).hasSize(1);
+
+        Long noGames = newSport(doublesSchema(Map.of("columns", List.of("wins"))), true);
+        assertThatThrownBy(() -> ruleService.save(hostId, noGames, request("SPORT", null, "SINGLE", List.of(Map.of("key", "wins", "dir", "DESC")), atLeastGames(2))))
+                .as("a precondition on games needs the sport to collect games")
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_REQUIRE_INVALID")
+                .extracting(e -> ((BadRequestException) e).getErrorParams().get("reason")).isEqualTo("STAT_NOT_COLLECTED");
+    }
+
+    // ---- who is skipped ------------------------------------------------------------------------------------------------
+
+    @Test
+    void aSportWithStatisticsSwitchedOffIsNotRankedAndItsBoardsStayDirty() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        switchStatistics(sportId, false);
+
+        assertThat(ranker.run(LeaderboardRanker.Mode.NIGHTLY)).isZero();
+
+        assertThat(entryRepository.findAll()).isEmpty();
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow().getDirty()).isTrue();
+        switchStatistics(sportId, true);
+        assertThat(ranker.run(LeaderboardRanker.Mode.NIGHTLY)).isEqualTo(3);
+    }
+
+    @Test
+    void aSwitchedOffSportIsSkippedWhileAnotherSportIsStillRanked() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        Long off = newSport(badmintonSchema(), false);
+        Instant marked = Instant.now().minusSeconds(60).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        StatBoardRun offBoard = new StatBoardRun(off, "REGION", REGION, COUNTRY);
+        offBoard.setDirty(true);
+        offBoard.setDirtyAt(marked);
+        runRepository.save(offBoard);
+
+        assertThat(ranker.run(LeaderboardRanker.Mode.NIGHTLY)).isEqualTo(3);
+
+        StatBoardRun still = runRepository.findById(new StatBoardRun.Key(off, "REGION", REGION)).orElseThrow();
+        assertThat(still.getDirty()).as("the switched-off sport is left alone").isTrue();
+        assertThat(still.getComputedAt()).isNull();
+    }
+
+    @Test
+    void removingARuleRemovesItsBoardsAfterTheNextRun() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(entryRepository.findById(new LeaderboardEntry.Key(sportId, "REGION", REGION, "PARTNER"))).isPresent();
+        assertThat(entryRepository.findById(new LeaderboardEntry.Key(sportId, "COUNTRY", COUNTRY, "PARTNER"))).isPresent();
+
+        ruleService.delete(sportId, "SPORT", null, "PARTNER");
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        for (String type : List.of("REGION", "COUNTRY", "GROUP")) {
+            Long scope = type.equals("REGION") ? REGION : type.equals("COUNTRY") ? COUNTRY : groupId;
+            assertThat(entryRepository.findById(new LeaderboardEntry.Key(sportId, type, scope, "PARTNER"))).as("%s pair board", type).isEmpty();
+            assertThat(entryRepository.findById(new LeaderboardEntry.Key(sportId, type, scope, "SINGLE"))).as("%s single board", type).isPresent();
+        }
+    }
+
+    @Test
+    void aGroupWithItsSwitchOffIsNotRankedAndKeepsItsBoard() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(tree("GROUP", groupId, "SINGLE").size()).isEqualTo(4);
+
+        countRankedGame(venueId, List.of(aliceId, carolId), List.of(bobId, danId));
+        GroupSessionSettings settings = groupSettingsRepository.findById(groupId).orElseThrow();
+        settings.setStatisticsEnabled(false);
+        groupSettingsRepository.save(settings);
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "GROUP", groupId)).orElseThrow().getDirty()).isTrue();
+        assertThat(tree("GROUP", groupId, "SINGLE").ranks().get(String.valueOf(no(aliceId)))).as("what was ranked before stays").isEqualTo(1);
+    }
+
+    @Test
+    void aGroupBoardNamesMembersByTheirGroupNumberAndCountsEveryGame() {
+        setRules();
+        Long sessionId = completedSession(groupId, venueId, 2);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);        // a normal game: the group counts it
+        statsRunner.processDue();
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        BoardTree single = tree("GROUP", groupId, "SINGLE");
+        assertThat(single.size()).isEqualTo(4);
+        assertThat(single.ranks().keySet()).containsExactlyInAnyOrder(String.valueOf(no(aliceId)), String.valueOf(no(bobId)),
+                String.valueOf(no(carolId)), String.valueOf(no(danId)));
+        BoardTree pairs = tree("GROUP", groupId, "PARTNER");
+        assertThat(pairs.size()).isEqualTo(2);
+        assertThat(pairs.contains(numbered(aliceId, bobId))).isTrue();
+        assertThat(pairs.contains(numbered(carolId, danId))).isTrue();
+        assertThat(entryRepository.findById(new LeaderboardEntry.Key(sportId, "REGION", REGION, "SINGLE"))).as("a normal game is on no region board").isEmpty();
+    }
+
+    // ---- failure and retry ----------------------------------------------------------------------------------------------
+
+    @Test
+    void aFailedBoardIsRecordedAndTheRetryTickTakesItWhenItsTimeHasCome() throws Exception {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        jdbc.execute("ALTER TABLE stat_board_changes RENAME TO stat_board_changes_gone");      // makes building fail after the claim
+        try {
+            assertThat(ranker.run(LeaderboardRanker.Mode.NIGHTLY)).isZero();
+        } finally {
+            jdbc.execute("ALTER TABLE stat_board_changes_gone RENAME TO stat_board_changes");
+        }
+
+        StatBoardRun failed = runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo("FAILED");
+        assertThat(failed.getDirty()).isTrue();
+        assertThat(failed.getLastError()).isNotBlank();
+        assertThat(failed.getNextAttemptAt()).isAfter(Instant.now());
+        assertThat(changeRepository.findAll().stream().filter(c -> c.getScopeType().equals("REGION"))).as("nothing was consumed").hasSize(4);
+
+        assertThat(ranker.run(LeaderboardRanker.Mode.RETRY)).as("not due yet").isZero();
+        makeDue(sportId, "REGION", REGION);
+        makeDue(sportId, "COUNTRY", COUNTRY);
+        makeDue(sportId, "GROUP", groupId);
+        assertThat(ranker.run(LeaderboardRanker.Mode.RETRY)).isEqualTo(3);
+        assertThat(tree("REGION", REGION, "SINGLE").size()).isEqualTo(4);
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow().getStatus()).isEqualTo("IDLE");
+    }
+
+    @Test
+    void aPublicationFromARunWhoseClaimWasTakenOverWritesNothingAndKeepsTheChangeRows() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        StatBoardRun run = runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow();
+        var computation = builder.compute(builder.plan(run), null);
+        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        assertThat(writer.claim(run, now, now.minusSeconds(900))).isTrue();
+
+        assertThatThrownBy(() -> writer.publish(new com.sportconnect.session.ranking.LeaderboardWriter.Publication(
+                run, now.minusSeconds(5), now, computation, false))).isInstanceOf(IllegalStateException.class);
+
+        assertThat(entryRepository.findAll()).as("the whole publication rolled back").isEmpty();
+        assertThat(changeRepository.findAll().stream().filter(c -> c.getScopeType().equals("REGION"))).hasSize(4);
+    }
+
+    @Test
+    void aCountryDoesNotMergeRegionBoardsBuiltWithAnotherRuleAndStaysDirty() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(tree("COUNTRY", COUNTRY, "PARTNER").size()).isEqualTo(2);
+
+        // the country\x27s pair rule changes behind the service and only the country board is marked: the region boards still hold
+        // the old sort list, and the merge must not compare their values with the new order
+        SportRankingRule row = new SportRankingRule(sportId, "COUNTRY", COUNTRY, "PARTNER");
+        row.setSort(new ArrayList<>(List.of(Map.of("key", "games", "dir", "DESC"))));
+        ruleRepository.save(row);
+        inTx(() -> runRepository.markDirty(sportId, "COUNTRY", COUNTRY, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)));
+
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        assertThat(tree("COUNTRY", COUNTRY, "PARTNER").size()).as("no region board merged").isZero();
+        assertThat(runRepository.findById(new StatBoardRun.Key(sportId, "COUNTRY", COUNTRY)).orElseThrow().getDirty())
+                .as("left dirty until the regions are rebuilt").isTrue();
+    }
+
+    @Test
+    void theRetryTickLeavesAHealthyDirtyBoardForTheNightlyRun() {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+
+        assertThat(ranker.run(LeaderboardRanker.Mode.RETRY)).isZero();
+        assertThat(entryRepository.findAll()).isEmpty();
+    }
+
+    // ---- two at once -----------------------------------------------------------------------------------------------------
+
+    @Test
+    void twoRankersAtOnceLeaveEveryBoardWhole() throws Exception {
+        setRules();
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        countRankedGame(venueId, List.of(aliceId, carolId), List.of(bobId, danId));
+
+        inParallel(2, () -> ranker.run(LeaderboardRanker.Mode.NIGHTLY));
+
+        assertThat(runRepository.findAll().stream().map(r -> r.getScopeType() + " " + r.getStatus() + " " + r.getLastError()).toList())
+                .as("no board failed or is left claimed").allMatch(s -> s.endsWith("IDLE null"));
+        // a country built by one ranker from region boards the other had not published yet stays dirty (the region publication
+        // marked it), so the next pass makes it whole: nothing is lost, it is eventually consistent by design
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(tree("REGION", REGION, "SINGLE").ranks().get(aliceId.toString())).isEqualTo(1);
+        assertThat(tree("REGION", REGION, "PARTNER").size()).isEqualTo(4);
+        assertThat(tree("COUNTRY", COUNTRY, "PARTNER").size()).isEqualTo(4);
+        assertThat(changeRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void aChangeRowInsertedAfterTheCutoffSurvivesAndAnOlderClaimCannotFinishTheRun() {
+        Long id1 = changeRepository.save(new StatBoardChange(sportId, "REGION", REGION, aliceId)).getId();
+        Long id2 = changeRepository.save(new StatBoardChange(sportId, "REGION", REGION, bobId)).getId();
+        Long id3 = changeRepository.save(new StatBoardChange(sportId, "REGION", REGION, carolId)).getId();
+
+        assertThat(changeRepository.maxId(sportId, "REGION", REGION)).isEqualTo(id3);
+        assertThat(changeRepository.findUserIdsUpTo(sportId, "REGION", REGION, id2)).containsExactlyInAnyOrder(aliceId, bobId);
+        assertThat(inTx(() -> changeRepository.deleteUpTo(sportId, "REGION", REGION, id2))).isEqualTo(2);
+        assertThat(changeRepository.findAll()).extracting(StatBoardChange::getId).containsExactly(id3);
+
+        // a game counted after the run read the board marks it dirty again: the run's end must not clear that
+        runRepository.save(new StatBoardRun(sportId, "REGION", REGION, COUNTRY));
+        Instant first = Instant.now().minusSeconds(60).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        inTx(() -> runRepository.markDirty(sportId, "REGION", REGION, first));
+        Instant claimed = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        assertThat(inTx(() -> runRepository.claim(sportId, "REGION", REGION, claimed, claimed.minusSeconds(900)))).isEqualTo(1);
+        assertThat(inTx(() -> runRepository.claim(sportId, "REGION", REGION, claimed, claimed.minusSeconds(900)))).as("already claimed").isZero();
+        inTx(() -> runRepository.markDirty(sportId, "REGION", REGION, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)));    // a game was counted during the run
+
+        assertThat(inTx(() -> runRepository.finish(sportId, "REGION", REGION, claimed, first, Instant.now(), 1))).isEqualTo(1);
+
+        StatBoardRun run = runRepository.findById(new StatBoardRun.Key(sportId, "REGION", REGION)).orElseThrow();
+        assertThat(run.getDirty()).as("the game counted during the run keeps the board dirty").isTrue();
+        assertThat(run.getStatus()).isEqualTo("IDLE");
+        assertThat(inTx(() -> runRepository.finish(sportId, "REGION", REGION, claimed.minusSeconds(5), run.getDirtyAt(), Instant.now(), 1)))
+                .as("a run whose claim was taken over ends nothing").isZero();
+    }
+
+    // ---- helpers -----------------------------------------------------------------------------------------------------------
+
+    private <T> T inTx(java.util.function.Supplier<T> work) {
+        return new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> work.get());
+    }
+
+    private void makeDue(Long sport, String type, Long scope) {
+        StatBoardRun run = runRepository.findById(new StatBoardRun.Key(sport, type, scope)).orElseThrow();
+        run.setNextAttemptAt(Instant.now().minusSeconds(5));
+        runRepository.save(run);
+    }
+
+    private <T> List<T> inParallel(int threads, Callable<T> work) throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            CyclicBarrier barrier = new CyclicBarrier(threads);
+            List<Future<T>> futures = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                futures.add(pool.submit(() -> {
+                    barrier.await(10, TimeUnit.SECONDS);
+                    return work.call();
+                }));
+            }
+            List<T> results = new ArrayList<>();
+            for (Future<T> future : futures) {
+                results.add(future.get(90, TimeUnit.SECONDS));
+            }
+            return results;
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** The default rules: wins descending then games ascending, for singles and pairs, no minimum. */
+    private void setRules() {
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", defaultSort(), null));
+        ruleService.save(hostId, sportId, request("SPORT", null, "PARTNER", defaultSort(), null));
+    }
+
+    private static List<Object> defaultSort() {
+        return List.of(Map.of("key", "wins", "dir", "DESC"), Map.of("key", "games", "dir", "ASC"));
+    }
+
+    private static List<Object> atLeastGames(int games) {
+        return List.of(Map.of("key", "games", "op", ">=", "value", games));
+    }
+
+    private static RankingRuleRequest request(String scopeType, Long scopeId, String kind, List<Object> sort, List<Object> require) {
+        return RankingRuleRequest.builder().scopeType(scopeType).scopeId(scopeId).kind(kind).sort(sort).require(require).build();
+    }
+
+    /** One ranking game in its own session at the venue, counted by the real engine (the board runs are marked and the change rows written). */
+    private void countRankedGame(Long atVenue, List<UUID> winners, List<UUID> losers) {
+        Long sessionId = completedSession(groupId, atVenue, 2);
+        Long recordId = game(sessionId, winners, losers, 21, 15);
+        List<UUID> all = new ArrayList<>(winners);
+        all.addAll(losers);
+        propose(recordId, winners.get(0), all);
+        statsRunner.processDue();
+    }
+
+    private BoardTree tree(String scopeType, Long scopeId, String kind) {
+        return BoardTree.fromJson(entryRepository.findById(new LeaderboardEntry.Key(sportId, scopeType, scopeId, kind))
+                .orElseThrow(() -> new AssertionError("no " + kind + " board for " + scopeType + " " + scopeId)).getTree());
+    }
+
+    private static String pair(UUID a, UUID b) {
+        return a.toString().compareTo(b.toString()) <= 0 ? a + "," + b : b + "," + a;
+    }
+
+    private int no(UUID user) {
+        return memberNumbers.getMemberNumbers(groupId, List.of(user)).get(user);
+    }
+
+    private String numbered(UUID a, UUID b) {
+        int x = no(a);
+        int y = no(b);
+        return Math.min(x, y) + "," + Math.max(x, y);
+    }
+
+    private void switchStatistics(Long sport, boolean on) {
+        Sport row = sportRepository.findById(sport).orElseThrow();
+        row.setStatisticsEnabled(on);
+        sportRepository.save(row);
+        if (cacheManager.getCache("sports") != null) {
+            cacheManager.getCache("sports").clear();
+        }
+    }
+
+    private UUID createUser(String label) {
+        User user = new User();
+        user.setUsername(label + "_" + UUID.randomUUID());
+        user.setEmail(label + "_" + System.nanoTime() + "@example.com");
+        user.setFirstName(label);
+        user.setLastName("User");
+        user.setIsEmailVerified(false);
+        user.setIsActive(true);
+        return userRepository.save(user).getId();
+    }
+
+    private Long newSport(Map<String, Object> schema, boolean statisticsEnabled) {
+        Long id = sportRepository.save(Sport.builder().name("SESSION-54 " + UUID.randomUUID()).isActive(true)
+                .statisticsEnabled(statisticsEnabled).resultSchema(schema).build()).getId();
+        if (cacheManager.getCache("sports") != null) {
+            cacheManager.getCache("sports").clear();
+        }
+        return id;
+    }
+
+    private Long venue(Long countryId, Long regionId) {
+        return locationRepository.save(Location.builder().sportId(sportId).name("Venue " + UUID.randomUUID())
+                .timezone("Asia/Ho_Chi_Minh").createdBy(hostId).countryId(countryId).regionId(regionId).build()).getId();
+    }
+
+    private Long completedSession(Long sessionGroupId, Long locationId, long endedDaysAgo) {
+        Instant end = Instant.now().minus(Duration.ofDays(endedDaysAgo)).minusSeconds(60);
+        Long postId = postRepository.save(Post.builder().userId(hostId).groupId(null).postType(PostType.SESSION_POST)
+                .content("Session: fixture").visibility("private").isActive(true).build()).getId();
+        Long id = sessionRepository.save(Session.builder().title("Boards session")
+                .groupId(sessionGroupId)
+                .isPublic(sessionGroupId == null)
+                .postId(postId)
+                .sessionType(sessionGroupId == null ? SessionType.STANDALONE : SessionType.GROUP_RECURRING)
+                .createdBy(hostId)
+                .sportId(sportId)
+                .locationId(locationId)
+                .scheduledStart(end.minus(Duration.ofHours(2)))
+                .scheduledEndAt(end)
+                .status(SessionStatus.COMPLETED)
+                .capacity(9999)
+                .feeType(FeeType.FREE)
+                .initialSlot(0)
+                .autoApprove(false)
+                .build()).getId();
+        for (UUID player : List.of(hostId, aliceId, bobId, carolId, danId)) {
+            participantRepository.save(SessionParticipant.builder().sessionId(id).userId(player)
+                    .status(ParticipantStatus.JOINED).build());
+        }
+        return id;
+    }
+
+    private Long game(Long sessionId, List<UUID> first, List<UUID> second, int firstScore, int secondScore) {
+        List<Integer> a = new ArrayList<>();
+        a.add(firstScore);
+        List<Integer> b = new ArrayList<>();
+        b.add(secondScore);
+        Map<String, Object> data = Map.of("teams", List.of(
+                Map.of("players", first.stream().map(UUID::toString).toList(), "scores", a),
+                Map.of("players", second.stream().map(UUID::toString).toList(), "scores", b)));
+        Instant now = Instant.now();
+        return recordRepository.save(SessionRecord.builder().sessionId(sessionId).data(data)
+                .clientRequestId(UUID.randomUUID()).createdBy(hostId).createdAt(now).updatedBy(hostId).updatedAt(now)
+                .build()).getId();
+    }
+
+    private void propose(Long recordId, UUID proposer, List<UUID> confirmers) {
+        SessionRecord record = recordRepository.findById(recordId).orElseThrow();
+        record.setRankingRequestedBy(proposer);
+        record.setRankingRequestedAt(Instant.now());
+        recordRepository.save(record);
+        for (UUID confirmer : confirmers) {
+            verificationRepository.save(SessionRecordVerification.builder().recordId(recordId).userId(confirmer)
+                    .revision(record.getRevision()).verifiedAt(Instant.now()).build());
+        }
+    }
+
+    /** Badminton: doubles, a scoreboard of games and wins grouped by partner (the sort is the rules' now, not the schema's). */
+    private static Map<String, Object> badmintonSchema() {
+        return doublesSchema(Map.of("columns", List.of("games", "wins"), "groupBy", List.of(Map.of("by", "PARTNER"))));
+    }
+
+    private static Map<String, Object> doublesSchema(Map<String, Object> scoreboard) {
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("data", Map.of("type", "COMPETITIVE",
+                "playersPerSide", Map.of("min", 1, "max", 2),
+                "score", Map.of("slot", List.of(Map.of("required", true, "rule", ">=0&<=30")))));
+        if (scoreboard != null) {
+            record.put("scoreboard", scoreboard);
+        }
+        return Map.of("version", 1, "maxRecords", 100, "record", record);
+    }
+}

@@ -75,6 +75,7 @@ class StatisticsReadIntegrationTest extends RedisBaseIT {
     @Autowired private UserSportStatsRepository userStatsRepository;
     @Autowired private GroupMemberStatsRepository groupStatsRepository;
     @Autowired private LeaderboardEntryRepository leaderboardRepository;
+    @Autowired private com.sportconnect.session.stats.StatBoardChangeRepository boardChangeRepository;
     @Autowired private StatBoardRunRepository boardRunRepository;
     @Autowired private SessionStatsJobRepository jobRepository;
     @Autowired private SessionRepository sessionRepository;
@@ -142,6 +143,7 @@ class StatisticsReadIntegrationTest extends RedisBaseIT {
 
     private void clearAll() {
         boardRunRepository.deleteAll();
+        boardChangeRepository.deleteAll();
         leaderboardRepository.deleteAll();
         groupStatsRepository.deleteAll();
         userStatsRepository.deleteAll();

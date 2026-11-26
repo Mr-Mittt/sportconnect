@@ -17,6 +17,18 @@ public interface UserSportStatsRepository extends JpaRepository<UserSportStats, 
     List<UUID> findExistingUserIds(@Param("sportId") Long sportId, @Param("userIds") Collection<UUID> userIds);
 
     /**
+     * SESSION-54: the sport's rows after a user id, in user id order, one page at a time (keyset paging: the caller passes the
+     * last id it saw), for a full rebuild of a board. No lock: the ranking job only reads.
+     */
+    @Query("SELECT s FROM UserSportStats s WHERE s.sportId = :sportId AND s.userId > :after ORDER BY s.userId")
+    List<UserSportStats> findPageAfter(@Param("sportId") Long sportId, @Param("after") UUID after,
+                                       org.springframework.data.domain.Pageable page);
+
+    /** SESSION-54: the rows of these users in a sport, no lock (a ranking run reads the blobs of the players who changed). */
+    @Query("SELECT s FROM UserSportStats s WHERE s.sportId = :sportId AND s.userId IN :userIds ORDER BY s.userId")
+    List<UserSportStats> findAllOf(@Param("sportId") Long sportId, @Param("userIds") Collection<UUID> userIds);
+
+    /**
      * The users' rows under a write lock, in one statement ordered by user id. Every transaction that takes several of these
      * rows takes them through this one query, so they are always locked in the same order and two sessions that share
      * players wait for each other instead of deadlocking.

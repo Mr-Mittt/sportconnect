@@ -98,3 +98,9 @@ app:
   # only the local dev relay target moves. host is still inherited from application.yml.
   stomp-relay:
     port: ${STOMP_RELAY_PORT:8613}
+  # SESSION-53/54, dev only: the statistics engine counts a finished session at once instead of 24 hours after it ended (the
+  # default guard-hours is 24, the window in which players can still log and confirm games), so a leaderboard can be tried
+  # the same day. Production keeps the default; never set this in application-prod.yml.
+  stats:
+    job:
+      guard-hours: 0

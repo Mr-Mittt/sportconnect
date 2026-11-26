@@ -568,20 +568,40 @@ CREATE TABLE IF NOT EXISTS group_stats (
     PRIMARY KEY (group_id, sport_id)
 );
 
+-- SESSION-54 (V108): one row per board (a tree keyed by the sport's sort values), the engine's change rows, the server-only
+-- sort rules, and the board runs (V104 + V108 columns).
 CREATE TABLE IF NOT EXISTS leaderboard_entry (
+    sport_id BIGINT NOT NULL,
     scope_type VARCHAR(10) NOT NULL,
     scope_id BIGINT NOT NULL,
-    sport_id BIGINT NOT NULL,
     kind VARCHAR(10) NOT NULL,
-    subject_key VARCHAR(255) NOT NULL,
-    k1 DOUBLE PRECISION,
-    k2 DOUBLE PRECISION,
-    k3 DOUBLE PRECISION,
-    games INTEGER NOT NULL DEFAULT 0,
-    rank INTEGER,
-    ranked_at TIMESTAMP WITH TIME ZONE,
+    tree JSON NOT NULL,
+    entries INTEGER NOT NULL DEFAULT 0,
+    rules_version INTEGER NOT NULL DEFAULT 0,
+    computed_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY (sport_id, scope_type, scope_id, kind)
+);
+
+CREATE TABLE IF NOT EXISTS stat_board_changes (
+    id BIGSERIAL PRIMARY KEY,
+    sport_id BIGINT NOT NULL,
+    scope_type VARCHAR(10) NOT NULL,
+    scope_id BIGINT NOT NULL,
+    user_id UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sport_ranking_rules (
+    sport_id BIGINT NOT NULL,
+    scope_type VARCHAR(10) NOT NULL,
+    scope_id BIGINT NOT NULL,
+    kind VARCHAR(10) NOT NULL,
+    sort JSON NOT NULL,
+    conditions JSON NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1,
+    updated_by UUID,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (scope_type, scope_id, sport_id, kind, subject_key)
+    PRIMARY KEY (sport_id, scope_type, scope_id, kind)
 );
 
 CREATE TABLE IF NOT EXISTS stat_board_runs (
@@ -593,6 +613,11 @@ CREATE TABLE IF NOT EXISTS stat_board_runs (
     status VARCHAR(10) NOT NULL DEFAULT 'IDLE',
     claimed_at TIMESTAMP WITH TIME ZONE,
     computed_at TIMESTAMP WITH TIME ZONE,
+    country_id BIGINT,
+    rules_version INTEGER NOT NULL DEFAULT 0,
+    full_rebuild BOOLEAN NOT NULL DEFAULT FALSE,
+    last_error VARCHAR(500),
+    next_attempt_at TIMESTAMP WITH TIME ZONE,
     PRIMARY KEY (sport_id, scope_type, scope_id)
 );
 

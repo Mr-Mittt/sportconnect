@@ -93,8 +93,8 @@ public class SessionStatsProcessor {
     private record Ignored(Long recordId, String reason) {
     }
 
-    /** A board a game touched; SESSION-54 ranks it. */
-    private record Board(String scopeType, Long scopeId, Long sportId) {
+    /** A board a game touched; SESSION-54 ranks it. {@code countryId} is a region board's country, a country board's own id, none for a group. */
+    private record Board(String scopeType, Long scopeId, Long sportId, Long countryId) {
     }
 
     private final SessionStatsJobRepository jobRepository;
@@ -113,6 +113,8 @@ public class SessionStatsProcessor {
     // SESSION-81: the group's own member numbers, the keys of a group's partner counters and of its head-to-head.
     private final GroupMemberNumberService memberNumbers;
     private final StatBoardRunRepository boardRunRepository;
+    // SESSION-54: who changed on each board, appended in the counting transaction (the ranking job rebuilds those players' entries).
+    private final StatBoardChangeRepository changeRepository;
     private final SessionStatsWriter writer;
 
     /** Replaceable in tests; not a constructor dependency. */
@@ -282,6 +284,8 @@ public class SessionStatsProcessor {
 
         Set<Board> boards = new TreeSet<>(Comparator.comparing((Board b) -> b.scopeType())
                 .thenComparing(b -> String.format("%020d", b.scopeId())));
+        // SESSION-54: the players whose entries changed, by board (each player once per board for the whole session)
+        Map<Board, Set<UUID>> changed = new LinkedHashMap<>();
         List<CountedGame> counted = new ArrayList<>();
         for (Game game : games) {
             long recordId = game.record().getId();
@@ -302,14 +306,14 @@ public class SessionStatsProcessor {
                     member.counters().add(participant.outcome(), participant.metrics(), stats.collected());
                     addToGroups(memberKeys(groups, numbers), member::group, participant, stats);
                     member.addPointer(recordId, game.ranking());
-                    boards.add(new Board("GROUP", groupId, sportId));
+                    touch(boards, changed, new Board("GROUP", groupId, sportId, null), participant.userId());
                 }
                 if (game.ranking()) {
                     if (venue.regionId() != null) {
-                        boards.add(new Board("REGION", venue.regionId(), sportId));
+                        touch(boards, changed, new Board("REGION", venue.regionId(), sportId, venue.countryId()), participant.userId());
                     }
                     if (venue.countryId() != null) {
-                        boards.add(new Board("COUNTRY", venue.countryId(), sportId));
+                        touch(boards, changed, new Board("COUNTRY", venue.countryId(), sportId, venue.countryId()), participant.userId());
                     }
                 }
             }
@@ -332,7 +336,27 @@ public class SessionStatsProcessor {
             groupStatsRepository.save(h2hRow);
         }
         markBoardsDirty(boards, now);
+        recordChanges(changed);
         return counted;
+    }
+
+    /** Notes that this player's entry on this board changed (and that the board is touched). */
+    private void touch(Set<Board> boards, Map<Board, Set<UUID>> changed, Board board, UUID userId) {
+        boards.add(board);
+        changed.computeIfAbsent(board, b -> new TreeSet<>(Comparator.comparing(UUID::toString))).add(userId);
+    }
+
+    /**
+     * SESSION-54: appends one change row per player and board, in this counting transaction (an append-only insert takes no lock
+     * another session waits on). The ranking job reads them, up to a cutoff, and rebuilds those players' entries.
+     */
+    private void recordChanges(Map<Board, Set<UUID>> changed) {
+        List<StatBoardChange> rows = new ArrayList<>();
+        changed.forEach((board, users) -> users.forEach(
+                user -> rows.add(new StatBoardChange(board.sportId(), board.scopeType(), board.scopeId(), user))));
+        if (!rows.isEmpty()) {
+            changeRepository.saveAll(rows);
+        }
     }
 
     /** A game of two teams of exactly two players: the only game the head-to-head counts. */
@@ -465,9 +489,12 @@ public class SessionStatsProcessor {
     private void markBoardsDirty(Set<Board> boards, Instant now) {
         for (Board board : boards) {
             try {
-                writer.ensureBoardRun(board.sportId(), board.scopeType(), board.scopeId());
+                writer.ensureBoardRun(board.sportId(), board.scopeType(), board.scopeId(), board.countryId());
             } catch (DataIntegrityViolationException e) {
                 log.info("Board run row race absorbed: {} {}", board.scopeType(), board.scopeId());
+            }
+            if (board.countryId() != null) {
+                boardRunRepository.fillCountry(board.sportId(), board.scopeType(), board.scopeId(), board.countryId());
             }
             boardRunRepository.markDirty(board.sportId(), board.scopeType(), board.scopeId(), now);
         }

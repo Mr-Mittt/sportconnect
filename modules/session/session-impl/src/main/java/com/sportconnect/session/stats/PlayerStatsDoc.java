@@ -110,6 +110,11 @@ public final class PlayerStatsDoc {
             return StatsGroupings.group(groupings, by, key, StatsCounters::new);
         }
 
+        /** SESSION-54: the counters of every group of one dimension at this place, for reading (nothing is created, do not change them). */
+        public Map<String, StatsCounters> groups(String by) {
+            return java.util.Collections.unmodifiableMap(groupings.getOrDefault(by, Map.of()));
+        }
+
         boolean matches(String scopeType, Long country, Long region) {
             return scope.equals(scopeType) && java.util.Objects.equals(countryId, country)
                     && java.util.Objects.equals(regionId, region);
