@@ -94,6 +94,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 30 | [SPORT-19](MVP/SPORT-19_ADMIN_SWITCH_FOR_A_SPORTS_STATISTICS_AND_RANKING.md) | Admin: the sport's statistics and ranking switch (`statisticsEnabled`) on the sport detail, and the field in the sport type and MSW mocks (server side in SESSION-53, rework 2026-11-25) | `TODO` |
 | 31 | [CLIENT-SESSION-59](MVP/CLIENT-SESSION-59_THE_SCOREBOARD_HAS_NO_DEFAULT_COLUMNS.md) | The scoreboard has no default columns: no `record.scoreboard.columns`, no scoreboard (one config with the server, which collects nothing without it; SESSION-53 rework) | `TODO` |
 | 32 | [CLIENT-SESSION-60](MVP/CLIENT-SESSION-60_GROUP_STATISTICS_AND_LEADERBOARD_SWITCH.md) | The group's statistics and leaderboard switch: a toggle in the group Settings tab (owner and admin change it, members see it), the empty state on the group statistics screens, en/vi copy for the two new group system posts (depends on SESSION-78) | `TODO` |
+| 33 | [CLIENT-SESSION-61](MVP/CLIENT-SESSION-61_SESSIONS_STAT_COLUMN.md) | The `sessions` stat in the catalog mirror: id, single-only flag (pair tables hide it), en/vi label; ships with SESSION-82 | `TODO` |
 
 #### Removed / Deferred
 

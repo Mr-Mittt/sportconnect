@@ -38,7 +38,7 @@ The statistics config is part of the sport's `result_schema` jsonb (sport module
 | `scoreboard.columns[]` | the stats the sport shows, chosen from the record type's catalog (`StatsCatalog`, the client's `record-ui-v1.json` list). The server collects exactly what they need. | **nothing is collected** (no defaults) |
 | `scoreboard.groupBy[]` | the **one** dimension that gets counters of its own beside the totals: `{by: PARTNER}` (one set per teammate) or `{by: TEAM, size: n >= 2}` (one set per group of n players of one team). A list, the first usable entry is kept. | no grouping at all |
 | `ranking.sort[]` | at most three keys of the catalog (`by`, `dir` `ASC` or `DESC`); a key also collects what it needs when the sport lists columns | no ranking order (no default) |
-| `ranking.minGames` | games needed to be ranked: `single` for a player, `combo` for a team | `0` and `5` |
+| `ranking.minGames` | games needed to be ranked: `single` for a player, `combo` for a team. **SESSION-54: no longer used**; who is listed is decided by the `require` preconditions of the server-only rule (section 7) | `0` and `5` |
 | `data.allowDraws` | the sport's games can end in a draw (the head-to-head then keeps a draws number) | `false` |
 
 The catalog for `COMPETITIVE`: counted `games`, `wins`, `losses`; summed `scoreFor`, `scoreAgainst`; formulas `winRate` (`wins/games`), `winDiff` (`wins-losses`), `scoreDiff` (`scoreFor-scoreAgainst`). Only the counted and summed stats are stored; a formula column makes its operands stored.
@@ -176,19 +176,28 @@ Primary key `(group_id, sport_id)`; `version` and `updated_at` plain columns; on
 - Also on the row (plain columns): `status` (`RUNNING`, `DONE`, `SKIPPED`, `RETRY`, `FAILED`), `attempts`, `next_attempt_at`, `claimed_at`, `last_error`, `counted` and `ignored` (the counts), `finished_at`.
 - A sport whose statistics are switched off has **no job row**: the runner does not pick its sessions, and a row claimed just before the switch was turned off is deleted by the processor, so switching the sport on later counts the session.
 
-## 7. `leaderboard_entry` and `stat_board_runs`
+## 7. Leaderboards (SESSION-54, V108): `leaderboard_entry`, `stat_board_changes`, `sport_ranking_rules`, `stat_board_runs`
 
-`leaderboard_entry` is the flat ranking projection (no jsonb), one row per player or team per board, so a ranking is set-based SQL and never a scan of the blobs above. Key `(scope_type, scope_id, sport_id, kind, subject_key)`:
+Design and the whole discussion: `modules/session/docs/SESSION-54_LEADERBOARD_STORAGE_DESIGN.md`. The only code that reads or writes a tree is `BoardTree`, a sort list `SortList`; the tables are session-owned, no foreign keys.
 
-| Column | Meaning |
-|---|---|
-| `scope_type`, `scope_id` | `GROUP` + group id, `REGION` + region id, or `COUNTRY` + country id |
-| `kind` | `SINGLE` (subject = the player's user id) or `COMBO` (subject = the `TEAM` key of section 3.2) |
-| `k1`, `k2`, `k3` | the values of the sport's `ranking.sort` keys, in order (null when a key has no value yet) |
-| `games` | games behind the numbers (the board's `minGames` is applied to it) |
-| `rank`, `ranked_at` | the position and when it was computed |
+**`leaderboard_entry` is one row per board**, key `(sport_id, scope_type, scope_id, kind)`: `scope_type` `GROUP` + group id, `REGION` + region id or `COUNTRY` + country id; `kind` `SINGLE` (a player) or `PARTNER` (a pair). `tree` is the whole ranked board (jsonb), `entries` how many subjects it holds, `rules_version` the version of the rule row it was built with, `computed_at` when it was published.
 
-**The counting engine does not write this table** (owner, 2026-11-25): SESSION-54's job builds the rows from the blobs of the boards that changed and ranks them. The engine only sets `stat_board_runs` (`dirty`, `dirty_at`, `status`, `claimed_at`, `computed_at`, one small row per board) so that job knows which boards to rebuild. How the job finds "every player with an entry in this region or country" is SESSION-54's question (a jsonb array has no index).
+```json
+{ "v": 1, "sort": [ {"key":"wins","dir":"DESC"}, {"key":"games","dir":"ASC"} ], "require": [], "n": 3,
+  "t": [ ["10", [ ["11", ["<A>,<B>~1", "<A>,<C>~3", "<C>,<D>~1"]] ]] ] }
+```
+
+- **`t` has one level per sort key.** A node is a `[key, child]` pair, an **array and not an object** (jsonb reorders object keys), the nodes of a level are **already in rank order**, and the last level's child lists the subjects that have exactly those values. `key` is the value rounded to 4 decimals as a plain decimal (`"0.6667"`, `"10"`), or `"n"` for no value, which ranks last in either direction. `sort` is the sort list and `require` the preconditions the tree was built with.
+- **The rank is derived, not stored:** 1 plus the number of entries in the better nodes; the entries of a leaf tie and share the rank of its first place. Counters are not stored either: the path carries the values the board is sorted by, so a page can show only stats that are in the sort list.
+- **A subject** is written `subject~prevRank`: the rank it had in the previous build (also across a rule change), or just `subject` when it was not on the board then. **Region and country boards name a player by user id and a pair by the two ids sorted as text and joined by a comma; a group board names a member by the group's member number (SESSION-81) and a pair by the two numbers sorted as numbers.**
+- **A country's `PARTNER` tree is the merge of its region trees** (`CountryMerge`): a pair that played in several regions counts at its best region only (its games are not added up, owner 2026-11-26), and the tree keeps at most `app.stats.ranking.country-slots-per-region` (1,000) entries for each region tree merged. A country's `SINGLE` tree is built from the players' aggregated `COUNTRY` entries and is not capped. A region tree is never capped.
+- **Size** (estimate, not measured on PostgreSQL): about 75 to 100 bytes an entry; 60,000 entries is about 6 MB.
+
+**`stat_board_changes`** (`id` generated and ever-increasing, `sport_id`, `scope_type`, `scope_id`, `user_id`, `created_at`): append-only. The statistics engine inserts one row per player and board (group, region, country) a counted session touched, in the counting transaction. The ranking job takes a board's highest `id` as its **cutoff**, rebuilds the players with a row up to it and deletes the rows up to it (`id <= cutoff`), so a game counted during the run keeps its row for the next one. A row says only who changed.
+
+**`sport_ranking_rules`** (`sport_id`, `scope_type` `SPORT` default with `scope_id` 0 | `COUNTRY` | `GROUP`, `scope_id`, `kind`, `sort` jsonb, `conditions` jsonb, `version`, `updated_by`, `updated_at`): server-only, set by an ADMIN (`RankingRuleController`). `sort` is `[{"key":"wins","dir":"DESC"}, {"sum":{"wins":3,"games":1},"dir":"DESC"}]`, at most four keys, a key a catalog stat or a weighted sum of catalog stats, each with its own `ASC` or `DESC`; every stat must be one the sport collects. **`conditions`** (the request's `require`) are the **preconditions** a player or pair must all meet to be listed: `[{"key":"games","op":">=","value":5}, {"key":"wins","op":">=","value":2}]`, each a catalog stat the sport collects (a formula such as `winRate` too), an operator among `>=`, `>`, `<=`, `<`, `=` and a number, at most six; an empty list lists everyone who has played, and a key with no value (a win rate with no games) fails its condition. They decide who is on the board, never the order. A board takes the most specific row (group, then country, then sport; **a group board has no country yet, owner 2026-11-26: the group's country is handled later, so it uses the group's own row or the sport's**); no row, no board of that kind. `version` goes up on every save; a board built with another sort list or other preconditions than the row's is rebuilt whole.
+
+**`stat_board_runs`** (V104 + V108): one small row per board: `dirty`, `dirty_at`, `status` (`IDLE`, `RUNNING` claimed, `FAILED`), `claimed_at`, `computed_at`, `country_id` (a region board's country, a country board's own id), `rules_version`, `full_rebuild` (a rule changed), `last_error`, `next_attempt_at` (a failed board's retry time). The engine sets `dirty` and `country_id`; the ranking job claims, publishes and clears them (the flag is cleared only if `dirty_at` is still the value the run read).
 
 ## 8. Worked example: a badminton player in two regions
 
@@ -311,9 +320,26 @@ The client never reads the tables above. It reads four endpoints, which show the
 - Exactly one of `pairs` and `partners` is filled (both are empty for a sport with no `groupBy`), most games first, **paged like 9.2** (`page`, `size`; the totals say how many there are), each entry with the one map of values (a group has no ranking split).
 - SESSION-74's privacy setting for personal and pair statistics will also gate this endpoint.
 
+### 9.6 The leaderboards (SESSION-54 slice B)
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /api/sessions/group/{groupId}/leaderboard?kind=&cursor=&size=` | a member of the group | a page of the group's board (the sport is the group's, as in 9.4) |
+| `GET /api/leaderboards/regions/{regionId}?sportId=&kind=&cursor=&size=` | any signed-in user | a page of the region's board |
+| `GET /api/leaderboards/countries/{countryId}?sportId=&kind=&cursor=&size=` | any signed-in user | a page of the country's board |
+| `POST /api/sessions/group/{groupId}/leaderboard/refresh` | group owner or admin | builds the group's board now; 200 `{rankedAt, nextRefreshAt}`, 429 `SESSION_RANKING_COOLDOWN` (`retryAfterSeconds`), 409 `SESSION_RANKING_IN_PROGRESS` or `SESSION_GROUP_STATISTICS_OFF` |
+| `GET / PUT / DELETE /api/sessions/group/{groupId}/leaderboard/rules` | GET any member; PUT, DELETE group owner or admin | the group's own sort list (`kind`, `sort`, `require`; `scopeType` and `scopeId` are ignored: the rule is this group's); `DELETE ?kind=` |
+
+- **Answer** (`LeaderboardResponse`): `sportId`, `scopeType`, `scopeId`, `kind`, `sort` (the board's own sort list as it was built, so the client knows what `values` are), `total` (entries on the board before anyone is hidden), `entries`, `me`, `nextCursor`, `rankedAt`. An entry is `{rank, prevRank, players, values}`: `rank` is the competition rank (equal entries share it, so ranks skip: 1, 1, 3), `prevRank` the rank in the build before (null when not listed then), `players` one player (`SINGLE`) or two (`PARTNER`) as `{id, fullName, avatarUrl}`, `values` the sort values in the sort list's order (null where there is none). **A page can only show stats that are in the sort list**: the tree holds nothing else.
+- **`kind`** is `SINGLE` (default) or `PARTNER`; anything else is 400 `SESSION_RANKING_KIND_INVALID`. **Paging is by cursor**: send the previous `nextCursor` (a position in the board, not a page number) because the number of hidden entries on a page is not known in advance; `size` 1 to 50 (default 20). One request looks at most 2,000 entries ahead, so `entries` can be shorter than `size` while `nextCursor` is still set.
+- **Who is shown:** a deactivated player on any board, a member who left on a group board, and a pair when either player is not shown, are skipped at read time (the board is unchanged: the next build drops them). `me` is the caller's best entry anywhere on the board (the best pair among those they are in), or null. `rank` is never recomputed at read time, so a hidden entry leaves a gap.
+- **A board never built** (no rule, no ranking game yet, or the nightly run has not reached it) is an empty answer (`entries` empty, `rankedAt` null), not an error. **A sport whose statistics switch is off is 404 `SPORT_NOT_FOUND`** (on the boards and on the refresh), as for an unknown sport. A group board stays readable while the **group's** switch is off: what was ranked before stays (the engine and the job skip such a group).
+- The boards are read from an in-memory copy of each tree (parsed once, valid while the board's `computed_at` is the stored one; `app.stats.ranking.read-cache-boards`, default 8 boards per instance).
+- **Refresh:** one compare-and-set takes the board only when it was built at least the cooldown ago and nobody is building it, so two refreshes, or a refresh and the nightly run, never build it twice. It runs on the request thread (a group board is built from its members' rows), and **keeps the previous ranks of the last nightly build** (so "previous" keeps meaning "before the last nightly run"). Saving or deleting a group's own rule also asks the worker to rebuild that board now.
+
 ## 10. Changing a shape
 
-1. Change `PlayerStatsDoc` / `GroupStatsDoc` / `GroupH2hDoc` / `StatsGroupings` (the only code that touches these maps) and `StatsDocsSpec` / `GroupH2hDocSpec` (which pin the keys).
+1. Change `PlayerStatsDoc` / `GroupStatsDoc` / `GroupH2hDoc` / `StatsGroupings` / `BoardTree` / `SortList` (the only code that touches these maps and trees) and `StatsDocsSpec` / `GroupH2hDocSpec` (which pin the keys).
 2. Change this file in the same change.
 3. A change to an existing key is a data migration of every row: say so in the ticket. A new optional key or a new dimension needs none (readers treat a missing key as empty, section 0). A stat added to the catalog and to a sport's columns has no history until the rebuild (SESSION-77).
 4. Anything the client reads from these shapes goes through the SESSION-73 read API; the client never reads the tables.

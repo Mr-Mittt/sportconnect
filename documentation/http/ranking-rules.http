@@ -1,0 +1,147 @@
+### SESSION-54: ranking rules for a sport's leaderboards (IntelliJ HTTP client; VS Code REST Client reads it too)
+### Fill the three variables, then run the requests top to bottom. Local dev server only.
+### The token must be a Keycloak ADMIN access token (5 minutes): paste a fresh one when you get a 401.
+
+@host = http://localhost:8080
+@token = PASTE_ADMIN_ACCESS_TOKEN_HERE
+@sportId = 1
+@countryId = 1
+
+### 1. Switch statistics on for the sport (needed once; the sport's result schema must list
+###    record.scoreboard.columns with games and wins, and groupBy PARTNER for the pair board)
+PUT {{host}}/api/sports/{{sportId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "statisticsEnabled": true }
+
+### 2a. Rule for the SINGLE board (a player): wins first, then fewer games; listed from 3 games
+PUT {{host}}/api/admin/sessions/ranking/rules/{{sportId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "scopeType": "SPORT",
+  "kind": "SINGLE",
+  "sort": [
+    { "key": "wins", "dir": "DESC" },
+    { "key": "games", "dir": "ASC" }
+  ],
+  "require": [
+    { "key": "games", "op": ">=", "value": 3 }
+  ]
+}
+
+### 2b. Rule for the PARTNER board (a pair)
+PUT {{host}}/api/admin/sessions/ranking/rules/{{sportId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "scopeType": "SPORT",
+  "kind": "PARTNER",
+  "sort": [
+    { "key": "wins", "dir": "DESC" },
+    { "key": "games", "dir": "ASC" }
+  ],
+  "require": [
+    { "key": "games", "op": ">=", "value": 3 }
+  ]
+}
+
+### 2c. To see boards quickly while testing: no preconditions at all (everyone who has played is listed)
+PUT {{host}}/api/admin/sessions/ranking/rules/{{sportId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "scopeType": "SPORT",
+  "kind": "SINGLE",
+  "sort": [
+    { "key": "wins", "dir": "DESC" },
+    { "key": "games", "dir": "ASC" }
+  ],
+  "require": []
+}
+
+### 3. Optional: one country with its own order (covers that country's region boards and its country board).
+###    Example: a points table, 3 for a win and 1 for each game played, then win rate; needs wins, games, winRate's operands collected
+PUT {{host}}/api/admin/sessions/ranking/rules/{{sportId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "scopeType": "COUNTRY",
+  "scopeId": {{countryId}},
+  "kind": "SINGLE",
+  "sort": [
+    { "sum": { "wins": 3, "games": 1 }, "dir": "DESC" },
+    { "key": "winRate", "dir": "DESC" }
+  ],
+  "require": [
+    { "key": "games", "op": ">=", "value": 5 },
+    { "key": "winRate", "op": ">=", "value": 0.4 }
+  ]
+}
+
+### 4. List the rules of the sport (the sport default first)
+GET {{host}}/api/admin/sessions/ranking/rules/{{sportId}}
+Authorization: Bearer {{token}}
+
+### 5. Remove a rule (the boards it covered fall back to a broader rule, or lose that kind of board)
+DELETE {{host}}/api/admin/sessions/ranking/rules/{{sportId}}?scopeType=COUNTRY&scopeId={{countryId}}&kind=SINGLE
+Authorization: Bearer {{token}}
+
+### 6. Build every board of the sport now from the games already counted, and run the ranking pass
+###    (saving a rule already marks the boards; this also starts the pass instead of waiting for 00:05)
+POST {{host}}/api/admin/sessions/ranking/{{sportId}}/rebuild
+Authorization: Bearer {{token}}
+
+### 7. Run the ranking pass now (every dirty board), without marking anything for a rebuild
+POST {{host}}/api/admin/sessions/ranking/run
+Authorization: Bearer {{token}}
+
+### Where to look afterwards (nothing reads a board yet, that is slice B):
+###   SELECT scope_type, scope_id, kind, entries, computed_at FROM leaderboard_entry WHERE sport_id = <sportId>;
+###   SELECT scope_type, scope_id, dirty, status, last_error, computed_at FROM stat_board_runs WHERE sport_id = <sportId>;
+###   a region or country board only exists after a RANKING game (proposed and confirmed by every player) was counted
+###   (application-dev.yml sets app.stats.job.guard-hours: 0, so on the dev profile a finished session is counted by the next
+###   5-minute tick instead of after 24 h; restart the server after changing it).
+
+### ---- Slice B: the reads, a group's own sort list, the manual refresh (a normal USER token: put it in @token; a group owner or admin for the writes)
+@groupId = 46
+
+### 11. A group's board (members only; the sport is the group's). kind SINGLE or PARTNER; send nextCursor back as cursor
+GET {{host}}/api/sessions/group/{{groupId}}/leaderboard?kind=SINGLE&size=20
+Authorization: Bearer {{token}}
+
+###
+GET {{host}}/api/sessions/group/{{groupId}}/leaderboard?kind=PARTNER&size=20
+Authorization: Bearer {{token}}
+
+### 12. A region's and a country's board (any signed-in user)
+GET {{host}}/api/leaderboards/regions/79?sportId={{sportId}}&kind=SINGLE&size=20
+Authorization: Bearer {{token}}
+
+###
+GET {{host}}/api/leaderboards/countries/{{countryId}}?sportId={{sportId}}&kind=PARTNER&size=20
+Authorization: Bearer {{token}}
+
+### 13. The group's own sort list (owner or admin). scopeType and scopeId are ignored: it is this group's rule
+PUT {{host}}/api/sessions/group/{{groupId}}/leaderboard/rules
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "kind": "SINGLE", "sort": [ { "key": "wins", "dir": "DESC" }, { "key": "games", "dir": "ASC" } ], "require": [] }
+
+###
+GET {{host}}/api/sessions/group/{{groupId}}/leaderboard/rules
+Authorization: Bearer {{token}}
+
+###
+DELETE {{host}}/api/sessions/group/{{groupId}}/leaderboard/rules?kind=SINGLE
+Authorization: Bearer {{token}}
+
+### 14. Build the group's board now (owner or admin): once an hour, 429 SESSION_RANKING_COOLDOWN with retryAfterSeconds otherwise
+POST {{host}}/api/sessions/group/{{groupId}}/leaderboard/refresh
+Authorization: Bearer {{token}}

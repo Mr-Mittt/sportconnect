@@ -18,6 +18,10 @@ app:
       # SESSION-53: the ITs call the runner directly and keep the 5-minute tick (and its worker thread) out of the way.
       enabled: false
       async: false
+    ranking:
+      # SESSION-54: the ITs call the ranker directly and keep the nightly and retry ticks (and the worker thread) out of the way.
+      enabled: false
+      async: false
 
 spring:
   datasource:

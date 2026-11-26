@@ -91,9 +91,9 @@ public class SessionStatsWriter {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void ensureBoardRun(Long sportId, String scopeType, Long scopeId) {
+    public void ensureBoardRun(Long sportId, String scopeType, Long scopeId, Long countryId) {
         if (!boardRunRepository.existsById(new StatBoardRun.Key(sportId, scopeType, scopeId))) {
-            boardRunRepository.saveAndFlush(new StatBoardRun(sportId, scopeType, scopeId));
+            boardRunRepository.saveAndFlush(new StatBoardRun(sportId, scopeType, scopeId, countryId));
         }
     }
 }

@@ -99,6 +99,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     @Autowired private com.sportconnect.group.repository.GroupMemberNumberRepository memberNumberRepository;
     @Autowired private com.sportconnect.group.repository.GroupMemberNumberCounterRepository memberNumberCounterRepository;
     @Autowired private LeaderboardEntryRepository leaderboardRepository;
+    @Autowired private com.sportconnect.session.stats.StatBoardChangeRepository boardChangeRepository;
     @Autowired private StatBoardRunRepository boardRunRepository;
     @Autowired private SessionRepository sessionRepository;
     @Autowired private SessionParticipantRepository participantRepository;
@@ -150,6 +151,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
 
     private void clearAll() {
         boardRunRepository.deleteAll();
+        boardChangeRepository.deleteAll();
         leaderboardRepository.deleteAll();
         groupH2hRepository.deleteAll();
         memberNumberRepository.deleteAll();
@@ -274,9 +276,13 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(h2h.size()).isEqualTo(2);
         assertThat(h2h.seq()).isEqualTo(3);
         assertThat(h2h.matchup(nums(aliceId, bobId), nums(carolId, danId))).containsExactly(1L, 1L, 2L);
-        // alice and carol beat bob and dan as the first team: the win is the first pair of the key's, whichever numbers they have
-        assertThat(h2h.matchup(nums(aliceId, carolId), nums(bobId, danId))).containsExactly(1L, 0L, 3L);
-        assertThat(h2h.matchup(nums(bobId, danId), nums(aliceId, carolId))).containsExactly(1L, 0L, 3L);
+        // alice and carol beat bob and dan. The wins follow the key (the smaller pair first), and the numbers come from random user
+        // ids, so which pair is first is not fixed: the winners' win is the first number only when their pair is the smaller one.
+        List<Integer> aliceCarol = nums(aliceId, carolId);
+        List<Integer> bobDan = nums(bobId, danId);
+        long[] expected = pairOrder(aliceCarol).compareTo(pairOrder(bobDan)) <= 0 ? new long[]{1L, 0L, 3L} : new long[]{0L, 1L, 3L};
+        assertThat(h2h.matchup(aliceCarol, bobDan)).containsExactly(expected[0], expected[1], expected[2]);
+        assertThat(h2h.matchup(bobDan, aliceCarol)).containsExactly(expected[0], expected[1], expected[2]);
     }
 
     @Test
@@ -902,6 +908,12 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     private PlayerStatsDoc player(UUID userId) {
         return userStatsRepository.findById(new UserSportStats.Key(userId, sportId))
                 .map(PlayerStatsDoc::read).orElseGet(() -> PlayerStatsDoc.read(new UserSportStats(userId, sportId)));
+    }
+
+    /** The order {@code GroupH2hDoc} puts two pairs in: each pair's two numbers smaller first, compared as text of fixed width. */
+    private String pairOrder(List<Integer> pair) {
+        List<Integer> sorted = pair.stream().sorted().toList();
+        return String.format("%010d.%010d", sorted.get(0), sorted.get(1));
     }
 
     /** The group's permanent member numbers of these users, in this order (allocated the first time, as the engine does). */
