@@ -48,6 +48,7 @@
 | 30 | [SESSION-RANKING-RECORD-1](MVP/SESSION-RANKING-RECORD-1_CONFIRM_A_RANKING_GAME_AT_A_GIVEN_REVISION.md) | Confirm a ranking game at the revision the player saw: optional `revision` on `POST .../verify` and on the record's `ranking` block, 409 `SESSION_RECORD_REVISION_CHANGED` when the game changed meanwhile (follow-up to SESSION-72; the client part is in CLIENT-SESSION-54) | `TODO` |
 | 31 | [SESSION-RANKING-RECORD-2](MVP/SESSION-RANKING-RECORD-2_CAPTAINS_CONFIRM_A_TEAM_GAME.md) | Team games: only the two captains confirm a ranking game (`RecordFacts.confirmers` beside `players`, schema `verification: ALL_PLAYERS|CAPTAINS`, `teams[].captain` on the record; no migration; follow-up to SESSION-72, **after the whole statistic and ranking chain is finished, badminton first (owner, 2026-11-23)**; the client picker and badge are filed at pickup) | `TODO` |
 | 32 | [SESSION-79](MVP/SESSION-79_ENQUEUE_A_SESSION_FOR_STATISTICS_WHEN_IT_COMPLETES.md) | Queue a session for statistics when it completes (a `PENDING` job row due at end + 24h, the 5-minute run reads only the job table) and sweep for missed sessions only at start-up and when a sport is switched on; settle the pruning interaction with SESSION-75 (depends on SESSION-53) | `TODO` |
+| 33 | [SESSION-82](MVP/SESSION-82_SESSIONS_STAT_AND_SINGLE_ONLY_STATS.md) | A `sessions` stat (sessions in which a player had at least one counted game) and a per-stat "singles only" flag so pairs never hold it; ships with CLIENT-SESSION-61, better after SESSION-77 (no history before the rebuild) | `TODO` |
 
 ---
 
