@@ -546,7 +546,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
 
     @Test
     void theAtLeastOneGameConfigCountsOnlyThePlayersWhoPlayedAndAndOrOrCombineTheTwoConditions() {
-        sportId = newSport(sessionsSchema(Map.of("counts", List.of("atLeast1Game"))), true);
+        sportId = newSport(sessionsSchema(Map.of("when", List.of("atLeast1Game"))), true);
         Long session = completedSession(groupId, venueId, 2);
         game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
         runner.processDue();
@@ -555,7 +555,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(member(aliceId).counters().value("sessions")).isEqualTo(1.0);
 
         // joined AND atLeast1Game: the same people as atLeast1Game (a counted game needs a joined player)
-        sportId = newSport(sessionsSchema(Map.of("counts", List.of("joined", "atLeast1Game"), "combine", "AND")), true);
+        sportId = newSport(sessionsSchema(Map.of("when", List.of("joined", "atLeast1Game"), "combine", "AND")), true);
         Long both = completedSession(groupId, venueId, 2);
         game(both, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
         runner.processDue();
@@ -563,7 +563,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(player(hostId).personal().all().value("sessions")).isNull();
 
         // joined OR atLeast1Game: the same people as joined
-        sportId = newSport(sessionsSchema(Map.of("counts", List.of("joined", "atLeast1Game"), "combine", "OR")), true);
+        sportId = newSport(sessionsSchema(Map.of("when", List.of("joined", "atLeast1Game"), "combine", "OR")), true);
         Long either = completedSession(groupId, venueId, 2);
         game(either, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
         runner.processDue();
@@ -587,7 +587,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(member(aliceId).counters().value("sessions")).isEqualTo(1.0);
         assertThat(dirty("GROUP", groupId)).isTrue();
 
-        sportId = newSport(sessionsSchema(Map.of("counts", List.of("atLeast1Game"))), true);
+        sportId = newSport(sessionsSchema(Map.of("when", List.of("atLeast1Game"))), true);
         Long other = completedSession(groupId, venueId, 2);
         runner.processDue();
         assertThat(jobRepository.findById(other).orElseThrow().getStatus()).isEqualTo(SessionStatsJob.Status.SKIPPED);

@@ -42,7 +42,7 @@ public final class StatisticsSchema {
 
     /**
      * SESSION-82: what makes a session count for a player in the {@code sessions} stat, read from
-     * {@code record.scoreboard.config.sessions = {counts: ["joined", "atLeast1Game"], combine: "AND"|"OR"}}: {@code joined} (the
+     * {@code record.scoreboard.config.sessions = {when: ["joined", "atLeast1Game"], combine: "AND"|"OR"}}: {@code joined} (the
      * player was a joined participant when the session was counted), {@code atLeast1Game} (the player had a counted game in it), or
      * both, met together ({@code AND}) or either ({@code OR}). <b>Default {@code joined}</b>; two conditions with no {@code combine}
      * mean {@code OR}. A counted game needs a joined player, so {@code AND} is {@code atLeast1Game} and {@code OR} is
@@ -96,12 +96,15 @@ public final class StatisticsSchema {
         Map<String, Object> scoreboard = map(record, "scoreboard");
         Map<String, Object> ranking = map(record, "ranking");
 
-        List<String> columns = readColumns(scoreboard.get("columns"), catalog);
+        // SESSION-82: config.sessions.enabled = false lists the column but does not collect it (the column is dropped, nothing is counted)
+        boolean sessionsOff = Boolean.FALSE.equals(map(map(scoreboard, "config"), "sessions").get("enabled"));
+        List<String> columns = readColumns(scoreboard.get("columns"), catalog).stream()
+                .filter(key -> !(sessionsOff && "sessions".equals(key))).toList();
         List<SortKey> sort = ranking.get("sort") instanceof List<?> list ? readSort(list, catalog) : List.of();
 
         List<String> needed = new ArrayList<>(columns);
         if (!columns.isEmpty()) {
-            sort.forEach(key -> needed.add(key.by()));
+            sort.stream().map(SortKey::by).filter(key -> !(sessionsOff && "sessions".equals(key))).forEach(needed::add);
         }
         List<StatsCatalog.Stat> collected = StatsCatalog.storedFor(catalog, needed);
 
@@ -267,7 +270,7 @@ public final class StatisticsSchema {
         Map<String, Object> sessions = map(config, "sessions");
         boolean joined = false;
         boolean game = false;
-        if (sessions.get("counts") instanceof List<?> counts) {
+        if (sessions.get("when") instanceof List<?> counts) {
             for (Object entry : counts) {
                 if ("joined".equals(entry)) {
                     joined = true;
