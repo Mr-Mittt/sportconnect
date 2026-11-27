@@ -120,6 +120,13 @@ describe('the scoreboard block (CLIENT-GL-49)', () => {
     return parseRecordSchema(raw)?.scoreboard;
   };
 
+  it('keeps a history stat of the catalog (sessions, SESSION-82) out of one session\'s scoreboard', () => {
+    expect(withBoard({ columns: ['games', 'sessions', 'wins'] })?.columns).toEqual(['games', 'wins']);
+    expect(withBoard({ columns: ['sessions'] })?.columns).toEqual(['games', 'wins', 'losses']);
+    expect(catalog.COMPETITIVE.scoreboard.columns).toContain('sessions');
+    expect(catalog.COMPETITIVE.scoreboard.statIds.sessions).toBe(9);
+  });
+
   it('is the default basic scoreboard when the schema has none', () => {
     expect(parseRecordSchema(schema())?.scoreboard).toEqual({
       enabled: true,

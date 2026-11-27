@@ -26,15 +26,24 @@ public final class StatsCatalog {
 
     /** How a stat gets its value. */
     public enum Kind {
-        COUNTED, SUMMED, FORMULA
+        COUNTED, SUMMED, FORMULA,
+        /** SESSION-82: counted once per session (never per game), by the sport's own rule for what makes a session count. */
+        SESSIONS
     }
 
     /**
      * One supported stat.
      *
      * @param formula the two-operand formula of a {@link Kind#FORMULA} stat ({@link StatsFormulas}); {@code null} otherwise
+     * @param singleOnly SESSION-82: the stat applies to a single player only; a pair or team entry never holds it and a rule for
+     *                   a pair board cannot name it
      */
-    public record Stat(String key, Kind kind, String formula) {
+    public record Stat(String key, Kind kind, String formula, boolean singleOnly) {
+
+        /** A stat that applies to every kind of subject (a single player, a pair, a team). */
+        public Stat(String key, Kind kind, String formula) {
+            this(key, kind, formula, false);
+        }
 
         /** The stat's fixed id (the position of its value in a stored counters string), see {@link #idOf}. */
         public int id() {
@@ -55,11 +64,11 @@ public final class StatsCatalog {
      * an id is never changed, reused or renumbered, and a new stat takes the next free number. It is independent of the order
      * the client lists the columns in. The client's {@code record-ui-v1.json} carries the same ids ({@code COMPETITIVE.scoreboard.statIds})
      * and {@code StatsCatalogSpec} fails when the two differ. Stored stats come first so the slots after the last stored one are
-     * cut; the formulas (never stored) take the ids after them.
+     * cut; the formulas (never stored) took 6 to 8, and {@code sessions} (SESSION-82, stored, singles only) is 9, so the slots 6 to 8 stay empty before it.
      */
     private static final Map<String, Integer> IDS = Map.of(
             "games", 1, "wins", 2, "losses", 3, "scoreFor", 4, "scoreAgainst", 5,
-            "winRate", 6, "winDiff", 7, "scoreDiff", 8);
+            "winRate", 6, "winDiff", 7, "scoreDiff", 8, "sessions", 9);
 
     private static final Map<Integer, String> KEYS_BY_ID = IDS.entrySet().stream()
             .collect(java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getValue, Map.Entry::getKey));
@@ -111,6 +120,7 @@ public final class StatsCatalog {
         add(stats, new Stat("scoreFor", Kind.SUMMED, null));
         add(stats, new Stat("scoreAgainst", Kind.SUMMED, null));
         add(stats, new Stat("scoreDiff", Kind.FORMULA, "scoreFor-scoreAgainst"));
+        add(stats, new Stat("sessions", Kind.SESSIONS, null, true));
         return Collections.unmodifiableMap(stats);
     }
 

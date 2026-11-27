@@ -46,10 +46,11 @@ class StatsCatalogSpec extends Specification {
 
     def "the stat ids are the frozen, append-only contract: one per key, unique, starting at 1, stored stats first"() {
         expect: "a change here is a decision: an id is never changed or reused, a new stat takes the next number"
-        StatsCatalog.ids() == [games: 1, wins: 2, losses: 3, scoreFor: 4, scoreAgainst: 5, winRate: 6, winDiff: 7, scoreDiff: 8]
+        StatsCatalog.ids() == [games: 1, wins: 2, losses: 3, scoreFor: 4, scoreAgainst: 5, winRate: 6, winDiff: 7, scoreDiff: 8, sessions: 9]
         StatsCatalog.ids().values().toSet().size() == StatsCatalog.ids().size()
         competitive.keySet().every { StatsCatalog.ids().containsKey(it) }
-        competitive.values().findAll { it.stored() }*.id().max() < competitive.values().findAll { !it.stored() }*.id().min()
+        and: "the eight first stats keep their slots, the stored ones before the formulas (SESSION-82 added the ninth, stored, after them)"
+        competitive.values().findAll { it.stored() && it.key() != 'sessions' }*.id().max() < competitive.values().findAll { !it.stored() }*.id().min()
     }
 
     def "an id and its key convert both ways; an id no stat has, and a key no stat has, are refused or empty"() {
@@ -71,7 +72,7 @@ class StatsCatalogSpec extends Specification {
         def client = new ObjectMapper().readValue(clientCatalog(), Map)
 
         expect:
-        (client.COMPETITIVE.scoreboard.sortKeys as Set) - 'name' == competitive.keySet()
+        (client.COMPETITIVE.scoreboard.sortKeys as Set) - 'name' == (competitive.keySet() - 'sessions')   // sessions is a history stat: not a sort key of one session's scoreboard
         // defaultColumns goes with CLIENT-SESSION-59 (no default columns); until then it must still name catalog stats
         ((client.COMPETITIVE.scoreboard.defaultColumns ?: []) as Set).every { competitive.containsKey(it) }
     }
@@ -88,7 +89,7 @@ class StatsCatalogSpec extends Specification {
         competitive.values().findAll { it.kind() == StatsCatalog.Kind.COUNTED }*.key() == ['games', 'wins', 'losses']
         competitive.values().findAll { it.kind() == StatsCatalog.Kind.SUMMED }*.key() == ['scoreFor', 'scoreAgainst']
         competitive.values().findAll { it.kind() == StatsCatalog.Kind.FORMULA }*.key() == ['winRate', 'winDiff', 'scoreDiff']
-        competitive.values().findAll { it.stored() }*.key() == ['games', 'wins', 'losses', 'scoreFor', 'scoreAgainst']
+        competitive.values().findAll { it.stored() }*.key() == ['games', 'wins', 'losses', 'scoreFor', 'scoreAgainst', 'sessions']
     }
 
     def "every formula reads only stats the catalog has"() {
@@ -130,5 +131,16 @@ class StatsCatalogSpec extends Specification {
         'losses' | Outcome.WIN   | false
         'losses' | Outcome.DRAW  | false
         'other'  | Outcome.WIN   | false
+    }
+
+    def "sessions is the ninth stat: stored, counted once per session, and for a single player only"() {
+        expect:
+        StatsCatalog.idOf('sessions') == 9
+        StatsCatalog.keyOfStoredId(9) == 'sessions'
+        competitive.sessions.kind() == StatsCatalog.Kind.SESSIONS
+        competitive.sessions.stored()
+        competitive.sessions.singleOnly()
+        competitive.values().findAll { it.key() != 'sessions' }.every { !it.singleOnly() }
+        !StatsCatalog.counts('sessions', com.sportconnect.session.record.RecordFacts.Outcome.WIN)
     }
 }

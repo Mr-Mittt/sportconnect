@@ -1,6 +1,6 @@
 # SESSION-82 · A `sessions` stat (sessions played) and stats that apply to singles only
 
-**Status:** `TODO`
+**Status:** `DONE` (2026-11-27)
 **Type:** Enhancement · **Depends on:** SESSION-81 (the string counters and global stat ids), SESSION-54 (the boards read the catalog); **better after** SESSION-77 (the rebuild), see below
 **Filed:** 2026-11-26, owner question during SESSION-54 slice B: a group wants a custom member column "joined sessions", the number of sessions a member played at least one counted game in, and it must not appear for pairs. Duplicate check: no session or client ticket names a sessions-count stat (searched both backlogs, the drafts file and the ticket folders); SESSION-55 (seasons) and SESSION-77 (rebuild) are neighbours, not duplicates.
 
@@ -15,3 +15,30 @@ A new catalog stat `sessions` (the next global id after the current eight, appen
 **Out of scope:** seasons, a sessions count for pairs ("sessions together"), any record-level condition on which games count.
 
 **Tests:** Spock for `StatsCounters` (the new slot, the single-only filter) and `StatsCatalogSpec`; `SessionStatsIntegrationTest` (a session with two games counts +1, a session with none counts 0, a pair entry has no slot, a reprocessed session counts once); `LeaderboardRankingIntegrationTest` (a SINGLE rule sorts and requires on it, a PARTNER rule refuses it); mutation-check each.
+
+## Scope change 2026-11-26 (owner, at the start of the pickup): the stat carries its own config
+
+`sessions` is not one fixed rule. It goes with a **config** that says what makes a session count for a player: `joined` (the player was a joined participant of the session) and/or `atLeast1Game` (the player had at least one counted game in it). **`joined` alone is the default** (replaces "at least one counted game" as the only rule above), and the config can combine the two with **AND** (both) or **OR** (either). The config belongs to the sport's schema (where the stat is collected), so each sport decides. Consequences to settle in the design: where the config sits in the schema and how it is validated; how a player who joined but had no counted game gets counted (the engine today counts from the records, so a session with no counted game may leave nobody to count); which scopes get +1 for a joined-only player (own totals, the group member row; region and country only through ranking games). The rest of the ticket stands (single-only, `STAT_NOT_FOR_KIND`, no history before SESSION-77, CLIENT-SESSION-61, which now also mirrors the config on the client).
+
+## Built (2026-11-27)
+
+**Design as approved** (the plan of the pickup, with the owner's config): a `sessions` stat that counts sessions, with the config in the sport's schema, single-only, no migration and no new endpoint, because the stat flows through the existing counters, read API and boards.
+
+**What was built**
+- `StatsCatalog`: `Kind.SESSIONS`, `Stat.singleOnly`, `sessions` id 9 (last in the client's column order too). The slots 6 to 8 stay empty before it in a stored string (ids are append-only); a counters string of a sport that collects it reads `"7,4,,52,40,,,,12"`.
+- `StatisticsSchema`: `SessionsRule` read from `record.scoreboard.config.sessions` (`counts` of `joined` and `atLeast1Game`, `combine` `AND` or `OR`; default `joined`; two conditions with no `combine` are `OR`; unusable input is the default), `collectsSessions()`, `collectedForCombos()`.
+- `StatsCounters.addSession(collected)`: +1, only when the sport collects the stat; a game (`add`) never touches it.
+- `SessionStatsProcessor`: the sessions step after the games (own totals and the group member row by the rule; the ranked, region and country counters only for a player with a ranking game in the session; the GROUP board's change rows for a player counted only by the session); pair, team and head-to-head counters use `collectedForCombos()`; the `NO_RECORDS` and no-games exits are skipped when the rule counts a joined player without a game; the job result gains `sessions`, a session with only those is `DONE`; a revived job row whose result already has `sessions` counts nobody for the session again (`priorSessions`), and a player whose game was already counted is skipped.
+- `RankingRuleServiceImpl.requireCollected`: a single-only stat in a `PARTNER` rule (sort or `require`, admin or group rule) is `SESSION_RANKING_SORT_INVALID` / `SESSION_RANKING_REQUIRE_INVALID` with `reason` `STAT_NOT_FOR_KIND` and `detail` the stat.
+- Client (the mirror half of CLIENT-SESSION-61, needed because `StatsCatalogSpec` reads the client's file): `record-ui-v1.json` gains `sessions` in `columns` and `statIds` (9) and a `historyOnly` list; `recordSchema.ts` leaves history-only stats out of a session's scoreboard columns; one Vitest case.
+
+**Findings that changed the plan**
+- `joined AND atLeast1Game` is the same set of players as `atLeast1Game` alone and `OR` the same as `joined`, because the engine ignores a game that names a player who is not joined. The syntax is kept as the owner asked and the equivalence is documented and tested; it is not a bug.
+- `collectedForCombos()` is defence in depth today: `StatsCounters.add` ignores the `SESSIONS` kind, so the pair counters would not hold the stat even without it (mutant M1 survives for that reason). It matters for a future single-only stat of another kind.
+- A job row with no `result.sessions` (a row from before this stat) that is revived would count a no-game player again; the only guard there is the history pointers of players who had a game. That row cannot happen for a sport that did not collect the stat yet, and SESSION-77's rebuild resets the counters, so it is accepted.
+
+**Not changed:** seasons, a sessions count for pairs, any record-level condition on which games count; the group's own config of the stat is SESSION-83 (client CLIENT-SESSION-62).
+
+**Tests:** Spock `StatsCatalogSpec`, `StatsCountersSpec`, `StatisticsSchemaSpec` extended; `SessionStatsIntegrationTest` 40 tests (+7: default counts a joined player with no game, once per session, pairs hold none; atLeast1Game, AND and OR; a session with no games; ranked, region and country; group switch off; a revived job row; a game counted before); `LeaderboardRankingIntegrationTest` 52 (+2: a singles board sorts and requires on `sessions`; a pair rule refuses it); client `recordSchema.test.ts`. **Mutation:** 13 mutants, 12 killed (a pair counter holding it, atLeast1Game ignored, AND read as OR, the two early exits, ranked for everyone, the revived-row guard, the already-counted skip, the group row, the PARTNER refusal, the unguarded `addSession`, `DONE` without games, the default rule), 1 equivalent (M1, above).
+**Not run:** the full `:server:test`, PostgreSQL, the client `e2e` project (the diff touches `record-ui-v1.json` and `recordSchema.ts`; see the next line), a live server.
+**Visual-regression expectation:** no baselined surface touched. The client change only drops a catalog key from the columns a sport can list, and no committed schema lists `sessions`, so no baseline change is expected; not run.

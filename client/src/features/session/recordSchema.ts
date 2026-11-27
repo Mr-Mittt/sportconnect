@@ -142,7 +142,9 @@ function parseUi(raw: unknown): RecordUiConfig {
 }
 
 const SCOREBOARD = catalog.COMPETITIVE.scoreboard;
-const SCOREBOARD_COLUMNS = SCOREBOARD.columns as ScoreboardColumn[];
+/** SESSION-82: stats of a player's history (like `sessions`): the catalog has them, but one session's scoreboard shows none of them. */
+const HISTORY_ONLY_COLUMNS: readonly string[] = (SCOREBOARD as { historyOnly?: string[] }).historyOnly ?? [];
+const SCOREBOARD_COLUMNS = (SCOREBOARD.columns as string[]).filter((column) => !HISTORY_ONLY_COLUMNS.includes(column)) as ScoreboardColumn[];
 const SCOREBOARD_SORT_KEYS = SCOREBOARD.sortKeys as ScoreboardSortKey[];
 export const DEFAULT_SCOREBOARD_COLUMNS = SCOREBOARD.defaultColumns as ScoreboardColumn[];
 const DEFAULT_SCOREBOARD_SORT = SCOREBOARD.defaultSort as ScoreboardSort[];

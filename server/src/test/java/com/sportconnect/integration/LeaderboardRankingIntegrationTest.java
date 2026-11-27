@@ -1149,6 +1149,55 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
         assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries()).as("two games each").hasSize(4);
     }
 
+    // ---- SESSION-82: the sessions stat in the rules ------------------------------------------------------------------------
+
+    private void switchToASportThatCollectsSessions() {
+        sportId = newSport(doublesSchema(Map.of("columns", List.of("games", "wins", "sessions"),
+                "groupBy", List.of(Map.of("by", "PARTNER")))), true);
+        Group group = groupRepository.findById(groupId).orElseThrow();
+        group.setSportId(sportId);
+        groupRepository.save(group);
+    }
+
+    @Test
+    void aSinglesBoardSortsAndRequiresOnTheSessionsStat() {
+        switchToASportThatCollectsSessions();
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", List.of(Map.of("key", "sessions", "dir", "DESC")),
+                List.of(Map.of("key", "sessions", "op", ">=", "value", 1))));
+        countRankedGame(venueId, List.of(aliceId, bobId), List.of(carolId, danId));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+
+        LeaderboardResponse board = groupBoard(aliceId, "SINGLE", null, 20);
+
+        assertThat(board.total()).as("the four players and the owner who only joined").isEqualTo(5);
+        assertThat(board.entries()).allSatisfy(entry -> assertThat(entry.values()).containsExactly(1d));
+        assertThat(board.entries()).extracting(LeaderboardEntryDto::rank).containsOnly(1);
+
+        ruleService.save(hostId, sportId, request("SPORT", null, "SINGLE", List.of(Map.of("key", "sessions", "dir", "DESC")),
+                List.of(Map.of("key", "sessions", "op", ">=", "value", 2))));
+        ranker.run(LeaderboardRanker.Mode.NIGHTLY);
+        assertThat(groupBoard(aliceId, "SINGLE", null, 20).entries()).as("nobody has two sessions yet").isEmpty();
+    }
+
+    @Test
+    void aPairRuleCannotNameAStatThatAppliesToASinglePlayerOnly() {
+        switchToASportThatCollectsSessions();
+
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("SPORT", null, "PARTNER",
+                List.of(Map.of("key", "sessions", "dir", "DESC")), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SORT_INVALID")
+                .hasFieldOrPropertyWithValue("errorParams", Map.of("reason", "STAT_NOT_FOR_KIND", "detail", "sessions"));
+        assertThatThrownBy(() -> ruleService.save(hostId, sportId, request("SPORT", null, "PARTNER", defaultSort(),
+                List.of(Map.of("key", "sessions", "op", ">=", "value", 1)))))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_REQUIRE_INVALID")
+                .hasFieldOrPropertyWithValue("errorParams", Map.of("reason", "STAT_NOT_FOR_KIND", "detail", "sessions"));
+        assertThatThrownBy(() -> ruleService.saveGroupRule(hostId, groupId, request("GROUP", groupId, "PARTNER",
+                List.of(Map.of("key", "sessions", "dir", "DESC")), null)))
+                .isInstanceOf(BadRequestException.class).hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SORT_INVALID");
+        assertThatCode(() -> ruleService.save(hostId, sportId, request("SPORT", null, "PARTNER", defaultSort(), null)))
+                .as("the same sport's pair rule on stats pairs hold is fine").doesNotThrowAnyException();
+    }
+
     // ---- helpers -----------------------------------------------------------------------------------------------------------
 
     private <T> T inTx(java.util.function.Supplier<T> work) {

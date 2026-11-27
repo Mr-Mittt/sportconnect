@@ -22,7 +22,7 @@ import java.util.Map;
  * n players of one team: football). Missing means no grouping at all, and with {@code PARTNER} a group session also keeps the
  * head-to-head of its pairs. {@code record.ranking} gives the order ({@code sort}, at most three keys of the catalog; no
  * default, so a sport that names none has no ranking order) and {@code minGames} (default 0 for a single player, 5 for a
- * combo). {@code record.data.allowDraws} (default false) says the sport's games can end in a draw.
+ * combo). {@code record.data.allowDraws} (default false) says the sport's games can end in a draw. {@code record.scoreboard.config.sessions} (SESSION-82) says what makes a session count in the {@code sessions} stat ({@link SessionsRule}); the default is {@code joined}.
  */
 public final class StatisticsSchema {
 
@@ -40,9 +40,33 @@ public final class StatisticsSchema {
     public record Grouping(String by, int size) {
     }
 
+    /**
+     * SESSION-82: what makes a session count for a player in the {@code sessions} stat, read from
+     * {@code record.scoreboard.config.sessions = {counts: ["joined", "atLeast1Game"], combine: "AND"|"OR"}}: {@code joined} (the
+     * player was a joined participant when the session was counted), {@code atLeast1Game} (the player had a counted game in it), or
+     * both, met together ({@code AND}) or either ({@code OR}). <b>Default {@code joined}</b>; two conditions with no {@code combine}
+     * mean {@code OR}. A counted game needs a joined player, so {@code AND} is {@code atLeast1Game} and {@code OR} is
+     * {@code joined} today; the form is kept for conditions that are not implied (an at-least-one-ranking-game, say). An unknown
+     * entry is dropped and nothing usable is the default, never an error.
+     */
+    public record SessionsRule(boolean joined, boolean atLeast1Game, boolean and) {
+
+        public static final SessionsRule DEFAULT = new SessionsRule(true, false, false);
+
+        /** Whether a player who {@code wasJoined} and {@code hadGame} counts for the session. */
+        public boolean counts(boolean wasJoined, boolean hadGame) {
+            if (joined && atLeast1Game) {
+                return and ? wasJoined && hadGame : wasJoined || hadGame;
+            }
+            return atLeast1Game ? hadGame : wasJoined;
+        }
+    }
+
     private final Map<String, StatsCatalog.Stat> catalog;
     private final List<String> columns;
     private final List<StatsCatalog.Stat> collected;
+    private final List<StatsCatalog.Stat> collectedForCombos;
+    private final SessionsRule sessionsRule;
     private final List<Grouping> groupBy;
     private final List<SortKey> sort;
     private final int minGamesSingle;
@@ -50,11 +74,13 @@ public final class StatisticsSchema {
     private final boolean allowDraws;
 
     private StatisticsSchema(Map<String, StatsCatalog.Stat> catalog, List<String> columns,
-                             List<StatsCatalog.Stat> collected, List<Grouping> groupBy, List<SortKey> sort,
+                             List<StatsCatalog.Stat> collected, SessionsRule sessionsRule, List<Grouping> groupBy, List<SortKey> sort,
                              int minGamesSingle, int minGamesCombo, boolean allowDraws) {
         this.catalog = catalog;
         this.columns = columns;
         this.collected = collected;
+        this.collectedForCombos = collected.stream().filter(stat -> !stat.singleOnly()).toList();
+        this.sessionsRule = sessionsRule;
         this.groupBy = groupBy;
         this.sort = sort;
         this.minGamesSingle = minGamesSingle;
@@ -79,7 +105,7 @@ public final class StatisticsSchema {
         }
         List<StatsCatalog.Stat> collected = StatsCatalog.storedFor(catalog, needed);
 
-        return new StatisticsSchema(catalog, columns, collected, readGroupBy(scoreboard.get("groupBy")), sort,
+        return new StatisticsSchema(catalog, columns, collected, readSessionsRule(map(scoreboard, "config")), readGroupBy(scoreboard.get("groupBy")), sort,
                 intOf(map(ranking, "minGames").get("single"), 0), intOf(map(ranking, "minGames").get("combo"), 5),
                 Boolean.TRUE.equals(data.get("allowDraws")));
     }
@@ -102,6 +128,21 @@ public final class StatisticsSchema {
     /** The stored stats the sport collects: the columns' own and their operands', and the ranking keys' operands. */
     public List<StatsCatalog.Stat> collected() {
         return collected;
+    }
+
+    /** SESSION-82: the stored stats a pair or team entry may hold: {@link #collected()} without the single-only ones. */
+    public List<StatsCatalog.Stat> collectedForCombos() {
+        return collectedForCombos;
+    }
+
+    /** SESSION-82: whether the sport collects the {@code sessions} stat. */
+    public boolean collectsSessions() {
+        return collected.stream().anyMatch(stat -> stat.kind() == StatsCatalog.Kind.SESSIONS);
+    }
+
+    /** SESSION-82: what makes a session count for a player in the {@code sessions} stat (the default is {@code joined}). */
+    public SessionsRule sessionsRule() {
+        return sessionsRule;
     }
 
     /** The grouping, empty or exactly one entry ({@code PARTNER} or {@code TEAM}). */
@@ -219,6 +260,27 @@ public final class StatisticsSchema {
             }
         }
         return List.of();
+    }
+
+    /** SESSION-82: the {@code sessions} config, lenient: unknown entries dropped, nothing usable is {@link SessionsRule#DEFAULT}. */
+    private static SessionsRule readSessionsRule(Map<String, Object> config) {
+        Map<String, Object> sessions = map(config, "sessions");
+        boolean joined = false;
+        boolean game = false;
+        if (sessions.get("counts") instanceof List<?> counts) {
+            for (Object entry : counts) {
+                if ("joined".equals(entry)) {
+                    joined = true;
+                } else if ("atLeast1Game".equals(entry)) {
+                    game = true;
+                }
+            }
+        }
+        if (!joined && !game) {
+            return SessionsRule.DEFAULT;
+        }
+        boolean and = sessions.get("combine") instanceof String combine && combine.trim().equalsIgnoreCase("AND");
+        return new SessionsRule(joined, game, and);
     }
 
     private static int intOf(Object value, int fallback) {
