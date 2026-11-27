@@ -27,4 +27,9 @@ public class CreateGroupRequest {
     private String avatarUrl;
     private String coverUrl;
     private Boolean isPrivate;
+
+    /** B25: {@code countries.id}; send together with {@code regionId}, or neither (then the owner's are used). */
+    private Long countryId;
+    /** B25: {@code regions.id}, which must belong to {@code countryId}. */
+    private Long regionId;
 }

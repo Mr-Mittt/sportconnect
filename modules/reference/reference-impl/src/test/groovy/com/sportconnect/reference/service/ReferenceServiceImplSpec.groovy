@@ -166,6 +166,52 @@ class ReferenceServiceImplSpec extends Specification {
         "empty" | []
     }
 
+    // ---------- getRegionTimezones (B25) ----------
+
+    def "getRegionTimezones gives the region's own zone, else its country's, and omits a region with neither"() {
+        given:
+        regionRepository.findAllById([70L, 71L, 72L]) >> [
+                Region.builder().id(70L).countryId(7L).isoCode("A-1").name("A").nativeName("A").build(),
+                Region.builder().id(71L).countryId(7L).isoCode("A-2").name("B").nativeName("B").timezone("Asia/Bangkok").build(),
+                Region.builder().id(72L).countryId(8L).isoCode("B-1").name("C").nativeName("C").build()
+        ]
+        1 * countryRepository.findAllById({ it as Set == [7L, 8L] as Set }) >> [
+                Country.builder().id(7L).iso2("VN").iso3("VNM").name("Vietnam").timezone("Asia/Ho_Chi_Minh").build(),
+                Country.builder().id(8L).iso2("XX").iso3("XXX").name("NoZone").build()
+        ]
+
+        when:
+        def result = service.getRegionTimezones([70L, 71L, 72L])
+
+        then:
+        result == [(70L): "Asia/Ho_Chi_Minh", (71L): "Asia/Bangkok"]
+    }
+
+    def "getRegionTimezones asks no country when every region has its own zone, and an unknown region is absent"() {
+        given:
+        regionRepository.findAllById([71L, 99L]) >> [
+                Region.builder().id(71L).countryId(7L).isoCode("A-2").name("B").nativeName("B").timezone("Asia/Bangkok").build()
+        ]
+
+        when:
+        def result = service.getRegionTimezones([71L, 99L])
+
+        then:
+        0 * countryRepository._
+        result == [(71L): "Asia/Bangkok"]
+    }
+
+    @Unroll
+    def "getRegionTimezones with #label ids returns an empty map without a query"() {
+        expect:
+        service.getRegionTimezones(ids) == [:]
+
+        where:
+        label   | ids
+        "null"  | null
+        "empty" | []
+    }
+
     // ---------- isActiveLanguage ----------
 
     def "isActiveLanguage asks the repository for a non-blank code"() {

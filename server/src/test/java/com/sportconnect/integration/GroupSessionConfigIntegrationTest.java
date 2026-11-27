@@ -86,7 +86,7 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         evictSportCache();
         locationId = locationRepository.save(Location.builder().sportId(sportId).name("Court").createdBy(ownerId).build()).getId();
         otherSportLocationId = locationRepository.save(Location.builder().sportId(otherSportId).name("Pool").createdBy(ownerId).build()).getId();
-        groupId = groupRepository.save(Group.builder().groupName("SESSION-GROUP-4 " + UUID.randomUUID())
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("SESSION-GROUP-4 " + UUID.randomUUID())
                 .createdBy(ownerId).isPrivate(true).isActive(true).sportId(sportId).build()).getId();
         join(ownerId, OWNER_ROLE_ID);
         join(adminId, ADMIN_ROLE_ID);
@@ -693,7 +693,7 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
 
     @Test
     void aConfigurationOfAnotherGroup_isNotFoundHere() throws Exception {
-        Long otherGroup = groupRepository.save(Group.builder().groupName("SESSION-GROUP-4 other " + UUID.randomUUID())
+        Long otherGroup = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("SESSION-GROUP-4 other " + UUID.randomUUID())
                 .createdBy(ownerId).isPrivate(true).isActive(true).sportId(sportId).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(otherGroup).userId(ownerId).roleId(OWNER_ROLE_ID).build());
         Long id = createAs(adminId, complete(1, "18:00"));

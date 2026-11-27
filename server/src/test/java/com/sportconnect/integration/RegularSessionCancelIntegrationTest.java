@@ -100,7 +100,7 @@ class RegularSessionCancelIntegrationTest extends RedisBaseIT {
         sportId = sportRepository.save(Sport.builder().name("SESSION-GROUP-6 " + UUID.randomUUID()).isActive(true).build()).getId();
         evictSportCache();
         locationId = locationRepository.save(Location.builder().sportId(sportId).name("Court").timezone("UTC").createdBy(ownerId).build()).getId();
-        groupId = groupRepository.save(Group.builder().groupName("Sunday Smash").createdBy(ownerId).isPrivate(true).isActive(true)
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Sunday Smash").createdBy(ownerId).isPrivate(true).isActive(true)
                 .sportId(sportId).build()).getId();
         join(ownerId, OWNER_ROLE_ID);
         join(adminId, ADMIN_ROLE_ID);

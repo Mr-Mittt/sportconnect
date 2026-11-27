@@ -9,6 +9,7 @@ import com.sportconnect.common.exception.NotFoundException
 import com.sportconnect.group.api.dto.*
 import com.sportconnect.group.entity.*
 import com.sportconnect.group.repository.*
+import com.sportconnect.reference.api.service.ReferenceService
 import com.sportconnect.social.post.api.dto.PostResponse
 import com.sportconnect.social.post.api.dto.PostType
 import com.sportconnect.social.post.api.dto.SystemCode
@@ -16,6 +17,7 @@ import com.sportconnect.social.post.api.service.PostService
 import com.sportconnect.sport.api.dto.SportResponse
 import com.sportconnect.sport.api.service.SportService
 import com.sportconnect.sport.api.service.UserSportProfileService
+import com.sportconnect.user.api.dto.UserResponse
 import com.sportconnect.user.api.dto.UserSummaryResponse
 import com.sportconnect.user.api.service.UserFriendService
 import com.sportconnect.user.api.service.UserService
@@ -46,6 +48,10 @@ class GroupServiceImplSpec extends Specification {
     GroupInvitationRepository invitationRepository = Mock()
     GroupInvitationInviterRepository invitationInviterRepository = Mock()
     StringRedisTemplate stringRedisTemplate = Mock()
+    // B25: the timezone of region 1; every response now carries a derived timezone.
+    ReferenceService referenceService = Mock {
+        getRegionTimezones(_) >> [(1L): 'Asia/Ho_Chi_Minh']
+    }
     // Real instance, not a Mock() — a pure value-converter with no side effects, and using the
     // real one lets tests assert on the actual serialized payload publishDomainEvent produces.
     ObjectMapper objectMapper = new ObjectMapper()
@@ -67,7 +73,8 @@ class GroupServiceImplSpec extends Specification {
             invitationRepository,
             invitationInviterRepository,
             stringRedisTemplate,
-            objectMapper)
+            objectMapper,
+            referenceService)
 
     // A7: createGroup now resolves the sport before the profile gate, so every createGroup
     // test has to stub SportService. Two fixtures cover the only distinction that matters.
@@ -93,7 +100,7 @@ class GroupServiceImplSpec extends Specification {
                 .fullName("Test User")
                 .build()
 
-        testGroup = Group.builder()
+        testGroup = Group.builder().countryId(1L).regionId(1L)
                 .id(1L)
                 .sportId(1L)
                 .groupName("Test Group")
@@ -146,7 +153,9 @@ class GroupServiceImplSpec extends Specification {
         1 * groupRepository.existsByGroupName(request.groupName) >> false
         1 * sportService.requireActiveSportById(1L) >> activeSport
         1 * userSportProfileService.hasActiveProfileForActiveSport(userId, 1L) >> true
-        1 * groupRepository.save(_ as Group) >> testGroup
+        1 * userService.getUserById(userId) >> UserResponse.builder().id(userId).countryId(1L).regionId(1L).build()
+        1 * referenceService.requireValidSelection(1L, 1L)
+        1 * groupRepository.save({ Group g -> g.countryId == 1L && g.regionId == 1L }) >> testGroup
         1 * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
         1 * groupMemberRepository.save(_ as GroupMember) >> new GroupMember()
         1 * groupTypeRepository.findByTypeName("DEFAULT") >> Optional.of(defaultGroupType)
@@ -161,6 +170,128 @@ class GroupServiceImplSpec extends Specification {
         response != null
         response.id == testGroup.id
         response.groupName == testGroup.groupName
+    }
+
+    // ---------------------------------------------------------------- B25: a group's country and region
+
+    def stubCreateBasics() {
+        sportService.requireActiveSportById(1L) >> activeSport
+        userSportProfileService.hasActiveProfileForActiveSport(userId, 1L) >> true
+        groupRepository.existsByGroupName(_) >> false
+    }
+
+    def "createGroup uses the country and region that were sent and does not read the owner's"() {
+        given:
+        stubCreateBasics()
+        def request = CreateGroupRequest.builder().sportId(1L).groupName("Geo Group").countryId(7L).regionId(70L).build()
+
+        when:
+        def response = groupService.createGroup(userId, request)
+
+        then:
+        0 * userService.getUserById(_)
+        1 * referenceService.requireValidSelection(7L, 70L)
+        1 * groupRepository.save({ Group g -> g.countryId == 7L && g.regionId == 70L }) >> testGroup
+        _ * groupRoleRepository.findByRoleName(_) >> Optional.of(ownerRole)
+        _ * groupMemberRepository.save(_) >> new GroupMember()
+        _ * groupTypeRepository.findByTypeName(_) >> Optional.of(defaultGroupType)
+        _ * groupSettingsRepository.save(_) >> new GroupSettings()
+        _ * userService.getUserSummariesByIds(_) >> [(userId): testUser]
+        _ * groupMemberRepository.countByGroupId(_) >> 1L
+        _ * groupMemberRepository.findByGroupIdAndUserId(_, _) >> Optional.of(GroupMember.builder().roleId(ownerRole.id).build())
+        _ * groupRoleRepository.findById(_) >> Optional.of(ownerRole)
+        response.countryId == testGroup.countryId
+        response.regionId == testGroup.regionId
+        response.timezone == 'Asia/Ho_Chi_Minh'
+    }
+
+    def "createGroup refuses a group when the owner has no country and region and none was sent"() {
+        given:
+        stubCreateBasics()
+        def request = CreateGroupRequest.builder().sportId(1L).groupName("Geo Group").build()
+
+        when:
+        groupService.createGroup(userId, request)
+
+        then:
+        1 * userService.getUserById(userId) >> UserResponse.builder().id(userId).countryId(1L).build()
+        0 * groupRepository.save(_)
+        def e = thrown(BadRequestException)
+        e.errorCode == "GROUP_GEO_REQUIRED"
+    }
+
+    def "createGroup refuses only a country or only a region"() {
+        given:
+        stubCreateBasics()
+        def request = CreateGroupRequest.builder().sportId(1L).groupName("Geo Group").countryId(countryId).regionId(regionId).build()
+
+        when:
+        groupService.createGroup(userId, request)
+
+        then:
+        0 * groupRepository.save(_)
+        0 * referenceService.requireValidSelection(_, _)
+        def e = thrown(BadRequestException)
+        e.errorCode == "GROUP_GEO_INCOMPLETE"
+
+        where:
+        countryId | regionId
+        1L        | null
+        null      | 1L
+    }
+
+    def "createGroup writes nothing when the reference module rejects the selection"() {
+        given:
+        stubCreateBasics()
+        def request = CreateGroupRequest.builder().sportId(1L).groupName("Geo Group").countryId(1L).regionId(99L).build()
+
+        when:
+        groupService.createGroup(userId, request)
+
+        then:
+        1 * referenceService.requireValidSelection(1L, 99L) >> { throw new BadRequestException("REGION_UNKNOWN", "no", null) }
+        0 * groupRepository.save(_)
+        def e = thrown(BadRequestException)
+        e.errorCode == "REGION_UNKNOWN"
+    }
+
+    def "updateGroup changes the country and region together, validated, for the owner"() {
+        given:
+        def request = UpdateGroupRequest.builder().countryId(7L).regionId(70L).build()
+        def ownerMember = GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
+
+        when:
+        groupService.updateGroup(testGroup.id, userId, request)
+
+        then:
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        _ * groupRoleRepository.findByRoleName("group_owner") >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findByRoleName("group_admin") >> Optional.of(adminRole)
+        1 * referenceService.requireValidSelection(7L, 70L)
+        1 * groupRepository.save({ Group g -> g.countryId == 7L && g.regionId == 70L }) >> testGroup
+        _ * userService.getUserSummariesByIds(_) >> [(userId): testUser]
+        _ * groupMemberRepository.countByGroupId(_) >> 1L
+        _ * groupRoleRepository.findById(_) >> Optional.of(ownerRole)
+    }
+
+    def "updateGroup refuses a lone country or region and changes nothing"() {
+        given:
+        def request = UpdateGroupRequest.builder().regionId(70L).build()
+        def ownerMember = GroupMember.builder().groupId(testGroup.id).userId(userId).roleId(ownerRole.id).build()
+
+        when:
+        groupService.updateGroup(testGroup.id, userId, request)
+
+        then:
+        1 * groupRepository.findByIdAndIsActiveTrue(testGroup.id) >> Optional.of(testGroup)
+        _ * groupMemberRepository.findByGroupIdAndUserId(testGroup.id, userId) >> Optional.of(ownerMember)
+        _ * groupRoleRepository.findByRoleName(_) >> Optional.of(ownerRole)
+        _ * groupRoleRepository.findById(_) >> Optional.of(ownerRole)
+        0 * groupRepository.save(_)
+        def e = thrown(BadRequestException)
+        e.errorCode == "GROUP_GEO_INCOMPLETE"
+        testGroup.regionId == 1L
     }
 
     def "createGroup should throw BadRequestException when the sport is deactivated"() {
@@ -1290,7 +1421,7 @@ class GroupServiceImplSpec extends Specification {
 
     def "getGroupInfo should return full info when group is public"() {
         given: "a public group with rules and schedule"
-        def groupWithInfo = Group.builder()
+        def groupWithInfo = Group.builder().countryId(1L).regionId(1L)
                 .id(1L)
                 .groupName("Test Group")
                 .description("A group about testing")
@@ -1398,7 +1529,7 @@ class GroupServiceImplSpec extends Specification {
 
     def "getGroupGeneralData should return full data when group is public"() {
         given: "a public group with rules and schedule"
-        def groupWithInfo = Group.builder()
+        def groupWithInfo = Group.builder().countryId(1L).regionId(1L)
                 .id(1L)
                 .groupName("Test Group")
                 .description("A group about testing")
@@ -1718,7 +1849,7 @@ class GroupServiceImplSpec extends Specification {
 
     def "cancelJoinRequest should throw BadRequestException when group is inactive"() {
         given: "a pending request for an inactive group"
-        def inactiveGroup = Group.builder()
+        def inactiveGroup = Group.builder().countryId(1L).regionId(1L)
                 .id(testGroup.id)
                 .groupName("Disbanded Group")
                 .isActive(false)
@@ -1811,7 +1942,7 @@ class GroupServiceImplSpec extends Specification {
     def "getPublicGroups should filter by keyword on group name"() {
         given: "a group matching keyword"
         def pageable = PageRequest.of(0, 10)
-        def matchingGroup = Group.builder()
+        def matchingGroup = Group.builder().countryId(1L).regionId(1L)
                 .id(2L).sportId(1L).groupName("Football Warriors")
                 .isActive(true).isPrivate(false).createdBy(otherUserId).build()
         def rawPage = new PageImpl<Object[]>([[matchingGroup, 5L] as Object[]])
@@ -1867,10 +1998,10 @@ class GroupServiceImplSpec extends Specification {
     def "getPublicGroups should put member groups before non-member groups"() {
         given: "two groups — user is member of Alpha (SUM=1), not Beta (SUM=0)"
         def pageable = PageRequest.of(0, 10)
-        def alphaGroup = Group.builder()
+        def alphaGroup = Group.builder().countryId(1L).regionId(1L)
                 .id(10L).sportId(1L).groupName("Alpha Group")
                 .isActive(true).isPrivate(false).createdBy(otherUserId).build()
-        def betaGroup = Group.builder()
+        def betaGroup = Group.builder().countryId(1L).regionId(1L)
                 .id(11L).sportId(1L).groupName("Beta Group")
                 .isActive(true).isPrivate(false).createdBy(otherUserId).build()
         // DB returns Beta first, Alpha second — sort should flip them
@@ -3125,7 +3256,7 @@ class GroupServiceImplSpec extends Specification {
 
     def "getUserPendingInvitations should resolve each row's own group's sportId (B15) across multiple groups in one page"() {
         given: "two pending_user invitations to the same invitee from two different groups/sports"
-        def otherGroup = Group.builder()
+        def otherGroup = Group.builder().countryId(1L).regionId(1L)
                 .id(42L).sportId(7L).groupName("Basketball Crew")
                 .isPrivate(false).isActive(true).createdBy(userId)
                 .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build()
@@ -3244,7 +3375,7 @@ class GroupServiceImplSpec extends Specification {
 
     def "cancelInvitation should throw BadRequestException when group is inactive"() {
         given: "a pending_owner invitation for an inactive group"
-        def inactiveGroup = Group.builder()
+        def inactiveGroup = Group.builder().countryId(1L).regionId(1L)
                 .id(testGroup.id)
                 .groupName("Disbanded Group")
                 .isActive(false)
@@ -3419,7 +3550,7 @@ class GroupServiceImplSpec extends Specification {
     def "createGroup publishes a group.member_added event for the owner"() {
         given: "a create group request with a sport the user has a profile for"
         def request = CreateGroupRequest.builder()
-                .sportId(1L).groupName("New Group").description("New Description").isPrivate(false)
+                .sportId(1L).groupName("New Group").description("New Description").isPrivate(false).countryId(1L).regionId(1L)
                 .build()
         def streamOps = Mock(StreamOperations)
 

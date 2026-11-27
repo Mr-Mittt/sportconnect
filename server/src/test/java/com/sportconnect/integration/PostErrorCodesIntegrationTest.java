@@ -71,7 +71,7 @@ class PostErrorCodesIntegrationTest extends RedisBaseIT {
         ownerId = createUser("owner").getId();
         memberId = createUser("member").getId();
         outsiderId = createUser("outsider").getId();
-        Group group = groupRepository.save(Group.builder()
+        Group group = groupRepository.save(Group.builder().countryId(1L).regionId(1L)
                 .groupName("Post Errors " + UUID.randomUUID())
                 .createdBy(ownerId)
                 .isPrivate(true)

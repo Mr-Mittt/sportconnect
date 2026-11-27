@@ -148,6 +148,8 @@ CREATE TABLE IF NOT EXISTS groups (
     rules VARCHAR(2000) NOT NULL DEFAULT '',
     schedule VARCHAR(2000) NOT NULL DEFAULT '',
     sport_id BIGINT,
+    country_id BIGINT NOT NULL,
+    region_id BIGINT NOT NULL,
     created_by UUID NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -683,7 +685,8 @@ CREATE TABLE IF NOT EXISTS countries (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     -- V074: default language per country. V074 itself is run by ReferenceApiIntegrationTest
     -- (ADD COLUMN IF NOT EXISTS), so the column being here already is safe.
-    default_language_code VARCHAR(35) REFERENCES languages (code)
+    default_language_code VARCHAR(35) REFERENCES languages (code),
+    timezone VARCHAR(64)
 );
 
 CREATE TABLE IF NOT EXISTS regions (
@@ -692,5 +695,6 @@ CREATE TABLE IF NOT EXISTS regions (
     iso_code VARCHAR(10) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
     native_name VARCHAR(100) NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    timezone VARCHAR(64)
 );

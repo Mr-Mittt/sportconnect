@@ -249,7 +249,7 @@ class SessionShareIntegrationTest extends RedisBaseIT {
 
     /** A private group with {@code hostId} as owner (SESSION-GROUP-3: a group session is shareable by its members). */
     private Long groupWithHost(boolean active) {
-        Long groupId = groupRepository.save(Group.builder().groupName("Share " + UUID.randomUUID())
+        Long groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Share " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(active).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(1).build());
         return groupId;

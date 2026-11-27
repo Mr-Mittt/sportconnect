@@ -70,7 +70,7 @@ class GroupMemberSearchIntegrationTest extends BaseIT {
     }
 
     private Long createGroup(boolean isPrivate, boolean isActive) {
-        return groupRepository.save(Group.builder()
+        return groupRepository.save(Group.builder().countryId(1L).regionId(1L)
                 .groupName("Member search group " + UUID.randomUUID())
                 .createdBy(viewerId)
                 .isPrivate(isPrivate)

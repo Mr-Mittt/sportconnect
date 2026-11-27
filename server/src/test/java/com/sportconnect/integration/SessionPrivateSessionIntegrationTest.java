@@ -242,7 +242,7 @@ class SessionPrivateSessionIntegrationTest extends RedisBaseIT {
 
     @Test
     void playersOfAGroupSession_areNotReadableByANonMember_butAreByAMember() throws Exception {
-        Long groupId = groupRepository.save(Group.builder().groupName("SESSION-69 " + UUID.randomUUID())
+        Long groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("SESSION-69 " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(1).build());
         Long id = seed(groupId, SessionStatus.SCHEDULED, false);
@@ -399,7 +399,7 @@ class SessionPrivateSessionIntegrationTest extends RedisBaseIT {
 
     @Test
     void aSessionOfAGroup_ignoresIsPublic_andStaysNonPublic() throws Exception {
-        Long groupId = groupRepository.save(Group.builder().groupName("SESSION-69 " + UUID.randomUUID())
+        Long groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("SESSION-69 " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(1).build());
         Long id = seed(groupId, SessionStatus.PREPARING, false);

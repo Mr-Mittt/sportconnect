@@ -95,7 +95,7 @@ class SessionImportIntegrationTest extends RedisBaseIT {
         evictSportCache();
         locationId = locationRepository.save(Location.builder().sportId(sportId).name("Tin sport").timezone("Asia/Ho_Chi_Minh")
                 .createdBy(ownerId).build()).getId();
-        groupId = groupRepository.save(Group.builder().groupName("B-k-B-g").createdBy(ownerId).isPrivate(true).isActive(true)
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("B-k-B-g").createdBy(ownerId).isPrivate(true).isActive(true)
                 .sportId(sportId).build()).getId();
         join(ownerId, OWNER_ROLE_ID);
         for (UUID member : List.of(hieu, duc, anhA, anhB, deactivated)) {

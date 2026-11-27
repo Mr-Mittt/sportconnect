@@ -51,6 +51,14 @@ public interface ReferenceService {
     /** Batch lookup by id — <strong>includes inactive rows</strong>; same contract as {@link #getCountriesByIds}. */
     Map<Long, RegionResponse> getRegionsByIds(Collection<Long> ids);
 
+    /**
+     * B25: the IANA timezone of each region, for reading a local date: the region's own timezone, else its country's.
+     * Includes inactive rows. A region id that is unknown, or whose region and country both have no timezone, is
+     * <strong>absent</strong> from the map (an error is logged for the second case: it is a data gap an operator must fill, never
+     * a guess). A {@code null} or empty collection yields an empty map. At most two queries regardless of size.
+     */
+    Map<Long, String> getRegionTimezones(Collection<Long> regionIds);
+
     /** Whether {@code code} is an active language's code. {@code null} or blank is {@code false}. */
     boolean isActiveLanguage(String code);
 

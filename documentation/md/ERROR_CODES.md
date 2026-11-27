@@ -160,6 +160,8 @@ A11 also moved statuses: owner/admin/member/invitee permission failures went 400
 | `GROUP_INVITATION_NOT_PENDING` | 409 | none | Approve, decline, accept, reject or cancel of an invitation that is not in the required state. |
 | `GROUP_POST_ALREADY_PINNED` | 409 | none | Pinning a post that is already pinned. |
 | `GROUP_SPORT_PROFILE_REQUIRED` | 400 | none | Create a group without an active sport profile for the sport. |
+| `GROUP_GEO_REQUIRED` | 400 | none | Create a group with no country and region sent when the owner's profile has none (B25). |
+| `GROUP_GEO_INCOMPLETE` | 400 | none | Create or update a group sending only one of `countryId` and `regionId` (B25). A wrong pair is `COUNTRY_UNKNOWN` / `REGION_UNKNOWN` (reference). |
 | `GROUP_NOT_FRIENDS` | 400 | none | Invite or add someone who is not a friend. |
 | `GROUP_OWNER_CANNOT_LEAVE` | 400 | none | The owner calls leave without transferring ownership first. |
 | `GROUP_OWNER_CANNOT_BE_REMOVED` | 400 | none | Removing the owner from the group. |

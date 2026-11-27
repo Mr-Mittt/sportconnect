@@ -94,9 +94,9 @@ class SessionGroupListsIntegrationTest extends RedisBaseIT {
         outsiderId = createUserWithRoles(true, "USER");
         sportId = sportRepository.save(Sport.builder().name("SESSION-GROUP-12 " + UUID.randomUUID()).isActive(true).build()).getId();
         evictSportCache();
-        groupId = groupRepository.save(Group.builder().groupName("SESSION-GROUP-12 " + UUID.randomUUID())
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("SESSION-GROUP-12 " + UUID.randomUUID())
                 .createdBy(ownerId).isPrivate(true).isActive(true).sportId(sportId).build()).getId();
-        otherGroupId = groupRepository.save(Group.builder().groupName("SESSION-GROUP-12 other " + UUID.randomUUID())
+        otherGroupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("SESSION-GROUP-12 other " + UUID.randomUUID())
                 .createdBy(ownerId).isPrivate(true).isActive(true).sportId(sportId).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(ownerId).roleId(OWNER_ROLE_ID).build());
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(memberId).roleId(MEMBER_ROLE_ID).build());

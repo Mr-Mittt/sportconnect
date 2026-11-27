@@ -66,7 +66,7 @@ class SessionErrorCodesIntegrationTest extends BaseIT {
         creatorId = createUser("creator").getId();
         memberId = createUser("member").getId();
         outsiderId = createUser("outsider").getId();
-        groupId = groupRepository.save(Group.builder()
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L)
                 .groupName("Session Errors " + UUID.randomUUID())
                 .createdBy(creatorId).isPrivate(true).isActive(true).build()).getId();
         addMember(creatorId, ROLE_OWNER);

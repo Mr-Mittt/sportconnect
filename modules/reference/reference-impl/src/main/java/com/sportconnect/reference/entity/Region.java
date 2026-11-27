@@ -42,6 +42,10 @@ public class Region {
     @Column(name = "native_name", nullable = false, length = 100)
     private String nativeName;
 
+    /** IANA timezone id when the region differs from its country's (V110); {@code null} means the country's. */
+    @Column(length = 64)
+    private String timezone;
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
