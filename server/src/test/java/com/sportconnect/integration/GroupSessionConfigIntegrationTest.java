@@ -205,6 +205,7 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         sendAs(adminId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.reason").value("GROUP_DISABLED"))
                 .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when").doesNotExist());
         assertThat(systemPosts()).hasSize(2);
 
@@ -231,7 +232,15 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
                 "scoreboard", Map.of("columns", List.of("games")))));
         sportRepository.save(sport);
         evictSportCache();
-        getAs(memberId, "/settings").andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false));
+        getAs(memberId, "/settings").andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.reason").value("NOT_LISTED_BY_SPORT"));
+
+        // the sport's own enabled false is a hard off: a group cannot turn it on, and the answer says so
+        setSportSchema(Map.of("enabled", false));
+        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", true, "when", List.of("joined")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.reason").value("SPORT_DISABLED"));
     }
 
     @Test

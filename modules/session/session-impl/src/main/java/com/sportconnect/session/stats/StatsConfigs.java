@@ -118,7 +118,10 @@ public final class StatsConfigs {
 
     /**
      * What a settings answer shows as the config the group's member row really uses: for {@code sessions}, whether it is collected
-     * for the row (the sport collects it and the group did not switch it off) and, when it is, the rule.
+     * for the row (the sport collects it and the group did not switch it off) and, when it is, the rule; when it is not, the
+     * {@code reason}: {@code SPORT_DISABLED} (the sport set {@code enabled: false}: a hard off), {@code NOT_LISTED_BY_SPORT} (the
+     * sport does not list the stat) or {@code GROUP_DISABLED} (the group switched it off). A group can only narrow what the sport
+     * collects, so only the last one is the group's own doing.
      */
     public static Map<String, Object> effective(StatisticsSchema schema, Map<String, Object> config) {
         Map<String, Object> sessions = new LinkedHashMap<>();
@@ -126,6 +129,9 @@ public final class StatsConfigs {
         sessions.put("enabled", on);
         if (on) {
             sessions.putAll(sessionsRule(config, schema.sessionsRule()).toConfig());
+        } else {
+            sessions.put("reason", schema.sessionsDisabledBySport() ? "SPORT_DISABLED"
+                    : !schema.collectsSessions() ? "NOT_LISTED_BY_SPORT" : "GROUP_DISABLED");
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put(SESSIONS, sessions);

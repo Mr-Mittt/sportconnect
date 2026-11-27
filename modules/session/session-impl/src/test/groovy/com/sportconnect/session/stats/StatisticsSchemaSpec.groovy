@@ -281,4 +281,14 @@ class StatisticsSchemaSpec extends Specification {
         [when: ['joined']]            | true
         [enabled: 'no']               | true
     }
+
+    def "sessionsDisabledBySport is the sport's own enabled false, and a sport that does not list the stat has no opinion"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: false]]])).sessionsDisabledBySport()
+        StatisticsSchema.of(schema([columns: ['games'], config: [sessions: [enabled: false]]])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games', 'sessions']])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games']])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: true]]])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: 'no']]])).sessionsDisabledBySport()
+    }
 }

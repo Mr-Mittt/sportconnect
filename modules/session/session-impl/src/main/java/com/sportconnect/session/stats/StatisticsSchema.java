@@ -98,6 +98,7 @@ public final class StatisticsSchema {
     private final List<StatsCatalog.Stat> collected;
     private final List<StatsCatalog.Stat> collectedForCombos;
     private final SessionsRule sessionsRule;
+    private final boolean sessionsDisabledBySport;
     private final List<Grouping> groupBy;
     private final List<SortKey> sort;
     private final int minGamesSingle;
@@ -105,13 +106,14 @@ public final class StatisticsSchema {
     private final boolean allowDraws;
 
     private StatisticsSchema(Map<String, StatsCatalog.Stat> catalog, List<String> columns,
-                             List<StatsCatalog.Stat> collected, SessionsRule sessionsRule, List<Grouping> groupBy, List<SortKey> sort,
+                             List<StatsCatalog.Stat> collected, SessionsRule sessionsRule, boolean sessionsDisabledBySport, List<Grouping> groupBy, List<SortKey> sort,
                              int minGamesSingle, int minGamesCombo, boolean allowDraws) {
         this.catalog = catalog;
         this.columns = columns;
         this.collected = collected;
         this.collectedForCombos = collected.stream().filter(stat -> !stat.singleOnly()).toList();
         this.sessionsRule = sessionsRule;
+        this.sessionsDisabledBySport = sessionsDisabledBySport;
         this.groupBy = groupBy;
         this.sort = sort;
         this.minGamesSingle = minGamesSingle;
@@ -139,7 +141,7 @@ public final class StatisticsSchema {
         }
         List<StatsCatalog.Stat> collected = StatsCatalog.storedFor(catalog, needed);
 
-        return new StatisticsSchema(catalog, columns, collected, readSessionsRule(map(scoreboard, "config")), readGroupBy(scoreboard.get("groupBy")), sort,
+        return new StatisticsSchema(catalog, columns, collected, readSessionsRule(map(scoreboard, "config")), sessionsOff, readGroupBy(scoreboard.get("groupBy")), sort,
                 intOf(map(ranking, "minGames").get("single"), 0), intOf(map(ranking, "minGames").get("combo"), 5),
                 Boolean.TRUE.equals(data.get("allowDraws")));
     }
@@ -172,6 +174,14 @@ public final class StatisticsSchema {
     /** SESSION-82: whether the sport collects the {@code sessions} stat. */
     public boolean collectsSessions() {
         return collected.stream().anyMatch(stat -> stat.kind() == StatsCatalog.Kind.SESSIONS);
+    }
+
+    /**
+     * SESSION-83: whether the sport's {@code config.sessions.enabled} is {@code false}: a hard off that no group can turn on (the
+     * sport has a reason). A sport that simply does not list {@code sessions} has no opinion, which is a different answer.
+     */
+    public boolean sessionsDisabledBySport() {
+        return sessionsDisabledBySport;
     }
 
     /** SESSION-82: what makes a session count for a player in the {@code sessions} stat (the default is {@code joined}). */

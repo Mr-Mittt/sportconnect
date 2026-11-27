@@ -88,8 +88,11 @@ class StatsConfigsSpec extends Specification {
         StatsConfigs.effective(sport([when: ['atLeast1Game']]), null).sessions == [enabled: true, when: ['atLeast1Game'], combine: 'OR']
         StatsConfigs.effective(sport(), null).sessions == [enabled: true, when: ['joined'], combine: 'OR']
         StatsConfigs.effective(sport([when: ['atLeast1Game']]), [sessions: [when: ['joined']]]).sessions == [enabled: true, when: ['joined'], combine: 'OR']
-        StatsConfigs.effective(sport(), [sessions: [enabled: false]]).sessions == [enabled: false]
-        StatsConfigs.effective(sport(null, ['games']), null).sessions == [enabled: false]
+        StatsConfigs.effective(sport(), [sessions: [enabled: false]]).sessions == [enabled: false, reason: 'GROUP_DISABLED']
+        StatsConfigs.effective(sport(null, ['games']), null).sessions == [enabled: false, reason: 'NOT_LISTED_BY_SPORT']
+        StatsConfigs.effective(sport([enabled: false]), null).sessions == [enabled: false, reason: 'SPORT_DISABLED']
+        StatsConfigs.effective(sport([enabled: false]), [sessions: [enabled: true, when: ['joined']]]).sessions == [enabled: false, reason: 'SPORT_DISABLED']
+        StatsConfigs.effective(sport([enabled: false]), [sessions: [enabled: false]]).sessions == [enabled: false, reason: 'SPORT_DISABLED']
     }
 
     def "a counters copy without a stat reads it as no value and keeps the others"() {
