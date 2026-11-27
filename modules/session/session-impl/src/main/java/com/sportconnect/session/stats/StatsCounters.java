@@ -53,11 +53,11 @@ public final class StatsCounters {
         }
     }
 
-    /** SESSION-83: a copy without these stats (they read as having no value). */
-    public StatsCounters without(java.util.Set<String> keys) {
+    /** SESSION-84: a copy holding only these stats (a group board reads only the stats the group's list holds, never a stale number of a dropped one). */
+    public StatsCounters retaining(java.util.Set<String> keys) {
         StatsCounters copy = new StatsCounters();
         values.forEach((key, value) -> {
-            if (!keys.contains(key)) {
+            if (keys.contains(key)) {
                 copy.values.put(key, value);
             }
         });

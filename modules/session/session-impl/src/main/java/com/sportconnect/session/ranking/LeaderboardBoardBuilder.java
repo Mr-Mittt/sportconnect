@@ -105,14 +105,21 @@ public class LeaderboardBoardBuilder {
     /** Reads what the board needs; never writes. */
     public BoardPlan plan(StatBoardRun run) {
         Long sportId = run.getSportId();
-        StatisticsSchema schema = schemaOf(sportId);
+        StatisticsSchema sportSchema = schemaOf(sportId);
         boolean group = "GROUP".equals(run.getScopeType());
         Long groupId = group ? run.getScopeId() : null;
+        // SESSION-84: a group board is built with the group's view of the stat list (its own list, else the sport's), and the rule it
+        // inherits (the sport's or a country's) is read through that view: a key on a stat the group does not hold is ignored, silently
+        StatisticsSchema schema = group
+                ? sportSchema.forGroup(groupSettings.findById(groupId).map(settings -> settings.getStatsConfig()).orElse(null))
+                : sportSchema;
         Long ruleCountry = group ? null : "COUNTRY".equals(run.getScopeType()) ? run.getScopeId() : run.getCountryId();
         Optional<RankingRules.Resolved> single = schema.collects()
-                ? rules.resolve(sportId, RankingRules.SINGLE, ruleCountry, groupId) : Optional.empty();
+                ? rules.resolve(sportId, RankingRules.SINGLE, ruleCountry, groupId).flatMap(rule -> group ? rule.retainedFor(schema) : Optional.of(rule))
+                : Optional.empty();
         Optional<RankingRules.Resolved> pair = schema.collects() && schema.groupsByPartner()
-                ? rules.resolve(sportId, RankingRules.PARTNER, ruleCountry, groupId) : Optional.empty();
+                ? rules.resolve(sportId, RankingRules.PARTNER, ruleCountry, groupId).flatMap(rule -> group ? rule.retainedFor(schema) : Optional.of(rule))
+                : Optional.empty();
         LeaderboardEntry existingSingle = entries.findById(key(run, RankingRules.SINGLE)).orElse(null);
         LeaderboardEntry existingPair = entries.findById(key(run, RankingRules.PARTNER)).orElse(null);
         boolean country = "COUNTRY".equals(run.getScopeType());
@@ -238,11 +245,10 @@ public class LeaderboardBoardBuilder {
         Map<UUID, Integer> numbers = memberNumbers.getMemberNumbers(run.getScopeId(),
                 rows.stream().map(GroupMemberStats::getUserId).collect(Collectors.toList()));
         SubjectNames names = SubjectNames.memberNumbers(numbers);
-        java.util.Set<String> disabled = groupSettings.findById(run.getScopeId())
-                .map(settings -> com.sportconnect.session.stats.StatsConfigs.disabledStats(settings.getStatsConfig()))
-                .orElse(java.util.Set.of());
+        java.util.Set<String> held = plan.schema().collected().stream().map(com.sportconnect.session.stats.StatsCatalog.Stat::key)
+                .collect(Collectors.toSet());
         for (GroupMemberStats row : rows) {
-            set.apply(names, row.getUserId(), PlayerEntries.ofGroup(GroupStatsDoc.read(row), disabled));
+            set.apply(names, row.getUserId(), PlayerEntries.ofGroup(GroupStatsDoc.read(row), held));
         }
         return set;
     }

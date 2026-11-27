@@ -1,6 +1,6 @@
 # SESSION-84 · A group's own stat list: disable any stat of the sport's list, and opt in to one it does not list
 
-**Status:** `IN PROGRESS`
+**Status:** `DONE` (2026-11-27)
 **Type:** Enhancement · **Depends on:** SESSION-83 (the group's `stats_config`, the effective block and its `reason`), SESSION-82
 **Filed:** 2026-11-27, split off at the pickup of SESSION-83 and **widened the same day** (owner, after the first manual run): SESSION-83 lets a group narrow only the `sessions` stat (any other key is `400`, reason `STAT_NOT_CONFIGURABLE`). The owner's rule: the sport is global config, so a stat the sport **disables** (`config.{stat}.enabled: false`) is a hard off the application admin chose, while a stat the sport **does not list** in `record.scoreboard.columns` is left to each group, the sub-board. Both halves are about one thing, the group's **effective stat list**, so the two tickets filed for them (SESSION-84, "disable any stat", and SESSION-85, "opt in to an unlisted stat") were **collapsed into this one on 2026-11-27**, delivered in two slices. Duplicate check: no session or client ticket names a per-group stat list (searched both backlogs and the ticket folders).
 
@@ -48,3 +48,24 @@
 
 **Tests:** `StatisticsSchemaSpec` 57 (+13), `SportResultSchemaIntegrationTest` 11 (+2: every refusal through the real context with nothing stored, and an accepted disabled stat no formula needs plus a record type with no catalog), `StatisticsReadIntegrationTest` 22 (+1); the stats, ranking and settings ITs unchanged and green (43, 53, 28). **Mutation:** 9 of 9 killed (the disabled detection, the formula chain, the validators not called, the operand check, the `enabled` type check, the sessions config check, the group view ignoring the sport's disabled stats, the group list not replacing the default, the group rule ignored).
 **Not run:** the full `:server:test`, PostgreSQL, a live server.
+
+## Slice 2 built (2026-11-27): the group's own stat list
+**Plan as approved:** the group's `statsConfig` is `{columns, config}` and replaces the sport's default list for the group's member row and board; one view built on the fly (`StatisticsSchema.forGroup`) used by the engine, the group read API, the board builder and the rule validation; inherited rule keys outside the list ignored at rebuild with no dirty mark; the group's own rule still validated (A and B); `effectiveStatsConfig` = `{columns, config, off}`.
+
+**Built**
+- `StatsConfigs` rewritten: strict `parse(node, sportSchema)` (`NOT_AN_OBJECT`, `KEY_UNKNOWN`, `COLUMNS_INVALID`, `STAT_UNKNOWN`, `STAT_DISABLED_BY_SPORT`, `STAT_NOT_CONFIGURABLE`, `WHEN_INVALID`, `COMBINE_INVALID`), `sessionsRule`, `effective` (the on-the-fly view with `off` reasons `SPORT_DISABLED`, `OPERAND_DISABLED`, `NOT_IN_LIST`). `StatisticsSchema.computes(stat)` says whether a view can value a stat.
+- Engine (`SessionStatsProcessor`): the group member row, its partner counters and the group's `sessions` step use `groupView`; a group can opt in to `sessions` when the sport does not list it; own totals and the ranked, region and country counters keep the sport's view; a player the group does not count gets no group row.
+- Read API: `SessionStatisticsServiceImpl.groupView` for the group list and the member detail (pair and partner entries answer the combos' columns, slice 1).
+- Board builder: a group board is planned with the group view; the inherited rule goes through `Resolved.retainedFor(view)` (`SortList.retaining`, `RequireList.retaining`: keys and conditions on stats the view cannot value are dropped, a weighted sum loses its terms one by one, no sort key left means no board); `PlayerEntries.ofGroup(doc, held)` and `StatsCounters.retaining` read only the stats the list holds.
+- Settings call: no rebuild mark (removed), `requireNoOwnRuleNaming` refuses dropping a stat the group's own rule names (`409 SESSION_GROUP_STAT_IN_USE`), `RankingRuleServiceImpl.store` checks a group's own rule against its view. SESSION-83's case C ("no value", `StatsCounters.without`, `PlayerEntries.ofGroup(doc, disabled)`) is gone.
+- Docs: `ERROR_CODES.md`, the statistics reference (§11.1, §11.2), the release notes, the module `CLAUDE.md`, CLIENT-SESSION-62 (the contract rebuilt).
+
+**Findings and divergences**
+- A group board lists a member only when they hold a number of a stat in the group's list: a member whose only stored number was a dropped stat (the host with `sessions` only) is not listed (`ofGroup(doc, held)`), which the first build of the test showed.
+- The `off` reason of a formula that lost an operand is `OPERAND_DISABLED`, as in the plan (the worked example given to the owner showed `SPORT_DISABLED` for `scoreDiff` by mistake).
+- A sport that collects nothing (no usable column) still counts nothing for any group (`STATISTICS_NOT_CONFIGURED`), even for a group that would opt in.
+- A stat dropped from the list and added back resumes counting from then with its old stored number in place (documented, rows are not rewritten).
+
+**Tests:** `StatsConfigsSpec` 28 (rewritten), `RuleRetainingSpec` 5 (new: `computes`, `retaining`, `retainedFor`, `StatsCounters.retaining`), `StatisticsSchemaSpec` 57, `SessionStatisticsServiceSpec` 43 (constructor), `GroupSessionConfigIntegrationTest` 28 (the group's list set and cleared with the effective answer, opt-in and the sport-disabled refusal and the later disable, every invalid case, permissions, rules A and B), `SessionStatsIntegrationTest` 45 (+2: opt-in to a stat the sport does not list, a list without a stat), `LeaderboardRankingIntegrationTest` 54 (+1: an inherited rule ignores keys with no dirty mark, then no board when no key is left), `StatisticsReadIntegrationTest` 23 (+1: the group endpoints answer the group's list). **Mutation:** 15 mutants, all killed (the disabled-by-sport check, `STAT_NOT_CONFIGURABLE`, the two reasons, the member counters, the partner counters and the `sessions` slot using the sport's view, the opt-in gate and its collect check, the read API view, the rule validation view, the ignored keys, the held stats, the empty rule building a board, the in-use check).
+**Not run:** the full `:server:test`, PostgreSQL, two instances, a live server; the manual test suite on the local branch still describes the SESSION-83 shape (to be updated there).
+**Visual-regression expectation:** no client change.

@@ -241,6 +241,30 @@ public final class StatisticsSchema {
     }
 
     /**
+     * SESSION-84: whether this schema can give a value for the stat: a stored stat it collects, or a formula whose operands it can
+     * all give. A ranking key that names a stat it cannot value is what a group board ignores.
+     */
+    public boolean computes(String key) {
+        return computes(key, 0);
+    }
+
+    private boolean computes(String key, int depth) {
+        StatsCatalog.Stat stat = catalog.get(key);
+        if (stat == null || depth > 3) {
+            return false;
+        }
+        if (stat.stored()) {
+            return collected.stream().anyMatch(c -> c.key().equals(key));
+        }
+        for (String operand : StatsFormulas.operands(stat.formula())) {
+            if (!computes(operand, depth + 1)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * SESSION-84: this schema as a group's own member row and board see it. {@code groupConfig} is the group's {@code stats_config},
      * {@code {"columns": [...], "config": {"sessions": {...}}}}, or {@code null}: its {@code columns}, when it names some, replace the
      * sport's default list (a stat left out is excluded, a stat the sport does not list is opted in); a stat the sport disabled is never

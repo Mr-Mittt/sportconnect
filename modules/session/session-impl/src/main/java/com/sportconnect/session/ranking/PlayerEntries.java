@@ -48,14 +48,11 @@ public record PlayerEntries(StatsCounters single, Map<String, StatsCounters> par
     }
 
     /**
-     * SESSION-83 (C): the same, for a group that switched some stats off for its member row: those stats have no value (a stored
-     * number from before the switch is not read), so a precondition on one lists nobody and a sort key on one ties everyone.
+     * SESSION-84: a group member's games as a group board with this list of stats reads them: only the stats the group's list holds
+     * ({@code held}, the stored ones its columns need); a member with a number of none of them has no entry.
      */
-    public static PlayerEntries ofGroup(GroupStatsDoc doc, java.util.Set<String> disabled) {
-        if (disabled.isEmpty()) {
-            return ofGroup(doc);
-        }
-        StatsCounters counters = doc.counters().without(disabled);
+    public static PlayerEntries ofGroup(GroupStatsDoc doc, java.util.Set<String> held) {
+        StatsCounters counters = doc.counters().retaining(held);
         return new PlayerEntries(counters.isEmpty() ? null : counters, doc.groupings().getOrDefault(StatisticsSchema.PARTNER, Map.of()));
     }
 }

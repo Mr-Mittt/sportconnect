@@ -28,7 +28,6 @@ import com.sportconnect.session.ranking.RequireList;
 import com.sportconnect.session.ranking.SortList;
 import com.sportconnect.session.stats.SportRankingRule;
 import com.sportconnect.session.stats.SportRankingRuleRepository;
-import com.sportconnect.session.stats.StatBoardRunRepository;
 import com.sportconnect.session.stats.StatisticsSchema;
 import com.sportconnect.session.stats.StatsCatalog;
 import com.sportconnect.session.stats.StatsConfigs;
@@ -89,8 +88,6 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     private final SportService sportService;
     // SESSION-83: a stat cannot be disabled for a group while the group's own ranking rule names it.
     private final SportRankingRuleRepository rankingRuleRepository;
-    // SESSION-83: a changed stats config makes the group's board rebuild whole at the next ranking run.
-    private final StatBoardRunRepository boardRunRepository;
 
     // ---- settings -------------------------------------------------------------------------------------------------
 
@@ -108,8 +105,11 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         // SESSION-83: a stats config is checked first (pure, a wrong one is 400 whatever else is true); an empty object clears it
         boolean statsConfigRequested = request.getStatsConfig() != null;
         Map<String, Object> newStatsConfig = null;
+        StatisticsSchema sportSchema = null;
         if (statsConfigRequested) {
-            Map<String, Object> parsed = StatsConfigs.parse(request.getStatsConfig());
+            // SESSION-84: the list is checked against the sport's current schema (a stat the sport disabled cannot be named)
+            sportSchema = sportSchema(groupId, callerId);
+            Map<String, Object> parsed = StatsConfigs.parse(request.getStatsConfig(), sportSchema);
             newStatsConfig = parsed.isEmpty() ? null : parsed;
         }
         // SESSION-78: while the group's sport has statistics off the statistics setting is not shown and cannot be changed (any value, on or off).
@@ -122,7 +122,7 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
         Map<String, Object> currentStatsConfig = existing == null ? null : existing.getStatsConfig();
         boolean statsConfigChanged = statsConfigRequested && !Objects.equals(newStatsConfig, currentStatsConfig);
         if (statsConfigChanged) {
-            requireNoOwnRuleNaming(groupId, callerId, StatsConfigs.disabledStats(newStatsConfig), StatsConfigs.disabledStats(currentStatsConfig));
+            requireNoOwnRuleNaming(groupId, callerId, sportSchema, currentStatsConfig, newStatsConfig);
         }
         boolean currentEnabled = existing != null && existing.isEnabled();
         RecurrenceMode currentMode = existing != null ? existing.getMode() : RecurrenceMode.WEEKLY;
@@ -147,9 +147,9 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
             settings.setStatisticsEnabled(request.getStatisticsEnabled());
         }
         if (statsConfigChanged) {
+            // SESSION-84 (owner): no immediate rebuild mark. The board is rebuilt, with the new list, the next time it is dirty (a counted
+            // game, the nightly run); a rule key the list no longer holds is ignored then.
             settings.setStatsConfig(newStatsConfig);
-            // the group's board (if it has one) is rebuilt whole at the next run: a switched-off stat has no value there now
-            boardRunRepository.markFullRebuildOfGroup(groupService.getGroup(groupId, callerId).getSportId(), groupId, java.time.Instant.now());
         }
         GroupSessionSettings saved = settingsRepository.save(settings);
 
@@ -430,18 +430,22 @@ public class GroupSessionConfigServiceImpl implements GroupSessionConfigService 
     }
 
     /**
-     * SESSION-83 (B): a stat cannot be switched off for the group while the group's own ranking rule names it, because the board
-     * would keep ordering by numbers that no longer change. {@code 409 SESSION_GROUP_STAT_IN_USE}, {@code detail} the stat and
-     * {@code kind} the rule's. A stat that was already off is not checked again.
+     * SESSION-83 (B), SESSION-84: a stat cannot be dropped from the group's own list while the group's own ranking rule names it,
+     * because the board would keep ordering by numbers that no longer change. {@code 409 SESSION_GROUP_STAT_IN_USE}, {@code detail}
+     * the stat and {@code kind} the rule's. Only a stat the old list held and the new one does not is checked (a rule that already named
+     * something the group did not hold is not this change's doing).
      */
-    private void requireNoOwnRuleNaming(Long groupId, UUID callerId, Set<String> nowOff, Set<String> wasOff) {
-        Set<String> newlyOff = new HashSet<>(nowOff);
-        newlyOff.removeAll(wasOff);
+    private void requireNoOwnRuleNaming(Long groupId, UUID callerId, StatisticsSchema sport, Map<String, Object> oldConfig,
+                                        Map<String, Object> newConfig) {
+        Set<String> was = sport.forGroup(oldConfig).collected().stream().map(StatsCatalog.Stat::key).collect(java.util.stream.Collectors.toSet());
+        Set<String> now = sport.forGroup(newConfig).collected().stream().map(StatsCatalog.Stat::key).collect(java.util.stream.Collectors.toSet());
+        Set<String> newlyOff = new HashSet<>(was);
+        newlyOff.removeAll(now);
         if (newlyOff.isEmpty()) {
             return;
         }
         Long sportId = groupService.getGroup(groupId, callerId).getSportId();
-        Map<String, StatsCatalog.Stat> catalog = sportSchema(groupId, callerId).catalog();
+        Map<String, StatsCatalog.Stat> catalog = sport.catalog();
         for (SportRankingRule rule : rankingRuleRepository.findAllOfSport(sportId)) {
             if (!SportRankingRule.GROUP.equals(rule.getScopeType()) || !groupId.equals(rule.getScopeId())) {
                 continue;

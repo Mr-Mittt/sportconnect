@@ -39,10 +39,13 @@ class SessionStatisticsServiceSpec extends Specification {
     def groupStatsRepository = Mock(GroupMemberStatsRepository)
     def recordRepository = Mock(SessionRecordRepository)
     def sessionRepository = Mock(SessionRepository)
+    def groupSettingsRepository = Mock(com.sportconnect.session.repository.GroupSessionSettingsRepository) {
+        findById(_) >> Optional.empty()          // SESSION-84: the group has no stat list of its own unless a feature says so
+    }
 
     @Subject
     def service = new SessionStatisticsServiceImpl(sportService, groupService, memberNumbers, userService, userStatsRepository,
-            groupStatsRepository, recordRepository, sessionRepository, new RecordReaders([new CompetitiveRecordReader()]))
+            groupStatsRepository, recordRepository, sessionRepository, new RecordReaders([new CompetitiveRecordReader()]), groupSettingsRepository)
 
     def alice = UUID.fromString('00000000-0000-0000-0000-00000000000a')
     def bob = UUID.fromString('00000000-0000-0000-0000-00000000000b')

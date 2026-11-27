@@ -682,7 +682,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     @Test
     void aGroupsOwnWhenReplacesTheSportsRuleForTheGroupRowOnlyAndAPlayerItDoesNotCountGetsNoGroupRow() {
         sportId = newSport(sessionsSchema(null), true);                          // the sport: joined
-        groupStatsConfig(Map.of("sessions", Map.of("when", List.of("atLeast1Game"))));
+        groupStatsConfig(Map.of("config", Map.of("sessions", Map.of("when", List.of("atLeast1Game")))));
         Long session = completedSession(groupId, venueId, 2);
         game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
 
@@ -698,7 +698,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     @Test
     void aGroupThatSwitchedTheStatOffKeepsItOutOfItsMemberRowsAndLeavesOwnTotalsAlone() {
         sportId = newSport(sessionsSchema(null), true);
-        groupStatsConfig(Map.of("sessions", Map.of("enabled", false)));
+        groupStatsConfig(Map.of("columns", List.of("games", "wins")));        // sessions left out of the group's list
         Long session = completedSession(groupId, venueId, 2);
         game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
 
@@ -714,7 +714,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
     @Test
     void aGroupWhoseWhenCountsAJoinedPlayerCountsASessionWithNoGamesEvenWhenTheSportNeedsAGame() {
         sportId = newSport(sessionsSchema(Map.of("when", List.of("atLeast1Game"))), true);   // the sport: played
-        groupStatsConfig(Map.of("sessions", Map.of("when", List.of("joined"))));
+        groupStatsConfig(Map.of("config", Map.of("sessions", Map.of("when", List.of("joined")))));
         Long session = completedSession(groupId, venueId, 2);
 
         runner.processDue();
@@ -724,6 +724,42 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         assertThat(member(hostId).counters().value("sessions")).isEqualTo(1.0);
         assertThat(player(aliceId).personal().all().value("sessions")).as("own totals follow the sport: nobody played").isNull();
         assertThat(dirty("GROUP", groupId)).isTrue();
+    }
+
+    @Test
+    void aGroupCanOptInToAStatTheSportDoesNotListAndOnlyItsRowsHoldIt() {
+        sportId = newSport(badmintonSchema(), true);                                  // the sport lists games, wins, scoreFor, scoreAgainst
+        groupStatsConfig(Map.of("columns", List.of("games", "wins", "sessions")));
+        Long session = completedSession(groupId, venueId, 2);
+        game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        runner.processDue();
+
+        assertThat(member(aliceId).counters().value("sessions")).as("the group's rows hold the stat the group opted in to").isEqualTo(1.0);
+        assertThat(member(hostId).counters().value("sessions")).as("joined, no game: the sport's default rule is inherited").isEqualTo(1.0);
+        assertThat(member(aliceId).counters().value("games")).isEqualTo(1.0);
+        assertThat(member(aliceId).counters().value("scoreFor")).as("a stat the group's list left out is not counted in its rows").isNull();
+        assertThat(player(aliceId).personal().all().value("sessions")).as("the player's own totals follow the sport").isNull();
+        assertThat(player(aliceId).personal().all().value("scoreFor")).isEqualTo(21.0);
+        assertThat(member(aliceId).group("PARTNER", String.valueOf(no(bobId))).value("sessions")).as("a pair never holds it").isNull();
+    }
+
+    @Test
+    void aGroupListWithoutAStatCountsItInNoGroupRowButTheOwnTotalsStillHoldIt() {
+        sportId = newSport(sessionsSchema(null), true);                               // games, wins, sessions, grouped by PARTNER
+        groupStatsConfig(Map.of("columns", List.of("wins", "sessions")));
+        Long session = completedSession(groupId, venueId, 2);
+        game(session, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+
+        runner.processDue();
+
+        assertThat(member(aliceId).counters().value("wins")).isEqualTo(1.0);
+        assertThat(member(aliceId).counters().value("games")).as("games is not in the group's list").isNull();
+        assertThat(member(aliceId).counters().value("sessions")).isEqualTo(1.0);
+        assertThat(member(aliceId).group("PARTNER", String.valueOf(no(bobId))).value("wins")).isEqualTo(1.0);
+        assertThat(member(aliceId).group("PARTNER", String.valueOf(no(bobId))).value("games")).as("the partner counters follow the group's list too").isNull();
+        assertThat(player(aliceId).personal().all().value("games")).as("own totals follow the sport").isEqualTo(1.0);
+        assertThat(player(aliceId).group("PARTNER", bobId.toString()).all().value("games")).isEqualTo(1.0);
     }
 
     // ---- the sport's switch and its config ----------------------------------------------------------------------------

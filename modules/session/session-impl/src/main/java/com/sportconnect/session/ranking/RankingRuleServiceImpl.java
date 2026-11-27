@@ -14,7 +14,6 @@ import com.sportconnect.session.stats.SportRankingRuleRepository;
 import com.sportconnect.session.stats.StatBoardRunRepository;
 import com.sportconnect.session.stats.StatisticsSchema;
 import com.sportconnect.session.stats.StatsCatalog;
-import com.sportconnect.session.stats.StatsConfigs;
 import com.sportconnect.sport.api.service.SportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -131,11 +130,12 @@ public class RankingRuleServiceImpl implements RankingRuleService {
         StatisticsSchema schema = schemaOf(sportId);
         String kind = kindOf(request.getKind(), schema);
         SortList sort = SortList.parse(request.getSort(), schema.catalog());
-        Set<String> disabled = SportRankingRule.GROUP.equals(scopeType)
-                ? groupSettings.findById(scopeId).map(row -> StatsConfigs.disabledStats(row.getStatsConfig())).orElse(Set.of()) : Set.of();
-        requireCollected(sort.operands(), schema, kind, disabled, "SESSION_RANKING_SORT_INVALID");
+        // SESSION-84: a group's own rule is checked against the stats the group's own list holds (its view), the others against the sport's
+        StatisticsSchema view = SportRankingRule.GROUP.equals(scopeType)
+                ? schema.forGroup(groupSettings.findById(scopeId).map(row -> row.getStatsConfig()).orElse(null)) : schema;
+        requireCollected(sort.operands(), view, kind, "SESSION_RANKING_SORT_INVALID");
         RequireList require = RequireList.parse(request.getRequire(), schema.catalog());
-        requireCollected(require.operands(), schema, kind, disabled, "SESSION_RANKING_REQUIRE_INVALID");
+        requireCollected(require.operands(), view, kind, "SESSION_RANKING_REQUIRE_INVALID");
 
         SportRankingRule.Key key = new SportRankingRule.Key(sportId, scopeType, scopeId, kind);
         SportRankingRule row = rules.findById(key).orElse(null);
@@ -266,9 +266,8 @@ public class RankingRuleServiceImpl implements RankingRuleService {
     }
 
     /** Every stat the keys or conditions read must be one the sport collects, and one that applies to the kind of board (SESSION-82), so the numbers a board is built from really exist. */
-    private void requireCollected(Set<String> operands, StatisticsSchema schema, String kind, Set<String> disabled, String errorCode) {
+    private void requireCollected(Set<String> operands, StatisticsSchema schema, String kind, String errorCode) {
         Set<String> collected = schema.collected().stream().map(StatsCatalog.Stat::key).collect(Collectors.toSet());
-        collected.removeAll(disabled);
         for (StatsCatalog.Stat needed : StatsCatalog.storedFor(schema.catalog(), operands)) {
             if (needed.singleOnly() && !RankingRules.SINGLE.equals(kind)) {
                 Map<String, Object> params = new LinkedHashMap<>();

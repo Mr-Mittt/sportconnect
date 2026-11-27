@@ -1,5 +1,6 @@
 package com.sportconnect.session.ranking;
 
+import com.sportconnect.session.stats.StatisticsSchema;
 import com.sportconnect.session.stats.SportRankingRule;
 import com.sportconnect.session.stats.SportRankingRuleRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,15 @@ public class RankingRules {
 
     /** A rule as a board uses it: the order, the preconditions to be listed, and the version of the row it came from. */
     public record Resolved(SortList sort, RequireList require, int version) {
+
+        /**
+         * SESSION-84: this rule as a group board with this view of the stats uses it: the keys and conditions on stats the view cannot value
+         * are ignored, and a rule left with no sort key at all builds no board (empty).
+         */
+        public Optional<Resolved> retainedFor(StatisticsSchema view) {
+            SortList kept = sort.retaining(view::computes);
+            return kept.isEmpty() ? Optional.empty() : Optional.of(new Resolved(kept, require.retaining(view::computes), version));
+        }
     }
 
     private final SportRankingRuleRepository repository;

@@ -181,10 +181,10 @@ public class SessionStatsProcessor {
         // SESSION-83: the group row of a group session with its switch on may follow the group's own config instead of the sport's
         GroupSessionSettings groupSettings = session.getGroupId() == null ? null
                 : groupSettingsRepository.findById(session.getGroupId()).filter(GroupSessionSettings::isStatisticsEnabled).orElse(null);
-        Map<String, Object> groupConfig = groupSettings == null ? null : groupSettings.getStatsConfig();
-        boolean groupCollectsSessions = groupSettings != null && stats.collectsSessions() && !StatsConfigs.disables(groupConfig, StatsConfigs.SESSIONS);
-        StatisticsSchema.SessionsRule groupRule = StatsConfigs.sessionsRule(groupConfig, stats.sessionsRule());
-        boolean sessionsWithoutGames = priorSessions == 0 && stats.collectsSessions() && (stats.sessionsRule().counts(true, false) || (groupCollectsSessions && groupRule.counts(true, false))) && !joined.isEmpty();
+        StatisticsSchema groupView = groupSettings == null ? null : stats.forGroup(groupSettings.getStatsConfig());   // SESSION-84: the group's own stat list
+        boolean groupCollectsSessions = groupView != null && groupView.collectsSessions();
+        StatisticsSchema.SessionsRule groupRule = groupView == null ? stats.sessionsRule() : groupView.sessionsRule();
+        boolean sessionsWithoutGames = priorSessions == 0 && ((stats.collectsSessions() && stats.sessionsRule().counts(true, false)) || (groupCollectsSessions && groupRule.counts(true, false))) && !joined.isEmpty();
         if (records.isEmpty() && !sessionsWithoutGames) {
             return finish(job, now, List.of(), List.of(), List.of("NO_RECORDS"), priorSessions);
         }
@@ -215,9 +215,9 @@ public class SessionStatsProcessor {
         }
         Set<UUID> sessionPlayers = new TreeSet<>(Comparator.comparing(UUID::toString));
         Set<UUID> groupSessionPlayers = new TreeSet<>(Comparator.comparing(UUID::toString));
-        if (stats.collectsSessions() && priorSessions == 0) {
+        if ((stats.collectsSessions() || groupCollectsSessions) && priorSessions == 0) {
             for (UUID player : joined) {
-                if (stats.sessionsRule().counts(true, gamePlayers.contains(player))) {
+                if (stats.collectsSessions() && stats.sessionsRule().counts(true, gamePlayers.contains(player))) {
                     sessionPlayers.add(player);
                 }
                 if (groupCollectsSessions && groupRule.counts(true, gamePlayers.contains(player))) {
@@ -239,7 +239,7 @@ public class SessionStatsProcessor {
             }
         }
         Applied applied = apply(session, stats, games, venue, ignored, now, sessionPlayers, groupSessionPlayers, rankingPlayers,
-                groupSettings == null ? null : session.getGroupId());
+                groupSettings == null ? null : session.getGroupId(), groupView);
         return finish(job, now, applied.counted(), ignored, notes, priorSessions + applied.sessions());
     }
 
@@ -292,7 +292,7 @@ public class SessionStatsProcessor {
      */
     private Applied apply(Session session, StatisticsSchema stats, List<Game> games, Venue venue,
                              List<Ignored> ignored, Instant now, Set<UUID> sessionPlayers, Set<UUID> groupSessionPlayers,
-                             Set<UUID> rankingPlayers, Long groupId) {
+                             Set<UUID> rankingPlayers, Long groupId, StatisticsSchema groupView) {
         Long sportId = session.getSportId();
         // SESSION-78: a group session is counted into the group's own rows (member statistics, head-to-head, the GROUP board) only
         // while the group has its switch on (read in process(), at counting time); the players' own statistics are counted either way.
@@ -345,8 +345,8 @@ public class SessionStatsProcessor {
                 doc.addPointer(recordId, game.ranking());
                 if (groupId != null) {
                     GroupStatsDoc member = members.get(participant.userId());
-                    member.counters().add(participant.outcome(), participant.metrics(), stats.collected());
-                    addToGroups(memberKeys(groups, numbers), member::group, participant, stats);
+                    member.counters().add(participant.outcome(), participant.metrics(), groupView.collected());
+                    addToGroups(memberKeys(groups, numbers), member::group, participant, groupView);
                     member.addPointer(recordId, game.ranking());
                     touch(boards, changed, new Board("GROUP", groupId, sportId, null), participant.userId());
                 }
@@ -392,7 +392,7 @@ public class SessionStatsProcessor {
                     continue;
                 }
                 countedForSession.add(player);
-                members.get(player).counters().addSession(stats.collected());
+                members.get(player).counters().addSession(groupView.collected());
                 touch(boards, changed, new Board("GROUP", groupId, sportId, null), player);
             }
         }

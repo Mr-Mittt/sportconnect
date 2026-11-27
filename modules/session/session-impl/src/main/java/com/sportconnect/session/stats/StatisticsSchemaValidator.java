@@ -92,7 +92,7 @@ public class StatisticsSchemaValidator implements ResultSchemaValidator {
             }
         });
         try {
-            StatsConfigs.parse(Map.of(StatsConfigs.SESSIONS, rest));
+            StatsConfigs.parseSessions(rest);
         } catch (BadRequestException e) {
             Object detail = e.getErrorParams() == null ? null : e.getErrorParams().get("detail");
             throw invalid(path + " is not valid: " + (e.getErrorParams() == null ? "" : e.getErrorParams().get("reason"))
