@@ -1,6 +1,6 @@
 # SESSION-84 · A group's own stat list: disable any stat of the sport's list, and opt in to one it does not list
 
-**Status:** `TODO`
+**Status:** `IN PROGRESS`
 **Type:** Enhancement · **Depends on:** SESSION-83 (the group's `stats_config`, the effective block and its `reason`), SESSION-82
 **Filed:** 2026-11-27, split off at the pickup of SESSION-83 and **widened the same day** (owner, after the first manual run): SESSION-83 lets a group narrow only the `sessions` stat (any other key is `400`, reason `STAT_NOT_CONFIGURABLE`). The owner's rule: the sport is global config, so a stat the sport **disables** (`config.{stat}.enabled: false`) is a hard off the application admin chose, while a stat the sport **does not list** in `record.scoreboard.columns` is left to each group, the sub-board. Both halves are about one thing, the group's **effective stat list**, so the two tickets filed for them (SESSION-84, "disable any stat", and SESSION-85, "opt in to an unlisted stat") were **collapsed into this one on 2026-11-27**, delivered in two slices. Duplicate check: no session or client ticket names a per-group stat list (searched both backlogs and the ticket folders).
 
@@ -15,3 +15,36 @@
 **Out of scope:** the sport's own config, a group-specific count in a player's own totals, seasons.
 
 **Tests:** to be written at pickup, with a mutation check for each requirement: for slice A every stat through the settings call (owner and admin, member refused), the formula operand decision, rules A, B and C for each stat, the engine's group row and partner counters, the read API columns, the board; for slice B the opt-in call, `SPORT_DISABLED` refused, `when` only does not opt in, the engine counts the group rows and not own totals, the group rule validation and the read API for the extra stat, the board.
+
+## Scope change 2026-11-27 (owner, at the pickup): the requirement rewritten as one model (the two slices are both supported by it)
+
+**For every sport**
+- The sport supports **every stat of `StatsCatalog`** (9 today), unless the application admin **disables** one with the sport's config, `record.scoreboard.config.{stat}.enabled = false` (the shape SESSION-82 gave `sessions`, now for any stat): a hard off for every board of the sport.
+- `record.scoreboard.columns` is the **default stat list of every leaderboard** when nothing customizes it. SESSION-82 and SESSION-83 (the `sessions` config) and this ticket (the group's list) are the customizations.
+
+**For a group (this ticket)**
+- The group can hold **its own stats list** (`group_session_settings.stats_config`). When it is defined, **it replaces the sport's default list for the group's member row and board**: a stat left out is excluded (slice A) and a stat the sport does not list but the group names is opted in (slice B). A stat the sport disabled is never in it.
+- The sport's disabled stats and the group's list overlap at two moments: **on the group's update** the settings call tells the owner or admin (validation); **when the sport disables a stat after the group's list was set**, the stat is ignored for the group with the reason `SPORT_DISABLED` in the effective block.
+- **The group's board shares the sport's ranking rules** (sport, country or the group's own). A rule key that names a stat outside the group's list is **silently ignored when the board is rebuilt** (no refusal, no value-less listing); the group's change does **not** mark the board dirty: the next rebuild (a counted game, the nightly job) picks it up.
+
+**Open at the time of writing (to settle before Phase 3):** the shape of the group's list (`{columns, config}` like the sport's scoreboard, recommended); whether the group's **own** ranking rule naming an excluded stat is still refused (SESSION-83's cases A and B) or also ignored; the formula operand question (`winRate` when `games` is off); the effect on SESSION-83 as built (case C's "no value" and the rebuild mark change to "ignore, no mark").
+
+**Findings the same day** (not new scope): (1) the statistics read API answers `stats.columns()` and `valuesOf` for the pair and partner entries too, so a pair row shows a **`sessions` column** although a pair never holds the stat; it must answer the combos' columns only (a SESSION-82 bug, to be fixed on its own commit); (2) `stat_board_runs` rows for REGION and COUNTRY are created **only by the engine when a ranking game is counted** (a rule or settings change only updates existing rows), so after the table is emptied they come back by recounting (the ranking games recreate them) or by the reseed SQL of the guide.
+
+## Decisions 2026-11-27 (owner, answers to the open points above)
+1. **Shape of the group's list: `{ "columns": [...], "config": { "<stat>": {...} } }`**, a partial scoreboard like the sport's `record.scoreboard`; omitted or `null` keeps, `{}` clears (the sport's list applies). It replaces SESSION-83's map keyed by stat (SESSION-83 is not merged, so this is a change of an unreleased shape; SESSION-83's `{sessions: {...}}` body becomes `{config: {sessions: {...}}}`).
+2. **The group's own ranking rule naming an excluded stat is still validated** (SESSION-83's cases A and B stay: a new rule cannot name it, and removing a stat the rule uses is `409 SESSION_GROUP_STAT_IN_USE`), while a rule that reaches the group by inheritance (the sport's or the country's) just has that key **silently ignored** at rebuild (replaces SESSION-83's case C "no value"); and the group's change **does not mark the board dirty** (removes SESSION-83's rebuild mark).
+3. **Bug confirmed** (not scope): the statistics read API answers the sport's columns and values for pair and partner entries, so a pair row shows a `sessions` column; fixed on its own commit as a SESSION-82 follow-up, and part of the combos rule here.
+
+## Slice 1 built (2026-11-27): the sport side, review gate
+**Plan as approved:** the pair-columns fix on its own commit, the sport-level `enabled` for any stat, the schema-save check through a hook (the sport module cannot call the session module), and the group view built but not wired.
+
+**Built**
+- `eb8be59` (own commit): `StatisticsSchema.forCombos()` and the read API using it for pair, partner and team entries, so a pair row has no `sessions` column. Tests: a read IT (a partner entry of `/api/stats/me` and of the member detail has no `sessions`, the totals have it) and a Spock case; 2 mutants killed.
+- `StatisticsSchema.of`: `config.{stat}.enabled = false` for any catalog stat into `disabledStats()`; `isOff` and `offBecause` follow a formula to its operands; a disabled stat and the formulas that need it leave the columns, the collected list and the sort needs. `sessionsDisabledBySport()` is now `disabledStats().contains("sessions")`.
+- `ResultSchemaValidator` (sport-api) and `StatisticsSchemaValidator` (session-impl bean): `SportServiceImpl.replaceResultSchema` asks every registered validator before it stores; the validator refuses a non-object `config`, an unknown stat key, a non-object entry, a non-boolean `enabled`, an unknown setting, a bad `when` or `combine` of `sessions`, and a listed formula with a disabled operand (`400 SPORT_RESULT_SCHEMA_INVALID`, the message names the path and the stat). The validator list is an optional field injection, so the three specs that build `SportServiceImpl` by hand did not change.
+- `StatisticsSchema.forGroup(groupConfig)`: the group's view (its `columns` replace the default list, an unlisted stat is opted in, a sport-disabled stat and its formulas are never in it, its `config.sessions` replaces the rule, the collected stats are those the columns need), **not wired yet** (slice 2).
+- Docs: `ERROR_CODES.md`, the statistics reference (§11.2), the release notes, both module `CLAUDE.md` files.
+
+**Tests:** `StatisticsSchemaSpec` 57 (+13), `SportResultSchemaIntegrationTest` 11 (+2: every refusal through the real context with nothing stored, and an accepted disabled stat no formula needs plus a record type with no catalog), `StatisticsReadIntegrationTest` 22 (+1); the stats, ranking and settings ITs unchanged and green (43, 53, 28). **Mutation:** 9 of 9 killed (the disabled detection, the formula chain, the validators not called, the operand check, the `enabled` type check, the sessions config check, the group view ignoring the sport's disabled stats, the group list not replacing the default, the group rule ignored).
+**Not run:** the full `:server:test`, PostgreSQL, a live server.

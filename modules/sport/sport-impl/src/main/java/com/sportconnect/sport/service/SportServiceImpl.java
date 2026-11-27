@@ -15,11 +15,13 @@ import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.sport.api.dto.CreateSportRequest;
 import com.sportconnect.sport.api.dto.SportResponse;
 import com.sportconnect.sport.api.dto.UpdateSportRequest;
+import com.sportconnect.sport.api.service.ResultSchemaValidator;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.repository.SportRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +47,13 @@ public class SportServiceImpl implements SportService {
 
     private final SportRepository sportRepository;
     private final SportLookupCache sportLookupCache;
+
+    /**
+     * SESSION-84: the checks other domains own for a result schema (the session module checks the statistics side). Optional and set
+     * by field injection, so a context without any (and the specs that build this service by hand) keeps the empty list.
+     */
+    @Autowired(required = false)
+    private List<ResultSchemaValidator> resultSchemaValidators = List.of();
 
     /**
      * {@inheritDoc}
@@ -464,6 +473,9 @@ public class SportServiceImpl implements SportService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sport", "id", sportId));
 
         validateResultSchema(schema);
+        if (schema != null) {
+            resultSchemaValidators.forEach(validator -> validator.validate(schema));
+        }
 
         sport.setResultSchema(schema);
         Sport saved = sportRepository.save(sport);

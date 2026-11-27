@@ -16,6 +16,7 @@ Also serves sport thumbnail PNG files as static resources via classpath.
 | Class | Purpose |
 |---|---|
 | `SportServiceImpl` | Sport CRUD; soft delete via `isActive=false`; partial update (null-check per field) |
+| `ResultSchemaValidator` (sport-api) | SESSION-84: other domains' checks of a result schema; `replaceResultSchema` asks every registered one before it stores (the session module checks the statistics side, `StatisticsSchemaValidator`); injected as an optional list so a context or a spec without any keeps working |
 | `UserSportProfileServiceImpl` | Validates sport exists before profile create; blocks duplicate `(userId, sportId)` |
 | `WebConfig` | `ResourceHandler`: `/images/**` → `classpath:/images/`; 1-year cache |
 
