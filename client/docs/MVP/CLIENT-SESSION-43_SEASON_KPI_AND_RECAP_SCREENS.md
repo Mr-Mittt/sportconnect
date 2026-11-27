@@ -13,3 +13,6 @@ Season create and list for admins, the KPI target and each player's progress, an
 **Tests:** Vitest and a scoped e2e.
 
 **Note (2026-11-23, `/feature` session "statistic and ranking", `modules/session/docs/STATISTIC_RANKING_DESIGN.md`):** the group-only note of 2026-11-17 is superseded; this ticket now reads the history and counters of SESSION-53 and is revisited when picked up.
+
+## Delta 2026-11-27 (owner, at the pickup of SESSION-55)
+The server ticket SESSION-55 was redesigned: it now builds the **season itself** (a group's period with its own statistics and board, collection auto or by linked sessions, a post in the group feed, statuses `SCHEDULED`, `ONGOING`, `COMPLETED`, `FINALISED`, cancel) and the group's country and region (B25, client CLIENT-GROUP-GEO-1). The **KPI progress and the recap** moved to SESSION-86. This ticket's season-management screens follow SESSION-55's contract (written there at its design); its KPI and recap parts wait for SESSION-86.

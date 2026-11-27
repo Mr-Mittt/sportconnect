@@ -96,6 +96,7 @@ New tickets get inserted at the appropriate position when filed, same as before 
 | 32 | [CLIENT-SESSION-60](MVP/CLIENT-SESSION-60_GROUP_STATISTICS_AND_LEADERBOARD_SWITCH.md) | The group's statistics and leaderboard switch: a toggle in the group Settings tab (owner and admin change it, members see it), the empty state on the group statistics screens, en/vi copy for the two new group system posts (depends on SESSION-78) | `TODO` |
 | 33 | [CLIENT-SESSION-61](MVP/CLIENT-SESSION-61_SESSIONS_STAT_COLUMN.md) | The `sessions` stat in the catalog mirror: id, single-only flag (pair tables hide it), en/vi label; ships with SESSION-82 | `TODO` |
 | 34 | [CLIENT-SESSION-62](MVP/CLIENT-SESSION-62_GROUP_SESSIONS_STAT_CONFIG_FIELD.md) | The group's own `sessions` stat config in the group settings screen (owner or admin; "use the sport's setting" by default); depends on SESSION-83 and CLIENT-SESSION-61 | `TODO` |
+| 35 | [CLIENT-GROUP-GEO-1](MVP/CLIENT-GROUP-GEO-1_GROUP_COUNTRY_AND_REGION_FIELDS.md) | Country and region on the group create and edit forms (pre-filled from the owner's profile, the region list follows the country); depends on B25 | `TODO` |
 
 #### Removed / Deferred
 

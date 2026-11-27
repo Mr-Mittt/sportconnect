@@ -21,6 +21,7 @@
 |---|---|---|---|
 | 1 | [B21](MVP/B21_NOTIFICATION_OUTBOX_WIRING.md) | Notification outbox wiring — join requests, invites | `TODO` |
 | 2 | [B24](MVP/B24_GROUP_INVITE_AND_ADD_MUST_REFUSE_DEACTIVATED_ACCOUNTS.md) | Group `createInvitation` and `addMember` check only a friendship row, so a deactivated friend can be invited or added: refuse a deactivated target (coded, proposal `404 USER_NOT_FOUND` like `sendFriendRequest`); also decide the accept/approve paths (the deactivated-accounts rule, NEXT_TOPICS) | `TODO` |
+| 3 | [B25](MVP/B25_GROUP_COUNTRY_AND_REGION.md) | A group has a required country and region (the owner's on creation, migrated from the owner's; a group whose owner has none is deactivated); for the local date of a season and for country rules; client twin CLIENT-GROUP-GEO-1 | `TODO` |
 
 ---
 

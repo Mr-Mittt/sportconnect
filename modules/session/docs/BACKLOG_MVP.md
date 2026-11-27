@@ -29,7 +29,7 @@
 | 8 | [SESSION-GL-51](MVP/SESSION-GL-51_SESSION_THREAD_CHAT_COMMANDS_FOR_RESULTS.md) | Chat commands `:add`, `:del`, `:upd` in the session post thread | `POSTPONED` (2026-11-14, see CLIENT-GL-39) |
 | 12 | [SESSION-54](MVP/SESSION-54_GROUP_LEADERBOARDS_AND_RANKING_ORDER.md) | Ranking jobs and boards (rewritten 2026-11-23): the nightly ranking job, group, region and country boards from the sport's order, the manual group refresh with a one-hour cooldown (client pair CLIENT-SESSION-42). **Review gate 2 follows it** | `IN PROGRESS` |
 | 13 | [SESSION-52](MVP/SESSION-52_GUESTS_IN_SESSION_RESULTS.md) | Guests in session results (BA GU-1 to GU-4); rewritten note 2026-11-23: a guest game is not a ranking game and is not counted | `TODO` |
-| 14 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `TODO` |
+| 14 | [SESSION-55](MVP/SESSION-55_SEASONS_KPI_AND_RECAP.md) | Seasons, game-count target (KPI) and season recap (BA SE-1 to SE-3, KP-1 to KP-3) | `IN PROGRESS` |
 | 15 | [SESSION-56](MVP/SESSION-56_POINT_ADJUSTMENTS.md) | Admin point adjustments with a reason and history (BA AD-1 to AD-4) | `TODO` |
 | 16 | [SESSION-58](MVP/SESSION-58_PERFORMANCE_RECORDS_FOR_RUNNING_CYCLING_SWIMMING.md) | A RECORD kind for sports without a head-to-head result (running, cycling, swimming) | `TODO` |
 | 17 | [SESSION-59](MVP/SESSION-59_DRAWS_AND_BEST_OF_THREE_RESULTS.md) | Draws and best-of-three results | `TODO` |
@@ -48,6 +48,7 @@
 | 30 | [SESSION-RANKING-RECORD-1](MVP/SESSION-RANKING-RECORD-1_CONFIRM_A_RANKING_GAME_AT_A_GIVEN_REVISION.md) | Confirm a ranking game at the revision the player saw: optional `revision` on `POST .../verify` and on the record's `ranking` block, 409 `SESSION_RECORD_REVISION_CHANGED` when the game changed meanwhile (follow-up to SESSION-72; the client part is in CLIENT-SESSION-54) | `TODO` |
 | 31 | [SESSION-RANKING-RECORD-2](MVP/SESSION-RANKING-RECORD-2_CAPTAINS_CONFIRM_A_TEAM_GAME.md) | Team games: only the two captains confirm a ranking game (`RecordFacts.confirmers` beside `players`, schema `verification: ALL_PLAYERS|CAPTAINS`, `teams[].captain` on the record; no migration; follow-up to SESSION-72, **after the whole statistic and ranking chain is finished, badminton first (owner, 2026-11-23)**; the client picker and badge are filed at pickup) | `TODO` |
 | 32 | [SESSION-79](MVP/SESSION-79_ENQUEUE_A_SESSION_FOR_STATISTICS_WHEN_IT_COMPLETES.md) | Queue a session for statistics when it completes (a `PENDING` job row due at end + 24h, the 5-minute run reads only the job table) and sweep for missed sessions only at start-up and when a sport is switched on; settle the pruning interaction with SESSION-75 (depends on SESSION-53) | `TODO` |
+| 33 | [SESSION-86](MVP/SESSION-86_SEASON_KPI_AND_RECAP.md) | Season KPI (a games-per-player target with progress) and the season recap (most points, most games, who reached the target), split off SESSION-55; client part in CLIENT-SESSION-43 | `TODO` |
 
 ---
 
