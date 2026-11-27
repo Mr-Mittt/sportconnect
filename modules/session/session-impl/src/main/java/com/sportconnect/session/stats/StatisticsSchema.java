@@ -171,6 +171,20 @@ public final class StatisticsSchema {
         return collectedForCombos;
     }
 
+    /**
+     * SESSION-84: this schema as a pair, a partner or a team entry sees it: the same, without the single-player stats in its
+     * columns (a pair never holds {@code sessions}, so its rows must not answer that column either). {@link #valuesOf} on it answers
+     * the remaining columns only.
+     */
+    public StatisticsSchema forCombos() {
+        List<String> comboColumns = columns.stream().filter(key -> {
+            StatsCatalog.Stat stat = catalog.get(key);
+            return stat != null && !stat.singleOnly();
+        }).toList();
+        return new StatisticsSchema(catalog, comboColumns, collectedForCombos, sessionsRule, sessionsDisabledBySport, groupBy, sort,
+                minGamesSingle, minGamesCombo, allowDraws);
+    }
+
     /** SESSION-82: whether the sport collects the {@code sessions} stat. */
     public boolean collectsSessions() {
         return collected.stream().anyMatch(stat -> stat.kind() == StatsCatalog.Kind.SESSIONS);

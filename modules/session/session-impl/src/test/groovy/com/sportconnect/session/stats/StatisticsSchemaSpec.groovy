@@ -291,4 +291,21 @@ class StatisticsSchemaSpec extends Specification {
         !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: true]]])).sessionsDisabledBySport()
         !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: 'no']]])).sessionsDisabledBySport()
     }
+
+    def "forCombos is the schema without the single-player stats in its columns, and valuesOf on it answers those columns only"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['games', 'wins', 'sessions', 'winRate']]))
+        def combos = s.forCombos()
+        def counters = new StatsCounters()
+        counters.add(Outcome.WIN, [:], s.collected())
+        counters.addSession(s.collected())
+
+        expect:
+        s.columns() == ['games', 'wins', 'sessions', 'winRate']
+        combos.columns() == ['games', 'wins', 'winRate']
+        s.valuesOf(counters).keySet() == ['games', 'wins', 'sessions', 'winRate'] as Set
+        combos.valuesOf(counters).keySet() == ['games', 'wins', 'winRate'] as Set
+        combos.valuesOf(counters).winRate == 1d
+        combos.collected() == s.collectedForCombos()
+    }
 }

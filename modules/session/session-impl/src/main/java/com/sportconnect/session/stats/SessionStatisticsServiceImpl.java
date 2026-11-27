@@ -111,7 +111,7 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
                 .map(s -> new StatsScopeDto(s.scope(), s.countryId(), s.regionId(), stats.valuesOf(s.counters())))
                 .toList();
         return new PlayerStatisticsResponse(sportId, stats.columns(), split(stats, doc.personal()),
-                groups(stats, pairs, names), allPairs.size(), groups(stats, partners, names), allPartners.size(), scopes,
+                groups(stats.forCombos(), pairs, names), allPairs.size(), groups(stats.forCombos(), partners, names), allPartners.size(), scopes,
                 row.map(UserSportStats::getUpdatedAt).orElse(null));
     }
 
@@ -272,8 +272,8 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         Map<UUID, StatsPlayerDto> names = players(ids);
 
         return new GroupMemberStatisticsResponse(sportId, stats.columns(), player(names, memberId),
-                stats.valuesOf(doc.counters()), memberEntries(stats, pairs, names, playersOf), allPairs.size(),
-                memberEntries(stats, partners, names, playersOf), allPartners.size(), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
+                stats.valuesOf(doc.counters()), memberEntries(stats.forCombos(), pairs, names, playersOf), allPairs.size(),
+                memberEntries(stats.forCombos(), partners, names, playersOf), allPartners.size(), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
     }
 
     /** The group's own sport (a group has at most one); a group with none has no statistics (400 SESSION_SPORT_REQUIRED, as for its sessions). */

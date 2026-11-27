@@ -244,6 +244,44 @@ class StatisticsReadIntegrationTest extends RedisBaseIT {
     }
 
     @Test
+    void aPairOrAPartnerEntryNeverAnswersTheSessionsColumnThoughTheSportListsItAndATotalDoes() throws Exception {
+        Map<String, Object> schema = new java.util.LinkedHashMap<>(badmintonSchema(List.of(Map.of("by", "PARTNER"))));
+        Map<String, Object> record = new java.util.LinkedHashMap<>((Map<String, Object>) schema.get("record"));
+        Map<String, Object> scoreboard = new java.util.LinkedHashMap<>((Map<String, Object>) record.get("scoreboard"));
+        scoreboard.put("columns", List.of("games", "wins", "sessions"));
+        record.put("scoreboard", scoreboard);
+        schema.put("record", record);
+        Long withSessions = sportRepository.save(Sport.builder().name("SESSION-84 sessions " + UUID.randomUUID()).isActive(true)
+                .statisticsEnabled(true).resultSchema(schema).build()).getId();
+        if (cacheManager.getCache("sports") != null) {
+            cacheManager.getCache("sports").clear();
+        }
+        Long sessionId = completedGroupSession(withSessions);
+        game(sessionId, List.of(aliceId, bobId), List.of(carolId, danId), 21, 15);
+        game(sessionId, List.of(aliceId, carolId), List.of(bobId, danId), 21, 18);
+        assertThat(runner.processDue()).isEqualTo(1);
+        setGroupSport(withSessions);
+
+        JsonNode me = data(read(aliceId, "/api/stats/me?sportId=" + withSessions));
+        assertThat(keys(me.get("columns"))).containsExactly("games", "wins", "sessions");
+        assertThat(me.get("totals").get("all").get("sessions").asDouble()).as("a player's total has it").isEqualTo(1.0);
+        assertThat(me.get("partners")).isNotEmpty();
+        for (JsonNode partner : me.get("partners")) {
+            assertThat(partner.get("values").get("all").has("sessions")).as("a partner entry has no sessions column").isFalse();
+            assertThat(partner.get("values").get("all").get("games").asDouble()).isPositive();
+        }
+
+        JsonNode list = data(read(bobId, "/api/sessions/group/" + groupId + "/stats"));
+        assertThat(keys(list.get("columns"))).containsExactly("games", "wins", "sessions");
+        JsonNode detail = data(read(bobId, "/api/sessions/group/" + groupId + "/stats/members/" + aliceId));
+        assertThat(detail.get("totals").get("sessions").asDouble()).as("the member's own row has it").isEqualTo(1.0);
+        assertThat(detail.get("partners")).isNotEmpty();
+        for (JsonNode partner : detail.get("partners")) {
+            assertThat(partner.get("values").has("sessions")).as("a partner entry of the member detail has none").isFalse();
+        }
+    }
+
+    @Test
     void theSportsCurrentGroupingDecidesWhatIsShownNotWhatIsStored() throws Exception {
         // counted under TEAM: alice has two pairs, and the sport's own config shows them
         assertThat(data(read(aliceId, "/api/stats/me?sportId=" + sportId)).get("pairs")).hasSize(2);
