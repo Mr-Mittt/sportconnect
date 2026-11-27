@@ -12,9 +12,12 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /** SESSION-GROUP-4 — a group's regular-session settings. No row means OFF and WEEKLY (and, SESSION-78, statistics off). {@code groupId} is cross-domain: no FK. */
 @Entity
@@ -46,6 +49,15 @@ public class GroupSessionSettings {
     @Column(name = "statistics_enabled", nullable = false)
     @Builder.Default
     private boolean statisticsEnabled = false;
+
+    /**
+     * SESSION-83 (V109) - the group's own config of the statistics it counts for its member row and board, keyed by stat
+     * ({@code {"sessions": {"enabled": false, "when": ["joined"]}}}); {@code null} means the sport's config. Validated and
+     * read by {@code StatsConfigs}; an owner or admin changes it with the settings.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "stats_config", columnDefinition = "jsonb")
+    private Map<String, Object> statsConfig;
 
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)

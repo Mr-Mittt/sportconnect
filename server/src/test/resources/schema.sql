@@ -423,6 +423,7 @@ CREATE TABLE IF NOT EXISTS group_session_settings (
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     mode VARCHAR(10) NOT NULL DEFAULT 'WEEKLY',
     statistics_enabled BOOLEAN NOT NULL DEFAULT FALSE,   -- SESSION-78 (V106)
+    stats_config JSON,                                   -- SESSION-83 (V109)
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

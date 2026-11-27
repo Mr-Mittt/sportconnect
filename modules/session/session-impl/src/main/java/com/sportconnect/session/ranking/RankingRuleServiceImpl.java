@@ -8,11 +8,13 @@ import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.session.api.dto.RankingRuleRequest;
 import com.sportconnect.session.api.dto.RankingRuleResponse;
 import com.sportconnect.session.api.service.RankingRuleService;
+import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.stats.SportRankingRule;
 import com.sportconnect.session.stats.SportRankingRuleRepository;
 import com.sportconnect.session.stats.StatBoardRunRepository;
 import com.sportconnect.session.stats.StatisticsSchema;
 import com.sportconnect.session.stats.StatsCatalog;
+import com.sportconnect.session.stats.StatsConfigs;
 import com.sportconnect.sport.api.service.SportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,8 @@ public class RankingRuleServiceImpl implements RankingRuleService {
     private final SportService sportService;
     private final LeaderboardRankingWorker worker;
     private final GroupService groupService;
+    // SESSION-83: a group's own rule cannot name a stat the group switched off for its member row.
+    private final GroupSessionSettingsRepository groupSettings;
 
     /** Replaceable in tests; not a constructor dependency. */
     private Clock clock = Clock.systemUTC();
@@ -127,9 +131,11 @@ public class RankingRuleServiceImpl implements RankingRuleService {
         StatisticsSchema schema = schemaOf(sportId);
         String kind = kindOf(request.getKind(), schema);
         SortList sort = SortList.parse(request.getSort(), schema.catalog());
-        requireCollected(sort.operands(), schema, kind, "SESSION_RANKING_SORT_INVALID");
+        Set<String> disabled = SportRankingRule.GROUP.equals(scopeType)
+                ? groupSettings.findById(scopeId).map(row -> StatsConfigs.disabledStats(row.getStatsConfig())).orElse(Set.of()) : Set.of();
+        requireCollected(sort.operands(), schema, kind, disabled, "SESSION_RANKING_SORT_INVALID");
         RequireList require = RequireList.parse(request.getRequire(), schema.catalog());
-        requireCollected(require.operands(), schema, kind, "SESSION_RANKING_REQUIRE_INVALID");
+        requireCollected(require.operands(), schema, kind, disabled, "SESSION_RANKING_REQUIRE_INVALID");
 
         SportRankingRule.Key key = new SportRankingRule.Key(sportId, scopeType, scopeId, kind);
         SportRankingRule row = rules.findById(key).orElse(null);
@@ -260,8 +266,9 @@ public class RankingRuleServiceImpl implements RankingRuleService {
     }
 
     /** Every stat the keys or conditions read must be one the sport collects, and one that applies to the kind of board (SESSION-82), so the numbers a board is built from really exist. */
-    private void requireCollected(Set<String> operands, StatisticsSchema schema, String kind, String errorCode) {
+    private void requireCollected(Set<String> operands, StatisticsSchema schema, String kind, Set<String> disabled, String errorCode) {
         Set<String> collected = schema.collected().stream().map(StatsCatalog.Stat::key).collect(Collectors.toSet());
+        collected.removeAll(disabled);
         for (StatsCatalog.Stat needed : StatsCatalog.storedFor(schema.catalog(), operands)) {
             if (needed.singleOnly() && !RankingRules.SINGLE.equals(kind)) {
                 Map<String, Object> params = new LinkedHashMap<>();

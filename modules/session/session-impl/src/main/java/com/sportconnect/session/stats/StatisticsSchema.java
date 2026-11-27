@@ -42,7 +42,7 @@ public final class StatisticsSchema {
 
     /**
      * SESSION-82: what makes a session count for a player in the {@code sessions} stat, read from
-     * {@code record.scoreboard.config.sessions = {counts: ["joined", "atLeast1Game"], combine: "AND"|"OR"}}: {@code joined} (the
+     * {@code record.scoreboard.config.sessions = {when: ["joined", "atLeast1Game"], combine: "AND"|"OR"}}: {@code joined} (the
      * player was a joined participant when the session was counted), {@code atLeast1Game} (the player had a counted game in it), or
      * both, met together ({@code AND}) or either ({@code OR}). <b>Default {@code joined}</b>; two conditions with no {@code combine}
      * mean {@code OR}. A counted game needs a joined player, so {@code AND} is {@code atLeast1Game} and {@code OR} is
@@ -52,6 +52,37 @@ public final class StatisticsSchema {
     public record SessionsRule(boolean joined, boolean atLeast1Game, boolean and) {
 
         public static final SessionsRule DEFAULT = new SessionsRule(true, false, false);
+
+        /** SESSION-83: the rule for these conditions ({@code AND} when {@code and}); an unusable list is {@link #DEFAULT}. */
+        public static SessionsRule of(List<?> when, boolean and) {
+            boolean joined = false;
+            boolean game = false;
+            if (when != null) {
+                for (Object entry : when) {
+                    if ("joined".equals(entry)) {
+                        joined = true;
+                    } else if ("atLeast1Game".equals(entry)) {
+                        game = true;
+                    }
+                }
+            }
+            return !joined && !game ? DEFAULT : new SessionsRule(joined, game, and);
+        }
+
+        /** SESSION-83: the rule as a config ({@code {"when": [...], "combine": "OR"}}), what a settings answer shows. */
+        public Map<String, Object> toConfig() {
+            List<String> when = new ArrayList<>();
+            if (joined) {
+                when.add("joined");
+            }
+            if (atLeast1Game) {
+                when.add("atLeast1Game");
+            }
+            Map<String, Object> config = new LinkedHashMap<>();
+            config.put("when", when);
+            config.put("combine", and ? "AND" : "OR");
+            return config;
+        }
 
         /** Whether a player who {@code wasJoined} and {@code hadGame} counts for the session. */
         public boolean counts(boolean wasJoined, boolean hadGame) {
@@ -67,6 +98,7 @@ public final class StatisticsSchema {
     private final List<StatsCatalog.Stat> collected;
     private final List<StatsCatalog.Stat> collectedForCombos;
     private final SessionsRule sessionsRule;
+    private final boolean sessionsDisabledBySport;
     private final List<Grouping> groupBy;
     private final List<SortKey> sort;
     private final int minGamesSingle;
@@ -74,13 +106,14 @@ public final class StatisticsSchema {
     private final boolean allowDraws;
 
     private StatisticsSchema(Map<String, StatsCatalog.Stat> catalog, List<String> columns,
-                             List<StatsCatalog.Stat> collected, SessionsRule sessionsRule, List<Grouping> groupBy, List<SortKey> sort,
+                             List<StatsCatalog.Stat> collected, SessionsRule sessionsRule, boolean sessionsDisabledBySport, List<Grouping> groupBy, List<SortKey> sort,
                              int minGamesSingle, int minGamesCombo, boolean allowDraws) {
         this.catalog = catalog;
         this.columns = columns;
         this.collected = collected;
         this.collectedForCombos = collected.stream().filter(stat -> !stat.singleOnly()).toList();
         this.sessionsRule = sessionsRule;
+        this.sessionsDisabledBySport = sessionsDisabledBySport;
         this.groupBy = groupBy;
         this.sort = sort;
         this.minGamesSingle = minGamesSingle;
@@ -96,16 +129,19 @@ public final class StatisticsSchema {
         Map<String, Object> scoreboard = map(record, "scoreboard");
         Map<String, Object> ranking = map(record, "ranking");
 
-        List<String> columns = readColumns(scoreboard.get("columns"), catalog);
+        // SESSION-82: config.sessions.enabled = false lists the column but does not collect it (the column is dropped, nothing is counted)
+        boolean sessionsOff = Boolean.FALSE.equals(map(map(scoreboard, "config"), "sessions").get("enabled"));
+        List<String> columns = readColumns(scoreboard.get("columns"), catalog).stream()
+                .filter(key -> !(sessionsOff && "sessions".equals(key))).toList();
         List<SortKey> sort = ranking.get("sort") instanceof List<?> list ? readSort(list, catalog) : List.of();
 
         List<String> needed = new ArrayList<>(columns);
         if (!columns.isEmpty()) {
-            sort.forEach(key -> needed.add(key.by()));
+            sort.stream().map(SortKey::by).filter(key -> !(sessionsOff && "sessions".equals(key))).forEach(needed::add);
         }
         List<StatsCatalog.Stat> collected = StatsCatalog.storedFor(catalog, needed);
 
-        return new StatisticsSchema(catalog, columns, collected, readSessionsRule(map(scoreboard, "config")), readGroupBy(scoreboard.get("groupBy")), sort,
+        return new StatisticsSchema(catalog, columns, collected, readSessionsRule(map(scoreboard, "config")), sessionsOff, readGroupBy(scoreboard.get("groupBy")), sort,
                 intOf(map(ranking, "minGames").get("single"), 0), intOf(map(ranking, "minGames").get("combo"), 5),
                 Boolean.TRUE.equals(data.get("allowDraws")));
     }
@@ -138,6 +174,14 @@ public final class StatisticsSchema {
     /** SESSION-82: whether the sport collects the {@code sessions} stat. */
     public boolean collectsSessions() {
         return collected.stream().anyMatch(stat -> stat.kind() == StatsCatalog.Kind.SESSIONS);
+    }
+
+    /**
+     * SESSION-83: whether the sport's {@code config.sessions.enabled} is {@code false}: a hard off that no group can turn on (the
+     * sport has a reason). A sport that simply does not list {@code sessions} has no opinion, which is a different answer.
+     */
+    public boolean sessionsDisabledBySport() {
+        return sessionsDisabledBySport;
     }
 
     /** SESSION-82: what makes a session count for a player in the {@code sessions} stat (the default is {@code joined}). */
@@ -265,22 +309,8 @@ public final class StatisticsSchema {
     /** SESSION-82: the {@code sessions} config, lenient: unknown entries dropped, nothing usable is {@link SessionsRule#DEFAULT}. */
     private static SessionsRule readSessionsRule(Map<String, Object> config) {
         Map<String, Object> sessions = map(config, "sessions");
-        boolean joined = false;
-        boolean game = false;
-        if (sessions.get("counts") instanceof List<?> counts) {
-            for (Object entry : counts) {
-                if ("joined".equals(entry)) {
-                    joined = true;
-                } else if ("atLeast1Game".equals(entry)) {
-                    game = true;
-                }
-            }
-        }
-        if (!joined && !game) {
-            return SessionsRule.DEFAULT;
-        }
         boolean and = sessions.get("combine") instanceof String combine && combine.trim().equalsIgnoreCase("AND");
-        return new SessionsRule(joined, game, and);
+        return SessionsRule.of(sessions.get("when") instanceof List<?> when ? when : null, and);
     }
 
     private static int intOf(Object value, int fallback) {

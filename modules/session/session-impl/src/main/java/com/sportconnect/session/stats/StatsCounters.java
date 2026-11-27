@@ -53,6 +53,17 @@ public final class StatsCounters {
         }
     }
 
+    /** SESSION-83: a copy without these stats (they read as having no value). */
+    public StatsCounters without(java.util.Set<String> keys) {
+        StatsCounters copy = new StatsCounters();
+        values.forEach((key, value) -> {
+            if (!keys.contains(key)) {
+                copy.values.put(key, value);
+            }
+        });
+        return copy;
+    }
+
     /** Whether nothing was counted into these counters (no stat has a value). */
     public boolean isEmpty() {
         return values.isEmpty();

@@ -286,4 +286,7 @@
     <!-- SESSION-54: leaderboard boards as one tree per board, the engine's change rows, the server-only sort rules, and the board runs' new columns -->
     <include file="db/changelog/changes/V108__leaderboard_boards_rules_and_changes.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-83: a group's own config of the statistics it counts for its member row -->
+    <include file="db/changelog/changes/V109__group_stats_config.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

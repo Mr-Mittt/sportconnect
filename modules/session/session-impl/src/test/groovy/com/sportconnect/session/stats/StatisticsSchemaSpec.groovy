@@ -250,11 +250,11 @@ class StatisticsSchemaSpec extends Specification {
 
         where:
         config                                                          | joinedOnly | played
-        [counts: ['joined']]                                            | true       | true
-        [counts: ['atLeast1Game']]                                      | false      | true
-        [counts: ['joined', 'atLeast1Game'], combine: 'AND']            | false      | true
-        [counts: ['joined', 'atLeast1Game'], combine: 'or']             | true       | true
-        [counts: ['joined', 'atLeast1Game']]                            | true       | true
+        [when: ['joined']]                                            | true       | true
+        [when: ['atLeast1Game']]                                      | false      | true
+        [when: ['joined', 'atLeast1Game'], combine: 'AND']            | false      | true
+        [when: ['joined', 'atLeast1Game'], combine: 'or']             | true       | true
+        [when: ['joined', 'atLeast1Game']]                            | true       | true
     }
 
     def "an unusable sessions config is the default, never an error"() {
@@ -262,6 +262,33 @@ class StatisticsSchemaSpec extends Specification {
         StatisticsSchema.of(schema([columns: ['sessions'], config: config])).sessionsRule() == StatisticsSchema.SessionsRule.DEFAULT
 
         where:
-        config << [null, 'joined', [sessions: 'joined'], [sessions: [counts: []]], [sessions: [counts: ['nonsense']]], [sessions: [counts: 'joined']]]
+        config << [null, 'joined', [sessions: 'joined'], [sessions: [when: []]], [sessions: [when: ['nonsense']]], [sessions: [when: 'joined']]]
+    }
+
+    def "config.sessions.enabled false lists the column but collects nothing for it, and true or missing keeps it"() {
+        expect:
+        def s = StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: sessionsConfig]],
+                [sort: [[by: 'sessions', dir: 'DESC']]]))
+        s.collectsSessions() == on
+        s.columns().contains('sessions') == on
+        keys(s).contains('sessions') == on
+
+        where:
+        sessionsConfig                | on
+        [enabled: false]              | false
+        [enabled: false, when: ['joined']] | false
+        [enabled: true]               | true
+        [when: ['joined']]            | true
+        [enabled: 'no']               | true
+    }
+
+    def "sessionsDisabledBySport is the sport's own enabled false, and a sport that does not list the stat has no opinion"() {
+        expect:
+        StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: false]]])).sessionsDisabledBySport()
+        StatisticsSchema.of(schema([columns: ['games'], config: [sessions: [enabled: false]]])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games', 'sessions']])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games']])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: true]]])).sessionsDisabledBySport()
+        !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: 'no']]])).sessionsDisabledBySport()
     }
 }
