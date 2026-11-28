@@ -8,6 +8,9 @@ import com.sportconnect.sport.entity.Sport;
 import com.sportconnect.sport.entity.UserSportProfile;
 import com.sportconnect.sport.repository.SportRepository;
 import com.sportconnect.sport.repository.UserSportProfileRepository;
+import com.sportconnect.reference.repository.CountryRepository;
+import com.sportconnect.reference.repository.LanguageRepository;
+import com.sportconnect.reference.repository.RegionRepository;
 import com.sportconnect.user.entity.User;
 import com.sportconnect.user.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -15,8 +18,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.CacheManager;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.springframework.http.MediaType;
 
+import javax.sql.DataSource;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,6 +73,19 @@ class SportActiveGateIntegrationTest extends BaseIT {
     @Autowired
     private CacheManager cacheManager;
 
+    // B25: a group needs a country and region, which a create that sends none takes from its owner; so the owner has the seeded ones.
+    @Autowired
+    private DataSource dataSource;
+
+    @Autowired
+    private CountryRepository countryRepository;
+
+    @Autowired
+    private RegionRepository regionRepository;
+
+    @Autowired
+    private LanguageRepository languageRepository;
+
     private UUID userId;
     private Long activeSportId;
     private Long inactiveSportId;
@@ -74,8 +93,17 @@ class SportActiveGateIntegrationTest extends BaseIT {
     @BeforeEach
     void setUpFixtures() {
         clearAll();
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator(
+                new ClassPathResource("db/changelog/changes/V073__seed_reference_data.sql"),
+                new ClassPathResource("db/changelog/changes/V074__add_default_language_to_countries.sql"));
+        populator.setSqlScriptEncoding("UTF-8");
+        populator.execute(dataSource);
+        Long countryId = countryRepository.findAll().get(0).getId();
+        Long regionId = regionRepository.findByCountryIdAndIsActiveTrueOrderByNameAsc(countryId).get(0).getId();
 
         userId = userRepository.save(User.builder()
+                .countryId(countryId)
+                .regionId(regionId)
                 .email("a7-gate@example.com")
                 .firstName("Gate")
                 .lastName("Tester")
@@ -104,6 +132,9 @@ class SportActiveGateIntegrationTest extends BaseIT {
         profileRepository.deleteAll();
         sportRepository.deleteAll();
         userRepository.deleteAll();
+        regionRepository.deleteAllInBatch();
+        countryRepository.deleteAllInBatch();
+        languageRepository.deleteAllInBatch();
     }
 
     private void evictSportCache() {
