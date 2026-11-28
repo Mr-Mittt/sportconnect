@@ -34,7 +34,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class GroupMemberStats {
+public class GroupMemberStats implements MemberStatsRow {
 
     @Id
     @Column(name = "group_id", nullable = false)

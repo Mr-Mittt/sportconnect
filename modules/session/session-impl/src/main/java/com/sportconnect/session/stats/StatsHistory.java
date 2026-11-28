@@ -63,6 +63,18 @@ public final class StatsHistory {
         return false;
     }
 
+    /** SESSION-55: a new history list without the entries that point at these records (a session removed from a season takes its games out). */
+    static List<Object> removeAll(List<Object> history, java.util.Set<Long> recordIds) {
+        List<Object> result = new ArrayList<>(history.size());
+        for (Object value : history) {
+            Pointer pointer = parse(value);
+            if (pointer == null || !recordIds.contains(pointer.recordId())) {
+                result.add(value);
+            }
+        }
+        return result;
+    }
+
     /** A new history list with the entry first and the oldest entries cut off beyond the cap. */
     static List<Object> prepend(List<Object> history, long recordId, boolean ranking) {
         List<Object> result = new ArrayList<>(Math.min(history.size() + 1, CAP));

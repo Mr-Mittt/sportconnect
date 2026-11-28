@@ -729,3 +729,23 @@ CREATE TABLE IF NOT EXISTS group_season_sessions (
     linked_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (season_id, session_id)
 );
+
+-- SESSION-55 slice 2 (V112): what a season counts.
+ALTER TABLE group_seasons ADD COLUMN IF NOT EXISTS counted_sessions JSON NOT NULL DEFAULT '{}';
+
+CREATE TABLE IF NOT EXISTS season_member_stats (
+    season_id BIGINT NOT NULL REFERENCES group_seasons (id) ON DELETE CASCADE,
+    user_id UUID NOT NULL,
+    stats JSON NOT NULL,
+    history JSON NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (season_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS season_stats (
+    season_id BIGINT PRIMARY KEY REFERENCES group_seasons (id) ON DELETE CASCADE,
+    h2h JSON NOT NULL,
+    version INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

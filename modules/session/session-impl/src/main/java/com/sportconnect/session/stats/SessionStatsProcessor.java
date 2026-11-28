@@ -10,6 +10,8 @@ import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.entity.SessionParticipant;
 import com.sportconnect.session.record.RecordFacts;
+import com.sportconnect.session.stats.SessionGames.Game;
+import com.sportconnect.session.stats.SessionGames.Ignored;
 import com.sportconnect.session.record.RecordRankingSupport;
 import com.sportconnect.session.record.RecordReaders;
 import com.sportconnect.session.record.RecordTypeReader;
@@ -88,23 +90,17 @@ public class SessionStatsProcessor {
     public record Result(SessionStatsJob.Status status, int counted, int ignored) {
     }
 
-    private record Game(SessionRecord record, RecordFacts facts, boolean ranking) {
-    }
-
-    private record Ignored(Long recordId, String reason) {
-    }
-
     /** A board a game touched; SESSION-54 ranks it. {@code countryId} is a region board's country, a country board's own id, none for a group. */
     private record Board(String scopeType, Long scopeId, Long sportId, Long countryId) {
     }
 
     private final SessionStatsJobRepository jobRepository;
     private final SessionRepository sessionRepository;
-    private final SessionRecordRepository recordRepository;
-    private final SessionRecordVerificationRepository verificationRepository;
-    private final SessionParticipantRepository participantRepository;
     private final RecordReaders readers;
-    private final RecordRankingSupport rankingSupport;
+    // SESSION-55: reads a session's games, shared with the seasons' own counting.
+    private final SessionGames sessionGames;
+    // SESSION-55: counts the session into the seasons that want it.
+    private final SeasonStatsCounter seasonCounter;
     private final SportService sportService;
     private final LocationService locationService;
     private final UserSportStatsRepository userStatsRepository;
@@ -133,6 +129,15 @@ public class SessionStatsProcessor {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Result process(Long sessionId, Instant claimedAt) {
+        Result result = countIntoGroupAndPlayers(sessionId, claimedAt);
+        // SESSION-55: the seasons that want this session count it in this same transaction (a failure retries the session like any other).
+        // Independent of the group's statistics switch: a season keeps counting when the group switches its statistics off.
+        sessionRepository.findById(sessionId).ifPresent(seasonCounter::countSession);
+        return result;
+    }
+
+    /** The counting of SESSION-53 to 84: the players' rows, the group's rows and the boards they touch; the job row is finished here. */
+    private Result countIntoGroupAndPlayers(Long sessionId, Instant claimedAt) {
         SessionStatsJob job = jobRepository.findForUpdate(sessionId).orElseThrow(() -> new ClaimLostException(sessionId));
         if (job.getStatus() != SessionStatsJob.Status.RUNNING || !claimedAt.equals(job.getClaimedAt())) {
             throw new ClaimLostException(sessionId);
@@ -172,9 +177,8 @@ public class SessionStatsProcessor {
             return finish(job, now, List.of(), List.of(), List.of("STATISTICS_NOT_CONFIGURED"));
         }
 
-        List<SessionRecord> records = recordRepository.findBySessionIdOrderByIdAsc(sessionId);
-        Set<UUID> joined = participantRepository.findBySessionIdAndStatusIn(sessionId, List.of(ParticipantStatus.JOINED))
-                .stream().map(SessionParticipant::getUserId).collect(Collectors.toSet());
+        SessionGames.Read read = sessionGames.read(session, schema, reader);
+        Set<UUID> joined = read.joined();
         // SESSION-82: a revived job row (the second line of defence) must not count the session's players a second time
         int priorSessions = job.getResult() != null && job.getResult().get("sessions") instanceof Number n ? Math.max(0, n.intValue()) : 0;
         // SESSION-82: a sport whose `sessions` rule counts a joined player without a game still counts a session with no games
@@ -185,25 +189,11 @@ public class SessionStatsProcessor {
         boolean groupCollectsSessions = groupView != null && groupView.collectsSessions();
         StatisticsSchema.SessionsRule groupRule = groupView == null ? stats.sessionsRule() : groupView.sessionsRule();
         boolean sessionsWithoutGames = priorSessions == 0 && ((stats.collectsSessions() && stats.sessionsRule().counts(true, false)) || (groupCollectsSessions && groupRule.counts(true, false))) && !joined.isEmpty();
-        if (records.isEmpty() && !sessionsWithoutGames) {
+        if (read.noRecords() && !sessionsWithoutGames) {
             return finish(job, now, List.of(), List.of(), List.of("NO_RECORDS"), priorSessions);
         }
-        Map<Long, List<SessionRecordVerification>> confirmations = confirmationsOf(records);
-
-        List<Game> games = new ArrayList<>();
-        List<Ignored> ignored = new ArrayList<>();
-        for (SessionRecord record : records) {
-            RecordFacts facts = reader.read(schema, record.getData());
-            if (!facts.valid()) {
-                ignored.add(new Ignored(record.getId(), facts.invalidReason()));
-            } else if (!facts.countable()) {
-                ignored.add(new Ignored(record.getId(), facts.notCountableReason()));
-            } else if (!joined.containsAll(facts.players())) {
-                ignored.add(new Ignored(record.getId(), "PLAYER_NOT_JOINED"));
-            } else {
-                games.add(new Game(record, facts, isRanking(record, facts, confirmations)));
-            }
-        }
+        List<Game> games = read.games();
+        List<Ignored> ignored = new ArrayList<>(read.ignored());
         // SESSION-82: who gets +1 in the `sessions` stat, by the sport's rule (joined players only: a counted game needs one)
         Set<UUID> gamePlayers = new HashSet<>();
         Set<UUID> rankingPlayers = new HashSet<>();
@@ -241,26 +231,6 @@ public class SessionStatsProcessor {
         Applied applied = apply(session, stats, games, venue, ignored, now, sessionPlayers, groupSessionPlayers, rankingPlayers,
                 groupSettings == null ? null : session.getGroupId(), groupView);
         return finish(job, now, applied.counted(), ignored, notes, priorSessions + applied.sessions());
-    }
-
-    /** A ranking game: proposed, and every named player confirmed the record's current revision (SESSION-72). */
-    private boolean isRanking(SessionRecord record, RecordFacts facts, Map<Long, List<SessionRecordVerification>> byRecord) {
-        if (record.getRankingRequestedAt() == null) {
-            return false;
-        }
-        Set<UUID> confirmed = new HashSet<>(rankingSupport.confirmedPlayers(record,
-                byRecord.getOrDefault(record.getId(), List.of())));
-        // Rankable = a score in the ranking slot, the same number of players on both sides and an outcome (SESSION-72/80).
-        return facts.rankable() && confirmed.containsAll(facts.players());
-    }
-
-    private Map<Long, List<SessionRecordVerification>> confirmationsOf(List<SessionRecord> records) {
-        List<Long> proposed = records.stream().filter(r -> r.getRankingRequestedAt() != null).map(SessionRecord::getId).toList();
-        if (proposed.isEmpty()) {
-            return Map.of();
-        }
-        return verificationRepository.findByRecordIdIn(proposed).stream()
-                .collect(Collectors.groupingBy(SessionRecordVerification::getRecordId));
     }
 
     private record Venue(Long countryId, Long regionId) {
@@ -317,7 +287,7 @@ public class SessionStatsProcessor {
         Map<UUID, GroupMemberStats> groupRows = groupId == null ? Map.of() : lockGroupRows(groupId, sportId, groupUsers);
         Map<UUID, GroupStatsDoc> members = new LinkedHashMap<>();
         groupRows.forEach((id, row) -> members.put(id, GroupStatsDoc.read(row)));
-        boolean headToHead = groupId != null && stats.groupsByPartner() && games.stream().anyMatch(this::isTwoPairs);
+        boolean headToHead = groupId != null && stats.groupsByPartner() && games.stream().anyMatch(g -> GameCounting.isTwoPairs(g.facts()));
         GroupStats h2hRow = headToHead ? lockGroupStatsRow(groupId, sportId) : null;
         GroupH2hDoc h2h = h2hRow == null ? null : GroupH2hDoc.read(h2hRow);
 
@@ -339,14 +309,14 @@ public class SessionStatsProcessor {
             counted.add(new CountedGame(recordId, game.ranking()));
             for (RecordFacts.Participant participant : game.facts().participants()) {
                 List<UUID> team = game.facts().teams().get(participant.team());
-                Map<String, List<String>> groups = groupKeys(stats, participant.userId(), team);
+                Map<String, List<String>> groups = GameCounting.groupKeys(stats, participant.userId(), team);
                 PlayerStatsDoc doc = players.get(participant.userId());
                 countPlayer(doc, participant, groups, game.ranking(), stats, venue);
                 doc.addPointer(recordId, game.ranking());
                 if (groupId != null) {
                     GroupStatsDoc member = members.get(participant.userId());
                     member.counters().add(participant.outcome(), participant.metrics(), groupView.collected());
-                    addToGroups(memberKeys(groups, numbers), member::group, participant, groupView);
+                    GameCounting.addToGroups(GameCounting.memberKeys(groups, numbers), member::group, participant, groupView);
                     member.addPointer(recordId, game.ranking());
                     touch(boards, changed, new Board("GROUP", groupId, sportId, null), participant.userId());
                 }
@@ -359,9 +329,9 @@ public class SessionStatsProcessor {
                     }
                 }
             }
-            if (h2h != null && isTwoPairs(game)) {
-                h2h.addGame(numbersOf(game.facts().teams().get(0), numbers), numbersOf(game.facts().teams().get(1), numbers),
-                        outcomeOfFirstTeam(game), stats.allowDraws());
+            if (h2h != null && GameCounting.isTwoPairs(game.facts())) {
+                h2h.addGame(GameCounting.numbersOf(game.facts().teams().get(0), numbers), GameCounting.numbersOf(game.facts().teams().get(1), numbers),
+                        GameCounting.outcomeOfFirstTeam(game.facts()), stats.allowDraws());
             }
         }
 
@@ -434,84 +404,25 @@ public class SessionStatsProcessor {
         }
     }
 
-    /** A game of two teams of exactly two players: the only game the head-to-head counts. */
-    private boolean isTwoPairs(Game game) {
-        List<List<UUID>> teams = game.facts().teams();
-        return teams.size() == 2 && teams.get(0).size() == 2 && teams.get(1).size() == 2;
-    }
-
-    /** How the game ended for the first team, from the outcome of its first player. */
-    private RecordFacts.Outcome outcomeOfFirstTeam(Game game) {
-        return game.facts().participants().stream().filter(p -> p.team() == 0).map(RecordFacts.Participant::outcome)
-                .findFirst().orElse(RecordFacts.Outcome.NONE);
-    }
-
-    /**
-     * The group keys of one player in one game, by dimension, for the grouping the sport's schema asks for: {@code PARTNER}
-     * (each other member of the team) or {@code TEAM} (every team of the schema's size the player is in).
-     */
-    private Map<String, List<String>> groupKeys(StatisticsSchema stats, UUID player, List<UUID> team) {
-        Map<String, List<String>> keys = new LinkedHashMap<>();
-        for (StatisticsSchema.Grouping grouping : stats.groupBy()) {
-            List<String> list = grouping.by().equals(StatisticsSchema.PARTNER)
-                    ? StatsCombos.partnersOf(player, team) : StatsCombos.keysFor(player, team, grouping.size());
-            if (!list.isEmpty()) {
-                keys.put(grouping.by(), list);
-            }
-        }
-        return keys;
-    }
-
-    /**
-     * The same group keys as a group's rows keep them (SESSION-81): a partner is the partner's member number, a team the
-     * members' numbers sorted and joined by commas. (A player's own rows keep the user ids: their partners come from many groups.)
-     */
-    private Map<String, List<String>> memberKeys(Map<String, List<String>> groups, Map<UUID, Integer> numbers) {
-        Map<String, List<String>> converted = new LinkedHashMap<>();
-        groups.forEach((by, keys) -> {
-            List<String> list = new ArrayList<>();
-            for (String key : keys) {
-                List<Integer> parts = new ArrayList<>();
-                for (String id : key.split(",")) {
-                    parts.add(numbers.get(UUID.fromString(id)));
-                }
-                parts.sort(null);
-                list.add(parts.stream().map(String::valueOf).collect(Collectors.joining(",")));
-            }
-            converted.put(by, list);
-        });
-        return converted;
-    }
-
-    private static List<Integer> numbersOf(List<UUID> team, Map<UUID, Integer> numbers) {
-        return team.stream().map(numbers::get).toList();
-    }
-
-    /** Adds one player's game to the counters of each of their groups. */
-    private void addToGroups(Map<String, List<String>> groups, BiFunction<String, String, StatsCounters> counters,
-                             RecordFacts.Participant p, StatisticsSchema stats) {
-        groups.forEach((by, keys) -> keys.forEach(key -> counters.apply(by, key).add(p.outcome(), p.metrics(), stats.collectedForCombos())));
-    }
-
     /** The counters of one player for one game: personal, every group of their team, and the venue's scopes (ranking games). */
     private void countPlayer(PlayerStatsDoc doc, RecordFacts.Participant p, Map<String, List<String>> groups, boolean ranking,
                              StatisticsSchema stats, Venue venue) {
         doc.personal().all().add(p.outcome(), p.metrics(), stats.collected());
-        addToGroups(groups, (by, key) -> doc.group(by, key).all(), p, stats);
+        GameCounting.addToGroups(groups, (by, key) -> doc.group(by, key).all(), p, stats);
         if (!ranking) {
             return;
         }
         doc.personal().ranked().add(p.outcome(), p.metrics(), stats.collected());
-        addToGroups(groups, (by, key) -> doc.group(by, key).ranked(), p, stats);
+        GameCounting.addToGroups(groups, (by, key) -> doc.group(by, key).ranked(), p, stats);
         if (venue.regionId() != null) {
             PlayerStatsDoc.Scope region = doc.scope("REGION", venue.countryId(), venue.regionId());
             region.counters().add(p.outcome(), p.metrics(), stats.collected());
-            addToGroups(groups, region::group, p, stats);
+            GameCounting.addToGroups(groups, region::group, p, stats);
         }
         if (venue.countryId() != null) {
             PlayerStatsDoc.Scope country = doc.scope("COUNTRY", venue.countryId(), null);
             country.counters().add(p.outcome(), p.metrics(), stats.collected());
-            addToGroups(groups, country::group, p, stats);
+            GameCounting.addToGroups(groups, country::group, p, stats);
         }
     }
 

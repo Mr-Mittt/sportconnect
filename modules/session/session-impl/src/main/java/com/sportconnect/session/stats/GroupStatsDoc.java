@@ -12,7 +12,7 @@ import java.util.Map;
  */
 public final class GroupStatsDoc {
 
-    private final StatsCounters counters;
+    private StatsCounters counters;
     private final Map<String, Map<String, StatsCounters>> groupings;
     private List<Object> history;
 
@@ -22,14 +22,14 @@ public final class GroupStatsDoc {
         this.history = history;
     }
 
-    public static GroupStatsDoc read(GroupMemberStats row) {
+    public static GroupStatsDoc read(MemberStatsRow row) {
         Map<String, Object> stats = row.getStats() == null ? Map.of() : row.getStats();
         List<Object> history = row.getHistory() == null ? new ArrayList<>() : new ArrayList<>(row.getHistory());
         return new GroupStatsDoc(StatsCounters.decode(stats.get("counters")),
                 StatsGroupings.read(stats.get("groupings"), StatsCounters::decode), history);
     }
 
-    public void writeTo(GroupMemberStats row) {
+    public void writeTo(MemberStatsRow row) {
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("counters", counters.encode());
         Map<String, Object> grouped = StatsGroupings.write(groupings, StatsCounters::encode);
@@ -53,6 +53,36 @@ public final class GroupStatsDoc {
     /** The counters of one group, {@code by} a partner or a team (created empty the first time). */
     public StatsCounters group(String by, String key) {
         return StatsGroupings.group(groupings, by, key, StatsCounters::new);
+    }
+
+    /**
+     * SESSION-55: takes a session's contribution back out of this row, for a season that drops a linked session. {@code contribution} is
+     * what the same games add to a blank row (the counters are sums and counts, so the subtraction is exact); a partner or team entry that
+     * the subtraction empties is removed, and the history loses the pointers of {@code recordIds}.
+     */
+    public void subtract(GroupStatsDoc contribution, java.util.Set<Long> recordIds) {
+        counters = counters.minus(contribution.counters);
+        contribution.groupings.forEach((by, keys) -> {
+            Map<String, StatsCounters> mine = groupings.get(by);
+            if (mine == null) {
+                return;
+            }
+            keys.forEach((key, gone) -> {
+                StatsCounters existing = mine.get(key);
+                if (existing != null) {
+                    StatsCounters left = existing.minus(gone);
+                    if (left.isZero()) {
+                        mine.remove(key);
+                    } else {
+                        mine.put(key, left);
+                    }
+                }
+            });
+            if (mine.isEmpty()) {
+                groupings.remove(by);
+            }
+        });
+        history = StatsHistory.removeAll(history, recordIds);
     }
 
     public boolean hasPointer(long recordId) {

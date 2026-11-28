@@ -295,4 +295,7 @@
     <!-- SESSION-55: group seasons and their links; the SEASON_POST anchor type -->
     <include file="db/changelog/changes/V111__group_seasons.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-55 slice 2: what a season counts (member rows, head-to-head, the counting ledger) -->
+    <include file="db/changelog/changes/V112__season_statistics.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

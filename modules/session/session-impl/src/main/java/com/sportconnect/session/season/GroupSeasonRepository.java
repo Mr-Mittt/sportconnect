@@ -1,5 +1,6 @@
 package com.sportconnect.session.season;
 
+import com.sportconnect.session.api.dto.SeasonCollectionMode;
 import com.sportconnect.session.api.dto.SeasonStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +29,13 @@ public interface GroupSeasonRepository extends JpaRepository<GroupSeason, Long> 
 
     /** The seasons the status job looks at: the ones that can still change. Small by construction (two open per group, plus those waiting to finalise). */
     List<GroupSeason> findByStatusInOrderByIdAsc(Collection<SeasonStatus> statuses);
+
+    /** SESSION-55 slice 2: the seasons of the group, in these statuses and this collection mode, whose range [start, end) holds the instant (an indexed read on the group). */
+    @Query("SELECT s FROM GroupSeason s WHERE s.groupId = :groupId AND s.status IN :statuses AND s.collectionMode = :mode "
+            + "AND s.startAt <= :instant AND s.endAt > :instant")
+    List<GroupSeason> findAutoSeasonsContaining(@Param("groupId") Long groupId, @Param("statuses") Collection<SeasonStatus> statuses,
+                                                @Param("mode") SeasonCollectionMode mode,
+                                                @Param("instant") Instant instant);
 
     /**
      * Takes the season's row lock for the rest of the transaction ({@code FOR UPDATE}), waiting if another holds it. It must run inside a

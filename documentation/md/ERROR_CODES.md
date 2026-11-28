@@ -263,6 +263,7 @@ A `gameMood` that is missing on create or outside 1-10 is the generic `VALIDATIO
 | `SESSION_SEASON_OVERLAP` | 409 | `seasonId`, `startDate`, `endDate` | Create or edit sharing a day with another season of the group that is not cancelled (the end day is occupied). |
 | `SESSION_SEASON_NOT_EDITABLE` | 409 | `status` | Edit of a season that is not `SCHEDULED`. |
 | `SESSION_SEASON_NOT_CANCELLABLE` | 409 | `status` | Cancel of a season that is not `SCHEDULED` or `ONGOING`. |
+| `SESSION_SEASON_NOT_FINALISABLE` | 409 | `status` | Finalising a season that is not `COMPLETED` (including one the status job finalised a moment ago).
 | `SESSION_SEASON_LINKS_NOT_ALLOWED` | 409 | `status`, `collectionMode` | Linking or unlinking sessions of an AUTO season, or of a MANUAL one that is not `ONGOING` or `COMPLETED`. |
 | `SESSION_SEASON_SESSION_INVALID` | 400 | `reason` (`NOT_FOUND`, `NOT_IN_GROUP`, `OUT_OF_RANGE`, `TOO_MANY`), `sessionId` or `max` | A session to link that does not exist, is not this group's, has a local date outside the season's dates (in the season's timezone), or more than 20 ids in a list. |
 | `SESSION_GROUP_STAT_IN_USE` | 409 | `detail`, `kind` | The same call drops a stat from the group's own list (a stat the old list held and the new one does not) while the group's own ranking rule names it in its sort list or its preconditions (`detail` the stat, `kind` the rule's board kind); change or delete the rule first (SESSION-83, SESSION-84). |

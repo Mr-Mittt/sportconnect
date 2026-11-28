@@ -41,7 +41,7 @@ public final class GroupH2hDoc {
     }
 
     /** Reads a row's document; an empty row reads as no games. */
-    public static GroupH2hDoc read(GroupStats row) {
+    public static GroupH2hDoc read(H2hRow row) {
         GroupH2hDoc doc = new GroupH2hDoc();
         Map<String, Object> h2h = row.getH2h() == null ? Map.of() : row.getH2h();
         doc.seq = h2h.get("seq") instanceof Number n ? n.longValue() : 0L;
@@ -61,7 +61,7 @@ public final class GroupH2hDoc {
     }
 
     /** Writes the document back into the row, which the caller holds a lock on. */
-    public void writeTo(GroupStats row) {
+    public void writeTo(H2hRow row) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("seq", seq);
         Map<String, Object> h2h = new LinkedHashMap<>();
@@ -121,6 +121,29 @@ public final class GroupH2hDoc {
             dropLeastRecent();
         }
         return true;
+    }
+
+    /**
+     * SESSION-55: takes another document's games back out (the head-to-head a removed session of a season added to a blank document): each
+     * matchup loses its wins (and draws), never below zero, and a matchup left with none is dropped. The sequence number is not rolled back.
+     */
+    public void subtract(GroupH2hDoc contribution) {
+        contribution.matchups.forEach((key, gone) -> {
+            long[] mine = matchups.get(key);
+            if (mine == null) {
+                return;
+            }
+            int counts = mine.length - 1;
+            boolean any = false;
+            for (int i = 0; i < counts; i++) {
+                long took = i < gone.length - 1 ? gone[i] : 0L;
+                mine[i] = Math.max(0L, mine[i] - took);
+                any |= mine[i] > 0;
+            }
+            if (!any) {
+                matchups.remove(key);
+            }
+        });
     }
 
     /** The matchup of two pairs as {@code [winsOfFirst, winsOfSecond(, draws), seq]} in key order, or null; for tests and reads. */

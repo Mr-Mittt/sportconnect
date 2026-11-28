@@ -635,7 +635,7 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
 
         // a season whose last day is over (written directly: the API refuses a past date) completes on the next pass
         GroupSeason season = reload(startsToday);
-        setRange(season, -5, -2);
+        setRange(season, -5, -1);          // ended at the start of today: still inside the guard, so completed but not finalised
         seasonRepository.save(season);
         assertThat(transitions.tick()).isEqualTo(1);
         assertThat(reload(startsToday).getStatus()).isEqualTo(SeasonStatus.COMPLETED);
@@ -643,7 +643,7 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void theStatusJob_takesBothStepsWhenItWasDownForDays_andNeverStartsACancelledSeason() throws Exception {
+    void theStatusJob_takesEveryStepWhenItWasDownForDays_andNeverStartsACancelledSeason() throws Exception {
         Long missed = createSeason("Missed", 1, 3);
         Long cancelled = createSeason("Cancelled", 10, 12);
         GroupSeason season = reload(missed);
@@ -656,7 +656,7 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
 
         assertThat(transitions.tick()).isEqualTo(1);
 
-        assertThat(reload(missed).getStatus()).isEqualTo(SeasonStatus.COMPLETED);
+        assertThat(reload(missed).getStatus()).isEqualTo(SeasonStatus.FINALISED);      // down for days: started, completed and, the guard long past, finalised in one pass
         assertThat(reload(cancelled).getStatus()).isEqualTo(SeasonStatus.CANCELLED);
         assertThat(systemPosts()).extracting(Post::getSystemCode).contains(SystemCode.GROUP_SEASON_STARTED);
     }

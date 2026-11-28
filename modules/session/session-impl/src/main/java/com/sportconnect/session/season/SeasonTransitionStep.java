@@ -4,6 +4,7 @@ import com.sportconnect.session.api.dto.SeasonStatus;
 import com.sportconnect.social.post.api.dto.SystemCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,12 @@ class SeasonTransitionStep {
 
     private final GroupSeasonRepository seasonRepository;
     private final SeasonAnnouncer announcer;
+    private final SeasonFinaliser finaliser;
+    private final SeasonRowLock rowLock;
+
+    /** The window after a season's end in which players can still log and confirm games: the job finalises only after it (the owner may finalise at once). */
+    @Value("${app.stats.job.guard-hours:24}")
+    private long guardHours;
 
     private Clock clock = Clock.systemUTC();
 
@@ -35,13 +42,13 @@ class SeasonTransitionStep {
 
     /**
      * SCHEDULED to ONGOING once the clock reaches the start instant (the "started" announcement), ONGOING to COMPLETED once the end instant
-     * has passed. A job that was down for days may take both steps in one go. COMPLETED to FINALISED is slice 2 of SESSION-55.
+     * has passed. A job that was down for days may take both steps in one go. COMPLETED to FINALISED once the guard after the end has passed (the sweep and the finalise: {@link SeasonFinaliser}).
      *
      * @return {@code true} if the season changed status
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean advance(Long seasonId) {
-        GroupSeason season = seasonRepository.findByIdForUpdateSkipLocked(seasonId).orElse(null);
+        GroupSeason season = rowLock.lockOrSkip(seasonId).orElse(null);
         if (season == null) {
             return false;
         }
@@ -57,6 +64,10 @@ class SeasonTransitionStep {
             season.setStatus(SeasonStatus.COMPLETED);
             log.info("Season {} of group {} completed", season.getId(), season.getGroupId());
             changed = true;
+        }
+        if (season.getStatus() == SeasonStatus.COMPLETED && !now.isBefore(SeasonDates.finalisesAt(season.getEndAt(), guardHours))) {
+            // the guard has passed: sweep the sessions the engine has not counted, then freeze the season
+            changed |= finaliser.finalise(season, now, null);
         }
         if (changed || season.getLastError() != null) {
             season.setLastError(null);

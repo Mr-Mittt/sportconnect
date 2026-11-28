@@ -1,6 +1,8 @@
 package com.sportconnect.session.api.service;
 
 import com.sportconnect.session.api.dto.CreateSeasonRequest;
+import com.sportconnect.session.api.dto.GroupMemberStatisticsResponse;
+import com.sportconnect.session.api.dto.GroupStatisticsResponse;
 import com.sportconnect.session.api.dto.SeasonDefaultsResponse;
 import com.sportconnect.session.api.dto.SeasonLinkedSessionResponse;
 import com.sportconnect.session.api.dto.SeasonLinksRequest;
@@ -43,6 +45,14 @@ public interface GroupSeasonService {
     /** Cancels a {@code SCHEDULED} or {@code ONGOING} season (409 {@code SESSION_SEASON_NOT_CANCELLABLE} otherwise); it stays readable. */
     SeasonResponse cancel(Long groupId, Long seasonId, UUID callerId);
 
+    /**
+     * Finalises a {@code COMPLETED} season at once, without waiting for the guard (owner or admin; 409 {@code SESSION_SEASON_NOT_FINALISABLE}
+     * otherwise): the sessions the engine has not counted yet are counted straight into the season (the engine still counts them into the players'
+     * and the group's own rows later), then the season is {@code FINALISED}, frozen, and the group is told. Idempotent: a season the status job
+     * finalised a moment ago answers 409 as any season that is no longer completed.
+     */
+    SeasonResponse finalise(Long groupId, Long seasonId, UUID callerId);
+
     /** One season with the like state of its anchor. Any member. */
     SeasonResponse get(Long groupId, Long seasonId, UUID callerId);
 
@@ -59,6 +69,12 @@ public interface GroupSeasonService {
      * adding a linked session again and removing one that is not linked do nothing. At most 20 ids per list. Returns the links.
      */
     List<SeasonLinkedSessionResponse> updateLinks(Long groupId, Long seasonId, UUID callerId, SeasonLinksRequest request);
+
+    /** The season's members' statistics: the same list the group's endpoint answers, through the season's own stat list. Any member. */
+    GroupStatisticsResponse getStatistics(Long groupId, Long seasonId, UUID callerId, Pageable pageable);
+
+    /** One member's detail in the season: the same shape as the group's member detail. Any member. */
+    GroupMemberStatisticsResponse getMemberStatistics(Long groupId, Long seasonId, UUID callerId, UUID memberId, int page, int size);
 
     /** The season's discussion thread, gated like a session's (the season's group members). */
     Page<CommentResponse> getComments(Long groupId, Long seasonId, UUID callerId, Pageable pageable);

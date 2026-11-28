@@ -64,6 +64,11 @@ public final class StatsCounters {
         return copy;
     }
 
+    /** SESSION-55: whether every stat held here is zero (a counters object that a subtraction emptied), or none is held. */
+    public boolean isZero() {
+        return values.values().stream().allMatch(value -> value == 0d);
+    }
+
     /** Whether nothing was counted into these counters (no stat has a value). */
     public boolean isEmpty() {
         return values.isEmpty();

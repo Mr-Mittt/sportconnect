@@ -3,6 +3,8 @@ package com.sportconnect.session.season;
 import com.sportconnect.common.auth.SecurityUtils;
 import com.sportconnect.common.dto.ApiResponse;
 import com.sportconnect.session.api.dto.CreateSeasonRequest;
+import com.sportconnect.session.api.dto.GroupMemberStatisticsResponse;
+import com.sportconnect.session.api.dto.GroupStatisticsResponse;
 import com.sportconnect.session.api.dto.SeasonDefaultsResponse;
 import com.sportconnect.session.api.dto.SeasonLinkedSessionResponse;
 import com.sportconnect.session.api.dto.SeasonLinksRequest;
@@ -35,6 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * SESSION-55 - a group's seasons. Read: any member of the group. Write: its owner and admins. A group that does not exist or is
@@ -105,6 +108,39 @@ public class GroupSeasonController {
     public ResponseEntity<ApiResponse<SeasonResponse>> cancel(@PathVariable Long groupId, @PathVariable Long seasonId, Authentication authentication) {
         return ResponseEntity.ok(ApiResponse.success("Season cancelled successfully",
                 seasonService.cancel(groupId, seasonId, SecurityUtils.extractUserId(authentication))));
+    }
+
+    @Operation(summary = "Finalise a completed season at once", description = "SESSION-55: owner or admin; only a COMPLETED season. The sessions the engine has not counted yet are counted straight into the season, then it is frozen.")
+    @PostMapping("/{seasonId}/finalise")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<SeasonResponse>> finalise(@PathVariable Long groupId, @PathVariable Long seasonId, Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success("Season finalised successfully",
+                seasonService.finalise(groupId, seasonId, SecurityUtils.extractUserId(authentication))));
+    }
+
+    @Operation(summary = "The season's members' statistics", description = "SESSION-55: any member; the same shape as the group's statistics list, through the season's own stat list.")
+    @GetMapping("/{seasonId}/stats")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<GroupStatisticsResponse>> stats(@PathVariable Long groupId, @PathVariable Long seasonId,
+                                                                      @RequestParam(defaultValue = "0") int page,
+                                                                      @RequestParam(defaultValue = "20") int size,
+                                                                      Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success("Season statistics retrieved successfully",
+                seasonService.getStatistics(groupId, seasonId, SecurityUtils.extractUserId(authentication),
+                        PageRequest.of(Math.max(page, 0), Math.max(1, Math.min(size, MAX_PAGE_SIZE))))));
+    }
+
+    @Operation(summary = "One member's statistics in a season", description = "SESSION-55: any member; the same shape as the group's member detail.")
+    @GetMapping("/{seasonId}/stats/members/{userId}")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<ApiResponse<GroupMemberStatisticsResponse>> memberStats(@PathVariable Long groupId, @PathVariable Long seasonId,
+                                                                                  @PathVariable UUID userId,
+                                                                                  @RequestParam(defaultValue = "0") int page,
+                                                                                  @RequestParam(defaultValue = "20") int size,
+                                                                                  Authentication authentication) {
+        return ResponseEntity.ok(ApiResponse.success("Season member statistics retrieved successfully",
+                seasonService.getMemberStatistics(groupId, seasonId, SecurityUtils.extractUserId(authentication), userId,
+                        Math.max(page, 0), Math.max(1, Math.min(size, MAX_PAGE_SIZE)))));
     }
 
     @Operation(summary = "The sessions linked to a manual season", description = "SESSION-55: any member.")

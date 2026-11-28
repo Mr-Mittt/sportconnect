@@ -99,4 +99,13 @@ public class GroupSeason {
 
     @Column(name = "last_error", length = 500)
     private String lastError;
+
+    /**
+     * The counting ledger (V112): {@code {"<sessionId>": {"g": [recordIds counted], "p": [userIds given a sessions count]}}}. A session in it is
+     * never added again; removing a linked session subtracts exactly its entry. Written whole by {@code SeasonStatsCounter} under the row lock.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "counted_sessions", columnDefinition = "jsonb", nullable = false)
+    @Builder.Default
+    private Map<String, Object> countedSessions = new java.util.LinkedHashMap<>();
 }

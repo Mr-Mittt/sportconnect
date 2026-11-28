@@ -109,6 +109,10 @@ public interface SessionRepository extends JpaRepository<Session, Long> {
     /** SESSION-70 — the import's skip rule, asked once for the whole batch: the group's sessions starting at any of these instants (the caller compares the titles). */
     List<Session> findByGroupIdAndScheduledStartIn(Long groupId, Collection<Instant> scheduledStarts);
 
+    /** SESSION-55 slice 2: a group's sessions in one status whose start lies in [from, to): the sessions an AUTO season sweeps at finalise (an indexed range on the group). */
+    List<Session> findByGroupIdAndStatusAndScheduledStartGreaterThanEqualAndScheduledStartLessThan(
+            Long groupId, SessionStatus status, Instant from, Instant to);
+
     /** SESSION-GROUP-5 — the duplicate guard of the generator (also enforced by the unique index on the pair). */
     boolean existsByRecurrenceIdAndOccurrenceDate(Long recurrenceId, java.time.LocalDate occurrenceDate);
 

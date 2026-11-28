@@ -207,9 +207,18 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         Long sportId = groupSportId(groupId, callerId);
         StatisticsSchema stats = groupView(groupId, schemaOf(sportId));
 
-        List<GroupMemberStats> rows = groupStatsRepository.findByGroupIdAndSportId(groupId, sportId);
+        return listMembers(groupId, sportId, stats, groupStatsRepository.findByGroupIdAndSportId(groupId, sportId), pageable);
+    }
+
+    /**
+     * SESSION-55: the members' statistics list from stats rows, whichever table keeps them (a group's or a season's): only current active
+     * members of the group, sorted by games then wins, one page, one batch name lookup for the page. The group endpoint and the season
+     * endpoint answer the same shape through this one method.
+     */
+    public GroupStatisticsResponse listMembers(Long groupId, Long sportId, StatisticsSchema stats, List<? extends MemberStatsRow> rows,
+                                               Pageable pageable) {
         Set<UUID> members = new HashSet<>(groupService.getMemberUserIds(groupId));
-        List<UUID> candidates = rows.stream().map(GroupMemberStats::getUserId).filter(members::contains).toList();
+        List<UUID> candidates = rows.stream().map(MemberStatsRow::getUserId).filter(members::contains).toList();
         Set<UUID> active = candidates.isEmpty() ? Set.of() : userService.getActiveUserIds(candidates);
 
         record Entry(UUID userId, GroupStatsDoc doc, Instant updatedAt) {
@@ -252,7 +261,20 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         Long sportId = groupSportId(groupId, callerId);
         StatisticsSchema stats = groupView(groupId, schemaOf(sportId));
         Optional<GroupMemberStats> row = groupStatsRepository.findById(new GroupMemberStats.Key(groupId, memberId, sportId));
-        GroupStatsDoc doc = GroupStatsDoc.read(row.orElseGet(() -> new GroupMemberStats(groupId, memberId, sportId)));
+        return memberDetail(groupId, sportId, stats, memberId, page, size,
+                row.orElseGet(() -> new GroupMemberStats(groupId, memberId, sportId)), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
+    }
+
+    /**
+     * SESSION-55: one member's detail from a stats row, whichever table keeps it (a group's {@code group_member_stats} or a season's
+     * {@code season_member_stats}): the values through {@code stats}, the pairs or partners of one page, names in one batch. The group endpoints
+     * and the season endpoints answer the same shape through this one method.
+     *
+     * @param asOf when the row was last changed, or {@code null} when it does not exist (the row passed is then a blank one)
+     */
+    public GroupMemberStatisticsResponse memberDetail(Long groupId, Long sportId, StatisticsSchema stats, UUID memberId,
+                                                      int page, int size, MemberStatsRow row, Instant asOf) {
+        GroupStatsDoc doc = GroupStatsDoc.read(row);
 
         // A group's rows name the members by the group's member numbers (SESSION-81), not by user id.
         List<Map.Entry<String, StatsCounters>> allPairs = declaredGroups(stats.comboSize() > 0,
@@ -275,7 +297,7 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
 
         return new GroupMemberStatisticsResponse(sportId, stats.columns(), player(names, memberId),
                 stats.valuesOf(doc.counters()), memberEntries(stats.forCombos(), pairs, names, playersOf), allPairs.size(),
-                memberEntries(stats.forCombos(), partners, names, playersOf), allPartners.size(), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
+                memberEntries(stats.forCombos(), partners, names, playersOf), allPartners.size(), asOf);
     }
 
 

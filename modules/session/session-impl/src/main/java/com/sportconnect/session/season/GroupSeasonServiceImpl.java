@@ -8,6 +8,8 @@ import com.sportconnect.common.exception.ResourceNotFoundException;
 import com.sportconnect.group.api.dto.GroupResponse;
 import com.sportconnect.group.api.service.GroupService;
 import com.sportconnect.session.api.dto.CreateSeasonRequest;
+import com.sportconnect.session.api.dto.GroupMemberStatisticsResponse;
+import com.sportconnect.session.api.dto.GroupStatisticsResponse;
 import com.sportconnect.session.api.dto.SeasonCollectionMode;
 import com.sportconnect.session.api.dto.SeasonDefaultsResponse;
 import com.sportconnect.session.api.dto.SeasonLinkedSessionResponse;
@@ -20,6 +22,12 @@ import com.sportconnect.session.entity.GroupSessionSettings;
 import com.sportconnect.session.entity.Session;
 import com.sportconnect.session.repository.GroupSessionSettingsRepository;
 import com.sportconnect.session.repository.SessionRepository;
+import com.sportconnect.session.stats.SeasonMemberStats;
+import com.sportconnect.session.stats.SeasonMemberStatsRepository;
+import com.sportconnect.session.stats.SeasonStatsCounter;
+import com.sportconnect.session.stats.SessionStatisticsServiceImpl;
+import com.sportconnect.session.stats.SessionStatsJob;
+import com.sportconnect.session.stats.SessionStatsJobRepository;
 import com.sportconnect.session.stats.StatisticsSchema;
 import com.sportconnect.social.post.api.dto.CommentResponse;
 import com.sportconnect.social.post.api.dto.CreateCommentRequest;
@@ -48,6 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -84,6 +93,12 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
     private final SeasonGroupLock groupLock;
     private final SeasonGate seasonGate;
     private final SeasonAnnouncer announcer;
+    private final SeasonRowLock rowLock;
+    private final SeasonFinaliser finaliser;
+    private final SeasonStatsCounter statsCounter;
+    private final SessionStatsJobRepository jobRepository;
+    private final SeasonMemberStatsRepository memberStatsRepository;
+    private final SessionStatisticsServiceImpl statisticsService;
 
     /** Replaceable in tests, like the other services of this module. */
     private Clock clock = Clock.systemUTC();
@@ -243,6 +258,20 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         return toResponse(season, zoneOrNull(groupService.getGroup(groupId, callerId)), (int) linkRepository.countBySeasonId(season.getId()), null, null);
     }
 
+    @Override
+    @Transactional
+    public SeasonResponse finalise(Long groupId, Long seasonId, UUID callerId) {
+        requireManager(groupId, callerId);
+        GroupSeason season = lockedSeason(groupId, seasonId);
+        if (season.getStatus() != SeasonStatus.COMPLETED) {
+            throw new ConflictException("SESSION_SEASON_NOT_FINALISABLE", "Only a completed season can be finalised",
+                    Map.of("status", season.getStatus().name()));
+        }
+        // at once, without waiting for the guard: the sessions the engine has not counted yet are counted straight into the season
+        finaliser.finalise(season, clock.instant(), nameOf(callerId));
+        return toResponse(season, zoneOrNull(groupService.getGroup(groupId, callerId)), (int) linkRepository.countBySeasonId(seasonId), null, null);
+    }
+
     // ---- reads ------------------------------------------------------------------------------------------------------
 
     @Override
@@ -289,11 +318,13 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         }
         Set<Long> add = idsOf(request.getAdd());
         Set<Long> remove = idsOf(request.getRemove());
+        if (!remove.isEmpty()) {
+            // the sessions the season had counted are taken back out in one pass, subtracting exactly what the ledger holds, then unlinked
+            statsCounter.removeFrom(season, remove);
+            linkRepository.deleteBySeasonIdAndSessionIdIn(season.getId(), remove);
+        }
         if (!add.isEmpty()) {
             addLinks(season, add, callerId);
-        }
-        if (!remove.isEmpty()) {
-            linkRepository.deleteBySeasonIdAndSessionIdIn(season.getId(), remove);
         }
         return linksOf(season);
     }
@@ -316,8 +347,19 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         for (Long sessionId : sessionIds) {
             if (!already.contains(sessionId)) {
                 linkRepository.save(new GroupSeasonSession(season.getId(), sessionId, callerId, now));
+                // a session the engine has already finished is counted into the season now; any other is counted by the engine (or the finalise sweep) later
+                if (engineFinished(sessionId)) {
+                    statsCounter.countInto(season, found.get(sessionId));
+                }
             }
         }
+    }
+
+    /** Whether the statistics engine is done with the session ({@code DONE}, or {@code SKIPPED}: nothing to count), so nothing will count it into the season later by itself. */
+    private boolean engineFinished(Long sessionId) {
+        return jobRepository.findById(sessionId)
+                .map(job -> job.getStatus() == SessionStatsJob.Status.DONE || job.getStatus() == SessionStatsJob.Status.SKIPPED)
+                .orElse(false);
     }
 
     private static BadRequestException invalidSession(Long sessionId, String reason) {
@@ -354,6 +396,29 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
                         .status(session.getStatus())
                         .build())
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GroupStatisticsResponse getStatistics(Long groupId, Long seasonId, UUID callerId, Pageable pageable) {
+        GroupSeason season = visibleSeason(groupId, seasonId, callerId);
+        return statisticsService.listMembers(groupId, season.getSportId(), seasonView(season),
+                memberStatsRepository.findBySeasonId(seasonId), pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GroupMemberStatisticsResponse getMemberStatistics(Long groupId, Long seasonId, UUID callerId, UUID memberId, int page, int size) {
+        GroupSeason season = visibleSeason(groupId, seasonId, callerId);
+        Optional<SeasonMemberStats> row = memberStatsRepository.findById(new SeasonMemberStats.Key(seasonId, memberId));
+        return statisticsService.memberDetail(groupId, season.getSportId(), seasonView(season), memberId, page, size,
+                row.orElseGet(() -> new SeasonMemberStats(seasonId, memberId)), row.map(SeasonMemberStats::getUpdatedAt).orElse(null));
+    }
+
+    /** The season's own stat list over the sport's current schema (an empty one, so nothing is shown, while the sport's statistics switch is off). */
+    private StatisticsSchema seasonView(GroupSeason season) {
+        return sportService.isStatisticsEnabled(season.getSportId())
+                ? sportSchema(season.getSportId()).forGroup(season.getStatsConfig()) : StatisticsSchema.of(Map.of());
     }
 
     // ---- the season's thread ----------------------------------------------------------------------------------------
@@ -411,7 +476,7 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
 
     /** The season of this group with its row locked for the rest of the transaction (404 when it is not this group's). */
     private GroupSeason lockedSeason(Long groupId, Long seasonId) {
-        GroupSeason season = seasonRepository.findByIdForUpdate(seasonId).orElse(null);
+        GroupSeason season = rowLock.lock(seasonId).orElse(null);
         if (season == null || !season.getGroupId().equals(groupId)) {
             throw new NotFoundException("SESSION_SEASON_NOT_FOUND", "Season not found", null);
         }

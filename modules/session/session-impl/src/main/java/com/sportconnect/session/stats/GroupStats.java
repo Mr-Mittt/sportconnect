@@ -31,7 +31,7 @@ import java.util.Map;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class GroupStats {
+public class GroupStats implements H2hRow {
 
     @Id
     @Column(name = "group_id", nullable = false)
