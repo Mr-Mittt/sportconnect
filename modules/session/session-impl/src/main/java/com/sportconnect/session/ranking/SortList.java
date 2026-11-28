@@ -148,6 +148,33 @@ public final class SortList {
         return keys.isEmpty();
     }
 
+    /**
+     * SESSION-84: this list without what a board cannot value: a key naming a stat {@code usable} rejects is dropped, and so is a
+     * term of a weighted sum (a sum with no term left is dropped). The inherited rule of a group board that does not hold a stat is
+     * read this way, silently, when the board is rebuilt. Empty when nothing is left.
+     */
+    public SortList retaining(java.util.function.Predicate<String> usable) {
+        List<Key> kept = new java.util.ArrayList<>();
+        for (Key key : keys) {
+            if (!key.isSum()) {
+                if (usable.test(key.stat())) {
+                    kept.add(key);
+                }
+                continue;
+            }
+            Map<String, Double> terms = new java.util.LinkedHashMap<>();
+            key.sum().forEach((stat, weight) -> {
+                if (usable.test(stat)) {
+                    terms.put(stat, weight);
+                }
+            });
+            if (!terms.isEmpty()) {
+                kept.add(new Key(null, terms, key.descending()));
+            }
+        }
+        return new SortList(kept);
+    }
+
     /** Every catalog stat the keys read, plain or in a sum, in the order they first appear. */
     public Set<String> operands() {
         Set<String> stats = new LinkedHashSet<>();

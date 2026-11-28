@@ -169,13 +169,14 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         return postRepository.findAll().stream().filter(p -> p.getPostType() == PostType.GROUP_SYSTEM).toList();
     }
 
-    // ---- SESSION-83: the group's own stats config --------------------------------------------------------------------------
+    // ---- SESSION-83, SESSION-84: the group's own stat list ------------------------------------------------------------------
 
-    private void setSportSchema(Map<String, Object> sessionsConfig) {
+    /** The group's sport lists games, wins and sessions; {@code config} is the sport's {@code record.scoreboard.config} (or null). */
+    private void setSportSchema(Map<String, Object> config) {
         Map<String, Object> scoreboard = new java.util.LinkedHashMap<>();
         scoreboard.put("columns", List.of("games", "wins", "sessions"));
-        if (sessionsConfig != null) {
-            scoreboard.put("config", Map.of("sessions", sessionsConfig));
+        if (config != null) {
+            scoreboard.put("config", config);
         }
         com.sportconnect.sport.entity.Sport sport = sportRepository.findById(sportId).orElseThrow();
         sport.setResultSchema(Map.of("version", 1, "maxRecords", 100,
@@ -185,62 +186,72 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void anOwnerAndAnAdminSetAndClearTheGroupsStatsConfig_theAnswerShowsTheEffectiveOne_andEachChangeIsAnnounced() throws Exception {
-        setSportSchema(Map.of("when", List.of("atLeast1Game")));
+    void anOwnerAndAnAdminSetAndClearTheGroupsStatList_theAnswerShowsTheEffectiveOne_andEachChangeIsAnnounced() throws Exception {
+        setSportSchema(Map.of("sessions", Map.of("when", List.of("atLeast1Game"))));
 
         getAs(memberId, "/settings").andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.statsConfig").value(org.hamcrest.Matchers.nullValue()))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(true))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("atLeast1Game"))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.combine").value("OR"));
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.columns[0]").value("games"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.columns[2]").value("sessions"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.config.sessions.when[0]").value("atLeast1Game"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.config.sessions.combine").value("OR"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.off.losses").value("NOT_IN_LIST"));
 
-        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("when", List.of("joined")))))
+        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("columns", List.of("wins", "losses", "sessions"),
+                "config", Map.of("sessions", Map.of("when", List.of("joined"))))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.statsConfig.sessions.when[0]").value("joined"))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("joined"));
-        assertThat(settingsRepository.findById(groupId).orElseThrow().getStatsConfig()).isEqualTo(Map.of("sessions", Map.of("when", List.of("joined"))));
+                .andExpect(jsonPath("$.data.statsConfig.columns[1]").value("losses"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.columns.length()").value(3))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.config.sessions.when[0]").value("joined"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.off.games").value("NOT_IN_LIST"));
+        assertThat(settingsRepository.findById(groupId).orElseThrow().getStatsConfig())
+                .isEqualTo(Map.of("columns", List.of("wins", "losses", "sessions"), "config", Map.of("sessions", Map.of("when", List.of("joined")))));
         assertThat(systemPosts()).hasSize(1);
         assertThat(systemPosts().get(0).getSystemCode()).isEqualTo(com.sportconnect.social.post.api.dto.SystemCode.GROUP_STATS_CONFIG_CHANGED);
 
-        sendAs(adminId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false))))
+        sendAs(adminId, "PUT", "/settings", Map.of("statsConfig", Map.of("columns", List.of("games"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.reason").value("GROUP_DISABLED"))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when").doesNotExist());
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.columns.length()").value(1))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.config").isEmpty())
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.off.sessions").value("NOT_IN_LIST"));
         assertThat(systemPosts()).hasSize(2);
 
-        sendAs(adminId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false))))
-                .andExpect(status().isOk());
+        sendAs(adminId, "PUT", "/settings", Map.of("statsConfig", Map.of("columns", List.of("games")))).andExpect(status().isOk());
         assertThat(systemPosts()).as("the same value again changes nothing").hasSize(2);
         sendAs(ownerId, "PUT", "/settings", Map.of("mode", "MONTHLY")).andExpect(status().isOk());
         assertThat(settingsRepository.findById(groupId).orElseThrow().getStatsConfig()).as("omitted keeps it").isNotNull();
 
         sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of())).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.statsConfig").value(org.hamcrest.Matchers.nullValue()))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("atLeast1Game"));
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.config.sessions.when[0]").value("atLeast1Game"));
         assertThat(settingsRepository.findById(groupId).orElseThrow().getStatsConfig()).as("{} clears it").isNull();
     }
 
     @Test
-    void aGroupThatOnlySaysEnabledKeepsTheSportsRuleAndASportThatDoesNotListTheStatCannotBeEnabledByAGroup() throws Exception {
-        setSportSchema(Map.of("when", List.of("atLeast1Game")));
-        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", true)))).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.when[0]").value("atLeast1Game"));
+    void aGroupCanNameAStatTheSportDoesNotList_butNotOneTheSportDisabled_andTheAnswerSaysWhyAStatIsOff() throws Exception {
+        setSportSchema(Map.of("scoreFor", Map.of("enabled", false)));
 
-        com.sportconnect.sport.entity.Sport sport = sportRepository.findById(sportId).orElseThrow();
-        sport.setResultSchema(Map.of("version", 1, "maxRecords", 100, "record", Map.of("data", Map.of("type", "COMPETITIVE"),
-                "scoreboard", Map.of("columns", List.of("games")))));
-        sportRepository.save(sport);
-        evictSportCache();
-        getAs(memberId, "/settings").andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.reason").value("NOT_LISTED_BY_SPORT"));
-
-        // the sport's own enabled false is a hard off: a group cannot turn it on, and the answer says so
-        setSportSchema(Map.of("enabled", false));
-        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("sessions", Map.of("enabled", true, "when", List.of("joined")))))
+        sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("columns", List.of("games", "losses", "scoreAgainst"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.enabled").value(false))
-                .andExpect(jsonPath("$.data.effectiveStatsConfig.sessions.reason").value("SPORT_DISABLED"));
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.columns[2]").value("scoreAgainst"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.off.scoreFor").value("SPORT_DISABLED"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.off.scoreDiff").value("OPERAND_DISABLED"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.off.wins").value("NOT_IN_LIST"));
+
+        for (String stat : List.of("scoreFor", "scoreDiff")) {
+            sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", Map.of("columns", List.of("games", stat))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_STATS_CONFIG_INVALID"))
+                    .andExpect(jsonPath("$.errorParams.reason").value("STAT_DISABLED_BY_SPORT"))
+                    .andExpect(jsonPath("$.errorParams.detail").value(stat));
+        }
+
+        // the sport disables a stat after the group listed it: the group's own list is untouched, and the answer says it is off
+        setSportSchema(Map.of("wins", Map.of("enabled", false)));
+        getAs(memberId, "/settings").andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.statsConfig.columns[1]").value("losses"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.off.wins").value("SPORT_DISABLED"))
+                .andExpect(jsonPath("$.data.effectiveStatsConfig.columns.length()").value(3));
     }
 
     @Test
@@ -248,15 +259,15 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
         setSportSchema(null);
         Object[][] cases = {
                 {"x", "NOT_AN_OBJECT"},
-                {Map.of("nope", Map.of()), "KEY_UNKNOWN"},
-                {Map.of("games", Map.of("enabled", false)), "STAT_NOT_CONFIGURABLE"},
-                {Map.of("sessions", "x"), "NOT_AN_OBJECT"},
-                {Map.of("sessions", Map.of("enabled", "no")), "ENABLED_INVALID"},
-                {Map.of("sessions", Map.of("when", List.of())), "WHEN_INVALID"},
-                {Map.of("sessions", Map.of("when", List.of("joined", "joined"))), "WHEN_INVALID"},
-                {Map.of("sessions", Map.of("when", List.of("played"))), "WHEN_INVALID"},
-                {Map.of("sessions", Map.of("combine", "XOR")), "COMBINE_INVALID"},
-                {Map.of("sessions", Map.of("color", 1)), "KEY_UNKNOWN"}};
+                {Map.of("nope", 1), "KEY_UNKNOWN"},
+                {Map.of("columns", List.of()), "COLUMNS_INVALID"},
+                {Map.of("columns", List.of("games", "games")), "COLUMNS_INVALID"},
+                {Map.of("columns", List.of("speed")), "STAT_UNKNOWN"},
+                {Map.of("config", Map.of("games", Map.of())), "STAT_NOT_CONFIGURABLE"},
+                {Map.of("config", Map.of("sessions", Map.of("enabled", false))), "KEY_UNKNOWN"},
+                {Map.of("config", Map.of("sessions", Map.of("when", List.of()))), "WHEN_INVALID"},
+                {Map.of("config", Map.of("sessions", Map.of("when", List.of("played")))), "WHEN_INVALID"},
+                {Map.of("config", Map.of("sessions", Map.of("combine", "XOR"))), "COMBINE_INVALID"}};
         for (Object[] oneCase : cases) {
             sendAs(ownerId, "PUT", "/settings", Map.of("statsConfig", oneCase[0])).andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_STATS_CONFIG_INVALID"))
@@ -269,7 +280,7 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
     @Test
     void aMemberAndAnOutsiderCannotSetTheStatsConfig_andItIs409WhileTheSportHasStatisticsOff() throws Exception {
         setSportSchema(null);
-        Map<String, Object> body = Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false)));
+        Map<String, Object> body = Map.of("statsConfig", Map.of("columns", List.of("games")));
 
         sendAs(memberId, "PUT", "/settings", body).andExpect(status().isForbidden());
         sendAs(outsiderId, "PUT", "/settings", body).andExpect(status().isForbidden());
@@ -283,27 +294,27 @@ class GroupSessionConfigIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void aStatCannotBeSwitchedOffWhileTheGroupsOwnRuleNamesIt_andANewRuleCannotNameASwitchedOffStat() throws Exception {
+    void aStatCannotBeDroppedWhileTheGroupsOwnRuleNamesIt_andANewRuleCannotNameAStatTheGroupsListLacks() throws Exception {
         setSportSchema(null);
         ruleService.saveGroupRule(ownerId, groupId, com.sportconnect.session.api.dto.RankingRuleRequest.builder().kind("SINGLE")
                 .sort(List.of(Map.of("key", "sessions", "dir", "DESC"))).require(List.of()).build());
-        Map<String, Object> off = Map.of("statsConfig", Map.of("sessions", Map.of("enabled", false)));
+        Map<String, Object> drop = Map.of("statsConfig", Map.of("columns", List.of("games", "wins")));
 
-        sendAs(ownerId, "PUT", "/settings", off).andExpect(status().isConflict())
+        sendAs(ownerId, "PUT", "/settings", drop).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_GROUP_STAT_IN_USE"))
                 .andExpect(jsonPath("$.errorParams.detail").value("sessions"))
                 .andExpect(jsonPath("$.errorParams.kind").value("SINGLE"));
         assertThat(settingsRepository.findById(groupId).map(row -> row.getStatsConfig()).orElse(null)).isNull();
 
         ruleService.deleteGroupRule(ownerId, groupId, "SINGLE");
-        sendAs(ownerId, "PUT", "/settings", off).andExpect(status().isOk());
+        sendAs(ownerId, "PUT", "/settings", drop).andExpect(status().isOk());
         assertThatThrownBy(() -> ruleService.saveGroupRule(ownerId, groupId, com.sportconnect.session.api.dto.RankingRuleRequest.builder()
                 .kind("SINGLE").sort(List.of(Map.of("key", "sessions", "dir", "DESC"))).require(List.of()).build()))
                 .isInstanceOf(com.sportconnect.common.exception.BadRequestException.class)
                 .hasFieldOrPropertyWithValue("errorCode", "SESSION_RANKING_SORT_INVALID")
                 .extracting(e -> ((com.sportconnect.common.exception.BadRequestException) e).getErrorParams().get("reason"))
                 .isEqualTo("STAT_NOT_COLLECTED");
-        sendAs(ownerId, "PUT", "/settings", off).andExpect(status().isOk());      // already off: not checked again
+        sendAs(ownerId, "PUT", "/settings", drop).andExpect(status().isOk());      // already out of the list: not checked again
     }
 
     // ---- settings ---------------------------------------------------------------------------------------------------

@@ -125,6 +125,49 @@ class SportResultSchemaIntegrationTest extends BaseIT {
         assertThat(sportRepository.findById(sportId).orElseThrow().getResultSchema()).isNull();
     }
 
+    // ---- SESSION-84: the statistics side of the schema is checked at the save --------------------------------------------------
+
+    private String competitive(String scoreboard) {
+        return "{\"version\":1,\"maxRecords\":100,\"record\":{\"data\":{\"type\":\"COMPETITIVE\"},\"scoreboard\":" + scoreboard + "}}";
+    }
+
+    @Test
+    void adminPut_refusesAFormulaListedWithADisabledOperand_andAnUnknownOrMalformedStatConfig() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+        String[][] cases = {
+                // a listed formula needs its operands
+                {"{\"columns\":[\"games\",\"wins\",\"winRate\"],\"config\":{\"games\":{\"enabled\":false}}}", "winRate but its operand games is disabled"},
+                {"{\"columns\":[\"winDiff\"],\"config\":{\"losses\":{\"enabled\":false}}}", "winDiff but its operand losses is disabled"},
+                // the shape of the config
+                {"{\"columns\":[\"games\"],\"config\":[]}", "config must be an object"},
+                {"{\"columns\":[\"games\"],\"config\":{\"speed\":{\"enabled\":false}}}", "speed is not a stat"},
+                {"{\"columns\":[\"games\"],\"config\":{\"games\":true}}", "games must be an object"},
+                {"{\"columns\":[\"games\"],\"config\":{\"games\":{\"enabled\":\"no\"}}}", "enabled must be true or false"},
+                {"{\"columns\":[\"games\"],\"config\":{\"games\":{\"when\":[\"joined\"]}}}", "when is not a setting of games"},
+                {"{\"columns\":[\"sessions\"],\"config\":{\"sessions\":{\"when\":[\"played\"]}}}", "WHEN_INVALID"},
+                {"{\"columns\":[\"sessions\"],\"config\":{\"sessions\":{\"combine\":\"XOR\"}}}", "COMBINE_INVALID"}};
+        for (String[] oneCase : cases) {
+            mockMvc.perform(put("/api/sports/{id}/result-schema", sportId).contentType(MediaType.APPLICATION_JSON)
+                            .content(competitive(oneCase[0])))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.errorCode").value("SPORT_RESULT_SCHEMA_INVALID"))
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(oneCase[1])));
+        }
+        assertThat(sportRepository.findById(sportId).orElseThrow().getResultSchema()).as("nothing was stored").isNull();
+    }
+
+    @Test
+    void adminPut_acceptsADisabledStatThatNoListedFormulaNeeds_andAConfigOfAnotherRecordTypeIsNotChecked() throws Exception {
+        authenticateAs(UUID.randomUUID(), "ADMIN");
+        mockMvc.perform(put("/api/sports/{id}/result-schema", sportId).contentType(MediaType.APPLICATION_JSON)
+                        .content(competitive("{\"columns\":[\"games\",\"wins\",\"sessions\"],\"config\":{\"losses\":{\"enabled\":false},"
+                                + "\"sessions\":{\"enabled\":true,\"when\":[\"joined\",\"atLeast1Game\"],\"combine\":\"AND\"}}}")))
+                .andExpect(status().isOk());
+        mockMvc.perform(put("/api/sports/{id}/result-schema", sportId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":1,\"record\":{\"data\":{\"type\":\"RACE\"},\"scoreboard\":{\"config\":{\"speed\":1}}}}"))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void adminPut_ofAnUnknownSport_is404() throws Exception {
         authenticateAs(UUID.randomUUID(), "ADMIN");

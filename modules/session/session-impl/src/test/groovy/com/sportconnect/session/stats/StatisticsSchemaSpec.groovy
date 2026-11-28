@@ -291,4 +291,89 @@ class StatisticsSchemaSpec extends Specification {
         !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: true]]])).sessionsDisabledBySport()
         !StatisticsSchema.of(schema([columns: ['games', 'sessions'], config: [sessions: [enabled: 'no']]])).sessionsDisabledBySport()
     }
+
+    def "forCombos is the schema without the single-player stats in its columns, and valuesOf on it answers those columns only"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: ['games', 'wins', 'sessions', 'winRate']]))
+        def combos = s.forCombos()
+        def counters = new StatsCounters()
+        counters.add(Outcome.WIN, [:], s.collected())
+        counters.addSession(s.collected())
+
+        expect:
+        s.columns() == ['games', 'wins', 'sessions', 'winRate']
+        combos.columns() == ['games', 'wins', 'winRate']
+        s.valuesOf(counters).keySet() == ['games', 'wins', 'sessions', 'winRate'] as Set
+        combos.valuesOf(counters).keySet() == ['games', 'wins', 'winRate'] as Set
+        combos.valuesOf(counters).winRate == 1d
+        combos.collected() == s.collectedForCombos()
+    }
+
+    def "config.{stat}.enabled false disables any catalog stat for the sport, and a formula that needs it goes with it"() {
+        given:
+        def s = StatisticsSchema.of(schema([columns: columns, config: config]))
+
+        expect:
+        s.columns() == expectedColumns
+        s.disabledStats() == disabled as Set
+        keys(s).containsAll(expectedStored)
+        !keys(s).any { it in notStored }
+
+        where:
+        columns                                   | config                                              | expectedColumns          | disabled   | expectedStored  | notStored
+        ['games', 'wins', 'winRate']              | [games: [enabled: false]]                           | ['wins']                 | ['games']  | ['wins']        | ['games']
+        ['games', 'wins', 'winRate', 'winDiff']   | [wins: [enabled: false]]                            | ['games']                | ['wins']   | ['games']       | ['wins']
+        ['scoreFor', 'scoreAgainst', 'scoreDiff'] | [scoreAgainst: [enabled: false], sessions: [:]]     | ['scoreFor']             | ['scoreAgainst'] | ['scoreFor'] | ['scoreAgainst']
+        ['games', 'wins']                         | [games: [enabled: true], wins: [when: ['x']]]       | ['games', 'wins']        | []         | ['games', 'wins'] | []
+    }
+
+    def "isOff and offBecause follow a formula down to the stored stats it needs"() {
+        given:
+        def catalog = StatsCatalog.forType('COMPETITIVE')
+
+        expect:
+        StatisticsSchema.isOff(catalog, 'winRate', ['games'] as Set)
+        StatisticsSchema.offBecause(catalog, 'winRate', ['wins'] as Set, 0) == 'wins'
+        StatisticsSchema.offBecause(catalog, 'games', ['games'] as Set, 0) == 'games'
+        !StatisticsSchema.isOff(catalog, 'winRate', ['losses'] as Set)
+        !StatisticsSchema.isOff(catalog, 'scoreDiff', [] as Set)
+    }
+
+    def "the group view: its columns replace the sport's list, an unlisted stat is opted in, a sport-disabled one is never in it"() {
+        given:
+        def sport = StatisticsSchema.of(schema([columns: ['games', 'wins', 'winRate'], config: [losses: [enabled: false]]]))
+
+        when:
+        def group = sport.forGroup(groupConfig)
+
+        then:
+        group.columns() == expected
+        group.collected()*.key() as Set == stored as Set
+
+        where:
+        groupConfig                                          | expected                           | stored
+        null                                                 | ['games', 'wins', 'winRate']       | ['games', 'wins']
+        [:]                                                  | ['games', 'wins', 'winRate']       | ['games', 'wins']
+        [columns: ['wins', 'sessions']]                      | ['wins', 'sessions']               | ['wins', 'sessions']
+        [columns: ['winRate']]                               | ['winRate']                        | ['games', 'wins']
+        [columns: ['games', 'losses', 'winDiff', 'scoreFor']] | ['games', 'scoreFor']             | ['games', 'scoreFor']
+        [columns: ['nope', 'games', 'games']]                | ['games']                          | ['games']
+    }
+
+    def "the group view takes its sessions rule from config.sessions and inherits the rest from the sport"() {
+        given:
+        def sport = StatisticsSchema.of(schema([columns: ['games', 'sessions'], groupBy: [[by: 'PARTNER']], config: [sessions: [when: ['atLeast1Game']]]],
+                null, [allowDraws: true]))
+
+        expect:
+        sport.sessionsRule().counts(true, false) == false
+        sport.forGroup(null).sessionsRule() == sport.sessionsRule()
+        sport.forGroup([config: [sessions: [when: ['joined']]]]).sessionsRule().counts(true, false)
+        sport.forGroup([columns: ['sessions'], config: [sessions: [when: ['joined', 'atLeast1Game'], combine: 'AND']]]).sessionsRule() ==
+                new StatisticsSchema.SessionsRule(true, true, true)
+        sport.forGroup([columns: ['games']]).groupsByPartner()
+        sport.forGroup([columns: ['games']]).allowDraws()
+        !sport.forGroup([columns: ['games']]).collectsSessions()
+        sport.forGroup([columns: ['sessions']]).collectsSessions()
+    }
 }

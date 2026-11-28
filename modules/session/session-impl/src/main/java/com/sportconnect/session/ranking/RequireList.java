@@ -116,6 +116,11 @@ public final class RequireList {
         return conditions.isEmpty();
     }
 
+    /** SESSION-84: these conditions without the ones on a stat {@code usable} rejects (a group board ignores a precondition on a stat it does not hold). */
+    public RequireList retaining(java.util.function.Predicate<String> usable) {
+        return new RequireList(conditions.stream().filter(condition -> usable.test(condition.key())).toList());
+    }
+
     /** Every catalog stat the conditions read, in the order they first appear. */
     public Set<String> operands() {
         Set<String> stats = new LinkedHashSet<>();

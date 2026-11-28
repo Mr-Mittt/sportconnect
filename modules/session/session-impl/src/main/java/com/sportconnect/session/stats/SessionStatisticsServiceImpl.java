@@ -79,6 +79,8 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
     private final SessionRecordRepository recordRepository;
     private final SessionRepository sessionRepository;
     private final RecordReaders recordReaders;
+    // SESSION-84: a group's own stat list decides the columns and values its endpoints answer.
+    private final com.sportconnect.session.repository.GroupSessionSettingsRepository groupSettingsRepository;
 
     /**
      * {@inheritDoc}
@@ -111,7 +113,7 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
                 .map(s -> new StatsScopeDto(s.scope(), s.countryId(), s.regionId(), stats.valuesOf(s.counters())))
                 .toList();
         return new PlayerStatisticsResponse(sportId, stats.columns(), split(stats, doc.personal()),
-                groups(stats, pairs, names), allPairs.size(), groups(stats, partners, names), allPartners.size(), scopes,
+                groups(stats.forCombos(), pairs, names), allPairs.size(), groups(stats.forCombos(), partners, names), allPartners.size(), scopes,
                 row.map(UserSportStats::getUpdatedAt).orElse(null));
     }
 
@@ -203,7 +205,7 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
     public GroupStatisticsResponse getGroupStatistics(Long groupId, UUID callerId, Pageable pageable) {
         requireGroupMember(groupId, callerId);
         Long sportId = groupSportId(groupId, callerId);
-        StatisticsSchema stats = schemaOf(sportId);
+        StatisticsSchema stats = groupView(groupId, schemaOf(sportId));
 
         List<GroupMemberStats> rows = groupStatsRepository.findByGroupIdAndSportId(groupId, sportId);
         Set<UUID> members = new HashSet<>(groupService.getMemberUserIds(groupId));
@@ -248,7 +250,7 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         requireGroupMember(groupId, callerId);
         requirePage(page, size);
         Long sportId = groupSportId(groupId, callerId);
-        StatisticsSchema stats = schemaOf(sportId);
+        StatisticsSchema stats = groupView(groupId, schemaOf(sportId));
         Optional<GroupMemberStats> row = groupStatsRepository.findById(new GroupMemberStats.Key(groupId, memberId, sportId));
         GroupStatsDoc doc = GroupStatsDoc.read(row.orElseGet(() -> new GroupMemberStats(groupId, memberId, sportId)));
 
@@ -272,10 +274,16 @@ public class SessionStatisticsServiceImpl implements SessionStatisticsService {
         Map<UUID, StatsPlayerDto> names = players(ids);
 
         return new GroupMemberStatisticsResponse(sportId, stats.columns(), player(names, memberId),
-                stats.valuesOf(doc.counters()), memberEntries(stats, pairs, names, playersOf), allPairs.size(),
-                memberEntries(stats, partners, names, playersOf), allPartners.size(), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
+                stats.valuesOf(doc.counters()), memberEntries(stats.forCombos(), pairs, names, playersOf), allPairs.size(),
+                memberEntries(stats.forCombos(), partners, names, playersOf), allPartners.size(), row.map(GroupMemberStats::getUpdatedAt).orElse(null));
     }
 
+
+    /** SESSION-84: the stat list a group's endpoints answer: the group's own list (its {@code stats_config}) over the sport's current schema. */
+    private StatisticsSchema groupView(Long groupId, StatisticsSchema sport) {
+        return sport.forGroup(groupSettingsRepository.findById(groupId)
+                .map(com.sportconnect.session.entity.GroupSessionSettings::getStatsConfig).orElse(null));
+    }
     /** The group's own sport (a group has at most one); a group with none has no statistics (400 SESSION_SPORT_REQUIRED, as for its sessions). */
     private Long groupSportId(Long groupId, UUID callerId) {
         Long sportId = groupService.getGroup(groupId, callerId).getSportId();

@@ -50,14 +50,13 @@ class GroupSessionConfigServiceImplSpec extends Specification {
     SessionRepository sessionRepository = Mock()
     SportService sportService = Mock()
     com.sportconnect.session.stats.SportRankingRuleRepository rankingRuleRepository = Mock()
-    com.sportconnect.session.stats.StatBoardRunRepository boardRunRepository = Mock()
     UUID other = UUID.randomUUID()
 
     @Subject
     GroupSessionConfigServiceImpl service = new GroupSessionConfigServiceImpl(
             settingsRepository, recurrenceRepository, groupService, locationService, postService,
             userService, attributeResolver, eventPublisher,
-            regularSessionCanceller, sessionRepository, sportService, rankingRuleRepository, boardRunRepository)
+            regularSessionCanceller, sessionRepository, sportService, rankingRuleRepository)
 
     UUID admin = UUID.randomUUID()
     UUID admin6 = UUID.randomUUID()

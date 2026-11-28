@@ -1,9 +1,12 @@
 package com.sportconnect.session.stats;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * What a sport's result schema says about its statistics and its ranking (SESSION-53, reworked 2026-11-25 by the owner),
@@ -98,7 +101,7 @@ public final class StatisticsSchema {
     private final List<StatsCatalog.Stat> collected;
     private final List<StatsCatalog.Stat> collectedForCombos;
     private final SessionsRule sessionsRule;
-    private final boolean sessionsDisabledBySport;
+    private final Set<String> disabledStats;
     private final List<Grouping> groupBy;
     private final List<SortKey> sort;
     private final int minGamesSingle;
@@ -106,14 +109,14 @@ public final class StatisticsSchema {
     private final boolean allowDraws;
 
     private StatisticsSchema(Map<String, StatsCatalog.Stat> catalog, List<String> columns,
-                             List<StatsCatalog.Stat> collected, SessionsRule sessionsRule, boolean sessionsDisabledBySport, List<Grouping> groupBy, List<SortKey> sort,
+                             List<StatsCatalog.Stat> collected, SessionsRule sessionsRule, Set<String> disabledStats, List<Grouping> groupBy, List<SortKey> sort,
                              int minGamesSingle, int minGamesCombo, boolean allowDraws) {
         this.catalog = catalog;
         this.columns = columns;
         this.collected = collected;
         this.collectedForCombos = collected.stream().filter(stat -> !stat.singleOnly()).toList();
         this.sessionsRule = sessionsRule;
-        this.sessionsDisabledBySport = sessionsDisabledBySport;
+        this.disabledStats = disabledStats;
         this.groupBy = groupBy;
         this.sort = sort;
         this.minGamesSingle = minGamesSingle;
@@ -129,23 +132,57 @@ public final class StatisticsSchema {
         Map<String, Object> scoreboard = map(record, "scoreboard");
         Map<String, Object> ranking = map(record, "ranking");
 
-        // SESSION-82: config.sessions.enabled = false lists the column but does not collect it (the column is dropped, nothing is counted)
-        boolean sessionsOff = Boolean.FALSE.equals(map(map(scoreboard, "config"), "sessions").get("enabled"));
+        Map<String, Object> config = map(scoreboard, "config");
+        // SESSION-84: config.{stat}.enabled = false disables any catalog stat for the sport (a hard off): it leaves the columns, the
+        // collected list and the sort needs, and so does a formula that needs it. A stored schema is read leniently (a save is checked
+        // by StatisticsSchemaValidator), so a formula whose operand is off is simply dropped.
+        Set<String> disabled = new LinkedHashSet<>();
+        for (String key : catalog.keySet()) {
+            if (Boolean.FALSE.equals(map(config, key).get("enabled"))) {
+                disabled.add(key);
+            }
+        }
         List<String> columns = readColumns(scoreboard.get("columns"), catalog).stream()
-                .filter(key -> !(sessionsOff && "sessions".equals(key))).toList();
+                .filter(key -> !isOff(catalog, key, disabled)).toList();
         List<SortKey> sort = ranking.get("sort") instanceof List<?> list ? readSort(list, catalog) : List.of();
 
         List<String> needed = new ArrayList<>(columns);
         if (!columns.isEmpty()) {
-            sort.stream().map(SortKey::by).filter(key -> !(sessionsOff && "sessions".equals(key))).forEach(needed::add);
+            sort.stream().map(SortKey::by).filter(key -> !isOff(catalog, key, disabled)).forEach(needed::add);
         }
         List<StatsCatalog.Stat> collected = StatsCatalog.storedFor(catalog, needed);
 
-        return new StatisticsSchema(catalog, columns, collected, readSessionsRule(map(scoreboard, "config")), sessionsOff, readGroupBy(scoreboard.get("groupBy")), sort,
+        return new StatisticsSchema(catalog, columns, collected, readSessionsRule(config), Collections.unmodifiableSet(disabled),
+                readGroupBy(scoreboard.get("groupBy")), sort,
                 intOf(map(ranking, "minGames").get("single"), 0), intOf(map(ranking, "minGames").get("combo"), 5),
                 Boolean.TRUE.equals(data.get("allowDraws")));
     }
 
+    /**
+     * SESSION-84: whether a stat is off for these disabled stats: it is disabled itself, or it is a formula with an operand that is
+     * (a formula cannot be computed without its operands; the chain is followed to the stored stats).
+     */
+    public static boolean isOff(Map<String, StatsCatalog.Stat> catalog, String key, Set<String> disabled) {
+        return offBecause(catalog, key, disabled, 0) != null;
+    }
+
+    /** SESSION-84: the disabled stat that makes {@code key} off (itself, or the operand of a formula), or {@code null} when it is not off. */
+    public static String offBecause(Map<String, StatsCatalog.Stat> catalog, String key, Set<String> disabled, int depth) {
+        if (disabled.contains(key)) {
+            return key;
+        }
+        StatsCatalog.Stat stat = catalog.get(key);
+        if (stat == null || stat.stored() || depth > 3) {
+            return null;
+        }
+        for (String operand : StatsFormulas.operands(stat.formula())) {
+            String cause = offBecause(catalog, operand, disabled, depth + 1);
+            if (cause != null) {
+                return cause;
+            }
+        }
+        return null;
+    }
     /** SESSION-54: the stats the sport's record type supports (the catalog the ranking rules are checked against); empty for a type with none. */
     public Map<String, StatsCatalog.Stat> catalog() {
         return catalog;
@@ -171,6 +208,20 @@ public final class StatisticsSchema {
         return collectedForCombos;
     }
 
+    /**
+     * SESSION-84: this schema as a pair, a partner or a team entry sees it: the same, without the single-player stats in its
+     * columns (a pair never holds {@code sessions}, so its rows must not answer that column either). {@link #valuesOf} on it answers
+     * the remaining columns only.
+     */
+    public StatisticsSchema forCombos() {
+        List<String> comboColumns = columns.stream().filter(key -> {
+            StatsCatalog.Stat stat = catalog.get(key);
+            return stat != null && !stat.singleOnly();
+        }).toList();
+        return new StatisticsSchema(catalog, comboColumns, collectedForCombos, sessionsRule, disabledStats, groupBy, sort,
+                minGamesSingle, minGamesCombo, allowDraws);
+    }
+
     /** SESSION-82: whether the sport collects the {@code sessions} stat. */
     public boolean collectsSessions() {
         return collected.stream().anyMatch(stat -> stat.kind() == StatsCatalog.Kind.SESSIONS);
@@ -181,7 +232,52 @@ public final class StatisticsSchema {
      * sport has a reason). A sport that simply does not list {@code sessions} has no opinion, which is a different answer.
      */
     public boolean sessionsDisabledBySport() {
-        return sessionsDisabledBySport;
+        return disabledStats.contains("sessions");
+    }
+
+    /** SESSION-84: the catalog stats the sport disabled ({@code config.{stat}.enabled = false}): a hard off for every board of the sport. */
+    public Set<String> disabledStats() {
+        return disabledStats;
+    }
+
+    /**
+     * SESSION-84: whether this schema can give a value for the stat: a stored stat it collects, or a formula whose operands it can
+     * all give. A ranking key that names a stat it cannot value is what a group board ignores.
+     */
+    public boolean computes(String key) {
+        return computes(key, 0);
+    }
+
+    private boolean computes(String key, int depth) {
+        StatsCatalog.Stat stat = catalog.get(key);
+        if (stat == null || depth > 3) {
+            return false;
+        }
+        if (stat.stored()) {
+            return collected.stream().anyMatch(c -> c.key().equals(key));
+        }
+        for (String operand : StatsFormulas.operands(stat.formula())) {
+            if (!computes(operand, depth + 1)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * SESSION-84: this schema as a group's own member row and board see it. {@code groupConfig} is the group's {@code stats_config},
+     * {@code {"columns": [...], "config": {"sessions": {...}}}}, or {@code null}: its {@code columns}, when it names some, replace the
+     * sport's default list (a stat left out is excluded, a stat the sport does not list is opted in); a stat the sport disabled is never
+     * in it, nor a formula that needs one. Its {@code config.sessions} replaces the sport's rule. The collected stats are those the
+     * columns need (a listed formula keeps its operands stored). The sport's {@code groupBy}, draws and ranking numbers are inherited.
+     */
+    public StatisticsSchema forGroup(Map<String, Object> groupConfig) {
+        List<String> base = groupConfig != null && groupConfig.get("columns") instanceof List<?> listed
+                ? readColumns(listed, catalog) : columns;
+        List<String> groupColumns = base.stream().filter(key -> !isOff(catalog, key, disabledStats)).toList();
+        SessionsRule rule = StatsConfigs.sessionsRule(groupConfig == null ? null : map(groupConfig, "config"), sessionsRule);
+        return new StatisticsSchema(catalog, groupColumns, StatsCatalog.storedFor(catalog, groupColumns), rule, disabledStats, groupBy,
+                sort, minGamesSingle, minGamesCombo, allowDraws);
     }
 
     /** SESSION-82: what makes a session count for a player in the {@code sessions} stat (the default is {@code joined}). */
