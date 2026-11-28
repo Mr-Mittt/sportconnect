@@ -258,7 +258,7 @@ A `gameMood` that is missing on create or outside 1-10 is the generic `VALIDATIO
 | `SESSION_SEASON_START_IN_PAST` | 400 | `today` | A start date before today in the group's timezone. |
 | `SESSION_SEASON_TOO_LONG` | 400 | `maxDays` | A season longer than 31 days (both ends counted). |
 | `SESSION_SEASON_NAME_REQUIRED` | 400 | none | An edit that blanks the name (a blank name on create is `VALIDATION_FAILED`). |
-| `SESSION_SEASON_TIMEZONE_MISSING` | 409 | `timezone` (when invalid) | The group's region and country have no (valid) timezone, so a season's local dates cannot be read; none is guessed. |
+| `SESSION_SEASON_TIMEZONE_MISSING` | 409 | `timezone` (when invalid) | The group's region and country have no (valid) timezone, so the dates a season is created or edited with cannot be turned into instants; none is guessed. |
 | `SESSION_SEASON_LIMIT` | 409 | `max` | Create when the group already has 2 seasons `SCHEDULED` or `ONGOING`. |
 | `SESSION_SEASON_OVERLAP` | 409 | `seasonId`, `startDate`, `endDate` | Create or edit sharing a day with another season of the group that is not cancelled (the end day is occupied). |
 | `SESSION_SEASON_NOT_EDITABLE` | 409 | `status` | Edit of a season that is not `SCHEDULED`. |

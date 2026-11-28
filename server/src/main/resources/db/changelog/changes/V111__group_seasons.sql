@@ -1,7 +1,8 @@
 -- SESSION-55 slice 1 (owner, 2026-11-27/28): group seasons, a group's period of up to 31 days with its own statistics and board.
 --
--- group_seasons          one row per season. Dates are LOCAL dates in `timezone`, a snapshot of the group's timezone at creation (B25),
---                        so a later region change of the group never moves an existing season. `stats_config` is the full stat list
+-- group_seasons          one row per season. A season is the half-open range [start_at, end_at) of UTC instants: the owner picks dates, the server
+--                        turns them into the start of the first day and the start of the day after the last, in the group's timezone (B25) at that
+--                        moment, so a later region change never moves which sessions count (no timezone is stored). `stats_config` is the full stat list
 --                        ({columns, config}) and `ranking_rule` the sort and require lists per kind ({SINGLE: {sort, require}, ...}),
 --                        both copied from the group's effective ones at creation and editable until the season starts (a pre-fill,
 --                        never a live link). `post_id` is the season's SEASON_POST anchor (the comment thread and the likes), no FK
@@ -9,16 +10,15 @@
 --                        The counting ledger and the initial ranks come with slices 2 and 3.
 -- group_season_sessions  the sessions an owner or admin linked to a MANUAL season. A table, not a column: the statistics engine looks
 --                        seasons up by session id, and the owner adds and removes single rows. AUTO membership is derived by query
---                        (the session's local date in the season's timezone), never stored. season_id is in-domain and keeps its FK;
+--                        (the session start lies within [start_at, end_at)), never stored. season_id is in-domain and keeps its FK;
 --                        session_id and linked_by are cross-domain or plain ids and carry none.
 CREATE TABLE group_seasons (
     id BIGSERIAL PRIMARY KEY,
     group_id BIGINT NOT NULL,
     sport_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    timezone VARCHAR(64) NOT NULL,
+    start_at TIMESTAMPTZ NOT NULL,
+    end_at TIMESTAMPTZ NOT NULL,
     status VARCHAR(12) NOT NULL,
     collection_mode VARCHAR(8) NOT NULL,
     inherit_ranks BOOLEAN NOT NULL DEFAULT FALSE,
@@ -34,11 +34,11 @@ CREATE TABLE group_seasons (
     last_error VARCHAR(500),
     CONSTRAINT chk_group_seasons_status CHECK (status IN ('SCHEDULED', 'ONGOING', 'COMPLETED', 'FINALISED', 'CANCELLED')),
     CONSTRAINT chk_group_seasons_mode CHECK (collection_mode IN ('AUTO', 'MANUAL')),
-    CONSTRAINT chk_group_seasons_dates CHECK (end_date >= start_date AND end_date - start_date < 31),
+    CONSTRAINT chk_group_seasons_range CHECK (end_at > start_at),
     CONSTRAINT uq_group_seasons_post UNIQUE (post_id)
 );
 
-CREATE INDEX idx_group_seasons_group ON group_seasons (group_id, start_date);
+CREATE INDEX idx_group_seasons_group ON group_seasons (group_id, start_at);
 -- the status job reads only the seasons that can still change
 CREATE INDEX idx_group_seasons_open ON group_seasons (status) WHERE status IN ('SCHEDULED', 'ONGOING', 'COMPLETED');
 

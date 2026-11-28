@@ -19,7 +19,7 @@ public interface GroupSeasonRepository extends JpaRepository<GroupSeason, Long> 
     Optional<GroupSeason> findByIdAndGroupId(Long id, Long groupId);
 
     /** The group's seasons, newest start first, optionally narrowed to some statuses ({@code statuses} is never empty: the caller passes every one for "all"). */
-    Page<GroupSeason> findByGroupIdAndStatusInOrderByStartDateDescIdDesc(Long groupId, Collection<SeasonStatus> statuses, Pageable pageable);
+    Page<GroupSeason> findByGroupIdAndStatusInOrderByStartAtDescIdDesc(Long groupId, Collection<SeasonStatus> statuses, Pageable pageable);
 
     long countByGroupIdAndStatusIn(Long groupId, Collection<SeasonStatus> statuses);
 

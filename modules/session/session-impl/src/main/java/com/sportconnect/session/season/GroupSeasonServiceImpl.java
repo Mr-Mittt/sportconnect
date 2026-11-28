@@ -120,6 +120,8 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         ZoneId zone = zoneOf(group);
         String name = requireName(request.getName());
         SeasonDates.validate(request.getStartDate(), request.getEndDate(), today(zone));
+        Instant startAt = SeasonDates.startAt(request.getStartDate(), zone);
+        Instant endAt = SeasonDates.endAt(request.getEndDate(), zone);
         Long sportId = requireStatisticsSport(group);
         StatisticsSchema sport = sportSchema(sportId);
 
@@ -133,7 +135,7 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
 
         // From here the group's seasons are read under the group's mutex, so two creates cannot both pass.
         groupLock.lock(groupId);
-        requireRoom(groupId, null, request.getStartDate(), request.getEndDate(), true);
+        requireRoom(groupId, null, startAt, endAt, true, zone);
 
         Instant now = clock.instant();
         Long postId = postService.createSeasonPost(callerId, "Season: " + name);
@@ -141,9 +143,8 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
                 .groupId(groupId)
                 .sportId(sportId)
                 .name(name)
-                .startDate(request.getStartDate())
-                .endDate(request.getEndDate())
-                .timezone(zone.getId())
+                .startAt(startAt)
+                .endAt(endAt)
                 .status(SeasonStatus.SCHEDULED)
                 .collectionMode(request.getCollectionMode() != null ? request.getCollectionMode() : SeasonCollectionMode.AUTO)
                 .inheritRanks(Boolean.TRUE.equals(request.getInheritRanks()))
@@ -156,8 +157,8 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
                 .build());
         announcer.announce(season, SystemCode.GROUP_SEASON_CREATED, nameOf(callerId));
         log.info("Season {} created in group {} by {} ({} to {}, {})", season.getId(), groupId, callerId,
-                season.getStartDate(), season.getEndDate(), season.getCollectionMode());
-        return toResponse(season, 0, null, null);
+                request.getStartDate(), request.getEndDate(), season.getCollectionMode());
+        return toResponse(season, zone, 0, null, null);
     }
 
     @Override
@@ -166,17 +167,28 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         requireManager(groupId, callerId);
         groupLock.lock(groupId);
         GroupSeason season = lockedSeason(groupId, seasonId);
-        if (season.getStatus() != SeasonStatus.SCHEDULED) {
-            throw new ConflictException("SESSION_SEASON_NOT_EDITABLE", "Only a scheduled season can be edited",
+        // Editable only while it is scheduled AND has not started: the clock decides (the status job can lag by one tick), the status
+        // keeps a season cancelled before its start out.
+        if (season.getStatus() != SeasonStatus.SCHEDULED || !clock.instant().isBefore(season.getStartAt())) {
+            throw new ConflictException("SESSION_SEASON_NOT_EDITABLE", "Only a scheduled season that has not started can be edited",
                     Map.of("status", season.getStatus().name()));
         }
-        ZoneId zone = ZoneId.of(season.getTimezone());
         StatisticsSchema sport = sportSchema(season.getSportId());
 
-        LocalDate start = request.getStartDate() != null ? request.getStartDate() : season.getStartDate();
-        LocalDate end = request.getEndDate() != null ? request.getEndDate() : season.getEndDate();
-        SeasonDates.validate(start, end, today(zone));
-        requireRoom(groupId, season.getId(), start, end, false);
+        GroupResponse group = groupService.getGroup(groupId, callerId);
+        ZoneId zone = zoneOrNull(group);
+        if (request.getStartDate() != null || request.getEndDate() != null) {
+            // a date was sent: both ends are read again in the group's timezone now (an end sent alone keeps the start's date as it reads today)
+            ZoneId datesZone = zoneOf(group);
+            LocalDate start = request.getStartDate() != null ? request.getStartDate() : SeasonDates.startDate(season.getStartAt(), datesZone);
+            LocalDate end = request.getEndDate() != null ? request.getEndDate() : SeasonDates.endDate(season.getEndAt(), datesZone);
+            SeasonDates.validate(start, end, today(datesZone));
+            Instant startAt = SeasonDates.startAt(start, datesZone);
+            Instant endAt = SeasonDates.endAt(end, datesZone);
+            requireRoom(groupId, season.getId(), startAt, endAt, false, datesZone);
+            season.setStartAt(startAt);
+            season.setEndAt(endAt);
+        }
 
         Map<String, Object> statsConfig = request.getStatsConfig() != null
                 ? seasonRules.statsConfigOf(request.getStatsConfig(), sport) : season.getStatsConfig();
@@ -194,8 +206,6 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         if (request.getName() != null) {
             season.setName(requireName(request.getName()));
         }
-        season.setStartDate(start);
-        season.setEndDate(end);
         if (request.getCollectionMode() != null) {
             season.setCollectionMode(request.getCollectionMode());
         }
@@ -210,7 +220,7 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
             // a season that is not MANUAL has no links: a switch to AUTO drops the ones it had (it has not started, so none was counted)
             linkRepository.deleteAll(linkRepository.findBySeasonId(season.getId()));
         }
-        return toResponse(season, (int) linkRepository.countBySeasonId(season.getId()), null, null);
+        return toResponse(season, zone, (int) linkRepository.countBySeasonId(season.getId()), null, null);
     }
 
     @Override
@@ -230,7 +240,7 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         season = seasonRepository.save(season);
         announcer.announce(season, SystemCode.GROUP_SEASON_CANCELLED, nameOf(callerId));
         log.info("Season {} of group {} cancelled by {}", seasonId, groupId, callerId);
-        return toResponse(season, (int) linkRepository.countBySeasonId(season.getId()), null, null);
+        return toResponse(season, zoneOrNull(groupService.getGroup(groupId, callerId)), (int) linkRepository.countBySeasonId(season.getId()), null, null);
     }
 
     // ---- reads ------------------------------------------------------------------------------------------------------
@@ -240,7 +250,7 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
     public SeasonResponse get(Long groupId, Long seasonId, UUID callerId) {
         GroupSeason season = visibleSeason(groupId, seasonId, callerId);
         PostLikeInfoResponse like = postService.getSessionPostLikeInfo(List.of(season.getPostId()), callerId).get(season.getPostId());
-        return toResponse(season, (int) linkRepository.countBySeasonId(seasonId),
+        return toResponse(season, zoneOrNull(groupService.getGroup(groupId, callerId)), (int) linkRepository.countBySeasonId(seasonId),
                 like != null ? like.getLikeCount() : 0L, like != null ? like.getIsLikedByCurrentUser() : Boolean.FALSE);
     }
 
@@ -249,12 +259,13 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
     public Page<SeasonResponse> list(Long groupId, UUID callerId, Set<SeasonStatus> statuses, Pageable pageable) {
         requireMember(groupId, callerId);
         Set<SeasonStatus> wanted = statuses == null || statuses.isEmpty() ? EnumSet.allOf(SeasonStatus.class) : statuses;
-        Page<GroupSeason> page = seasonRepository.findByGroupIdAndStatusInOrderByStartDateDescIdDesc(groupId, wanted, pageable);
+        Page<GroupSeason> page = seasonRepository.findByGroupIdAndStatusInOrderByStartAtDescIdDesc(groupId, wanted, pageable);
         // one query for the link counts of the whole page, never one per season
         Map<Long, Long> counts = page.isEmpty() ? Map.of() : linkRepository.countBySeasonIds(
                 page.getContent().stream().map(GroupSeason::getId).toList()).stream()
                 .collect(Collectors.toMap(GroupSeasonSessionRepository.LinkCount::getSeasonId, GroupSeasonSessionRepository.LinkCount::getCount));
-        return page.map(season -> toResponse(season, counts.getOrDefault(season.getId(), 0L).intValue(), null, null));
+        ZoneId zone = zoneOrNull(groupService.getGroup(groupId, callerId));
+        return page.map(season -> toResponse(season, zone, counts.getOrDefault(season.getId(), 0L).intValue(), null, null));
     }
 
     @Override
@@ -290,7 +301,6 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
     private void addLinks(GroupSeason season, Set<Long> sessionIds, UUID callerId) {
         Map<Long, Session> found = sessionRepository.findAllById(sessionIds).stream()
                 .collect(Collectors.toMap(Session::getId, Function.identity()));
-        ZoneId zone = ZoneId.of(season.getTimezone());
         Set<Long> already = linkRepository.findBySeasonId(season.getId()).stream()
                 .map(GroupSeasonSession::getSessionId).collect(Collectors.toSet());
         Instant now = clock.instant();
@@ -299,8 +309,7 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
             if (session == null || !season.getGroupId().equals(session.getGroupId())) {
                 throw invalidSession(sessionId, session == null ? "NOT_FOUND" : "NOT_IN_GROUP");
             }
-            LocalDate date = SeasonDates.localDate(session.getScheduledStart(), zone);
-            if (!SeasonDates.contains(season.getStartDate(), season.getEndDate(), date)) {
+            if (!SeasonDates.contains(season.getStartAt(), season.getEndAt(), session.getScheduledStart())) {
                 throw invalidSession(sessionId, "OUT_OF_RANGE");
             }
         }
@@ -336,7 +345,6 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
         if (ids.isEmpty()) {
             return List.of();
         }
-        ZoneId zone = ZoneId.of(season.getTimezone());
         return sessionRepository.findAllById(ids).stream()
                 .sorted(Comparator.comparing(Session::getScheduledStart).thenComparing(Session::getId))
                 .map(session -> SeasonLinkedSessionResponse.builder()
@@ -344,7 +352,6 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
                         .title(session.getTitle())
                         .scheduledStart(session.getScheduledStart())
                         .status(session.getStatus())
-                        .localDate(SeasonDates.localDate(session.getScheduledStart(), zone))
                         .build())
                 .toList();
     }
@@ -415,18 +422,18 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
      * The group may hold two open seasons ({@code create} only: an edit does not add one) and no two seasons that are not cancelled may
      * share a day. Both are read under the group's lock.
      */
-    private void requireRoom(Long groupId, Long selfId, LocalDate start, LocalDate end, boolean counts) {
+    private void requireRoom(Long groupId, Long selfId, Instant startAt, Instant endAt, boolean counts, ZoneId zone) {
         if (counts && seasonRepository.countByGroupIdAndStatusIn(groupId, EnumSet.of(SeasonStatus.SCHEDULED, SeasonStatus.ONGOING)) >= MAX_OPEN) {
             throw new ConflictException("SESSION_SEASON_LIMIT", "A group can have at most " + MAX_OPEN + " scheduled or ongoing seasons",
                     Map.of("max", MAX_OPEN));
         }
         for (GroupSeason other : seasonRepository.findByGroupIdAndStatusNot(groupId, SeasonStatus.CANCELLED)) {
             if (!other.getId().equals(selfId)
-                    && SeasonDates.overlaps(start, end, other.getStartDate(), other.getEndDate())) {
+                    && SeasonDates.overlaps(startAt, endAt, other.getStartAt(), other.getEndAt())) {
                 Map<String, Object> params = new LinkedHashMap<>();
                 params.put("seasonId", other.getId());
-                params.put("startDate", other.getStartDate().toString());
-                params.put("endDate", other.getEndDate().toString());
+                params.put("startDate", SeasonDates.startDate(other.getStartAt(), zone).toString());
+                params.put("endDate", SeasonDates.endDate(other.getEndAt(), zone).toString());
                 throw new ConflictException("SESSION_SEASON_OVERLAP", "These dates overlap another season of the group", params);
             }
         }
@@ -461,6 +468,15 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
             throw new BadRequestException("SESSION_SEASON_NAME_REQUIRED", "A season needs a name", null);
         }
         return trimmed;
+    }
+
+    /** The group's current timezone for showing a season's dates, or {@code null} when its region has none (the instants are still answered). */
+    private static ZoneId zoneOrNull(GroupResponse group) {
+        try {
+            return zoneOf(group);
+        } catch (ConflictException e) {
+            return null;
+        }
     }
 
     /** The group's timezone (B25), or 409: a season's local dates cannot be read without one, and none is guessed. */
@@ -510,15 +526,17 @@ public class GroupSeasonServiceImpl implements GroupSeasonService {
     }
 
 
-    private SeasonResponse toResponse(GroupSeason season, int linkedCount, Long likeCount, Boolean liked) {
+    private SeasonResponse toResponse(GroupSeason season, ZoneId zone, int linkedCount, Long likeCount, Boolean liked) {
         return SeasonResponse.builder()
                 .id(season.getId())
                 .groupId(season.getGroupId())
                 .sportId(season.getSportId())
                 .name(season.getName())
-                .startDate(season.getStartDate())
-                .endDate(season.getEndDate())
-                .timezone(season.getTimezone())
+                .startAt(season.getStartAt())
+                .endAt(season.getEndAt())
+                .startDate(zone == null ? null : SeasonDates.startDate(season.getStartAt(), zone))
+                .endDate(zone == null ? null : SeasonDates.endDate(season.getEndAt(), zone))
+                .timezone(zone == null ? null : zone.getId())
                 .status(season.getStatus())
                 .collectionMode(season.getCollectionMode())
                 .inheritRanks(season.isInheritRanks())

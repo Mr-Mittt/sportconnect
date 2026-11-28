@@ -10,7 +10,12 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
-/** SESSION-55: a group season. Dates are local dates in {@link #timezone}. */
+/**
+ * SESSION-55: a group season, the half-open range {@code [startAt, endAt)} of UTC instants (the start of its first day to the start of the
+ * day after its last, in the group's timezone when it was saved). {@code startDate}, {@code endDate} and {@code timezone} are for showing it:
+ * the dates are read in the group's <b>current</b> timezone (absent when the group's region has none), so after a region change they can read
+ * differently while the instants, and so which sessions count, stay fixed.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -21,9 +26,13 @@ public class SeasonResponse {
     private Long groupId;
     private Long sportId;
     private String name;
+    private Instant startAt;
+    /** Exclusive. */
+    private Instant endAt;
     private LocalDate startDate;
+    /** The last day of the season (inclusive). */
     private LocalDate endDate;
-    /** IANA id, a snapshot of the group's timezone when the season was created. */
+    /** The group's current IANA timezone the dates are read in; null when the group has none. */
     private String timezone;
     private SeasonStatus status;
     private SeasonCollectionMode collectionMode;

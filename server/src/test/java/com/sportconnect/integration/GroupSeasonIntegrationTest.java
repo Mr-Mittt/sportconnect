@@ -243,6 +243,20 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
         return seasonRepository.findById(id).orElseThrow();
     }
 
+    private Instant startAtOf(int daysFromToday) {
+        return today.plusDays(daysFromToday).atStartOfDay(ZONE).toInstant();
+    }
+
+    /** The exclusive end of a season whose last day is today plus this many days. */
+    private Instant endAtOf(int lastDayFromToday) {
+        return today.plusDays(lastDayFromToday + 1L).atStartOfDay(ZONE).toInstant();
+    }
+
+    private void setRange(GroupSeason season, int firstDay, int lastDay) {
+        season.setStartAt(startAtOf(firstDay));
+        season.setEndAt(endAtOf(lastDay));
+    }
+
     private void setStatus(Long id, SeasonStatus status) {
         GroupSeason season = reload(id);
         season.setStatus(status);
@@ -409,7 +423,7 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
         sendAs(memberId, "PUT", base(groupId) + "/" + one, Map.of("name", "x")).andExpect(status().isForbidden());
 
         assertThat(reload(one).getName()).isEqualTo("Renamed");
-        assertThat(reload(one).getEndDate()).isEqualTo(today.plusDays(8));
+        assertThat(reload(one).getEndAt()).isEqualTo(endAtOf(8));
     }
 
     @Test
@@ -490,8 +504,7 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
 
         setStatus(manual, SeasonStatus.ONGOING);
         sendAs(ownerId, "PUT", path, Map.of("add", List.of(inRange))).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].sessionId").value(inRange))
-                .andExpect(jsonPath("$.data[0].localDate").value(today.plusDays(12).toString()));
+                .andExpect(jsonPath("$.data[0].sessionId").value(inRange));
         sendAs(adminId, "PUT", path, Map.of("add", List.of(inRange))).andExpect(status().isOk()).andExpect(jsonPath("$.data.length()").value(1));
         sendAs(ownerId, "PUT", path, Map.of("add", List.of(outOfRange))).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("SESSION_SEASON_SESSION_INVALID")).andExpect(jsonPath("$.errorParams.reason").value("OUT_OF_RANGE"));
@@ -519,19 +532,65 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
     }
 
     @Test
-    void aSessionIsDatedInTheSeasonsTimezone_notUtc() throws Exception {
+    void aSeasonIsTheHalfOpenRangeFromTheStartOfItsFirstDayToTheStartOfTheDayAfterItsLast_inTheGroupsZone() throws Exception {
         Long manual = createAs(ownerId, new HashMap<>(Map.of("name", "Edge", "startDate", today.plusDays(10).toString(),
                 "endDate", today.plusDays(10).toString(), "collectionMode", "MANUAL")));
         setStatus(manual, SeasonStatus.ONGOING);
-        // 00:30 on the season's day in Ho Chi Minh City is still the day before in UTC
-        Instant start = ZonedDateTime.of(today.plusDays(10), java.time.LocalTime.of(0, 30), ZONE).toInstant();
-        Long session = sessionRepository.save(Session.builder().title("Late night").groupId(groupId).isPublic(false)
-                .postId(postIds.incrementAndGet()).sessionType(SessionType.GROUP_RECURRING).createdBy(ownerId).sportId(sportId).locationId(1L)
+        assertThat(reload(manual).getStartAt()).isEqualTo(startAtOf(10));
+        assertThat(reload(manual).getEndAt()).isEqualTo(endAtOf(10));
+        String path = base(groupId) + "/" + manual + "/sessions";
+
+        // 00:30 on the season's day in Ho Chi Minh City is still the day before in UTC: inside
+        Long early = sessionAt(startAtOf(10).plusSeconds(30 * 60));
+        // 23:59:59.5 on the last day: inside (a 23:59:59 end would have left it in a gap)
+        Long late = sessionAt(endAtOf(10).minusMillis(500));
+        sendAs(ownerId, "PUT", path, Map.of("add", List.of(early, late))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2));
+
+        // one millisecond before the first instant, and exactly the exclusive end: outside
+        Long before = sessionAt(startAtOf(10).minusMillis(1));
+        Long atEnd = sessionAt(endAtOf(10));
+        sendAs(ownerId, "PUT", path, Map.of("add", List.of(before))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorParams.reason").value("OUT_OF_RANGE"));
+        sendAs(ownerId, "PUT", path, Map.of("add", List.of(atEnd))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorParams.reason").value("OUT_OF_RANGE"));
+    }
+
+    @Test
+    void theResponseAnswersTheInstantsAndTheDatesAndTheGroupsTimezoneThatReadThem() throws Exception {
+        Long id = createSeason("Shown", 3, 6);
+
+        getAs(memberId, base(groupId) + "/" + id).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.startAt").value(startAtOf(3).toString()))
+                .andExpect(jsonPath("$.data.endAt").value(endAtOf(6).toString()))
+                .andExpect(jsonPath("$.data.startDate").value(today.plusDays(3).toString()))
+                .andExpect(jsonPath("$.data.endDate").value(today.plusDays(6).toString()))
+                .andExpect(jsonPath("$.data.timezone").value("Asia/Ho_Chi_Minh"));
+        // no timezone is stored: when the group's region has none, the instants are still answered and the dates are not
+        jdbcTemplate.update("UPDATE countries SET timezone = NULL");
+        getAs(memberId, base(groupId) + "/" + id).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.startAt").value(startAtOf(3).toString()))
+                .andExpect(jsonPath("$.data.startDate").doesNotExist());
+    }
+
+    @Test
+    void update_isRefusedOnceTheStartInstantHasPassed_evenWhileTheStatusJobHasNotRun() throws Exception {
+        Long id = createSeason("Starting", 1, 5);
+        GroupSeason season = reload(id);
+        season.setStartAt(java.time.Instant.now().minusSeconds(60));
+        seasonRepository.save(season);
+        assertThat(reload(id).getStatus()).isEqualTo(SeasonStatus.SCHEDULED);
+
+        sendAs(ownerId, "PUT", base(groupId) + "/" + id, Map.of("name", "Too late")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("SESSION_SEASON_NOT_EDITABLE"));
+        assertThat(reload(id).getName()).isEqualTo("Starting");
+    }
+
+    private Long sessionAt(java.time.Instant start) {
+        return sessionRepository.save(Session.builder().title("S").groupId(groupId).isPublic(false).postId(postIds.incrementAndGet())
+                .sessionType(SessionType.GROUP_RECURRING).createdBy(ownerId).sportId(sportId).locationId(1L)
                 .scheduledStart(start).scheduledEndAt(start.plusSeconds(3600)).status(SessionStatus.COMPLETED).capacity(10)
                 .feeType(FeeType.FREE).initialSlot(0).gameMood(5).autoApprove(true).build()).getId();
-
-        sendAs(ownerId, "PUT", base(groupId) + "/" + manual + "/sessions", Map.of("add", List.of(session))).andExpect(status().isOk())
-                .andExpect(jsonPath("$.data[0].localDate").value(today.plusDays(10).toString()));
     }
 
     // ---- the season's thread ----------------------------------------------------------------------------------------------------------
@@ -576,8 +635,7 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
 
         // a season whose last day is over (written directly: the API refuses a past date) completes on the next pass
         GroupSeason season = reload(startsToday);
-        season.setStartDate(today.minusDays(5));
-        season.setEndDate(today.minusDays(2));
+        setRange(season, -5, -2);
         seasonRepository.save(season);
         assertThat(transitions.tick()).isEqualTo(1);
         assertThat(reload(startsToday).getStatus()).isEqualTo(SeasonStatus.COMPLETED);
@@ -589,12 +647,10 @@ class GroupSeasonIntegrationTest extends RedisBaseIT {
         Long missed = createSeason("Missed", 1, 3);
         Long cancelled = createSeason("Cancelled", 10, 12);
         GroupSeason season = reload(missed);
-        season.setStartDate(today.minusDays(10));
-        season.setEndDate(today.minusDays(7));
+        setRange(season, -10, -7);
         seasonRepository.save(season);
         GroupSeason other = reload(cancelled);
-        other.setStartDate(today.minusDays(1));
-        other.setEndDate(today.plusDays(2));
+        setRange(other, -1, 2);
         other.setStatus(SeasonStatus.CANCELLED);
         seasonRepository.save(other);
 

@@ -6,9 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.time.LocalDate;
 
-/** SESSION-55: a session linked to a MANUAL season. {@code localDate} is its start read in the season's timezone. */
+/** SESSION-55: a session linked to a MANUAL season. */
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,5 +18,4 @@ public class SeasonLinkedSessionResponse {
     private String title;
     private Instant scheduledStart;
     private SessionStatus status;
-    private LocalDate localDate;
 }

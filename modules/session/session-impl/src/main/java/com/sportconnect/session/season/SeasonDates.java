@@ -10,8 +10,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 /**
- * SESSION-55: the pure date rules of a season. Every date is a <b>local</b> date in the season's own timezone (a snapshot of the
- * group's), so these functions take the zone and never read a clock themselves: the service passes "today".
+ * SESSION-55: the pure date rules of a season. A season is the half-open range {@code [startAt, endAt)} of UTC instants (owner,
+ * 2026-11-28): the owner picks <b>dates</b>, and the server turns them into the start of the first day and the start of the day after the
+ * last, read in the group's timezone <i>at that moment</i>. After that no timezone is needed: eligibility, overlap, the job's transitions and
+ * the engine's lookup are plain instant comparisons. Functions take the zone or the clock's "today" and never read a clock themselves.
  */
 public final class SeasonDates {
 
@@ -44,28 +46,38 @@ public final class SeasonDates {
         }
     }
 
-    /** Whether two seasons share a day. The end day is occupied: the next season starts the day after it (owner, 2026-11-27). */
-    public static boolean overlaps(LocalDate startA, LocalDate endA, LocalDate startB, LocalDate endB) {
-        return !startA.isAfter(endB) && !startB.isAfter(endA);
+    /** The first instant of a season starting on this date: the start of that day in the zone. */
+    public static Instant startAt(LocalDate startDate, ZoneId zone) {
+        return startDate.atStartOfDay(zone).toInstant();
     }
 
-    /** Whether a local date lies within the season's dates, both ends included. */
-    public static boolean contains(LocalDate start, LocalDate end, LocalDate date) {
-        return !date.isBefore(start) && !date.isAfter(end);
+    /** The exclusive end of a season ending on this date: the start of the <b>next</b> day in the zone, so no instant of the last day falls in a gap. */
+    public static Instant endAt(LocalDate endDate, ZoneId zone) {
+        return endDate.plusDays(1).atStartOfDay(zone).toInstant();
     }
 
-    /** A session's local date: its start instant read in the season's timezone (owner, 2026-11-28: the season's, never the venue's). */
-    public static LocalDate localDate(Instant instant, ZoneId zone) {
-        return instant.atZone(zone).toLocalDate();
+    /** The first date of a season, read in the zone (the group's current one: the instants are fixed, only how they are shown follows the zone). */
+    public static LocalDate startDate(Instant startAt, ZoneId zone) {
+        return startAt.atZone(zone).toLocalDate();
     }
 
-    /** The instant the season has ended: the start of the day after its end date in its timezone. */
-    public static Instant endsAt(LocalDate end, ZoneId zone) {
-        return end.plusDays(1).atStartOfDay(zone).toInstant();
+    /** The last date of a season, read in the zone: the date of the last instant before the exclusive end. */
+    public static LocalDate endDate(Instant endAt, ZoneId zone) {
+        return endAt.minusMillis(1).atZone(zone).toLocalDate();
+    }
+
+    /** Whether two ranges share an instant. Ranges are half-open, so one season's end is the next one's earliest start. */
+    public static boolean overlaps(Instant startA, Instant endA, Instant startB, Instant endB) {
+        return startA.isBefore(endB) && startB.isBefore(endA);
+    }
+
+    /** Whether an instant lies within {@code [startAt, endAt)}. */
+    public static boolean contains(Instant startAt, Instant endAt, Instant instant) {
+        return !instant.isBefore(startAt) && instant.isBefore(endAt);
     }
 
     /** The instant a COMPLETED season is finalised on its own: its end plus the guard in which players can still log and confirm games. */
-    public static Instant finalisesAt(LocalDate end, ZoneId zone, long guardHours) {
-        return endsAt(end, zone).plus(Duration.ofHours(guardHours));
+    public static Instant finalisesAt(Instant endAt, long guardHours) {
+        return endAt.plus(Duration.ofHours(guardHours));
     }
 }

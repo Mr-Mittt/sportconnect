@@ -19,13 +19,12 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * SESSION-55 (V111): a group's season. {@code groupId}, {@code sportId}, {@code postId} and {@code createdBy} are cross-domain ids
- * (no foreign key). The dates are local dates in {@link #timezone}, the group's timezone as it was when the season was created.
+ * (no foreign key). The season is the half-open range {@code [startAt, endAt)} of UTC instants; no timezone is stored.
  * {@link #statsConfig} and {@link #rankingRule} are the season's own copies (a pre-fill from the group, never a live link).
  */
 @Entity
@@ -50,14 +49,13 @@ public class GroupSeason {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "start_date", nullable = false)
-    private LocalDate startDate;
+    /** The first instant of the season: the start of its first day in the group's timezone when it was saved. */
+    @Column(name = "start_at", nullable = false)
+    private Instant startAt;
 
-    @Column(name = "end_date", nullable = false)
-    private LocalDate endDate;
-
-    @Column(nullable = false, length = 64)
-    private String timezone;
+    /** The first instant after the season (exclusive): the start of the day after its last day in the group's timezone when it was saved. */
+    @Column(name = "end_at", nullable = false)
+    private Instant endAt;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 12)

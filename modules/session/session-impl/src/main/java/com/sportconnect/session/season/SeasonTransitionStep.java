@@ -10,8 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 
 /**
  * SESSION-55: advances ONE season as far as the calendar allows, in a transaction of its own (a failure leaves every other season alone and
@@ -36,8 +34,8 @@ class SeasonTransitionStep {
     }
 
     /**
-     * SCHEDULED to ONGOING once the local date reaches the start date (the "started" announcement), ONGOING to COMPLETED once the end date
-     * is over. A job that was down for days may take both steps in one go. COMPLETED to FINALISED is slice 2 of SESSION-55.
+     * SCHEDULED to ONGOING once the clock reaches the start instant (the "started" announcement), ONGOING to COMPLETED once the end instant
+     * has passed. A job that was down for days may take both steps in one go. COMPLETED to FINALISED is slice 2 of SESSION-55.
      *
      * @return {@code true} if the season changed status
      */
@@ -48,16 +46,14 @@ class SeasonTransitionStep {
             return false;
         }
         Instant now = clock.instant();
-        ZoneId zone = ZoneId.of(season.getTimezone());
-        LocalDate today = LocalDate.now(clock.withZone(zone));
         boolean changed = false;
-        if (season.getStatus() == SeasonStatus.SCHEDULED && !today.isBefore(season.getStartDate())) {
+        if (season.getStatus() == SeasonStatus.SCHEDULED && !now.isBefore(season.getStartAt())) {
             season.setStatus(SeasonStatus.ONGOING);
             announcer.announce(season, SystemCode.GROUP_SEASON_STARTED, null);
             log.info("Season {} of group {} started", season.getId(), season.getGroupId());
             changed = true;
         }
-        if (season.getStatus() == SeasonStatus.ONGOING && !now.isBefore(SeasonDates.endsAt(season.getEndDate(), zone))) {
+        if (season.getStatus() == SeasonStatus.ONGOING && !now.isBefore(season.getEndAt())) {
             season.setStatus(SeasonStatus.COMPLETED);
             log.info("Season {} of group {} completed", season.getId(), season.getGroupId());
             changed = true;
