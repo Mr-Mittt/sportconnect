@@ -43,6 +43,10 @@ public class Country {
     @Column(name = "default_language_code", length = 35)
     private String defaultLanguageCode;
 
+    /** IANA timezone id of the country (V110), e.g. {@code Asia/Ho_Chi_Minh}; {@code null} until one is set. A region's own timezone overrides it. */
+    @Column(length = 64)
+    private String timezone;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

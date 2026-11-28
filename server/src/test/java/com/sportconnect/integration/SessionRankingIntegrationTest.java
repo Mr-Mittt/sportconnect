@@ -105,7 +105,7 @@ class SessionRankingIntegrationTest extends RedisBaseIT {
         sportId = sportRepository.save(Sport.builder().name("SESSION-72 " + UUID.randomUUID()).isActive(true)
                 .statisticsEnabled(true).resultSchema(badmintonSchema()).build()).getId();
         evictSportCache();
-        groupId = groupRepository.save(Group.builder().groupName("Ranking " + UUID.randomUUID())
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Ranking " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
         for (UUID member : List.of(aliceId, bobId, carolId, danId, neverJoinedId)) {

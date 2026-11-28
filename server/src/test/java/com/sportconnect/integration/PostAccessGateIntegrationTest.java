@@ -112,7 +112,7 @@ class PostAccessGateIntegrationTest extends RedisBaseIT {
     }
 
     private Group createGroup(boolean active) {
-        Group group = Group.builder()
+        Group group = Group.builder().countryId(1L).regionId(1L)
                 .groupName("Test Group " + UUID.randomUUID())
                 .createdBy(ownerId)
                 .isPrivate(true)

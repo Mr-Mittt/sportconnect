@@ -17,6 +17,10 @@ import java.util.UUID;
 public class GroupResponse {
     private Long id;
     private Long sportId;
+    /** B25: the group's country and region (reference ids) and its timezone, derived from them (the region's, else the country's; null if the reference data has none). */
+    private Long countryId;
+    private Long regionId;
+    private String timezone;
     private String groupName;
     private String description;
     private String avatarUrl;

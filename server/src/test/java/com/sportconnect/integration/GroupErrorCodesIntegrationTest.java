@@ -153,7 +153,7 @@ class GroupErrorCodesIntegrationTest extends RedisBaseIT {
 
     /** Saves a group owned by {@link #ownerId} with an admin and a plain member. */
     private Long saveGroup(String name, boolean isPrivate) {
-        Group group = groupRepository.save(Group.builder()
+        Group group = groupRepository.save(Group.builder().countryId(1L).regionId(1L)
                 .groupName(name).createdBy(ownerId).isPrivate(isPrivate).isActive(true).sportId(sportId).build());
         groupSettingsRepository.save(GroupSettings.builder()
                 .groupId(group.getId()).groupTypeId(DEFAULT_GROUP_TYPE_ID).build());

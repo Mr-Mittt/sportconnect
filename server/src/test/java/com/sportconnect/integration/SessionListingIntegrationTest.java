@@ -161,7 +161,7 @@ class SessionListingIntegrationTest extends BaseIT {
      * the lists did not look at the group at all). */
     private Long callerGroupId() {
         if (callerGroupId == null) {
-            callerGroupId = groupRepository.save(Group.builder().groupName("listing " + UUID.randomUUID())
+            callerGroupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("listing " + UUID.randomUUID())
                     .createdBy(callerId).isPrivate(true).isActive(true).sportId(1L).build()).getId();
             groupMemberRepository.save(GroupMember.builder().groupId(callerGroupId).userId(callerId).roleId(3).build());
         }

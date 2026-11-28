@@ -99,7 +99,7 @@ class SessionRecordsIntegrationTest extends RedisBaseIT {
         sportId = sportRepository.save(Sport.builder().name("SESSION-50 " + UUID.randomUUID()).isActive(true)
                 .resultSchema(Map.of("kind", "MATCH", "maxRecords", 100)).build()).getId();
         evictSportCache();
-        groupId = groupRepository.save(Group.builder().groupName("Records " + UUID.randomUUID())
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Records " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         addGroupMember(hostId, ROLE_OWNER);
         addGroupMember(aliceId, ROLE_MEMBER);

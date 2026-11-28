@@ -134,7 +134,7 @@ class SessionStatsIntegrationTest extends RedisBaseIT {
         carolId = createUser("carol");
         danId = createUser("dan");
         sportId = newSport(badmintonSchema(), true);
-        groupId = groupRepository.save(Group.builder().groupName("Stats " + UUID.randomUUID())
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Stats " + UUID.randomUUID())
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
         groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());   // SESSION-78: off by default

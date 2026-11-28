@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -99,6 +100,34 @@ public class ReferenceServiceImpl implements ReferenceService {
         }
         return regionRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(Region::getId, this::toRegionResponse));
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Flow: one {@code IN} query for the regions, one for the countries of the regions that have no timezone of their own.
+     */
+    @Override
+    public Map<Long, String> getRegionTimezones(Collection<Long> regionIds) {
+        if (regionIds == null || regionIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Region> regions = regionRepository.findAllById(regionIds);
+        Set<Long> countryIds = regions.stream().filter(r -> r.getTimezone() == null).map(Region::getCountryId)
+                .collect(Collectors.toSet());
+        Map<Long, String> countryZones = countryIds.isEmpty() ? Map.of()
+                : countryRepository.findAllById(countryIds).stream().filter(c -> c.getTimezone() != null)
+                        .collect(Collectors.toMap(Country::getId, Country::getTimezone));
+        Map<Long, String> zones = new HashMap<>();
+        for (Region region : regions) {
+            String zone = region.getTimezone() != null ? region.getTimezone() : countryZones.get(region.getCountryId());
+            if (zone == null) {
+                log.error("Region {} and its country {} have no timezone: set one in the reference data", region.getId(), region.getCountryId());
+            } else {
+                zones.put(region.getId(), zone);
+            }
+        }
+        return zones;
     }
 
     @Override
@@ -288,6 +317,7 @@ public class ReferenceServiceImpl implements ReferenceService {
                 .iso3(country.getIso3())
                 .name(country.getName())
                 .defaultLanguageCode(country.getDefaultLanguageCode())
+                .timezone(country.getTimezone())
                 .build();
     }
 
@@ -298,6 +328,7 @@ public class ReferenceServiceImpl implements ReferenceService {
                 .isoCode(region.getIsoCode())
                 .name(region.getName())
                 .nativeName(region.getNativeName())
+                .timezone(region.getTimezone())
                 .build();
     }
 }

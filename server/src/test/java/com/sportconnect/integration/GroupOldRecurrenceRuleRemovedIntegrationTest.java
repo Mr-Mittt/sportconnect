@@ -48,7 +48,7 @@ class GroupOldRecurrenceRuleRemovedIntegrationTest extends RedisBaseIT {
         ownerId = createUserWithRoles(true, "USER");
         Long sportId = sportRepository.save(Sport.builder().name("GROUP-1 " + UUID.randomUUID()).isActive(true).build()).getId();
         evictSportCache();
-        groupId = groupRepository.save(Group.builder().groupName("GROUP-1 " + UUID.randomUUID()).createdBy(ownerId)
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("GROUP-1 " + UUID.randomUUID()).createdBy(ownerId)
                 .isPrivate(false).isActive(true).sportId(sportId).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(ownerId).roleId(OWNER_ROLE_ID).build());
         groupSettingsRepository.save(GroupSettings.builder().groupId(groupId).groupTypeId(1L).build());

@@ -95,7 +95,7 @@ class SessionAccessGateIntegrationTest extends BaseIT {
     }
 
     private Long createGroup(boolean isPrivate, boolean isActive) {
-        Group group = Group.builder()
+        Group group = Group.builder().countryId(1L).regionId(1L)
                 .groupName("SESSION-40 Test Group " + UUID.randomUUID())
                 .createdBy(creatorId)
                 .isPrivate(isPrivate)

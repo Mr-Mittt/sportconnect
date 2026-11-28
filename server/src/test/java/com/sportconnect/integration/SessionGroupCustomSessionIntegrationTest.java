@@ -90,7 +90,7 @@ class SessionGroupCustomSessionIntegrationTest extends RedisBaseIT {
         sportId = sportRepository.save(Sport.builder().name("SESSION-GROUP-1 " + UUID.randomUUID()).isActive(true).build()).getId();
         otherSportId = sportRepository.save(Sport.builder().name("SESSION-GROUP-1 other " + UUID.randomUUID()).isActive(true).build()).getId();
         evictSportCache();
-        groupId = groupRepository.save(Group.builder().groupName("SESSION-GROUP-1 " + UUID.randomUUID())
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("SESSION-GROUP-1 " + UUID.randomUUID())
                 .createdBy(ownerId).isPrivate(true).isActive(true).sportId(sportId).build()).getId();
         join(ownerId, OWNER_ROLE_ID);
         join(adminId, ADMIN_ROLE_ID);

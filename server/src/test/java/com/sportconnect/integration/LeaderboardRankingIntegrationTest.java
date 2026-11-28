@@ -156,7 +156,7 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
         carolId = createUser("carol");
         danId = createUser("dan");
         sportId = newSport(badmintonSchema(), true);
-        groupId = groupRepository.save(Group.builder().groupName("Boards " + UUID.randomUUID()).sportId(sportId)
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Boards " + UUID.randomUUID()).sportId(sportId)
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
         groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());
@@ -1077,7 +1077,7 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
 
     @Test
     void aGroupWithoutASportHasNoBoardToRead() {
-        Long noSport = groupRepository.save(Group.builder().groupName("No sport " + UUID.randomUUID()).createdBy(hostId)
+        Long noSport = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("No sport " + UUID.randomUUID()).createdBy(hostId)
                 .isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(noSport).userId(hostId).roleId(ROLE_OWNER).build());
 
@@ -1115,7 +1115,7 @@ class LeaderboardRankingIntegrationTest extends RedisBaseIT {
     @Test
     void aGroupRuleOfOneGroupDoesNotTouchAnotherGroupOfTheSport() {
         rankOneGame();
-        Long other = groupRepository.save(Group.builder().groupName("Other " + UUID.randomUUID()).sportId(sportId).createdBy(hostId)
+        Long other = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Other " + UUID.randomUUID()).sportId(sportId).createdBy(hostId)
                 .isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(other).userId(hostId).roleId(ROLE_OWNER).build());
 

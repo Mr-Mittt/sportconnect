@@ -59,6 +59,14 @@ public class Group {
     @Column(name = "sport_id")
     private Long sportId;
 
+    /** {@code countries.id} in the reference domain (no foreign key across domains). Required (B25). */
+    @Column(name = "country_id", nullable = false)
+    private Long countryId;
+
+    /** {@code regions.id} in the reference domain; belongs to {@link #countryId}. Required (B25). */
+    @Column(name = "region_id", nullable = false)
+    private Long regionId;
+
     @Column(name = "is_private")
     @Builder.Default
     private Boolean isPrivate = false;

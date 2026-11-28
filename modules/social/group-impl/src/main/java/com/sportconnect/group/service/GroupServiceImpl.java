@@ -40,6 +40,7 @@ import com.sportconnect.group.repository.GroupRepository;
 import com.sportconnect.group.repository.GroupRoleRepository;
 import com.sportconnect.group.repository.GroupSettingsRepository;
 import com.sportconnect.group.repository.GroupTypeRepository;
+import com.sportconnect.reference.api.service.ReferenceService;
 import com.sportconnect.social.post.api.dto.PostResponse;
 import com.sportconnect.social.post.api.dto.PostType;
 import com.sportconnect.social.post.api.dto.SystemCode;
@@ -47,6 +48,7 @@ import com.sportconnect.social.post.api.service.PostService;
 import com.sportconnect.sport.api.dto.UserSportProfileResponse;
 import com.sportconnect.sport.api.service.SportService;
 import com.sportconnect.sport.api.service.UserSportProfileService;
+import com.sportconnect.user.api.dto.UserResponse;
 import com.sportconnect.user.api.dto.UserSummaryResponse;
 import com.sportconnect.user.api.service.UserFriendService;
 import com.sportconnect.user.api.service.UserService;
@@ -94,6 +96,7 @@ public class GroupServiceImpl implements GroupService {
     private final GroupInvitationInviterRepository invitationInviterRepository;
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
+    private final ReferenceService referenceService;
 
     // services/chat (the first non-Java service in this repo) consumes this stream to keep its
     // own local authorization cache in sync — see services/chat/docs/SYNC_DESIGN.md for the full
@@ -126,7 +129,9 @@ public class GroupServiceImpl implements GroupService {
             GroupInvitationRepository invitationRepository,
             GroupInvitationInviterRepository invitationInviterRepository,
             StringRedisTemplate stringRedisTemplate,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ReferenceService referenceService) {
+        this.referenceService = referenceService;
         this.groupRepository = groupRepository;
         this.groupMemberRepository = groupMemberRepository;
         this.joinRequestRepository = joinRequestRepository;
@@ -190,9 +195,14 @@ public class GroupServiceImpl implements GroupService {
             throw new BadRequestException("GROUP_SPORT_PROFILE_REQUIRED", "You must have a sport profile for this sport to create a group", null);
         }
 
+        // B25: the group's country and region (sent, or the owner's), validated before anything is written
+        Long[] geo = resolveGeoForCreate(userId, request.getCountryId(), request.getRegionId());
+
         // Create group
         Group group = Group.builder()
                 .sportId(request.getSportId())
+                .countryId(geo[0])
+                .regionId(geo[1])
                 .groupName(request.getGroupName())
                 .description(request.getDescription())
                 .avatarUrl(request.getAvatarUrl())
@@ -302,6 +312,8 @@ public class GroupServiceImpl implements GroupService {
                 .collect(Collectors.toList());
         // U18: only fullName/avatarUrl read below.
         Map<UUID, UserSummaryResponse> creatorsById = creatorIds.isEmpty() ? Map.of() : userService.getUserSummariesByIds(creatorIds);
+        Map<Long, String> timezones = referenceService.getRegionTimezones(
+                groupsById.values().stream().map(Group::getRegionId).distinct().collect(Collectors.toList()));
 
         List<Integer> roleIds = memberships.getContent().stream()
                 .map(GroupMember::getRoleId)
@@ -314,7 +326,7 @@ public class GroupServiceImpl implements GroupService {
 
         return memberships.map(membership -> {
             Group group = groupsById.get(membership.getGroupId());
-            return mapToGroupResponse(group, creatorsById, memberCountsById, rolesById, membership.getRoleId());
+            return mapToGroupResponse(group, creatorsById, memberCountsById, rolesById, membership.getRoleId(), timezones);
         });
     }
 
@@ -396,6 +408,12 @@ public class GroupServiceImpl implements GroupService {
 
         if (request.getCoverUrl() != null) {
             group.setCoverUrl(request.getCoverUrl());
+        }
+
+        if (request.getCountryId() != null || request.getRegionId() != null) {
+            requireCompleteValidGeo(request.getCountryId(), request.getRegionId());
+            group.setCountryId(request.getCountryId());
+            group.setRegionId(request.getRegionId());
         }
 
         if (request.getIsPrivate() != null) {
@@ -1627,6 +1645,34 @@ public class GroupServiceImpl implements GroupService {
         }
     }
 
+    /**
+     * B25: the country and region of a new group. Both sent: validated. Neither sent: the owner's own, validated too (so a
+     * client that does not send them yet keeps working). Only one sent, or the owner has none: a coded 400.
+     *
+     * @return {@code [countryId, regionId]}, both non-null
+     */
+    private Long[] resolveGeoForCreate(UUID ownerId, Long countryId, Long regionId) {
+        if (countryId == null && regionId == null) {
+            UserResponse owner = userService.getUserById(ownerId);
+            countryId = owner.getCountryId();
+            regionId = owner.getRegionId();
+            if (countryId == null || regionId == null) {
+                throw new BadRequestException("GROUP_GEO_REQUIRED",
+                        "A group needs a country and a region, and your profile has none", null);
+            }
+        }
+        requireCompleteValidGeo(countryId, regionId);
+        return new Long[] {countryId, regionId};
+    }
+
+    /** B25: a country and a region together (a coded 400 when one is missing), and the region in the country, active (the reference module's own coded 400s). */
+    private void requireCompleteValidGeo(Long countryId, Long regionId) {
+        if (countryId == null || regionId == null) {
+            throw new BadRequestException("GROUP_GEO_INCOMPLETE", "Send both the country and the region of the group", null);
+        }
+        referenceService.requireValidSelection(countryId, regionId);
+    }
+
     // Helper methods
     private GroupResponse mapToGroupResponse(Group group, UUID currentUserId) {
         String createdByFullName = userService.getUserSummariesByIds(List.of(group.getCreatedBy())).values().stream()
@@ -1641,6 +1687,9 @@ public class GroupServiceImpl implements GroupService {
         return GroupResponse.builder()
                 .id(group.getId())
                 .sportId(group.getSportId())
+                .countryId(group.getCountryId())
+                .regionId(group.getRegionId())
+                .timezone(referenceService.getRegionTimezones(List.of(group.getRegionId())).get(group.getRegionId()))
                 .groupName(group.getGroupName())
                 .description(group.getDescription())
                 .avatarUrl(group.getAvatarUrl())
@@ -1660,7 +1709,8 @@ public class GroupServiceImpl implements GroupService {
                                               Map<UUID, UserSummaryResponse> creatorsById,
                                               Map<Long, Long> memberCountsById,
                                               Map<Integer, GroupRole> rolesById,
-                                              Integer currentUserRoleId) {
+                                              Integer currentUserRoleId,
+                                              Map<Long, String> timezones) {
         UserSummaryResponse creator = creatorsById.get(group.getCreatedBy());
         String createdByFullName = creator != null ? creator.getFullName() : "Unknown User";
 
@@ -1672,6 +1722,9 @@ public class GroupServiceImpl implements GroupService {
         return GroupResponse.builder()
                 .id(group.getId())
                 .sportId(group.getSportId())
+                .countryId(group.getCountryId())
+                .regionId(group.getRegionId())
+                .timezone(timezones.get(group.getRegionId()))
                 .groupName(group.getGroupName())
                 .description(group.getDescription())
                 .avatarUrl(group.getAvatarUrl())

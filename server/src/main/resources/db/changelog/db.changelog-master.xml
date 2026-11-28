@@ -289,4 +289,7 @@
     <!-- SESSION-83: a group's own config of the statistics it counts for its member row -->
     <include file="db/changelog/changes/V109__group_stats_config.sql" relativeToChangelogFile="false"/>
 
+    <!-- B25: a group has a required country and region; countries and regions carry the timezone -->
+    <include file="db/changelog/changes/V110__group_country_region_and_reference_timezone.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

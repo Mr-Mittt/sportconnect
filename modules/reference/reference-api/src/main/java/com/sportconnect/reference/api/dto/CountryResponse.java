@@ -33,4 +33,6 @@ public class CountryResponse {
      * field must check it against the active language list.
      */
     private String defaultLanguageCode;
+    /** IANA timezone id of the country, e.g. {@code Asia/Ho_Chi_Minh}, or {@code null} when none is set (B25). */
+    private String timezone;
 }

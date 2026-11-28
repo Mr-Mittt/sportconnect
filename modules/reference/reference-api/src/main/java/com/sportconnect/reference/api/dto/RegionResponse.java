@@ -29,4 +29,6 @@ public class RegionResponse {
 
     /** Name in the country's own language, e.g. {@code Hồ Chí Minh}. */
     private String nativeName;
+    /** IANA timezone id when this region differs from its country's, else {@code null} (B25). */
+    private String timezone;
 }

@@ -84,7 +84,7 @@ class SessionThreadPeopleIntegrationTest extends BaseIT {
     }
 
     private Long createGroup() {
-        return groupRepository.save(Group.builder()
+        return groupRepository.save(Group.builder().countryId(1L).regionId(1L)
                 .groupName("Thread people group " + UUID.randomUUID())
                 .createdBy(viewerId)
                 .isPrivate(false)

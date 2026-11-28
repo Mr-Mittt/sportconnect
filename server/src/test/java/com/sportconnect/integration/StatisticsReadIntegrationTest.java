@@ -119,7 +119,7 @@ class StatisticsReadIntegrationTest extends RedisBaseIT {
         if (cacheManager.getCache("sports") != null) {
             cacheManager.getCache("sports").clear();
         }
-        groupId = groupRepository.save(Group.builder().groupName("Reads " + UUID.randomUUID()).sportId(sportId)
+        groupId = groupRepository.save(Group.builder().countryId(1L).regionId(1L).groupName("Reads " + UUID.randomUUID()).sportId(sportId)
                 .createdBy(hostId).isPrivate(true).isActive(true).build()).getId();
         groupMemberRepository.save(GroupMember.builder().groupId(groupId).userId(hostId).roleId(ROLE_OWNER).build());
         groupSettingsRepository.save(GroupSessionSettings.builder().groupId(groupId).statisticsEnabled(true).build());   // SESSION-78: off by default
