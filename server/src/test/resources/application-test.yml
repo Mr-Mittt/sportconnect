@@ -9,6 +9,10 @@ app:
       # LOC-5: off so a context start never forces the boundary index to load; the IT invokes the runner directly
       enabled: false
   session:
+    season:
+      # SESSION-55: the ITs run the status pass on the calling thread and keep the 5-minute tick out of the way.
+      async: false
+      enabled: false
     generation:
       # SESSION-GROUP-5: the ITs drain the generation queue on the calling thread and keep the 60-second tick out of the way.
       async: false

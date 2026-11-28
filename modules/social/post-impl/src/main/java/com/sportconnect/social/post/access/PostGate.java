@@ -40,7 +40,7 @@ public class PostGate implements ResourceGate<Post> {
         if (post == null || !Boolean.TRUE.equals(post.getIsActive())) {
             return false;
         }
-        if (post.getPostType() == PostType.SESSION_POST) {
+        if (post.getPostType().isThreadAnchor()) {
             return false;
         }
         return post.getGroupId() == null || groupService.isGroupActive(post.getGroupId());
@@ -62,7 +62,7 @@ public class PostGate implements ResourceGate<Post> {
             case USER_FEED -> isOwnerOrPublicOrFriend(post, viewerId);
             case GROUP_POST, GROUP_BROADCAST, GROUP_SYSTEM ->
                     viewerId != null && groupService.isGroupMember(post.getGroupId(), viewerId);
-            case SESSION_POST -> false;
+            case SESSION_POST, SEASON_POST -> false;
         };
     }
 

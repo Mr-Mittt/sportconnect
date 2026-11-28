@@ -212,3 +212,10 @@ A cancel told nobody before. Now cancelling a group session (by its creator whil
 **Source:** the owner's answer while planning the statistics ("when a player proposes a game, the other players receive a notification").
 
 When someone proposes a record as a ranking game, every other player named in it who is still active gets a notification (new type `session.record.verification_requested`, three words because the notification queue is bound `session.*.*`; client text and route in CLIENT-SESSION-54), one per player per proposal, and again to the other players when a proposed game is changed (its confirmations went stale); the existing aggregation keeps one unread notification per recipient and session. The proposer is not notified, and a deactivated player is skipped (a new interaction). Not decided: whether a game becoming verified, or a player's confirmation, should notify the proposer (candidate, not built); and the access-request notification of SESSION-74 (to be logged at its pickup). Design: `modules/session/docs/STATISTIC_RANKING_DESIGN.md`.
+
+## SESSION-55 (group seasons, 2026-11-28): candidate triggers, none built
+There is no notification feature yet; a season writes only `GROUP_SYSTEM` posts in the group feed (created, started, finalised, cancelled). Candidate notifications for the day it exists:
+- a season **started** (to the group's members), and **finalised** (the final board is ready: to the members who played in it);
+- a season **cancelled** (to the members, with the reason);
+- a session **linked to** or **removed from** a MANUAL season (to the players of that session, whose counters change);
+- a comment on a season's thread (to those who commented before it), like a session's thread.

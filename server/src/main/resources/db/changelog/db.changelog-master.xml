@@ -292,4 +292,7 @@
     <!-- B25: a group has a required country and region; countries and regions carry the timezone -->
     <include file="db/changelog/changes/V110__group_country_region_and_reference_timezone.sql" relativeToChangelogFile="false"/>
 
+    <!-- SESSION-55: group seasons and their links; the SEASON_POST anchor type -->
+    <include file="db/changelog/changes/V111__group_seasons.sql" relativeToChangelogFile="false"/>
+
 </databaseChangeLog>

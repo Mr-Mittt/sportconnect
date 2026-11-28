@@ -29,6 +29,8 @@ package com.sportconnect.social.post.api.dto;
  *
  * <p>SESSION-78: {@code GROUP_STATISTICS_ON} and {@code GROUP_STATISTICS_OFF} are the {@code GROUP_SYSTEM} posts written when the
  * owner or an admin switches the group's statistics and leaderboard; they carry {@code name} only.
+ *
+ * <p>SESSION-55: {@code GROUP_SEASON_CREATED}, {@code _STARTED}, {@code _FINALISED} and {@code _CANCELLED} are the {@code GROUP_SYSTEM} posts of a group season's life; all carry {@code name} (the season's name), {@code startDate} and {@code endDate} (ISO local dates); {@code _CREATED} and {@code _CANCELLED} also carry {@code by} (who did it).
  */
 public enum SystemCode {
     SESSION_JOINED,
@@ -60,5 +62,9 @@ public enum SystemCode {
     GROUP_SESSION_MODE_CHANGED,
     GROUP_STATISTICS_ON,
     GROUP_STATISTICS_OFF,
-    GROUP_STATS_CONFIG_CHANGED
+    GROUP_STATS_CONFIG_CHANGED,
+    GROUP_SEASON_CREATED,
+    GROUP_SEASON_STARTED,
+    GROUP_SEASON_FINALISED,
+    GROUP_SEASON_CANCELLED
 }

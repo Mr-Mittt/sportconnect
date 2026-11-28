@@ -120,7 +120,7 @@ public class CommentServiceImpl implements CommentService {
      * just a session's anchor. */
     private void requireSessionPost(Long postId) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId).orElse(null);
-        if (post == null || post.getPostType() != PostType.SESSION_POST) {
+        if (post == null || !post.getPostType().isThreadAnchor()) {
             throw new NotFoundException("POST_NOT_FOUND", "Post not found", null);
         }
     }
@@ -132,7 +132,7 @@ public class CommentServiceImpl implements CommentService {
      */
     private void requireSessionPosts(List<Long> distinctPostIds) {
         long sessionPosts = postRepository.findByIdInAndIsActiveTrue(distinctPostIds).stream()
-                .filter(post -> post.getPostType() == PostType.SESSION_POST)
+                .filter(post -> post.getPostType().isThreadAnchor())
                 .count();
         if (sessionPosts != distinctPostIds.size()) {
             throw new NotFoundException("POST_NOT_FOUND", "Post not found", null);

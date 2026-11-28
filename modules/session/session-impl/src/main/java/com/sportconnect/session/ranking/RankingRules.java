@@ -1,12 +1,18 @@
 package com.sportconnect.session.ranking;
 
+import com.sportconnect.common.exception.BadRequestException;
 import com.sportconnect.session.stats.StatisticsSchema;
+import com.sportconnect.session.stats.StatsCatalog;
 import com.sportconnect.session.stats.SportRankingRule;
 import com.sportconnect.session.stats.SportRankingRuleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * SESSION-54: which sort rule a board uses. A board takes the <b>most specific rule that exists</b>: a group's own, then its
@@ -54,5 +60,26 @@ public class RankingRules {
         }
         return rule.map(row -> new Resolved(SortList.fromStored(row.getSort()), RequireList.fromStored(row.getConditions()),
                 row.getVersion())).filter(resolved -> !resolved.sort().isEmpty());
+    }
+
+    /** Every stat the keys or conditions read must be one the sport collects, and one that applies to the kind of board (SESSION-82), so the numbers a board is built from really exist. */
+    public static void requireCollected(Set<String> operands, StatisticsSchema schema, String kind, String errorCode) {
+        Set<String> collected = schema.collected().stream().map(StatsCatalog.Stat::key).collect(Collectors.toSet());
+        for (StatsCatalog.Stat needed : StatsCatalog.storedFor(schema.catalog(), operands)) {
+            if (needed.singleOnly() && !RankingRules.SINGLE.equals(kind)) {
+                Map<String, Object> params = new LinkedHashMap<>();
+                params.put("reason", "STAT_NOT_FOR_KIND");
+                params.put("detail", needed.key());
+                throw new BadRequestException(errorCode, needed.key() + " applies to a single player only, so a " + kind
+                        + " board cannot use it", params);
+            }
+            if (!collected.contains(needed.key())) {
+                Map<String, Object> params = new LinkedHashMap<>();
+                params.put("reason", "STAT_NOT_COLLECTED");
+                params.put("detail", needed.key());
+                throw new BadRequestException(errorCode,
+                        "The sport does not collect " + needed.key() + ", so a board cannot use it", params);
+            }
+        }
     }
 }

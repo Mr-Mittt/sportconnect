@@ -133,9 +133,9 @@ public class RankingRuleServiceImpl implements RankingRuleService {
         // SESSION-84: a group's own rule is checked against the stats the group's own list holds (its view), the others against the sport's
         StatisticsSchema view = SportRankingRule.GROUP.equals(scopeType)
                 ? schema.forGroup(groupSettings.findById(scopeId).map(row -> row.getStatsConfig()).orElse(null)) : schema;
-        requireCollected(sort.operands(), view, kind, "SESSION_RANKING_SORT_INVALID");
+        RankingRules.requireCollected(sort.operands(), view, kind, "SESSION_RANKING_SORT_INVALID");
         RequireList require = RequireList.parse(request.getRequire(), schema.catalog());
-        requireCollected(require.operands(), view, kind, "SESSION_RANKING_REQUIRE_INVALID");
+        RankingRules.requireCollected(require.operands(), view, kind, "SESSION_RANKING_REQUIRE_INVALID");
 
         SportRankingRule.Key key = new SportRankingRule.Key(sportId, scopeType, scopeId, kind);
         SportRankingRule row = rules.findById(key).orElse(null);
@@ -265,26 +265,6 @@ public class RankingRuleServiceImpl implements RankingRuleService {
                 Map.of("reason", reason));
     }
 
-    /** Every stat the keys or conditions read must be one the sport collects, and one that applies to the kind of board (SESSION-82), so the numbers a board is built from really exist. */
-    private void requireCollected(Set<String> operands, StatisticsSchema schema, String kind, String errorCode) {
-        Set<String> collected = schema.collected().stream().map(StatsCatalog.Stat::key).collect(Collectors.toSet());
-        for (StatsCatalog.Stat needed : StatsCatalog.storedFor(schema.catalog(), operands)) {
-            if (needed.singleOnly() && !RankingRules.SINGLE.equals(kind)) {
-                Map<String, Object> params = new LinkedHashMap<>();
-                params.put("reason", "STAT_NOT_FOR_KIND");
-                params.put("detail", needed.key());
-                throw new BadRequestException(errorCode, needed.key() + " applies to a single player only, so a " + kind
-                        + " board cannot use it", params);
-            }
-            if (!collected.contains(needed.key())) {
-                Map<String, Object> params = new LinkedHashMap<>();
-                params.put("reason", "STAT_NOT_COLLECTED");
-                params.put("detail", needed.key());
-                throw new BadRequestException(errorCode,
-                        "The sport does not collect " + needed.key() + ", so a board cannot use it", params);
-            }
-        }
-    }
 
     private RankingRuleResponse toResponse(SportRankingRule row) {
         return RankingRuleResponse.builder().sportId(row.getSportId()).scopeType(row.getScopeType()).scopeId(row.getScopeId())

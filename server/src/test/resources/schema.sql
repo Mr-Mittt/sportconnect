@@ -698,3 +698,35 @@ CREATE TABLE IF NOT EXISTS regions (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     timezone VARCHAR(64)
 );
+
+-- SESSION-55 (V111): group seasons and the sessions linked to a MANUAL season. (The partial index and the posts check constraint of V111 are PostgreSQL-only; H2 has neither.)
+CREATE TABLE IF NOT EXISTS group_seasons (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL,
+    sport_id BIGINT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    timezone VARCHAR(64) NOT NULL,
+    status VARCHAR(12) NOT NULL,
+    collection_mode VARCHAR(8) NOT NULL,
+    inherit_ranks BOOLEAN NOT NULL DEFAULT FALSE,
+    stats_config JSON NOT NULL,
+    ranking_rule JSON NOT NULL,
+    post_id BIGINT NOT NULL UNIQUE,
+    created_by UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cancelled_by UUID,
+    cancelled_at TIMESTAMP WITH TIME ZONE,
+    finalised_at TIMESTAMP WITH TIME ZONE,
+    last_error VARCHAR(500)
+);
+
+CREATE TABLE IF NOT EXISTS group_season_sessions (
+    season_id BIGINT NOT NULL REFERENCES group_seasons (id) ON DELETE CASCADE,
+    session_id BIGINT NOT NULL,
+    linked_by UUID NOT NULL,
+    linked_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (season_id, session_id)
+);

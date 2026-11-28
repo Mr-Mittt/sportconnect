@@ -94,8 +94,8 @@ public class PostServiceImpl implements PostService {
         if (postType == PostType.GROUP_SYSTEM) {
             throw new BadRequestException("POST_TYPE_NOT_CREATABLE", "GROUP_SYSTEM posts cannot be created directly", Map.of("postType", "GROUP_SYSTEM"));
         }
-        if (postType == PostType.SESSION_POST) {
-            throw new BadRequestException("POST_TYPE_NOT_CREATABLE", "SESSION_POST posts cannot be created directly", Map.of("postType", "SESSION_POST"));
+        if (postType != null && postType.isThreadAnchor()) {
+            throw new BadRequestException("POST_TYPE_NOT_CREATABLE", postType + " posts cannot be created directly", Map.of("postType", postType.name()));
         }
         if (postType == PostType.USER_FEED && groupId != null) {
             throw new BadRequestException("POST_GROUP_NOT_ALLOWED", "USER_FEED posts cannot be associated with a group", null);
@@ -195,6 +195,22 @@ public class PostServiceImpl implements PostService {
         return post.getId();
     }
 
+    /** {@inheritDoc} Same shape as {@link #createSessionPost}: no group, private, never in a feed (the season's gate decides access). */
+    @Override
+    @Transactional
+    public Long createSeasonPost(UUID authorUserId, String content) {
+        Post post = Post.builder()
+                .userId(authorUserId)
+                .groupId(null)
+                .postType(PostType.SEASON_POST)
+                .content(content)
+                .visibility("private")
+                .build();
+        post = postRepository.save(post);
+        log.info("Created SEASON_POST {} authored by {}", post.getId(), authorUserId);
+        return post.getId();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public PostResponse getPostById(Long postId, UUID currentUserId) {
@@ -271,8 +287,8 @@ public class PostServiceImpl implements PostService {
         if (post.getPostType() == PostType.GROUP_SYSTEM) {
             throw new BadRequestException("POST_TYPE_NOT_EDITABLE", "GROUP_SYSTEM posts cannot be edited", Map.of("postType", "GROUP_SYSTEM"));
         }
-        if (post.getPostType() == PostType.SESSION_POST) {
-            throw new BadRequestException("POST_TYPE_NOT_EDITABLE", "SESSION_POST posts cannot be edited", Map.of("postType", "SESSION_POST"));
+        if (post.getPostType().isThreadAnchor()) {
+            throw new BadRequestException("POST_TYPE_NOT_EDITABLE", post.getPostType() + " posts cannot be edited", Map.of("postType", post.getPostType().name()));
         }
 
         boolean isCreator = post.getUserId().equals(userId);
@@ -309,8 +325,8 @@ public class PostServiceImpl implements PostService {
         if (post.getPostType() == PostType.GROUP_SYSTEM) {
             throw new BadRequestException("POST_TYPE_NOT_DELETABLE", "GROUP_SYSTEM posts cannot be deleted", Map.of("postType", "GROUP_SYSTEM"));
         }
-        if (post.getPostType() == PostType.SESSION_POST) {
-            throw new BadRequestException("POST_TYPE_NOT_DELETABLE", "SESSION_POST posts cannot be deleted", Map.of("postType", "SESSION_POST"));
+        if (post.getPostType().isThreadAnchor()) {
+            throw new BadRequestException("POST_TYPE_NOT_DELETABLE", post.getPostType() + " posts cannot be deleted", Map.of("postType", post.getPostType().name()));
         }
 
         boolean isOwner = post.getUserId().equals(userId);
@@ -391,7 +407,7 @@ public class PostServiceImpl implements PostService {
      * codebase always writes each domain's/class's own cross-cutting checks locally. */
     private void requireSessionPost(Long postId) {
         Post post = postRepository.findByIdAndIsActiveTrue(postId).orElse(null);
-        if (post == null || post.getPostType() != PostType.SESSION_POST) {
+        if (post == null || !post.getPostType().isThreadAnchor()) {
             throw new NotFoundException("POST_NOT_FOUND", "Post not found", null);
         }
     }
@@ -418,7 +434,7 @@ public class PostServiceImpl implements PostService {
         }
 
         List<Long> validIds = postRepository.findByIdInAndIsActiveTrue(distinctIds).stream()
-                .filter(post -> post.getPostType() == PostType.SESSION_POST)
+                .filter(post -> post.getPostType().isThreadAnchor())
                 .map(Post::getId)
                 .collect(Collectors.toList());
         if (validIds.isEmpty()) {

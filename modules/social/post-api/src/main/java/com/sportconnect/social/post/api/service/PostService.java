@@ -43,6 +43,9 @@ public interface PostService {
      */
     Long createSessionPost(UUID authorUserId, String content);
 
+    /** SESSION-55: creates the {@code SEASON_POST} anchor of a group season, the way {@link #createSessionPost} does for a session. */
+    Long createSeasonPost(UUID authorUserId, String content);
+
     /**
      * Gated by {@code post-impl}'s {@code PostGate} (A14 —
      * {@code documentation/md/adr/RESOURCE_ACCESS_GATE_ADR.md}): throws {@code NotFoundException}
